@@ -1,0 +1,465 @@
+import React, { useReducer, useEffect, useCallback } from 'react';
+import { CRMContext, crmReducer, CRMState } from '@/lib/crmStore';
+import { AuthProvider, useAuth } from '@/lib/authContext';
+import { db } from '@/lib/database';
+import { supabase } from '@/lib/supabase';
+import {
+  mockContacts,
+  mockTeamMembers,
+  defaultBoards,
+  defaultLeadSources,
+  mockAppointments,
+  mockInvoices,
+  mockAutomations,
+  Contact,
+  Appointment,
+  Invoice,
+  KanbanBoard,
+  LeadSource,
+  Automation,
+  TeamMember,
+} from '@/lib/crmData';
+
+// Import all CRM components
+import Sidebar from './crm/Sidebar';
+import TopBar from './crm/TopBar';
+import Dashboard from './crm/Dashboard';
+import PipelineBoard from './crm/PipelineBoard';
+import ContactList from './crm/ContactList';
+import ContactDetail from './crm/ContactDetail';
+import CommunicationHub from './crm/CommunicationHub';
+import CalendarView from './crm/CalendarView';
+import DocumentCenter from './crm/DocumentCenter';
+import FinancialDashboard from './crm/FinancialDashboard';
+import TeamView from './crm/TeamView';
+import AutomationsView from './crm/AutomationsView';
+import SettingsView from './crm/SettingsView';
+import AIAssistant from './crm/AIAssistant';
+import QuickAddModal from './crm/QuickAddModal';
+import InvoiceModal from './crm/InvoiceModal';
+import AuthPage from './crm/AuthPage';
+import { Building2, Loader2 } from 'lucide-react';
+
+// Initial CRM state (empty, will be populated from database)
+const initialState: CRMState = {
+  currentUser: null,
+  companyId: null,
+  currentView: 'dashboard',
+  selectedContactId: null,
+  selectedBoardId: 'board-sales',
+  contacts: [],
+  teamMembers: [],
+  boards: defaultBoards, // Use default boards as fallback
+  leadSources: defaultLeadSources,
+  appointments: [],
+  invoices: [],
+  automations: [],
+  sidebarCollapsed: false,
+  searchQuery: '',
+  filterStatus: 'all',
+  filterAssignee: 'all',
+  showQuickAdd: false,
+  showInvoiceModal: false,
+  selectedInvoiceId: null,
+  isLoading: true,
+  isInitialized: false,
+  notifications: [
+    {
+      id: 'notif-1',
+      type: 'info',
+      title: 'Welcome to StormCraft CRM',
+      message: 'Your enterprise CRM is ready to use. Start by exploring the dashboard.',
+      timestamp: new Date().toISOString(),
+      read: false,
+    },
+  ],
+};
+
+// View Router Component
+function ViewRouter() {
+  const { state } = React.useContext(CRMContext)!;
+
+  switch (state.currentView) {
+    case 'dashboard':
+      return <Dashboard />;
+    case 'pipeline':
+      return <PipelineBoard />;
+    case 'contacts':
+      return <ContactList />;
+    case 'contact-detail':
+      return <ContactDetail />;
+    case 'communications':
+      return <CommunicationHub />;
+    case 'calendar':
+      return <CalendarView />;
+    case 'documents':
+      return <DocumentCenter />;
+    case 'financial':
+      return <FinancialDashboard />;
+    case 'team':
+      return <TeamView />;
+    case 'automations':
+      return <AutomationsView />;
+    case 'settings':
+      return <SettingsView />;
+    case 'ai-assistant':
+      return <AIAssistant />;
+    default:
+      return <Dashboard />;
+  }
+}
+
+// Loading Screen
+function LoadingScreen() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center">
+      <div className="text-center">
+        <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <Building2 size={32} className="text-white" />
+        </div>
+        <h1 className="text-2xl font-bold text-white mb-2">StormCraft CRM</h1>
+        <div className="flex items-center justify-center gap-2 text-slate-400">
+          <Loader2 className="animate-spin" size={20} />
+          <span>Loading your data...</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Helper function to convert DB contact to app contact
+function dbContactToAppContact(dbContact: any): Contact {
+  return {
+    id: dbContact.id,
+    firstName: dbContact.first_name,
+    lastName: dbContact.last_name,
+    email: dbContact.email || '',
+    phone1: dbContact.phone1 || '',
+    phone2: dbContact.phone2,
+    address: dbContact.address || '',
+    city: dbContact.city || '',
+    state: dbContact.state || '',
+    zip: dbContact.zip || '',
+    status: dbContact.status,
+    leadSource: dbContact.lead_source || '',
+    assignedTo: dbContact.assigned_to || '',
+    createdAt: dbContact.created_at,
+    updatedAt: dbContact.updated_at,
+    tags: dbContact.tags || [],
+    insuranceCompany: dbContact.insurance_company,
+    policyNumber: dbContact.policy_number,
+    claimNumber: dbContact.claim_number,
+    adjusterName: dbContact.adjuster_name,
+    adjusterPhone: dbContact.adjuster_phone,
+    adjusterEmail: dbContact.adjuster_email,
+    deductible: dbContact.deductible,
+    projectType: dbContact.project_type,
+    projectValue: dbContact.project_value,
+    depositAmount: dbContact.deposit_amount,
+    depositPaid: dbContact.deposit_paid,
+    depositDate: dbContact.deposit_date,
+    finalPaymentAmount: dbContact.final_payment_amount,
+    finalPaymentPaid: dbContact.final_payment_paid,
+    finalPaymentDate: dbContact.final_payment_date,
+    isRetail: dbContact.is_retail,
+    retailNotes: dbContact.retail_notes,
+    notes: dbContact.notes,
+  };
+}
+
+// Helper function to convert DB appointment to app appointment
+function dbAppointmentToAppAppointment(dbAppointment: any, contacts: Contact[]): Appointment {
+  const contact = contacts.find(c => c.id === dbAppointment.contact_id);
+  return {
+    id: dbAppointment.id,
+    contactId: dbAppointment.contact_id,
+    contactName: contact ? `${contact.firstName} ${contact.lastName}` : 'Unknown',
+    title: dbAppointment.title,
+    type: dbAppointment.type,
+    date: dbAppointment.date,
+    time: dbAppointment.time,
+    duration: dbAppointment.duration,
+    assignedTo: dbAppointment.assigned_to || '',
+    location: dbAppointment.location || '',
+    notes: dbAppointment.notes,
+    status: dbAppointment.status,
+  };
+}
+
+// Helper function to convert DB invoice to app invoice
+function dbInvoiceToAppInvoice(dbInvoice: any, contacts: Contact[]): Invoice {
+  const contact = contacts.find(c => c.id === dbInvoice.contact_id);
+  return {
+    id: dbInvoice.id,
+    contactId: dbInvoice.contact_id,
+    contactName: contact ? `${contact.firstName} ${contact.lastName}` : 'Unknown',
+    jobId: dbInvoice.job_id || '',
+    amount: dbInvoice.amount,
+    status: dbInvoice.status,
+    dueDate: dbInvoice.due_date || '',
+    createdAt: dbInvoice.created_at,
+    paidAt: dbInvoice.paid_at,
+    items: [], // Items loaded separately if needed
+  };
+}
+
+// CRM App (authenticated view)
+function CRMApp() {
+  const { profile, user } = useAuth();
+  const [state, dispatch] = useReducer(crmReducer, initialState);
+
+  // Load data from database
+  const loadData = useCallback(async () => {
+    if (!profile?.company_id) {
+      // No company yet - use mock data for demo
+      dispatch({
+        type: 'INITIALIZE_DATA',
+        payload: {
+          contacts: mockContacts,
+          appointments: mockAppointments,
+          invoices: mockInvoices,
+          boards: defaultBoards,
+          leadSources: defaultLeadSources,
+          automations: mockAutomations,
+          teamMembers: mockTeamMembers,
+        },
+      });
+      return;
+    }
+
+    dispatch({ type: 'SET_LOADING', payload: true });
+    dispatch({ type: 'SET_COMPANY_ID', payload: profile.company_id });
+
+    try {
+      // Load all data in parallel
+      const [
+        dbContacts,
+        dbAppointments,
+        dbInvoices,
+        dbBoards,
+        dbLeadSources,
+        dbAutomations,
+        dbTeamMembers,
+      ] = await Promise.all([
+        db.getContacts(profile.company_id),
+        db.getAppointments(profile.company_id),
+        db.getInvoices(profile.company_id),
+        db.getKanbanBoards(profile.company_id),
+        db.getLeadSources(profile.company_id),
+        db.getAutomations(profile.company_id),
+        db.getTeamMembers(profile.company_id),
+      ]);
+
+      // Convert DB contacts to app contacts
+      const contacts = dbContacts.map(dbContactToAppContact);
+
+      // Convert DB appointments to app appointments
+      const appointments = dbAppointments.map(apt => dbAppointmentToAppAppointment(apt, contacts));
+
+      // Convert DB invoices to app invoices
+      const invoices = dbInvoices.map(inv => dbInvoiceToAppInvoice(inv, contacts));
+
+      // Convert DB boards to app boards (with columns)
+      const boards: KanbanBoard[] = dbBoards.length > 0 
+        ? await Promise.all(dbBoards.map(async (board) => {
+            const result = await db.getKanbanBoardWithColumns(board.id);
+            return {
+              id: board.id,
+              name: board.name,
+              type: board.type as any,
+              visibleTo: board.visible_to as any[],
+              createdBy: board.created_by || '',
+              isDefault: board.is_default,
+              columns: result?.columns.map(col => ({
+                id: col.id,
+                title: col.title,
+                status: col.status as any,
+                color: col.color,
+                order: col.sort_order,
+              })) || [],
+            };
+          }))
+        : defaultBoards;
+
+      // Convert DB lead sources to app lead sources
+      const leadSources: LeadSource[] = dbLeadSources.length > 0
+        ? dbLeadSources.map(ls => ({
+            id: ls.id,
+            name: ls.name,
+            isCustom: ls.is_custom,
+            createdBy: ls.created_by,
+          }))
+        : defaultLeadSources;
+
+      // Convert DB automations to app automations
+      const automations: Automation[] = dbAutomations.length > 0
+        ? dbAutomations.map(auto => ({
+            id: auto.id,
+            name: auto.name,
+            trigger: auto.trigger_event,
+            action: auto.action_type,
+            isActive: auto.is_active,
+            createdBy: auto.created_by || '',
+          }))
+        : mockAutomations;
+
+      // Convert DB team members to app team members
+      const teamMembers: TeamMember[] = dbTeamMembers.length > 0
+        ? dbTeamMembers.map(tm => ({
+            id: tm.id,
+            name: `${tm.first_name || ''} ${tm.last_name || ''}`.trim() || tm.email,
+            email: tm.email,
+            role: (tm.role || 'sales') as any,
+            avatar: tm.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(tm.first_name || tm.email)}&background=random`,
+            phone: tm.phone || '',
+            department: tm.department || 'General',
+            isActive: tm.is_active,
+          }))
+        : mockTeamMembers;
+
+      dispatch({
+        type: 'INITIALIZE_DATA',
+        payload: {
+          contacts: contacts.length > 0 ? contacts : mockContacts,
+          appointments: appointments.length > 0 ? appointments : mockAppointments,
+          invoices: invoices.length > 0 ? invoices : mockInvoices,
+          boards,
+          leadSources,
+          automations,
+          teamMembers,
+        },
+      });
+
+    } catch (error) {
+      console.error('Error loading CRM data:', error);
+      // Fall back to mock data on error
+      dispatch({
+        type: 'INITIALIZE_DATA',
+        payload: {
+          contacts: mockContacts,
+          appointments: mockAppointments,
+          invoices: mockInvoices,
+          boards: defaultBoards,
+          leadSources: defaultLeadSources,
+          automations: mockAutomations,
+          teamMembers: mockTeamMembers,
+        },
+      });
+    }
+  }, [profile?.company_id]);
+
+  // Set up real-time subscriptions
+  useEffect(() => {
+    if (!profile?.company_id) return;
+
+    const channel = db.subscribeToAll(profile.company_id, {
+      onContactChange: (payload) => {
+        console.log('Contact change:', payload);
+        if (payload.eventType === 'INSERT') {
+          const newContact = dbContactToAppContact(payload.new);
+          dispatch({ type: 'ADD_CONTACT', payload: newContact });
+          dispatch({
+            type: 'ADD_NOTIFICATION',
+            payload: {
+              id: `notif-${Date.now()}`,
+              type: 'info',
+              title: 'New Contact Added',
+              message: `${newContact.firstName} ${newContact.lastName} was added by a team member.`,
+              timestamp: new Date().toISOString(),
+              read: false,
+            },
+          });
+        } else if (payload.eventType === 'UPDATE') {
+          const updatedContact = dbContactToAppContact(payload.new);
+          dispatch({ type: 'UPDATE_CONTACT', payload: updatedContact });
+        } else if (payload.eventType === 'DELETE') {
+          dispatch({ type: 'DELETE_CONTACT', payload: payload.old.id });
+        }
+      },
+      onAppointmentChange: (payload) => {
+        console.log('Appointment change:', payload);
+        // Reload appointments to get contact names
+        loadData();
+      },
+      onInvoiceChange: (payload) => {
+        console.log('Invoice change:', payload);
+        // Reload invoices to get contact names
+        loadData();
+      },
+      onCommunicationChange: (payload) => {
+        console.log('Communication change:', payload);
+        // Could trigger a notification or refresh communications view
+      },
+    });
+
+    return () => {
+      db.unsubscribe(channel);
+    };
+  }, [profile?.company_id, loadData]);
+
+  // Load data on mount
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // Set current user from profile
+  useEffect(() => {
+    if (profile) {
+      const currentUser: TeamMember = {
+        id: profile.id,
+        name: `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || profile.email,
+        email: profile.email,
+        role: (profile.role || 'sales') as any,
+        avatar: profile.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.first_name || profile.email)}&background=random`,
+        phone: profile.phone || '',
+        department: profile.department || 'General',
+        isActive: profile.is_active !== false,
+      };
+      dispatch({ type: 'SET_CURRENT_USER', payload: currentUser });
+    }
+  }, [profile]);
+
+  if (state.isLoading && !state.isInitialized) {
+    return <LoadingScreen />;
+  }
+
+  return (
+    <CRMContext.Provider value={{ state, dispatch }}>
+      <div className="flex h-screen bg-gray-50 overflow-hidden">
+        <Sidebar />
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <TopBar />
+          <main className="flex-1 overflow-auto">
+            <ViewRouter />
+          </main>
+        </div>
+        <QuickAddModal />
+        <InvoiceModal />
+      </div>
+    </CRMContext.Provider>
+  );
+}
+
+// Auth Gate - shows login or CRM based on auth state
+function AuthGate() {
+  const { session, loading } = useAuth();
+
+  if (loading) {
+    return <LoadingScreen />;
+  }
+
+  if (!session) {
+    return <AuthPage />;
+  }
+
+  return <CRMApp />;
+}
+
+// Main App Layout with Auth Provider
+export default function AppLayout() {
+  return (
+    <AuthProvider>
+      <AuthGate />
+    </AuthProvider>
+  );
+}
