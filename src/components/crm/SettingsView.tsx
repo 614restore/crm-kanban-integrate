@@ -1,8 +1,9 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useCRM, canManageLeadSources } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { LeadSource, defaultLeadSources } from '@/lib/crmData';
 import { toast } from 'sonner';
+import { db } from '@/lib/database';
 import { uploadCompanyLogo, uploadUserAvatar, validateImageFile, createPreviewUrl } from '@/lib/storage';
 import {
   Settings,
@@ -32,6 +33,14 @@ import {
 
 type SettingsTab = 'company' | 'profile' | 'integrations' | 'notifications' | 'security' | 'billing' | 'api';
 
+interface CompanyFormData {
+  name: string;
+  phone: string;
+  email: string;
+  website: string;
+  address: string;
+}
+
 export default function SettingsView() {
   const { state, dispatch } = useCRM();
   const { profile, updateProfile } = useAuth();
@@ -39,6 +48,17 @@ export default function SettingsView() {
   const [newLeadSource, setNewLeadSource] = useState('');
   const [showAddLeadSource, setShowAddLeadSource] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
+  const [isSavingCompany, setIsSavingCompany] = useState(false);
+  
+  // Company form state
+  const [companyForm, setCompanyForm] = useState<CompanyFormData>({
+    name: 'StormCraft Roofing',
+    phone: '(555) 123-4567',
+    email: 'info@stormcraft.com',
+    website: 'https://stormcraft.com',
+    address: '123 Business Park Drive, Dallas, TX 75201',
+  });
+  
   const [profileForm, setProfileForm] = useState({
     first_name: profile?.first_name || '',
     last_name: profile?.last_name || '',
@@ -47,6 +67,7 @@ export default function SettingsView() {
   const [profileAvatar, setProfileAvatar] = useState<string | null>(profile?.avatar_url || null);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [isLoadingCompany, setIsLoadingCompany] = useState(false);
   
   // Refs for file inputs
   const companyLogoInputRef = useRef<HTMLInputElement>(null);
@@ -57,6 +78,36 @@ export default function SettingsView() {
 
   // Combine default and custom lead sources
   const allLeadSources = [...defaultLeadSources, ...state.leadSources.filter((ls) => ls.isCustom)];
+
+  // Load company data on mount
+  useEffect(() => {
+    const loadCompanyData = async () => {
+      if (profile?.company_id) {
+        setIsLoadingCompany(true);
+        try {
+          const company = await db.getCompany(profile.company_id);
+          if (company) {
+            setCompanyForm({
+              name: company.name || 'StormCraft Roofing',
+              phone: company.phone || '',
+              email: company.email || '',
+              website: company.website || '',
+              address: company.address || '',
+            });
+            if (company.logo_url) {
+              setCompanyLogo(company.logo_url);
+            }
+          }
+        } catch (error) {
+          console.error('Error loading company data:', error);
+        } finally {
+          setIsLoadingCompany(false);
+        }
+      }
+    };
+
+    loadCompanyData();
+  }, [profile?.company_id]);
 
   const handleAddLeadSource = () => {
     if (newLeadSource.trim()) {
@@ -70,6 +121,36 @@ export default function SettingsView() {
       setNewLeadSource('');
       setShowAddLeadSource(false);
       toast.success('Lead source added successfully');
+    }
+  };
+
+  const handleSaveCompany = async () => {
+    if (!profile?.company_id) {
+      toast.error('No company associated with your account');
+      return;
+    }
+
+    setIsSavingCompany(true);
+
+    try {
+      const result = await db.updateCompany(profile.company_id, {
+        name: companyForm.name,
+        phone: companyForm.phone,
+        email: companyForm.email,
+        website: companyForm.website,
+        address: companyForm.address,
+      });
+
+      if (result) {
+        toast.success('Company profile saved successfully!');
+      } else {
+        toast.error('Failed to save company profile');
+      }
+    } catch (error) {
+      console.error('Save company error:', error);
+      toast.error('Failed to save company profile');
+    } finally {
+      setIsSavingCompany(false);
     }
   };
 
@@ -116,9 +197,10 @@ export default function SettingsView() {
           setCompanyLogo(null);
         } else {
           setCompanyLogo(result.url);
-          toast.success('Logo uploaded successfully');
-          // TODO: Update company logo URL in database
-          // await db.updateCompany(profile.company_id, { logo_url: result.url });
+          
+          // Update company logo URL in database
+          await db.updateCompany(profile.company_id, { logo_url: result.url });
+          toast.success('Logo uploaded and saved successfully');
         }
       } else {
         toast.success('Logo preview loaded (connect database to persist)');
@@ -159,13 +241,14 @@ export default function SettingsView() {
           setProfileAvatar(profile.avatar_url || null);
         } else {
           setProfileAvatar(result.url);
-          toast.success('Avatar uploaded successfully');
           
           // Update profile with new avatar URL
           try {
             await updateProfile({ avatar_url: result.url });
+            toast.success('Avatar uploaded and saved successfully');
           } catch (updateError) {
             console.error('Failed to update profile with new avatar:', updateError);
+            toast.error('Avatar uploaded but failed to save to profile');
           }
         }
       } else {
@@ -249,6 +332,14 @@ export default function SettingsView() {
     },
   ];
 
+  if (isLoadingCompany && activeTab === 'company') {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <Loader2 className="animate-spin text-blue-600" size={40} />
+      </div>
+    );
+  }
+
   return (
     <div className="h-full flex">
       {/* Hidden file inputs */}
@@ -325,7 +416,7 @@ export default function SettingsView() {
                     )}
                   </div>
                   <div>
-                    <h4 className="text-lg font-semibold text-gray-900">StormCraft Roofing</h4>
+                    <h4 className="text-lg font-semibold text-gray-900">{companyForm.name}</h4>
                     <p className="text-gray-500">Premium roofing and restoration services</p>
                     <button
                       onClick={() => companyLogoInputRef.current?.click()}
@@ -355,7 +446,8 @@ export default function SettingsView() {
                     </label>
                     <input
                       type="text"
-                      defaultValue="StormCraft Roofing"
+                      value={companyForm.name}
+                      onChange={(e) => setCompanyForm({ ...companyForm, name: e.target.value })}
                       className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                     />
                   </div>
@@ -365,7 +457,8 @@ export default function SettingsView() {
                     </label>
                     <input
                       type="tel"
-                      defaultValue="(555) 123-4567"
+                      value={companyForm.phone}
+                      onChange={(e) => setCompanyForm({ ...companyForm, phone: e.target.value })}
                       className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                     />
                   </div>
@@ -375,7 +468,8 @@ export default function SettingsView() {
                     </label>
                     <input
                       type="email"
-                      defaultValue="info@stormcraft.com"
+                      value={companyForm.email}
+                      onChange={(e) => setCompanyForm({ ...companyForm, email: e.target.value })}
                       className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                     />
                   </div>
@@ -383,7 +477,8 @@ export default function SettingsView() {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Website</label>
                     <input
                       type="url"
-                      defaultValue="https://stormcraft.com"
+                      value={companyForm.website}
+                      onChange={(e) => setCompanyForm({ ...companyForm, website: e.target.value })}
                       className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                     />
                   </div>
@@ -393,21 +488,33 @@ export default function SettingsView() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
                   <input
                     type="text"
-                    defaultValue="123 Business Park Drive, Dallas, TX 75201"
+                    value={companyForm.address}
+                    onChange={(e) => setCompanyForm({ ...companyForm, address: e.target.value })}
                     className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                   />
                 </div>
 
                 <button
-                  onClick={() => toast.success('Company profile saved!')}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                  onClick={handleSaveCompany}
+                  disabled={isSavingCompany}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Save Changes
+                  {isSavingCompany ? (
+                    <>
+                      <Loader2 size={18} className="animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save size={18} />
+                      Save Changes
+                    </>
+                  )}
                 </button>
               </div>
             </div>
 
-            {/* Lead Sources - keeping existing implementation */}
+            {/* Lead Sources */}
             {canManageSources && (
               <div>
                 <div className="flex items-center justify-between mb-4">
@@ -608,7 +715,6 @@ export default function SettingsView() {
           </div>
         )}
 
-        {/* Keeping all other tabs as-is from previous implementation */}
         {activeTab === 'integrations' && (
           <div className="max-w-4xl">
             <h3 className="text-xl font-semibold text-gray-900 mb-6">Integrations</h3>
@@ -656,7 +762,7 @@ export default function SettingsView() {
           </div>
         )}
 
-        {/* Continue with other tabs... keeping implementation from before */}
+        {/* Add other tabs here if needed - notifications, security, billing, api */}
       </div>
     </div>
   );
