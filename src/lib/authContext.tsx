@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { setupNewUser } from '@/lib/setupCompany';
 import type { Session, User } from '@supabase/supabase-js';
 
 export interface Profile {
@@ -56,6 +57,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Ensure user has a company set up
+  const ensureUserSetup = async (userId: string, userEmail: string) => {
+    try {
+      // Get current profile
+      const profileData = await fetchProfile(userId);
+      
+      // If user doesn't have a company, set one up automatically
+      if (profileData && !profileData.company_id) {
+        console.log('User has no company, running automatic setup...');
+        const setupSuccess = await setupNewUser(userId, userEmail);
+        
+        if (setupSuccess) {
+          // Fetch profile again to get the new company_id
+          return await fetchProfile(userId);
+        }
+      }
+      
+      return profileData;
+    } catch (err) {
+      console.error('Error in ensureUserSetup:', err);
+      return await fetchProfile(userId);
+    }
+  };
+
   useEffect(() => {
     // Get initial session
     supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -63,7 +88,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(session?.user ?? null);
       
       if (session?.user) {
-        const profileData = await fetchProfile(session.user.id);
+        const profileData = await ensureUserSetup(session.user.id, session.user.email || '');
         setProfile(profileData);
       }
       
@@ -76,7 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(session?.user ?? null);
       
       if (session?.user) {
-        const profileData = await fetchProfile(session.user.id);
+        const profileData = await ensureUserSetup(session.user.id, session.user.email || '');
         setProfile(profileData);
       } else {
         setProfile(null);
@@ -126,6 +151,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             })
             .eq('id', data.user.id);
         }
+        
+        // Run first-time setup
+        await setupNewUser(data.user.id, data.user.email || email);
       }
 
       return { error };
