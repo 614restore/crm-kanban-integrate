@@ -1,0 +1,55 @@
+name: E2E Invite Test
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  e2e-invite:
+    name: Run E2E invite script
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run E2E invite
+        env:
+          SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.E2E_SUPABASE_KEY }}
+          INVITEE_EMAIL: ${{ secrets.E2E_INVITEE_EMAIL }}
+        run: npm run e2e:invite
+name: E2E Invite Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  e2e-invite:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install
+        run: npm ci
+
+      - name: Run E2E invite script
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          INVITEE_EMAIL: ${{ secrets.E2E_INVITEE_EMAIL }}
+          COMPANY_ID: ${{ secrets.E2E_COMPANY_ID }}
+          INVITER_ID: ${{ secrets.E2E_INVITER_ID }}
+        run: npm run e2e:invite
