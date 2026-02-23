@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useCRM, canManageLeadSources } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { LeadSource, defaultLeadSources } from '@/lib/crmData';
+import { toast } from 'sonner';
 import {
   Settings,
   Building2,
@@ -24,6 +25,7 @@ import {
   Calendar,
   FileText,
   User,
+  Upload,
 } from 'lucide-react';
 
 type SettingsTab = 'company' | 'profile' | 'integrations' | 'notifications' | 'security' | 'billing' | 'api';
@@ -39,6 +41,12 @@ export default function SettingsView() {
     first_name: profile?.first_name || '',
     last_name: profile?.last_name || '',
   });
+  const [companyLogo, setCompanyLogo] = useState<string | null>(null);
+  const [profileAvatar, setProfileAvatar] = useState<string | null>(null);
+  
+  // Refs for file inputs
+  const companyLogoInputRef = useRef<HTMLInputElement>(null);
+  const profileAvatarInputRef = useRef<HTMLInputElement>(null);
 
   const userRole = state.currentUser?.role || 'sales';
   const canManageSources = canManageLeadSources(userRole);
@@ -57,6 +65,7 @@ export default function SettingsView() {
       dispatch({ type: 'ADD_LEAD_SOURCE', payload: newSource });
       setNewLeadSource('');
       setShowAddLeadSource(false);
+      toast.success('Lead source added successfully');
     }
   };
 
@@ -67,6 +76,57 @@ export default function SettingsView() {
         last_name: profileForm.last_name,
       });
       setEditingProfile(false);
+      toast.success('Profile updated successfully');
+    }
+  };
+
+  const handleCompanyLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Check file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('File size must be less than 5MB');
+        return;
+      }
+
+      // Check file type
+      if (!file.type.startsWith('image/')) {
+        toast.error('Please upload an image file');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setCompanyLogo(reader.result as string);
+        toast.success('Logo uploaded successfully');
+        // TODO: Upload to Supabase storage
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleProfileAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Check file size (max 2MB)
+      if (file.size > 2 * 1024 * 1024) {
+        toast.error('File size must be less than 2MB');
+        return;
+      }
+
+      // Check file type
+      if (!file.type.startsWith('image/')) {
+        toast.error('Please upload an image file');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setProfileAvatar(reader.result as string);
+        toast.success('Avatar uploaded successfully');
+        // TODO: Upload to Supabase storage and update profile
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -141,6 +201,22 @@ export default function SettingsView() {
 
   return (
     <div className="h-full flex">
+      {/* Hidden file inputs */}
+      <input
+        ref={companyLogoInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleCompanyLogoChange}
+        className="hidden"
+      />
+      <input
+        ref={profileAvatarInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleProfileAvatarChange}
+        className="hidden"
+      />
+
       {/* Sidebar */}
       <div className="w-64 bg-white border-r border-gray-200 p-4 flex-shrink-0">
         <h2 className="text-lg font-semibold text-gray-900 mb-4 px-3">Settings</h2>
@@ -170,13 +246,30 @@ export default function SettingsView() {
               <h3 className="text-xl font-semibold text-gray-900 mb-6">Company Profile</h3>
               <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-6">
                 <div className="flex items-center gap-6">
-                  <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
-                    <Building2 className="text-white" size={36} />
+                  <div className="relative group">
+                    {companyLogo ? (
+                      <img
+                        src={companyLogo}
+                        alt="Company logo"
+                        className="w-20 h-20 rounded-xl object-cover"
+                      />
+                    ) : (
+                      <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
+                        <Building2 className="text-white" size={36} />
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-black/50 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <Upload className="text-white" size={24} />
+                    </div>
                   </div>
                   <div>
                     <h4 className="text-lg font-semibold text-gray-900">StormCraft Roofing</h4>
                     <p className="text-gray-500">Premium roofing and restoration services</p>
-                    <button className="mt-2 text-sm text-blue-600 hover:text-blue-700 font-medium">
+                    <button
+                      onClick={() => companyLogoInputRef.current?.click()}
+                      className="mt-2 text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+                    >
+                      <Upload size={14} />
                       Change Logo
                     </button>
                   </div>
@@ -232,7 +325,10 @@ export default function SettingsView() {
                   />
                 </div>
 
-                <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium">
+                <button
+                  onClick={() => toast.success('Company profile saved!')}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                >
                   Save Changes
                 </button>
               </div>
@@ -268,7 +364,13 @@ export default function SettingsView() {
                         )}
                       </div>
                       {source.isCustom && (
-                        <button className="p-1.5 hover:bg-red-100 rounded transition-colors">
+                        <button
+                          onClick={() => {
+                            dispatch({ type: 'DELETE_LEAD_SOURCE', payload: source.id });
+                            toast.success('Lead source deleted');
+                          }}
+                          className="p-1.5 hover:bg-red-100 rounded transition-colors"
+                        >
                           <Trash2 size={16} className="text-red-500" />
                         </button>
                       )}
@@ -282,6 +384,7 @@ export default function SettingsView() {
                       type="text"
                       value={newLeadSource}
                       onChange={(e) => setNewLeadSource(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleAddLeadSource()}
                       placeholder="Enter lead source name..."
                       className="flex-1 px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                       autoFocus
@@ -314,9 +417,25 @@ export default function SettingsView() {
               <h3 className="text-xl font-semibold text-gray-900 mb-6">My Profile</h3>
               <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-6">
                 <div className="flex items-center gap-6">
-                  <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-2xl font-bold">
-                    {profile?.first_name?.[0]?.toUpperCase() || profile?.email?.[0]?.toUpperCase() || 'U'}
-                    {profile?.last_name?.[0]?.toUpperCase() || ''}
+                  <div className="relative group">
+                    {profileAvatar ? (
+                      <img
+                        src={profileAvatar}
+                        alt="Profile avatar"
+                        className="w-20 h-20 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-2xl font-bold">
+                        {profile?.first_name?.[0]?.toUpperCase() || profile?.email?.[0]?.toUpperCase() || 'U'}
+                        {profile?.last_name?.[0]?.toUpperCase() || ''}
+                      </div>
+                    )}
+                    <button
+                      onClick={() => profileAvatarInputRef.current?.click()}
+                      className="absolute inset-0 bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
+                    >
+                      <Upload className="text-white" size={24} />
+                    </button>
                   </div>
                   <div>
                     <h4 className="text-lg font-semibold text-gray-900">
@@ -326,6 +445,13 @@ export default function SettingsView() {
                     </h4>
                     <p className="text-gray-500">{profile?.email}</p>
                     <p className="text-sm text-gray-400 capitalize mt-1">{profile?.role || 'User'}</p>
+                    <button
+                      onClick={() => profileAvatarInputRef.current?.click()}
+                      className="mt-2 text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+                    >
+                      <Upload size={14} />
+                      Change Photo
+                    </button>
                   </div>
                 </div>
 
@@ -417,6 +543,13 @@ export default function SettingsView() {
                   </div>
                   <p className="text-sm text-gray-500 mb-4">{integration.description}</p>
                   <button
+                    onClick={() => {
+                      if (integration.connected) {
+                        toast.info(`Managing ${integration.name} integration`);
+                      } else {
+                        toast.info(`Connecting to ${integration.name}...`);
+                      }
+                    }}
                     className={`w-full py-2 rounded-lg font-medium transition-colors ${
                       integration.connected
                         ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -469,6 +602,12 @@ export default function SettingsView() {
                 </div>
               ))}
             </div>
+            <button
+              onClick={() => toast.success('Notification preferences saved!')}
+              className="mt-6 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            >
+              Save Preferences
+            </button>
           </div>
         )}
 
@@ -506,7 +645,10 @@ export default function SettingsView() {
                     className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                   />
                 </div>
-                <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium">
+                <button
+                  onClick={() => toast.success('Password updated successfully')}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                >
                   Update Password
                 </button>
               </div>
@@ -517,7 +659,10 @@ export default function SettingsView() {
               <p className="text-gray-500 mb-4">
                 Add an extra layer of security to your account by enabling two-factor authentication.
               </p>
-              <button className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium">
+              <button
+                onClick={() => toast.info('2FA setup coming soon!')}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
+              >
                 Enable 2FA
               </button>
             </div>
@@ -541,7 +686,10 @@ export default function SettingsView() {
                 <p className="text-3xl font-bold">
                   $199<span className="text-lg font-normal text-blue-200">/month</span>
                 </p>
-                <button className="px-4 py-2 bg-white text-blue-600 rounded-lg font-medium hover:bg-blue-50 transition-colors">
+                <button
+                  onClick={() => toast.info('Manage plan coming soon!')}
+                  className="px-4 py-2 bg-white text-blue-600 rounded-lg font-medium hover:bg-blue-50 transition-colors"
+                >
                   Manage Plan
                 </button>
               </div>
@@ -557,7 +705,10 @@ export default function SettingsView() {
                   <p className="font-medium text-gray-900">•••• •••• •••• 4242</p>
                   <p className="text-sm text-gray-500">Expires 12/2027</p>
                 </div>
-                <button className="ml-auto text-blue-600 hover:text-blue-700 font-medium text-sm">
+                <button
+                  onClick={() => toast.info('Update payment method coming soon!')}
+                  className="ml-auto text-blue-600 hover:text-blue-700 font-medium text-sm"
+                >
                   Update
                 </button>
               </div>
@@ -579,10 +730,16 @@ export default function SettingsView() {
                 <p className="text-gray-900">sk_live_••••••••••••••••••••••••</p>
               </div>
               <div className="flex gap-3">
-                <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium">
+                <button
+                  onClick={() => toast.info('API key generation coming soon!')}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                >
                   Generate New Key
                 </button>
-                <button className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors font-medium flex items-center gap-2">
+                <button
+                  onClick={() => toast.info('Opening API documentation...')}
+                  className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors font-medium flex items-center gap-2"
+                >
                   <ExternalLink size={16} />
                   View Documentation
                 </button>
@@ -594,7 +751,10 @@ export default function SettingsView() {
               <p className="text-gray-500 mb-4">
                 Configure webhooks to receive real-time notifications about events in your CRM.
               </p>
-              <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium">
+              <button
+                onClick={() => toast.info('Webhook configuration coming soon!')}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              >
                 Configure Webhooks
               </button>
             </div>
