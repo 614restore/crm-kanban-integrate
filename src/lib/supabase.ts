@@ -9,13 +9,26 @@ if (!supabaseUrl || !supabaseKey) {
   console.error('Missing Supabase configuration. Please check your .env file.');
 }
 
-// Initialize Supabase client
+// Initialize Supabase client with lock configuration to prevent timeouts
 const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: true
-  }
+    detectSessionInUrl: true,
+    // Fix LockManager timeout issues
+    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+    storageKey: 'sb-auth-token',
+    flowType: 'pkce',
+  },
+  // Increase global timeout to prevent lock timeout errors
+  global: {
+    headers: {
+      'x-client-info': 'crm-kanban-app',
+    },
+  },
+  db: {
+    schema: 'public',
+  },
 });
 
 export { supabase };
