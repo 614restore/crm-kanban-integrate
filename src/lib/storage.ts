@@ -9,7 +9,7 @@ export interface UploadResult {
 /**
  * Upload a file to Supabase Storage
  * @param file - The file to upload
- * @param bucket - The storage bucket name (e.g., 'avatars', 'logos', 'documents')
+ * @param bucket - The storage bucket name (e.g., 'avatars', 'company-logos', 'projectceo-documents')
  * @param folder - Optional folder within the bucket
  * @returns Upload result with URL and path
  */
@@ -84,7 +84,7 @@ export async function uploadCompanyLogo(
   file: File,
   companyId: string
 ): Promise<UploadResult> {
-  return uploadFile(file, 'logos', companyId);
+  return uploadFile(file, 'company-logos', companyId);
 }
 
 /**
@@ -111,7 +111,7 @@ export async function uploadDocument(
   contactId?: string
 ): Promise<UploadResult> {
   const folder = contactId ? `${companyId}/${contactId}` : companyId;
-  return uploadFile(file, 'documents', folder);
+  return uploadFile(file, 'projectceo-documents', folder);
 }
 
 /**
