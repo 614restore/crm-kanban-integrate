@@ -4,13 +4,8 @@ import { AuthProvider, useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
 import { supabase } from '@/lib/supabase';
 import {
-  mockContacts,
-  mockTeamMembers,
   defaultBoards,
   defaultLeadSources,
-  mockAppointments,
-  mockInvoices,
-  mockAutomations,
   Contact,
   Appointment,
   Invoice,
@@ -40,7 +35,7 @@ import InvoiceModal from './crm/InvoiceModal';
 import AuthPage from './crm/AuthPage';
 import { Building2, Loader2 } from 'lucide-react';
 
-// Initial CRM state (empty, will be populated from database)
+// Initial CRM state (completely empty)
 const initialState: CRMState = {
   currentUser: null,
   companyId: null,
@@ -63,16 +58,7 @@ const initialState: CRMState = {
   selectedInvoiceId: null,
   isLoading: true,
   isInitialized: false,
-  notifications: [
-    {
-      id: 'notif-1',
-      type: 'info',
-      title: 'Welcome to StormCraft CRM',
-      message: 'Your enterprise CRM is ready to use. Start by exploring the dashboard.',
-      timestamp: new Date().toISOString(),
-      read: false,
-    },
-  ],
+  notifications: [],
 };
 
 // View Router Component
@@ -117,7 +103,7 @@ function LoadingScreen() {
         <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
           <Building2 size={32} className="text-white" />
         </div>
-        <h1 className="text-2xl font-bold text-white mb-2">StormCraft CRM</h1>
+        <h1 className="text-2xl font-bold text-white mb-2">614 Restore CRM</h1>
         <div className="flex items-center justify-center gap-2 text-slate-400">
           <Loader2 className="animate-spin" size={20} />
           <span>Loading your data...</span>
@@ -211,17 +197,17 @@ function CRMApp() {
   // Load data from database
   const loadData = useCallback(async () => {
     if (!profile?.company_id) {
-      // No company yet - use mock data for demo
+      // No company yet - show empty state
       dispatch({
         type: 'INITIALIZE_DATA',
         payload: {
-          contacts: mockContacts,
-          appointments: mockAppointments,
-          invoices: mockInvoices,
+          contacts: [],
+          appointments: [],
+          invoices: [],
           boards: defaultBoards,
           leadSources: defaultLeadSources,
-          automations: mockAutomations,
-          teamMembers: mockTeamMembers,
+          automations: [],
+          teamMembers: [],
         },
       });
       return;
@@ -292,37 +278,33 @@ function CRMApp() {
         : defaultLeadSources;
 
       // Convert DB automations to app automations
-      const automations: Automation[] = dbAutomations.length > 0
-        ? dbAutomations.map(auto => ({
-            id: auto.id,
-            name: auto.name,
-            trigger: auto.trigger_event,
-            action: auto.action_type,
-            isActive: auto.is_active,
-            createdBy: auto.created_by || '',
-          }))
-        : mockAutomations;
+      const automations: Automation[] = dbAutomations.map(auto => ({
+        id: auto.id,
+        name: auto.name,
+        trigger: auto.trigger_event,
+        action: auto.action_type,
+        isActive: auto.is_active,
+        createdBy: auto.created_by || '',
+      }));
 
       // Convert DB team members to app team members
-      const teamMembers: TeamMember[] = dbTeamMembers.length > 0
-        ? dbTeamMembers.map(tm => ({
-            id: tm.id,
-            name: `${tm.first_name || ''} ${tm.last_name || ''}`.trim() || tm.email,
-            email: tm.email,
-            role: (tm.role || 'sales') as any,
-            avatar: tm.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(tm.first_name || tm.email)}&background=random`,
-            phone: tm.phone || '',
-            department: tm.department || 'General',
-            isActive: tm.is_active,
-          }))
-        : mockTeamMembers;
+      const teamMembers: TeamMember[] = dbTeamMembers.map(tm => ({
+        id: tm.id,
+        name: `${tm.first_name || ''} ${tm.last_name || ''}`.trim() || tm.email,
+        email: tm.email,
+        role: (tm.role || 'sales') as any,
+        avatar: tm.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(tm.first_name || tm.email)}&background=random`,
+        phone: tm.phone || '',
+        department: tm.department || 'General',
+        isActive: tm.is_active,
+      }));
 
       dispatch({
         type: 'INITIALIZE_DATA',
         payload: {
-          contacts: contacts.length > 0 ? contacts : mockContacts,
-          appointments: appointments.length > 0 ? appointments : mockAppointments,
-          invoices: invoices.length > 0 ? invoices : mockInvoices,
+          contacts,
+          appointments,
+          invoices,
           boards,
           leadSources,
           automations,
@@ -332,17 +314,17 @@ function CRMApp() {
 
     } catch (error) {
       console.error('Error loading CRM data:', error);
-      // Fall back to mock data on error
+      // Show empty state on error
       dispatch({
         type: 'INITIALIZE_DATA',
         payload: {
-          contacts: mockContacts,
-          appointments: mockAppointments,
-          invoices: mockInvoices,
+          contacts: [],
+          appointments: [],
+          invoices: [],
           boards: defaultBoards,
           leadSources: defaultLeadSources,
-          automations: mockAutomations,
-          teamMembers: mockTeamMembers,
+          automations: [],
+          teamMembers: [],
         },
       });
     }
