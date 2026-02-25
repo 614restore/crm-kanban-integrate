@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useCRM, useUpcomingAppointments } from '@/lib/crmStore';
 import { Appointment, formatDate } from '@/lib/crmData';
 import { db } from '@/lib/database';
+import { getMentionTargets, validateMentions } from '@/lib/mentions';
 import { toast } from 'sonner';
 import {
   Calendar,
@@ -46,6 +47,7 @@ export default function CalendarView() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [filterAssignee, setFilterAssignee] = useState<string>('all');
   const [filterType, setFilterType] = useState<string>('all');
+  const mentionTargets = getMentionTargets(state.teamMembers);
 
   // Get all appointments (mock + state)
   const allAppointments = [...state.appointments];
@@ -126,6 +128,27 @@ export default function CalendarView() {
     return sortedAppointments.filter((apt) => apt.date === dateStr);
   };
 
+  const validateNoteMentions = (notes: string): boolean => {
+    const { invalid } = validateMentions(notes, mentionTargets);
+    if (invalid.length === 0) return true;
+    toast.error(`Unknown mention(s): ${invalid.map((handle) => `@${handle}`).join(', ')}`);
+    return false;
+  };
+
+  const renderMentions = (value: string) => {
+    const known = new Set(mentionTargets.map((target) => target.handle.toLowerCase()));
+    return value.split(/(@[a-zA-Z0-9_]+)/g).map((part, index) => {
+      if (!part.startsWith('@')) return <React.Fragment key={index}>{part}</React.Fragment>;
+      const handle = part.slice(1).toLowerCase();
+      if (!known.has(handle)) return <React.Fragment key={index}>{part}</React.Fragment>;
+      return (
+        <span key={index} className="font-medium text-blue-700">
+          {part}
+        </span>
+      );
+    });
+  };
+
   const handleCreateAppointment = async () => {
     if (state.contacts.length === 0) {
       toast.error('Add a contact first before creating an appointment');
@@ -138,6 +161,8 @@ export default function CalendarView() {
     if (!title?.trim()) return;
 
     const time = window.prompt('Appointment time (HH:MM)', '09:00') || '09:00';
+    const notesInput = window.prompt('Appointment notes (use @handle to tag teammates)', '') || '';
+    if (!validateNoteMentions(notesInput)) return;
 
     const newAppointment: Appointment = {
       id: `apt-${Date.now()}`,
@@ -150,7 +175,7 @@ export default function CalendarView() {
       duration: 60,
       assignedTo: state.currentUser?.id || '',
       location: contact.address || '',
-      notes: '',
+      notes: notesInput.trim(),
       status: 'scheduled',
     };
 
@@ -182,14 +207,19 @@ export default function CalendarView() {
     const title = window.prompt('Edit appointment title', appointment.title);
     if (!title?.trim()) return;
 
+    const notesInput = window.prompt('Edit appointment notes (use @handle to tag teammates)', appointment.notes || '') || '';
+    if (!validateNoteMentions(notesInput)) return;
+
     const updatedAppointment: Appointment = {
       ...appointment,
       title: title.trim(),
+      notes: notesInput.trim(),
     };
 
     if (state.companyId) {
       const updated = await db.updateAppointment(appointment.id, {
         title: updatedAppointment.title,
+        notes: updatedAppointment.notes || undefined,
       });
 
       if (!updated) {
@@ -413,7 +443,7 @@ export default function CalendarView() {
                         </div>
                         {apt.notes && (
                           <p className="mt-3 text-sm text-gray-500 bg-gray-50 rounded-lg p-3">
-                            {apt.notes}
+                            {renderMentions(apt.notes)}
                           </p>
                         )}
                       </div>

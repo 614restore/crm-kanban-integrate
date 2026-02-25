@@ -1,7 +1,14 @@
-import React, { useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useCRM, useCurrentContact } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
+import {
+  applyMention,
+  findActiveMentionQuery,
+  getMentionSuggestions,
+  getMentionTargets,
+  validateMentions,
+} from '@/lib/mentions';
 import { toast } from 'sonner';
 import {
   Contact,
@@ -58,6 +65,10 @@ export default function ContactDetail() {
   const [isReassigning, setIsReassigning] = useState(false);
   const [editedContact, setEditedContact] = useState<Contact | null>(null);
   const [newNote, setNewNote] = useState('');
+  const [mentionStart, setMentionStart] = useState<number | null>(null);
+  const [mentionSuggestions, setMentionSuggestions] = useState<ReturnType<typeof getMentionTargets>>([]);
+  const noteInputRef = useRef<HTMLInputElement>(null);
+  const mentionTargets = useMemo(() => getMentionTargets(state.teamMembers), [state.teamMembers]);
 
   if (!contact) {
     return (
@@ -68,6 +79,34 @@ export default function ContactDetail() {
   }
 
   const assignee = state.teamMembers.find((tm) => tm.id === contact.assignedTo);
+
+  const syncMentionSuggestions = (text: string, caret: number) => {
+    const active = findActiveMentionQuery(text, caret);
+    if (!active) {
+      setMentionStart(null);
+      setMentionSuggestions([]);
+      return;
+    }
+
+    const suggestions = getMentionSuggestions(mentionTargets, active.query);
+    setMentionStart(active.start);
+    setMentionSuggestions(suggestions);
+  };
+
+  const insertMention = (handle: string) => {
+    if (!noteInputRef.current || mentionStart === null) return;
+    const caret = noteInputRef.current.selectionStart ?? newNote.length;
+    const updated = applyMention(newNote, mentionStart, caret, handle);
+
+    setNewNote(updated.text);
+    setMentionStart(null);
+    setMentionSuggestions([]);
+
+    requestAnimationFrame(() => {
+      noteInputRef.current?.focus();
+      noteInputRef.current?.setSelectionRange(updated.caret, updated.caret);
+    });
+  };
 
   const handleBack = () => {
     dispatch({ type: 'SELECT_CONTACT', payload: null });
@@ -143,6 +182,12 @@ export default function ContactDetail() {
   const handleAddNote = async () => {
     if (!newNote.trim()) return;
 
+    const { invalid } = validateMentions(newNote, mentionTargets);
+    if (invalid.length > 0) {
+      toast.error(`Unknown mention(s): ${invalid.map((handle) => `@${handle}`).join(', ')}`);
+      return;
+    }
+
     try {
       if (profile?.company_id) {
         await db.createCommunication({
@@ -173,6 +218,8 @@ export default function ContactDetail() {
       };
       dispatch({ type: 'UPDATE_CONTACT', payload: updatedContact });
       setNewNote('');
+      setMentionStart(null);
+      setMentionSuggestions([]);
     } catch (error) {
       console.error('Error adding note:', error);
     }
@@ -816,13 +863,60 @@ export default function ContactDetail() {
           <div className="max-w-3xl">
             <div className="bg-white rounded-xl border border-gray-200 p-6">
               <div className="flex items-center gap-3 mb-6">
-                <input
-                  type="text"
-                  value={newNote}
-                  onChange={(e) => setNewNote(e.target.value)}
-                  placeholder="Add a note..."
-                  className="flex-1 px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                />
+                <div className="flex-1 relative">
+                  <input
+                    ref={noteInputRef}
+                    type="text"
+                    value={newNote}
+                    onChange={(e) => {
+                      setNewNote(e.target.value);
+                      const caret = e.target.selectionStart ?? e.target.value.length;
+                      syncMentionSuggestions(e.target.value, caret);
+                    }}
+                    onClick={(e) => {
+                      const target = e.target as HTMLInputElement;
+                      const caret = target.selectionStart ?? target.value.length;
+                      syncMentionSuggestions(target.value, caret);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        setMentionSuggestions([]);
+                        setMentionStart(null);
+                        return;
+                      }
+
+                      if (e.key === 'Enter' && mentionSuggestions.length > 0) {
+                        e.preventDefault();
+                        insertMention(mentionSuggestions[0].handle);
+                        return;
+                      }
+
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        void handleAddNote();
+                      }
+                    }}
+                    placeholder="Add a note... use @jnewell to tag teammates"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                  />
+                  {mentionSuggestions.length > 0 && (
+                    <div className="absolute z-10 mt-2 w-full bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+                      {mentionSuggestions.map((target) => (
+                        <button
+                          key={target.id}
+                          type="button"
+                          onClick={() => insertMention(target.handle)}
+                          className="w-full px-3 py-2 text-left hover:bg-gray-50 transition-colors"
+                        >
+                          <p className="text-sm font-medium text-gray-900">@{target.handle}</p>
+                          <p className="text-xs text-gray-500">
+                            {target.name} • {target.email}
+                          </p>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <button
                   onClick={handleAddNote}
                   disabled={!newNote.trim()}
