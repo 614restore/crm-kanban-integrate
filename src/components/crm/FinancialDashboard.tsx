@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import { useCRM, useFinancialStats } from '@/lib/crmStore';
+import { db } from '@/lib/database';
+import { exportToExcel } from '@/lib/exportUtils';
+import { toast } from 'sonner';
 import {
   formatCurrency,
   formatDate,
@@ -33,6 +36,53 @@ export default function FinancialDashboard() {
   const financialStats = useFinancialStats();
   const [invoiceFilter, setInvoiceFilter] = useState<InvoiceFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
+
+  const handleExport = () => {
+    if (allInvoices.length === 0) {
+      toast.error('No invoices available to export');
+      return;
+    }
+
+    exportToExcel(allInvoices);
+    toast.success('Invoice export started');
+  };
+
+  const handleConnectQuickBooks = () => {
+    dispatch({ type: 'SET_VIEW', payload: 'settings' });
+    window.dispatchEvent(
+      new CustomEvent('crm-open-settings-tab', {
+        detail: { tab: 'integrations' },
+      })
+    );
+  };
+
+  const handleViewInvoiceContact = (contactId: string) => {
+    dispatch({ type: 'SELECT_CONTACT', payload: contactId });
+  };
+
+  const handleSendInvoice = async (invoiceId: string) => {
+    const existingInvoice = state.invoices.find((inv) => inv.id === invoiceId);
+    if (!existingInvoice) {
+      toast.error('Invoice not found');
+      return;
+    }
+
+    const updated = await db.updateInvoice(invoiceId, { status: 'sent' });
+    if (!updated) {
+      toast.error('Failed to mark invoice as sent');
+      return;
+    }
+
+    dispatch({
+      type: 'UPDATE_INVOICE',
+      payload: {
+        ...existingInvoice,
+        status: 'sent',
+      },
+    });
+
+    toast.success('Invoice marked as sent');
+  };
 
   const allInvoices = [...state.invoices];
 
@@ -95,7 +145,10 @@ export default function FinancialDashboard() {
           <p className="text-gray-500 mt-1">Track revenue, invoices, and payments</p>
         </div>
         <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+          <button
+            onClick={handleExport}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+          >
             <Download size={18} />
             <span className="font-medium">Export</span>
           </button>
@@ -216,7 +269,10 @@ export default function FinancialDashboard() {
               </p>
             </div>
           </div>
-          <button className="px-6 py-3 bg-white text-green-600 rounded-lg font-semibold hover:bg-green-50 transition-colors">
+          <button
+            onClick={handleConnectQuickBooks}
+            className="px-6 py-3 bg-white text-green-600 rounded-lg font-semibold hover:bg-green-50 transition-colors"
+          >
             Connect QuickBooks
           </button>
         </div>
@@ -310,12 +366,14 @@ export default function FinancialDashboard() {
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-1">
                       <button
+                        onClick={() => handleViewInvoiceContact(invoice.contactId)}
                         className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                         title="View"
                       >
                         <Eye size={16} className="text-gray-500" />
                       </button>
                       <button
+                        onClick={() => window.print()}
                         className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                         title="Print"
                       >
@@ -323,6 +381,7 @@ export default function FinancialDashboard() {
                       </button>
                       {invoice.status === 'draft' && (
                         <button
+                          onClick={() => handleSendInvoice(invoice.id)}
                           className="p-2 hover:bg-blue-100 rounded-lg transition-colors"
                           title="Send"
                         >
@@ -330,6 +389,7 @@ export default function FinancialDashboard() {
                         </button>
                       )}
                       <button
+                        onClick={() => toast.info('More actions coming soon')}
                         className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                         title="More"
                       >

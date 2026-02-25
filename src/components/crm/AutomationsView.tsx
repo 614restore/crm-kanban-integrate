@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { Automation } from '@/lib/crmData';
+import { db } from '@/lib/database';
+import { toast } from 'sonner';
 import {
   Zap,
   Plus,
@@ -43,7 +45,98 @@ export default function AutomationsView() {
   });
 
   const handleToggleAutomation = (id: string) => {
+    const target = state.automations.find((auto) => auto.id === id);
+    if (!target) return;
+
+    const nextIsActive = !target.isActive;
     dispatch({ type: 'TOGGLE_AUTOMATION', payload: id });
+
+    db.updateAutomation(id, { is_active: nextIsActive }).catch((error) => {
+      console.error('Failed to persist automation toggle:', error);
+      dispatch({ type: 'TOGGLE_AUTOMATION', payload: id });
+      toast.error('Failed to save automation status');
+    });
+  };
+
+  const handleCreateAutomation = async () => {
+    if (!state.companyId) {
+      toast.error('No company selected');
+      return;
+    }
+
+    const name = window.prompt('Automation name', 'New Automation');
+    if (!name?.trim()) return;
+
+    const created = await db.createAutomation({
+      company_id: state.companyId,
+      name: name.trim(),
+      trigger_event: 'status change',
+      action_type: 'send notification',
+      is_active: false,
+      created_by: state.currentUser?.id,
+    });
+
+    if (!created) {
+      toast.error('Failed to create automation');
+      return;
+    }
+
+    dispatch({
+      type: 'SET_AUTOMATIONS',
+      payload: [
+        ...state.automations,
+        {
+          id: created.id,
+          name: created.name,
+          trigger: created.trigger_event,
+          action: created.action_type,
+          isActive: created.is_active,
+          createdBy: created.created_by || '',
+        },
+      ],
+    });
+    toast.success('Automation created');
+  };
+
+  const handleEditAutomation = async (automation: Automation) => {
+    const name = window.prompt('Edit automation name', automation.name);
+    if (!name?.trim() || name.trim() === automation.name) return;
+
+    const updated = await db.updateAutomation(automation.id, { name: name.trim() });
+    if (!updated) {
+      toast.error('Failed to update automation');
+      return;
+    }
+
+    dispatch({
+      type: 'SET_AUTOMATIONS',
+      payload: state.automations.map((a) =>
+        a.id === automation.id
+          ? {
+              ...a,
+              name: updated.name,
+            }
+          : a
+      ),
+    });
+    toast.success('Automation updated');
+  };
+
+  const handleDeleteAutomation = async (automation: Automation) => {
+    const confirmed = window.confirm(`Delete automation "${automation.name}"?`);
+    if (!confirmed) return;
+
+    const ok = await db.deleteAutomation(automation.id);
+    if (!ok) {
+      toast.error('Failed to delete automation');
+      return;
+    }
+
+    dispatch({
+      type: 'SET_AUTOMATIONS',
+      payload: state.automations.filter((a) => a.id !== automation.id),
+    });
+    toast.success('Automation deleted');
   };
 
   const getActionIcon = (action: string) => {
@@ -82,7 +175,10 @@ export default function AutomationsView() {
             {activeCount} active, {inactiveCount} inactive automations
           </p>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+        <button
+          onClick={handleCreateAutomation}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+        >
           <Plus size={18} />
           <span className="font-medium">Create Automation</span>
         </button>
@@ -226,10 +322,16 @@ export default function AutomationsView() {
                   />
                 </button>
 
-                <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                <button
+                  onClick={() => handleEditAutomation(automation)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
                   <Edit2 size={16} className="text-gray-500" />
                 </button>
-                <button className="p-2 hover:bg-red-100 rounded-lg transition-colors">
+                <button
+                  onClick={() => handleDeleteAutomation(automation)}
+                  className="p-2 hover:bg-red-100 rounded-lg transition-colors"
+                >
                   <Trash2 size={16} className="text-red-500" />
                 </button>
               </div>

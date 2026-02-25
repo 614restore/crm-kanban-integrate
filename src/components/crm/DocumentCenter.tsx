@@ -1,6 +1,9 @@
-import React, { useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { formatDate, getContactFullName } from '@/lib/crmData';
+import { db } from '@/lib/database';
+import { uploadDocument, validateDocumentFile, formatFileSize } from '@/lib/storage';
+import { toast } from 'sonner';
 import {
   FileText,
   Search,
@@ -12,14 +15,11 @@ import {
   FileSpreadsheet,
   Grid,
   List,
-  Filter,
-  MoreVertical,
   Eye,
   Trash2,
   Share2,
-  Clock,
-  User,
   FolderOpen,
+  Loader2,
 } from 'lucide-react';
 
 type ViewMode = 'list' | 'grid';
@@ -30,6 +30,7 @@ interface DocumentItem {
   name: string;
   type: string;
   category: DocCategory;
+  url?: string;
   size: string;
   uploadedAt: string;
   uploadedBy: string;
@@ -42,14 +43,136 @@ export default function DocumentCenter() {
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<DocCategory>('all');
+  const [uploadedDocuments, setUploadedDocuments] = useState<DocumentItem[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const loadCompanyDocuments = async () => {
+      if (!state.companyId) {
+        setUploadedDocuments([]);
+        return;
+      }
+
+      const docs = await db.getDocuments(state.companyId);
+      const mapped: DocumentItem[] = docs.map((doc) => {
+        const linkedContact = state.contacts.find((contact) => contact.id === doc.contact_id);
+        const type = (doc.type || 'other') as DocCategory;
+
+        return {
+          id: doc.id,
+          name: doc.name,
+          type,
+          category: type,
+          url: doc.url,
+          size: doc.size || 'Unknown',
+          uploadedAt: doc.created_at,
+          uploadedBy: doc.uploaded_by || 'Team member',
+          contactName: linkedContact ? getContactFullName(linkedContact) : undefined,
+          contactId: doc.contact_id || undefined,
+        };
+      });
+
+      setUploadedDocuments(mapped);
+    };
+
+    loadCompanyDocuments();
+  }, [state.companyId, state.contacts]);
+
+  const inferCategory = (file: File): DocCategory => {
+    const fileName = file.name.toLowerCase();
+    if (fileName.includes('contract')) return 'contract';
+    if (fileName.includes('estimate')) return 'estimate';
+    if (fileName.includes('invoice')) return 'invoice';
+    if (file.type.startsWith('image/')) return 'photo';
+    if (fileName.includes('insurance')) return 'insurance';
+    return 'other';
+  };
+
+  const handleUploadFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!state.companyId) {
+      toast.error('No company selected');
+      return;
+    }
+
+    const validationError = validateDocumentFile(file, 15);
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const uploadResult = await uploadDocument(file, state.companyId);
+      if (uploadResult.error) {
+        toast.error(`Upload failed: ${uploadResult.error}`);
+        return;
+      }
+
+      const category = inferCategory(file);
+      const created = await db.createDocument({
+        company_id: state.companyId,
+        name: file.name,
+        type: category,
+        url: uploadResult.url,
+        size: formatFileSize(file.size),
+        uploaded_by: state.currentUser?.id,
+      });
+
+      if (!created) {
+        toast.error('File uploaded but failed to save document record');
+        return;
+      }
+
+      setUploadedDocuments((prev) => [
+        {
+          id: created.id,
+          name: created.name,
+          type: created.type,
+          category: created.type as DocCategory,
+          url: created.url,
+          size: created.size || formatFileSize(file.size),
+          uploadedAt: created.created_at,
+          uploadedBy: created.uploaded_by || 'Team member',
+        },
+        ...prev,
+      ]);
+
+      toast.success('File uploaded');
+    } catch (error) {
+      console.error('Document upload error:', error);
+      toast.error('Failed to upload file');
+    } finally {
+      setIsUploading(false);
+      event.target.value = '';
+    }
+  };
+
+  const handleDeleteDocument = async (docId: string) => {
+    const confirmed = window.confirm('Delete this document?');
+    if (!confirmed) return;
+
+    const ok = await db.deleteDocument(docId);
+    if (!ok) {
+      toast.error('Failed to delete document');
+      return;
+    }
+
+    setUploadedDocuments((prev) => prev.filter((doc) => doc.id !== docId));
+    toast.success('Document deleted');
+  };
 
   // Gather all documents from contacts
-  const allDocuments: DocumentItem[] = state.contacts.flatMap((contact) =>
+  const contactDocuments: DocumentItem[] = state.contacts.flatMap((contact) =>
     (contact.documents || []).map((doc) => ({
       id: doc.id,
       name: doc.name,
       type: doc.type,
       category: doc.type as DocCategory,
+      url: doc.url,
       size: doc.size,
       uploadedAt: doc.uploadedAt,
       uploadedBy: doc.uploadedBy,
@@ -57,6 +180,8 @@ export default function DocumentCenter() {
       contactId: contact.id,
     }))
   );
+
+  const allDocuments: DocumentItem[] = [...uploadedDocuments, ...contactDocuments];
 
   // Filter documents
   const filteredDocuments = allDocuments.filter((doc) => {
@@ -128,11 +253,23 @@ export default function DocumentCenter() {
 
   return (
     <div className="h-full flex">
+      <input
+        ref={fileInputRef}
+        type="file"
+        className="hidden"
+        onChange={handleUploadFile}
+        disabled={isUploading}
+      />
+
       {/* Sidebar */}
       <div className="w-64 bg-white border-r border-gray-200 p-4 flex-shrink-0">
-        <button className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors mb-6">
-          <Upload size={18} />
-          <span className="font-medium">Upload Files</span>
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isUploading}
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors mb-6 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isUploading ? <Loader2 size={18} className="animate-spin" /> : <Upload size={18} />}
+          <span className="font-medium">{isUploading ? 'Uploading...' : 'Upload Files'}</span>
         </button>
 
         <nav className="space-y-1">
@@ -275,16 +412,40 @@ export default function DocumentCenter() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-1">
-                          <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-                            <Eye size={16} className="text-gray-500" />
+                          <button
+                            onClick={() => doc.url && window.open(doc.url, '_blank', 'noopener,noreferrer')}
+                            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                          >
+                            <Eye
+                              size={16}
+                              className="text-gray-500"
+                            />
                           </button>
-                          <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                          <button
+                            onClick={() => doc.url && window.open(doc.url, '_blank', 'noopener,noreferrer')}
+                            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                          >
                             <Download size={16} className="text-gray-500" />
                           </button>
-                          <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                          <button
+                            onClick={async () => {
+                              if (!doc.url) return;
+                              try {
+                                await navigator.clipboard.writeText(doc.url);
+                                toast.success('Document link copied');
+                              } catch (error) {
+                                console.error('Failed to copy document link:', error);
+                                toast.error('Unable to copy link');
+                              }
+                            }}
+                            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                          >
                             <Share2 size={16} className="text-gray-500" />
                           </button>
-                          <button className="p-2 hover:bg-red-100 rounded-lg transition-colors">
+                          <button
+                            onClick={() => handleDeleteDocument(doc.id)}
+                            className="p-2 hover:bg-red-100 rounded-lg transition-colors"
+                          >
                             <Trash2 size={16} className="text-red-500" />
                           </button>
                         </div>
@@ -309,7 +470,10 @@ export default function DocumentCenter() {
                   key={doc.id}
                   className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow cursor-pointer group"
                 >
-                  <div className="aspect-square bg-gray-50 rounded-lg flex items-center justify-center mb-3">
+                  <div
+                    onClick={() => doc.url && window.open(doc.url, '_blank', 'noopener,noreferrer')}
+                    className="aspect-square bg-gray-50 rounded-lg flex items-center justify-center mb-3"
+                  >
                     {getFileIcon(doc.type)}
                   </div>
                   <h4 className="font-medium text-gray-900 truncate text-sm">{doc.name}</h4>
@@ -323,10 +487,13 @@ export default function DocumentCenter() {
                       {doc.category}
                     </span>
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button className="p-1 hover:bg-gray-100 rounded">
+                      <button
+                        onClick={() => doc.url && window.open(doc.url, '_blank', 'noopener,noreferrer')}
+                        className="p-1 hover:bg-gray-100 rounded"
+                      >
                         <Download size={14} className="text-gray-500" />
                       </button>
-                      <button className="p-1 hover:bg-red-100 rounded">
+                      <button onClick={() => handleDeleteDocument(doc.id)} className="p-1 hover:bg-red-100 rounded">
                         <Trash2 size={14} className="text-red-500" />
                       </button>
                     </div>

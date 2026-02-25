@@ -17,7 +17,6 @@ function escapeCsv(value: string | number | undefined | null): string {
  */
 function downloadCsv(csvContent: string, filename: string) {
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('url');
     const url = URL.createObjectURL(blob);
 
     const a = document.createElement('a');

@@ -501,6 +501,30 @@ export default function SettingsView() {
     { id: 'api', label: 'API Access', icon: <Key size={18} /> },
   ];
 
+  useEffect(() => {
+    const onOpenSettingsTab = (event: Event) => {
+      const customEvent = event as CustomEvent<{ tab?: SettingsTab }>;
+      const requestedTab = customEvent.detail?.tab;
+      if (requestedTab) {
+        setActiveTab(requestedTab);
+      }
+    };
+
+    window.addEventListener('crm-open-settings-tab', onOpenSettingsTab);
+    return () => window.removeEventListener('crm-open-settings-tab', onOpenSettingsTab);
+  }, []);
+
+  const integrationLinks: Record<string, string> = {
+    QuickBooks: 'https://quickbooks.intuit.com/',
+    Twilio: 'https://www.twilio.com/',
+    'Google Calendar': 'https://calendar.google.com/',
+    EagleView: 'https://www.eagleview.com/',
+    Stripe: 'https://stripe.com/',
+    DocuSign: 'https://www.docusign.com/',
+    ScopeMGR: 'https://crm-kanban-integrate.vercel.app/',
+    Zapier: 'https://zapier.com/',
+  };
+
   const integrations = [
     {
       name: 'QuickBooks',
@@ -983,11 +1007,17 @@ export default function SettingsView() {
                   <p className="text-sm text-gray-500 mb-4">{integration.description}</p>
                   <button
                     onClick={() => {
-                      if (integration.connected) {
-                        toast.info(`Managing ${integration.name} integration`);
-                      } else {
-                        toast.info(`Connecting to ${integration.name}...`);
+                      const url = integrationLinks[integration.name];
+                      if (url) {
+                        window.open(url, '_blank', 'noopener,noreferrer');
+                        return;
                       }
+
+                      toast.info(
+                        integration.connected
+                          ? `Manage ${integration.name} integration`
+                          : `Connect ${integration.name} integration`
+                      );
                     }}
                     className={`w-full py-2 rounded-lg font-medium transition-colors ${
                       integration.connected

@@ -53,12 +53,19 @@ export default function TeamView() {
     return acc;
   }, {} as Record<string, TeamMember[]>);
 
-  const companyId = 'STORM-2026-XYZ';
+  const companyId = state.companyId || 'No company linked';
 
   const handleCopyCompanyId = () => {
-    navigator.clipboard.writeText(companyId);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (!state.companyId) return;
+
+    navigator.clipboard.writeText(state.companyId)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      })
+      .catch((error) => {
+        console.error('Failed to copy company ID:', error);
+      });
   };
 
   const handleInvite = () => {
@@ -143,6 +150,7 @@ export default function TeamView() {
             </div>
             <button
               onClick={handleCopyCompanyId}
+              disabled={!state.companyId}
               className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
             >
               {copied ? (
