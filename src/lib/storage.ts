@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { supabase, supabaseKey, supabaseUrl } from './supabase';
 
 export interface UploadResult {
   url: string;
@@ -39,6 +39,61 @@ export async function getDocumentSignedUrl(pathOrUrl: string, expiresInSeconds: 
   return data?.signedUrl || null;
 }
 
+function encodeStoragePath(path: string): string {
+  return path
+    .split('/')
+    .map((segment) => encodeURIComponent(segment))
+    .join('/');
+}
+
+async function uploadBinaryViaRest(
+  bucket: string,
+  path: string,
+  payload: Blob | File,
+  accessToken: string,
+  timeoutMs: number = 20000
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(
+      `${supabaseUrl}/storage/v1/object/${bucket}/${encodeStoragePath(path)}`,
+      {
+        method: 'POST',
+        headers: {
+          apikey: supabaseKey,
+          Authorization: `Bearer ${accessToken}`,
+          'x-upsert': 'false',
+          'cache-control': '3600',
+          'content-type': payload.type || 'application/octet-stream',
+        },
+        body: payload,
+        signal: controller.signal,
+      }
+    );
+
+    if (!response.ok) {
+      const text = await response.text();
+      return { ok: false, message: text || `HTTP ${response.status}` };
+    }
+
+    return { ok: true };
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      return { ok: false, message: `Request timed out after ${Math.round(timeoutMs / 1000)}s` };
+    }
+
+    if (error instanceof Error) {
+      return { ok: false, message: error.message };
+    }
+
+    return { ok: false, message: 'Unknown upload error' };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 /**
  * Upload a file to Supabase Storage
  * @param file - The file to upload
@@ -53,7 +108,8 @@ export async function uploadFile(
 ): Promise<UploadResult> {
   try {
     const { data: authData } = await supabase.auth.getSession();
-    if (!authData?.session) {
+    const accessToken = authData?.session?.access_token;
+    if (!accessToken) {
       return {
         url: '',
         path: '',
@@ -66,25 +122,15 @@ export async function uploadFile(
     const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
     const filePath = folder ? `${folder}/${fileName}` : fileName;
 
-    const uploadOnce = async () => {
-      return supabase.storage
-        .from(bucket)
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false,
-          contentType: file.type || undefined,
-        });
-    };
+    // First attempt (direct REST upload for deterministic timeout behavior)
+    let result = await uploadBinaryViaRest(bucket, filePath, file, accessToken, 20000);
 
-    // First attempt
-    let { data, error } = await uploadOnce();
-
-    // Retry once for transient network/auth failures seen as StorageUnknownError/Load failed.
-    if (error && ((error as any).name === 'StorageUnknownError' || /load failed/i.test(error.message || ''))) {
-      console.warn('Upload transient failure, retrying once:', error);
+    // Retry once for transient network/auth failures.
+    if (!result.ok) {
+      console.warn('Upload transient failure, retrying once:', result.message);
       try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const refreshToken = sessionData?.session?.refresh_token;
+        const { data: refreshData } = await supabase.auth.getSession();
+        const refreshToken = refreshData?.session?.refresh_token;
         if (refreshToken) {
           await supabase.auth.refreshSession({ refresh_token: refreshToken });
         }
@@ -93,43 +139,23 @@ export async function uploadFile(
       }
 
       await new Promise((resolve) => setTimeout(resolve, 250));
-      let retryResult = await uploadOnce();
-
-      // Retry with Blob payload for browsers that fail File streaming intermittently.
-      if (retryResult.error) {
-        try {
-          const buffer = await file.arrayBuffer();
-          const blobPayload = new Blob([buffer], { type: file.type || 'application/octet-stream' });
-          retryResult = await supabase.storage
-            .from(bucket)
-            .upload(filePath, blobPayload, {
-              cacheControl: '3600',
-              upsert: false,
-              contentType: file.type || undefined,
-            });
-        } catch (blobRetryError) {
-          console.warn('Blob retry failed:', blobRetryError);
-        }
-      }
-
-      data = retryResult.data;
-      error = retryResult.error;
+      const buffer = await file.arrayBuffer();
+      const blobPayload = new Blob([buffer], { type: file.type || 'application/octet-stream' });
+      const { data: latestSession } = await supabase.auth.getSession();
+      const retryToken = latestSession?.session?.access_token || accessToken;
+      result = await uploadBinaryViaRest(bucket, filePath, blobPayload, retryToken, 25000);
     }
 
-    if (error) {
-      console.error('Upload error:', error);
-      const status = (error as any).statusCode || (error as any).status || '';
-      const details = (error as any).error || (error as any).name || '';
-      const parts = [error.message, status ? `status ${status}` : '', details].filter(Boolean);
-      return { url: '', path: '', error: parts.join(' | ') };
+    if (!result.ok) {
+      return { url: '', path: '', error: result.message };
     }
 
-    // Get public URL
-    const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(data.path);
+    // Public URL is used for logos/avatars; documents store path and are later resolved to signed URLs.
+    const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(filePath);
 
     return {
       url: urlData.publicUrl,
-      path: data.path,
+      path: filePath,
     };
   } catch (error) {
     console.error('Upload exception:', error);
@@ -147,6 +173,7 @@ export async function uploadFile(
     };
   }
 }
+
 /**
  * Delete a file from Supabase Storage
  * @param bucket - The storage bucket name
