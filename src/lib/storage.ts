@@ -52,6 +52,15 @@ export async function uploadFile(
   folder?: string
 ): Promise<UploadResult> {
   try {
+    const { data: authData } = await supabase.auth.getSession();
+    if (!authData?.session) {
+      return {
+        url: '',
+        path: '',
+        error: 'Session expired. Please sign in again and retry.',
+      };
+    }
+
     // Generate unique filename
     const fileExt = file.name.split('.').pop();
     const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
@@ -84,7 +93,25 @@ export async function uploadFile(
       }
 
       await new Promise((resolve) => setTimeout(resolve, 250));
-      const retryResult = await uploadOnce();
+      let retryResult = await uploadOnce();
+
+      // Retry with Blob payload for browsers that fail File streaming intermittently.
+      if (retryResult.error) {
+        try {
+          const buffer = await file.arrayBuffer();
+          const blobPayload = new Blob([buffer], { type: file.type || 'application/octet-stream' });
+          retryResult = await supabase.storage
+            .from(bucket)
+            .upload(filePath, blobPayload, {
+              cacheControl: '3600',
+              upsert: false,
+              contentType: file.type || undefined,
+            });
+        } catch (blobRetryError) {
+          console.warn('Blob retry failed:', blobRetryError);
+        }
+      }
+
       data = retryResult.data;
       error = retryResult.error;
     }
