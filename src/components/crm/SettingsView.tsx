@@ -240,8 +240,17 @@ export default function SettingsView() {
         const result = await uploadCompanyLogo(file, profile.company_id);
         
         if (result.error) {
-          toast.error(`Upload failed: ${result.error}`);
-          setCompanyLogo(previousLogo);
+          // Fallback path: persist as inline data URL when storage bucket is unavailable.
+          const updatedCompany = await db.updateCompany(profile.company_id, { logo_url: previewUrl });
+          if (!updatedCompany) {
+            toast.error(`Upload failed: ${result.error}`);
+            setCompanyLogo(previousLogo);
+            return;
+          }
+
+          setCompanyLogo(updatedCompany.logo_url || previewUrl);
+          window.dispatchEvent(new Event('crm-company-updated'));
+          toast.success('Logo saved (storage fallback mode)');
         } else {
           setCompanyLogo(result.url);
           
