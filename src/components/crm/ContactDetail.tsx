@@ -103,7 +103,10 @@ export default function ContactDetail() {
           claim_number: editedContact.claimNumber,
           adjuster_name: editedContact.adjusterName,
           adjuster_phone: editedContact.adjusterPhone,
+          adjuster_email: editedContact.adjusterEmail,
           deductible: editedContact.deductible,
+          is_retail: editedContact.isRetail,
+          retail_notes: editedContact.retailNotes,
           notes: editedContact.notes,
         });
       }
@@ -507,50 +510,168 @@ export default function ContactDetail() {
               </div>
 
               {/* Insurance Info */}
-              {(contact.insuranceCompany || isEditing) && (
+              {(!currentData.isRetail || contact.insuranceCompany || contact.policyNumber || contact.claimNumber || isEditing) && (
                 <div className="bg-white rounded-xl border border-gray-200 p-6">
                   <div className="flex items-center gap-2 mb-4">
                     <Shield className="text-blue-600" size={20} />
                     <h3 className="text-lg font-semibold text-gray-900">Insurance Information</h3>
                   </div>
-                  <div className="grid grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <label className="block text-sm font-medium text-gray-500 mb-1">
-                        Insurance Company
-                      </label>
+                      <label className="block text-sm font-medium text-gray-500 mb-1">Customer Type</label>
                       {isEditing ? (
-                        <input
-                          type="text"
-                          value={currentData.insuranceCompany || ''}
+                        <select
+                          value={currentData.isRetail ? 'retail' : 'insurance'}
                           onChange={(e) =>
-                            setEditedContact({ ...currentData, insuranceCompany: e.target.value })
+                            setEditedContact({
+                              ...currentData,
+                              isRetail: e.target.value === 'retail',
+                            })
                           }
                           className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                        />
+                        >
+                          <option value="insurance">Insurance</option>
+                          <option value="retail">Retail</option>
+                        </select>
                       ) : (
-                        <p className="text-gray-900">{contact.insuranceCompany || '-'}</p>
+                        <p className="text-gray-900">{contact.isRetail ? 'Retail' : 'Insurance'}</p>
                       )}
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-500 mb-1">
-                        Policy Number
-                      </label>
-                      <p className="text-gray-900">{contact.policyNumber || '-'}</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-500 mb-1">
-                        Claim Number
-                      </label>
-                      <p className="text-gray-900">{contact.claimNumber || '-'}</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-500 mb-1">
-                        Deductible
-                      </label>
-                      <p className="text-gray-900">
-                        {contact.deductible ? formatCurrency(contact.deductible) : '-'}
-                      </p>
-                    </div>
+
+                    {currentData.isRetail ? (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-500 mb-1">Retail Notes</label>
+                        {isEditing ? (
+                          <textarea
+                            value={currentData.retailNotes || ''}
+                            onChange={(e) =>
+                              setEditedContact({ ...currentData, retailNotes: e.target.value })
+                            }
+                            rows={2}
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none resize-none"
+                          />
+                        ) : (
+                          <p className="text-gray-900">{contact.retailNotes || '-'}</p>
+                        )}
+                      </div>
+                    ) : (
+                      <>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-500 mb-1">Insurance Company</label>
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              value={currentData.insuranceCompany || ''}
+                              onChange={(e) =>
+                                setEditedContact({ ...currentData, insuranceCompany: e.target.value })
+                              }
+                              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                            />
+                          ) : (
+                            <p className="text-gray-900">{contact.insuranceCompany || '-'}</p>
+                          )}
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-500 mb-1">Policy Number</label>
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              value={currentData.policyNumber || ''}
+                              onChange={(e) =>
+                                setEditedContact({ ...currentData, policyNumber: e.target.value })
+                              }
+                              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                            />
+                          ) : (
+                            <p className="text-gray-900">{contact.policyNumber || '-'}</p>
+                          )}
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-500 mb-1">Claim Number</label>
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              value={currentData.claimNumber || ''}
+                              onChange={(e) =>
+                                setEditedContact({ ...currentData, claimNumber: e.target.value })
+                              }
+                              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                            />
+                          ) : (
+                            <p className="text-gray-900">{contact.claimNumber || '-'}</p>
+                          )}
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-500 mb-1">Deductible</label>
+                          {isEditing ? (
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={currentData.deductible ?? ''}
+                              onChange={(e) =>
+                                setEditedContact({
+                                  ...currentData,
+                                  deductible: e.target.value ? Number(e.target.value) : undefined,
+                                })
+                              }
+                              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                            />
+                          ) : (
+                            <p className="text-gray-900">
+                              {contact.deductible ? formatCurrency(contact.deductible) : '-'}
+                            </p>
+                          )}
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-500 mb-1">Adjuster Name</label>
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              value={currentData.adjusterName || ''}
+                              onChange={(e) =>
+                                setEditedContact({ ...currentData, adjusterName: e.target.value })
+                              }
+                              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                            />
+                          ) : (
+                            <p className="text-gray-900">{contact.adjusterName || '-'}</p>
+                          )}
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-500 mb-1">Adjuster Phone</label>
+                          {isEditing ? (
+                            <input
+                              type="tel"
+                              value={currentData.adjusterPhone || ''}
+                              onChange={(e) =>
+                                setEditedContact({ ...currentData, adjusterPhone: e.target.value })
+                              }
+                              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                            />
+                          ) : (
+                            <p className="text-gray-900">{contact.adjusterPhone || '-'}</p>
+                          )}
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="block text-sm font-medium text-gray-500 mb-1">Adjuster Email</label>
+                          {isEditing ? (
+                            <input
+                              type="email"
+                              value={currentData.adjusterEmail || ''}
+                              onChange={(e) =>
+                                setEditedContact({ ...currentData, adjusterEmail: e.target.value })
+                              }
+                              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                            />
+                          ) : contact.adjusterEmail ? (
+                            <a href={`mailto:${contact.adjusterEmail}`} className="text-blue-600 hover:underline">{contact.adjusterEmail}</a>
+                          ) : (
+                            <p className="text-gray-900">-</p>
+                          )}
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               )}
