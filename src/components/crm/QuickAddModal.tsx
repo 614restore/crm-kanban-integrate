@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
+import { supabase } from '@/lib/supabase';
 import { db } from '@/lib/database';
+import { ensureUserHasCompany } from '@/lib/setupCompany';
 import { Contact, defaultLeadSources, CustomerStatus } from '@/lib/crmData';
 import { X, User, Phone, Mail, MapPin, DollarSign, Tag, Shield, Building, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 type FormStep = 'basic' | 'project' | 'insurance';
 
@@ -37,6 +40,30 @@ export default function QuickAddModal() {
     deductible: '',
     notes: '',
   });
+
+  const resolveCompanyId = async (): Promise<string | null> => {
+    if (profile?.company_id) return profile.company_id;
+    if (state.companyId) return state.companyId;
+
+    if (!profile?.id || !profile?.email) return null;
+
+    const ensured = await ensureUserHasCompany(profile.id, profile.email);
+    if (!ensured) return null;
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('company_id')
+      .eq('id', profile.id)
+      .single();
+
+    if (error || !data?.company_id) {
+      console.error('Failed to resolve company for Quick Add:', error);
+      return null;
+    }
+
+    dispatch({ type: 'SET_COMPANY_ID', payload: data.company_id });
+    return data.company_id;
+  };
 
   const handleClose = () => {
     dispatch({ type: 'TOGGLE_QUICK_ADD' });
@@ -72,7 +99,7 @@ export default function QuickAddModal() {
     setIsSubmitting(true);
 
     try {
-      const effectiveCompanyId = profile?.company_id || state.companyId || null;
+      const effectiveCompanyId = profile?.company_id || state.companyId || await resolveCompanyId();
 
       // If user has a company, save to database
       if (effectiveCompanyId) {
@@ -139,7 +166,7 @@ export default function QuickAddModal() {
 
         dispatch({ type: 'ADD_CONTACT', payload: createdContact });
       } else {
-        throw new Error('No company context found. Please log out and sign in again.');
+        throw new Error('No company context found. Please try again in a few seconds.');
       }
 
       dispatch({
@@ -157,13 +184,15 @@ export default function QuickAddModal() {
       handleClose();
     } catch (error) {
       console.error('Error creating contact:', error);
+      const message = error instanceof Error ? error.message : 'Failed to create contact. Please try again.';
+      toast.error(message);
       dispatch({
         type: 'ADD_NOTIFICATION',
         payload: {
           id: `notif-${Date.now()}`,
           type: 'error',
           title: 'Error',
-          message: 'Failed to create contact. Please try again.',
+          message,
           timestamp: new Date().toISOString(),
           read: false,
         },
