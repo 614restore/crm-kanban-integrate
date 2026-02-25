@@ -820,6 +820,41 @@ class DatabaseService {
     return data;
   }
 
+  async replaceKanbanColumns(boardId: string, columns: Partial<DbKanbanColumn>[]): Promise<boolean> {
+    const { error: deleteError } = await supabase
+      .from('kanban_columns')
+      .delete()
+      .eq('board_id', boardId);
+
+    if (deleteError) {
+      console.error('Error deleting existing kanban columns:', deleteError);
+      return false;
+    }
+
+    if (columns.length === 0) {
+      return true;
+    }
+
+    const payload = columns.map((col, index) => ({
+      board_id: boardId,
+      title: col.title,
+      status: col.status,
+      color: col.color,
+      sort_order: col.sort_order ?? index,
+    }));
+
+    const { error: insertError } = await supabase
+      .from('kanban_columns')
+      .insert(payload);
+
+    if (insertError) {
+      console.error('Error inserting kanban columns:', insertError);
+      return false;
+    }
+
+    return true;
+  }
+
   async deleteKanbanBoard(boardId: string): Promise<boolean> {
     const { error } = await supabase
       .from('kanban_boards')
