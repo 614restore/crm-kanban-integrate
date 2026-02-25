@@ -195,6 +195,31 @@ export default function SettingsView() {
     }
   };
 
+  const getReadableError = (error: unknown): string => {
+    if (error instanceof Error) return error.message;
+    if (typeof error === 'string') return error;
+
+    if (error && typeof error === 'object') {
+      const maybeMessage = (error as any).message;
+      if (typeof maybeMessage === 'string' && maybeMessage.trim()) return maybeMessage;
+
+      const maybeStatus = (error as any).status || (error as any).statusCode;
+      const maybeName = (error as any).name;
+      const summary = [maybeName, maybeStatus ? `status ${maybeStatus}` : '']
+        .filter(Boolean)
+        .join(' | ');
+
+      try {
+        const raw = JSON.stringify(error);
+        return summary ? `${summary} | ${raw}` : raw;
+      } catch {
+        return summary || 'Unknown object error';
+      }
+    }
+
+    return 'Unknown error';
+  };
+
   const handleSaveProfile = async () => {
     if (profile) {
       try {
@@ -271,7 +296,7 @@ export default function SettingsView() {
       }
     } catch (error) {
       console.error('Logo upload error:', error);
-      const message = error instanceof Error ? error.message : 'Unknown error';
+      const message = getReadableError(error);
       toast.error(`Failed to upload logo: ${message}`);
       setCompanyLogo(previousLogo);
     } finally {
@@ -325,7 +350,8 @@ export default function SettingsView() {
       }
     } catch (error) {
       console.error('Avatar upload error:', error);
-      toast.error('Failed to upload avatar');
+      const message = getReadableError(error);
+      toast.error(`Failed to upload avatar: ${message}`);
       setProfileAvatar(profile?.avatar_url || null);
     } finally {
       setIsUploadingAvatar(false);
