@@ -277,6 +277,22 @@ export default function SettingsView() {
     }
   };
 
+  const withTimeout = async <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+    const timeoutPromise = new Promise<T>((_, reject) => {
+      timeoutId = setTimeout(() => {
+        reject(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`));
+      }, ms);
+    });
+
+    try {
+      return await Promise.race([promise, timeoutPromise]);
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+    }
+  };
+
   const getReadableError = (error: unknown): string => {
     if (error instanceof Error) return error.message;
     if (typeof error === 'string') return error;
@@ -443,7 +459,7 @@ export default function SettingsView() {
 
       // Upload to Supabase if user has company
       if (companyId) {
-        const result = await uploadCompanyLogo(file, companyId);
+        const result = await withTimeout(uploadCompanyLogo(file, companyId), 25000, 'Company logo upload');
 
         if (result.error) {
           toast.error(`Upload failed: ${result.error}`);
@@ -451,7 +467,7 @@ export default function SettingsView() {
           return;
         } else {
           // Update company logo URL in database and verify persistence
-          const updatedCompany = await db.updateCompany(companyId, { logo_url: result.url });
+          const updatedCompany = await withTimeout(db.updateCompany(companyId, { logo_url: result.url }), 12000, 'Company logo save');
           if (!updatedCompany) {
             setCompanyLogo(previousLogo);
             toast.error('Logo uploaded, but failed to save to company profile');
@@ -500,7 +516,7 @@ export default function SettingsView() {
 
       // Upload to Supabase if user is authenticated
       if (profile?.id) {
-        const result = await uploadUserAvatar(file, profile.id);
+        const result = await withTimeout(uploadUserAvatar(file, profile.id), 25000, 'Profile avatar upload');
         
         if (result.error) {
           toast.error(`Upload failed: ${result.error}`);
@@ -510,7 +526,7 @@ export default function SettingsView() {
           
           // Update profile with new avatar URL
           try {
-            const { error } = await updateProfile({ avatar_url: result.url });
+            const { error } = await withTimeout(updateProfile({ avatar_url: result.url }), 12000, 'Profile avatar save');
             if (error) {
               throw error;
             }
@@ -533,6 +549,28 @@ export default function SettingsView() {
       setIsUploadingAvatar(false);
     }
   };
+
+  useEffect(() => {
+    if (!isUploadingLogo) return;
+
+    const timer = window.setTimeout(() => {
+      setIsUploadingLogo(false);
+      toast.error('Logo upload is taking too long. Please try again.');
+    }, 35000);
+
+    return () => window.clearTimeout(timer);
+  }, [isUploadingLogo]);
+
+  useEffect(() => {
+    if (!isUploadingAvatar) return;
+
+    const timer = window.setTimeout(() => {
+      setIsUploadingAvatar(false);
+      toast.error('Avatar upload is taking too long. Please try again.');
+    }, 35000);
+
+    return () => window.clearTimeout(timer);
+  }, [isUploadingAvatar]);
 
   const tabs = [
     { id: 'company', label: 'Company', icon: <Building2 size={18} /> },
