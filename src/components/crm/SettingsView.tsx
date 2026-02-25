@@ -29,7 +29,12 @@ import {
   User,
   Upload,
   Loader2,
+  LogOut,
+  AlertTriangle,
+  RotateCcw,
 } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { ensureDefaultLeadSources } from '@/lib/setupCompany';
 
 type SettingsTab = 'company' | 'profile' | 'integrations' | 'notifications' | 'security' | 'billing' | 'api';
 
@@ -43,7 +48,7 @@ interface CompanyFormData {
 
 export default function SettingsView() {
   const { state, dispatch } = useCRM();
-  const { profile, updateProfile } = useAuth();
+  const { profile, updateProfile, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState<SettingsTab>('company');
   const [newLeadSource, setNewLeadSource] = useState('');
   const [showAddLeadSource, setShowAddLeadSource] = useState(false);
@@ -77,6 +82,9 @@ export default function SettingsView() {
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isLoadingCompany, setIsLoadingCompany] = useState(false);
+  const [isStartingFresh, setIsStartingFresh] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
   
   // Refs for file inputs
   const companyLogoInputRef = useRef<HTMLInputElement>(null);
@@ -255,6 +263,92 @@ export default function SettingsView() {
         toast.error('Failed to update profile');
         console.error('Profile update error:', error);
       }
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      toast.success('Logged out successfully');
+    } catch (error) {
+      console.error('Logout error:', error);
+      toast.error('Failed to log out');
+    }
+  };
+
+  const handleStartFreshWorkspace = async () => {
+    if (!profile?.id || !profile?.email) {
+      toast.error('You must be signed in to start fresh');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      'Start fresh with a brand new company workspace? This will switch your profile to a new company and initialize default settings.'
+    );
+    if (!confirmed) return;
+
+    setIsStartingFresh(true);
+    try {
+      const newCompanyName = `${profile.email.split('@')[0] || 'My'}'s Company`;
+      const newCompany = await db.createCompany({
+        name: newCompanyName,
+        email: profile.email,
+        phone: '',
+        address: '',
+        website: '',
+      });
+
+      if (!newCompany) {
+        toast.error('Failed to create a new company workspace');
+        return;
+      }
+
+      const profileUpdate = await updateProfile({ company_id: newCompany.id });
+      if (profileUpdate.error) {
+        throw profileUpdate.error;
+      }
+
+      await ensureDefaultLeadSources(newCompany.id);
+
+      dispatch({ type: 'SET_COMPANY_ID', payload: newCompany.id });
+      dispatch({ type: 'SET_VIEW', payload: 'dashboard' });
+      window.dispatchEvent(new Event('crm-company-updated'));
+      toast.success('Fresh workspace created. You are now in a brand-new company.');
+    } catch (error) {
+      console.error('Start fresh workspace error:', error);
+      toast.error('Failed to start fresh workspace');
+    } finally {
+      setIsStartingFresh(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!profile?.id) {
+      toast.error('You must be signed in');
+      return;
+    }
+
+    if (deleteConfirmText.trim().toUpperCase() !== 'DELETE') {
+      toast.error('Type DELETE to confirm account deletion');
+      return;
+    }
+
+    setIsDeletingAccount(true);
+    try {
+      const { error } = await supabase.rpc('delete_my_account');
+      if (error) {
+        throw error;
+      }
+
+      await signOut();
+      toast.success('Your account has been deleted');
+    } catch (error) {
+      console.error('Delete account error:', error);
+      toast.error(
+        'Account deletion requires a server-side function. For now, use "Start fresh workspace" or contact admin to run account deletion.'
+      );
+    } finally {
+      setIsDeletingAccount(false);
     }
   };
 
@@ -905,6 +999,76 @@ export default function SettingsView() {
                   </button>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'security' && (
+          <div className="max-w-3xl space-y-6">
+            <div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Security & Account</h3>
+              <p className="text-sm text-gray-500">
+                Manage your session and account lifecycle actions.
+              </p>
+            </div>
+
+            <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+              <h4 className="text-base font-semibold text-gray-900">Session</h4>
+              <p className="text-sm text-gray-500">
+                Log out from this device. You can sign back in at any time.
+              </p>
+              <button
+                onClick={handleLogout}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors font-medium"
+              >
+                <LogOut size={16} />
+                Log out
+              </button>
+            </div>
+
+            <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+              <h4 className="text-base font-semibold text-gray-900">Start Fresh</h4>
+              <p className="text-sm text-gray-500">
+                Create a new empty company workspace and move your user to it. This is the safest way to restart setup without deleting your login.
+              </p>
+              <button
+                onClick={handleStartFreshWorkspace}
+                disabled={isStartingFresh}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isStartingFresh ? <Loader2 size={16} className="animate-spin" /> : <RotateCcw size={16} />}
+                {isStartingFresh ? 'Creating new workspace...' : 'Start fresh workspace'}
+              </button>
+            </div>
+
+            <div className="bg-red-50 rounded-xl border border-red-200 p-6 space-y-4">
+              <h4 className="text-base font-semibold text-red-800 flex items-center gap-2">
+                <AlertTriangle size={16} />
+                Delete Account
+              </h4>
+              <p className="text-sm text-red-700">
+                Permanent delete requires a backend function (`delete_my_account`) with elevated Supabase permissions.
+              </p>
+              <div>
+                <label className="block text-sm font-medium text-red-800 mb-1">
+                  Type DELETE to confirm
+                </label>
+                <input
+                  type="text"
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  placeholder="DELETE"
+                  className="w-full max-w-sm px-4 py-2 border border-red-200 rounded-lg focus:ring-2 focus:ring-red-500/20 focus:border-red-500 outline-none"
+                />
+              </div>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={isDeletingAccount}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isDeletingAccount ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                {isDeletingAccount ? 'Deleting...' : 'Delete account'}
+              </button>
             </div>
           </div>
         )}
