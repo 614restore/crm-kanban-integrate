@@ -34,7 +34,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { ensureDefaultLeadSources } from '@/lib/setupCompany';
+import { ensureDefaultLeadSources, ensureUserHasCompany } from '@/lib/setupCompany';
 
 type SettingsTab = 'company' | 'profile' | 'integrations' | 'notifications' | 'security' | 'billing' | 'api';
 
@@ -93,6 +93,36 @@ export default function SettingsView() {
   const userRole = state.currentUser?.role || 'sales';
   const canManageSources = canManageLeadSources(userRole);
   const effectiveCompanyId = profile?.company_id || state.companyId || null;
+
+  const resolveCompanyId = async (): Promise<string | null> => {
+    if (effectiveCompanyId) return effectiveCompanyId;
+
+    if (!profile?.id || !profile?.email) {
+      return null;
+    }
+
+    try {
+      const ensured = await ensureUserHasCompany(profile.id, profile.email);
+      if (!ensured) return null;
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('company_id')
+        .eq('id', profile.id)
+        .single();
+
+      if (error || !data?.company_id) {
+        console.error('Failed to resolve company after ensureUserHasCompany:', error);
+        return null;
+      }
+
+      dispatch({ type: 'SET_COMPANY_ID', payload: data.company_id });
+      return data.company_id;
+    } catch (error) {
+      console.error('resolveCompanyId error:', error);
+      return null;
+    }
+  };
 
   // Combine default and custom lead sources
   const allLeadSources = [...defaultLeadSources, ...state.leadSources.filter((ls) => ls.isCustom)];
@@ -176,7 +206,9 @@ export default function SettingsView() {
   };
 
   const handleSaveCompany = async () => {
-    if (!effectiveCompanyId) {
+    const companyId = effectiveCompanyId || await resolveCompanyId();
+
+    if (!companyId) {
       toast.error('No company associated with your account')
       return;
     }
@@ -184,7 +216,7 @@ export default function SettingsView() {
     setIsSavingCompany(true);
 
     try {
-      const result = await db.updateCompany(effectiveCompanyId, {
+      const result = await db.updateCompany(companyId, {
         name: companyForm.name,
         phone: companyForm.phone,
         email: companyForm.email,
@@ -368,6 +400,14 @@ export default function SettingsView() {
     setIsUploadingLogo(true);
 
     try {
+      const companyId = effectiveCompanyId || await resolveCompanyId();
+
+      if (!companyId) {
+        toast.error('No company context available. Please refresh and sign in again.');
+        setCompanyLogo(previousLogo);
+        return;
+      }
+
       // Non-blocking preview: do not fail upload if preview creation fails.
       let previewUrl = previousLogo;
       try {
@@ -378,8 +418,8 @@ export default function SettingsView() {
       }
 
       // Upload to Supabase if user has company
-      if (effectiveCompanyId) {
-        const result = await uploadCompanyLogo(file, effectiveCompanyId);
+      if (companyId) {
+        const result = await uploadCompanyLogo(file, companyId);
 
         if (result.error) {
           // Fallback path: persist a real data URL (never blob:) when storage upload fails.
@@ -396,7 +436,7 @@ export default function SettingsView() {
             return;
           }
 
-          const updatedCompany = await db.updateCompany(effectiveCompanyId, { logo_url: fallbackDataUrl });
+          const updatedCompany = await db.updateCompany(companyId, { logo_url: fallbackDataUrl });
           if (!updatedCompany) {
             toast.error(`Upload failed: ${result.error}`);
             setCompanyLogo(previousLogo);
@@ -408,7 +448,7 @@ export default function SettingsView() {
           toast.success('Logo saved (storage fallback mode)');
         } else {
           // Update company logo URL in database and verify persistence
-          const updatedCompany = await db.updateCompany(effectiveCompanyId, { logo_url: result.url });
+          const updatedCompany = await db.updateCompany(companyId, { logo_url: result.url });
           if (!updatedCompany) {
             setCompanyLogo(previousLogo);
             toast.error('Logo uploaded, but failed to save to company profile');
