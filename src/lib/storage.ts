@@ -189,12 +189,12 @@ export function validateDocumentFile(file: File, maxSizeMB: number = 10): string
  * @returns Data URL for preview
  */
 export function createPreviewUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+  try {
+    // Object URLs are more reliable than FileReader for client-side preview.
+    return Promise.resolve(URL.createObjectURL(file));
+  } catch (error) {
+    return Promise.reject(error instanceof Error ? error : new Error('Failed to create preview URL'));
+  }
 }
 
 /**
