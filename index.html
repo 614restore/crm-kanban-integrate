@@ -6,6 +6,9 @@
     <script type="text/javascript">
       // Handle redirected SPA routes from public/404.html on GitHub Pages.
       (function (l) {
+        try {
+          window.sessionStorage.removeItem('gh_pages_spa_redirect_attempted');
+        } catch (e) {}
         if (l.search[1] === "/") {
           var decoded = l.search
             .slice(1)
