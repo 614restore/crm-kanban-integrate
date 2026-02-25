@@ -57,13 +57,37 @@ export async function uploadFile(
     const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
     const filePath = folder ? `${folder}/${fileName}` : fileName;
 
-    // Upload file
-    const { data, error } = await supabase.storage
-      .from(bucket)
-      .upload(filePath, file, {
-        cacheControl: '3600',
-        upsert: false,
-      });
+    const uploadOnce = async () => {
+      return supabase.storage
+        .from(bucket)
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false,
+          contentType: file.type || undefined,
+        });
+    };
+
+    // First attempt
+    let { data, error } = await uploadOnce();
+
+    // Retry once for transient network/auth failures seen as StorageUnknownError/Load failed.
+    if (error && ((error as any).name === 'StorageUnknownError' || /load failed/i.test(error.message || ''))) {
+      console.warn('Upload transient failure, retrying once:', error);
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const refreshToken = sessionData?.session?.refresh_token;
+        if (refreshToken) {
+          await supabase.auth.refreshSession({ refresh_token: refreshToken });
+        }
+      } catch (refreshError) {
+        console.warn('Session refresh before retry failed:', refreshError);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      const retryResult = await uploadOnce();
+      data = retryResult.data;
+      error = retryResult.error;
+    }
 
     if (error) {
       console.error('Upload error:', error);
@@ -96,7 +120,6 @@ export async function uploadFile(
     };
   }
 }
-
 /**
  * Delete a file from Supabase Storage
  * @param bucket - The storage bucket name
