@@ -84,6 +84,7 @@ export default function SettingsView() {
 
   const userRole = state.currentUser?.role || 'sales';
   const canManageSources = canManageLeadSources(userRole);
+  const effectiveCompanyId = profile?.company_id || state.companyId || null;
 
   // Combine default and custom lead sources
   const allLeadSources = [...defaultLeadSources, ...state.leadSources.filter((ls) => ls.isCustom)];
@@ -91,10 +92,10 @@ export default function SettingsView() {
   // Load company data on mount
   useEffect(() => {
     const loadCompanyData = async () => {
-      if (profile?.company_id) {
+      if (effectiveCompanyId) {
         setIsLoadingCompany(true);
         try {
-          const company = await db.getCompany(profile.company_id);
+          const company = await db.getCompany(effectiveCompanyId);
           if (company) {
             setCompanyForm({
               name: company.name || 'StormCraft Roofing',
@@ -116,19 +117,19 @@ export default function SettingsView() {
     };
 
     loadCompanyData();
-  }, [profile?.company_id]);
+  }, [effectiveCompanyId]);
 
   const handleAddLeadSource = async () => {
     const sourceName = newLeadSource.trim();
     if (!sourceName) return;
 
     try {
-      if (profile?.company_id) {
+      if (effectiveCompanyId) {
         const created = await db.createLeadSource({
-          company_id: profile.company_id,
+          company_id: effectiveCompanyId,
           name: sourceName,
           is_custom: true,
-          created_by: profile.id,
+          created_by: profile?.id,
         });
 
         if (!created) {
@@ -165,15 +166,15 @@ export default function SettingsView() {
   };
 
   const handleSaveCompany = async () => {
-    if (!profile?.company_id) {
-      toast.error('No company associated with your account');
+    if (!effectiveCompanyId) {
+      toast.error('No company associated with your account')
       return;
     }
 
     setIsSavingCompany(true);
 
     try {
-      const result = await db.updateCompany(profile.company_id, {
+      const result = await db.updateCompany(effectiveCompanyId, {
         name: companyForm.name,
         phone: companyForm.phone,
         email: companyForm.email,
@@ -266,8 +267,8 @@ export default function SettingsView() {
       }
 
       // Upload to Supabase if user has company
-      if (profile?.company_id) {
-        const result = await uploadCompanyLogo(file, profile.company_id);
+      if (effectiveCompanyId) {
+        const result = await uploadCompanyLogo(file, effectiveCompanyId);
 
         if (result.error) {
           // Fallback path: persist the preview URL when storage bucket upload fails.
@@ -277,7 +278,7 @@ export default function SettingsView() {
             return;
           }
 
-          const updatedCompany = await db.updateCompany(profile.company_id, { logo_url: previewUrl });
+          const updatedCompany = await db.updateCompany(effectiveCompanyId, { logo_url: previewUrl });
           if (!updatedCompany) {
             toast.error(`Upload failed: ${result.error}`);
             setCompanyLogo(previousLogo);
@@ -289,7 +290,7 @@ export default function SettingsView() {
           toast.success('Logo saved (storage fallback mode)');
         } else {
           // Update company logo URL in database and verify persistence
-          const updatedCompany = await db.updateCompany(profile.company_id, { logo_url: result.url });
+          const updatedCompany = await db.updateCompany(effectiveCompanyId, { logo_url: result.url });
           if (!updatedCompany) {
             setCompanyLogo(previousLogo);
             toast.error('Logo uploaded, but failed to save to company profile');
@@ -301,7 +302,7 @@ export default function SettingsView() {
           toast.success('Logo uploaded and saved successfully');
         }
       } else {
-        toast.success('Logo preview loaded (connect database to persist)');
+        toast.error('No company context available. Please refresh and sign in again.');
       }
     } catch (error) {
       console.error('Logo upload error:', error);
@@ -328,9 +329,13 @@ export default function SettingsView() {
     setIsUploadingAvatar(true);
 
     try {
-      // Create preview immediately
-      const previewUrl = await createPreviewUrl(file);
-      setProfileAvatar(previewUrl);
+      // Create preview immediately (non-blocking)
+      try {
+        const previewUrl = URL.createObjectURL(file);
+        setProfileAvatar(previewUrl);
+      } catch (previewError) {
+        console.warn('Avatar preview creation failed:', previewError);
+      }
 
       // Upload to Supabase if user is authenticated
       if (profile?.id) {
@@ -652,7 +657,7 @@ export default function SettingsView() {
                         <button
                           onClick={async () => {
                             try {
-                              if (profile?.company_id) {
+                              if (effectiveCompanyId) {
                                 const ok = await db.deleteLeadSource(source.id);
                                 if (!ok) {
                                   toast.error('Failed to delete lead source');
