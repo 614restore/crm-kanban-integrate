@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/lib/authContext';
+import { supabase } from '@/lib/supabase';
 import { roleLabels, UserRole } from '@/lib/crmData';
 import {
   Building2,
@@ -36,6 +37,12 @@ export default function AuthPage() {
     return normalized.includes('user already registered') || normalized.includes('already registered');
   };
 
+  const isTokenError = (message?: string | null) => {
+    if (!message) return false;
+    const normalized = message.toLowerCase();
+    return normalized.includes('token') || normalized.includes('jwt') || normalized.includes('refresh_token');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -46,7 +53,16 @@ export default function AuthPage() {
       if (mode === 'login') {
         const { error } = await signIn(email, password);
         if (error) {
-          setError(error.message || 'Failed to sign in. Please check your credentials.');
+          if (isTokenError(error.message)) {
+            try {
+              await supabase.auth.signOut({ scope: 'local' });
+            } catch (signOutError) {
+              console.warn('Failed to clear local auth session after token error:', signOutError);
+            }
+            setError('Your previous session expired. Please try signing in again.');
+          } else {
+            setError(error.message || 'Failed to sign in. Please check your credentials.');
+          }
         }
       } else if (mode === 'signup') {
         if (password !== confirmPassword) {

@@ -1,4 +1,4 @@
-import React, { useReducer, useEffect, useCallback } from 'react';
+import React, { useReducer, useEffect, useCallback, useRef } from 'react';
 import { CRMContext, crmReducer, CRMState } from '@/lib/crmStore';
 import { AuthProvider, useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
@@ -156,15 +156,35 @@ function dbContactToAppContact(dbContact: any): Contact {
 // Helper function to convert DB appointment to app appointment
 function dbAppointmentToAppAppointment(dbAppointment: any, contacts: Contact[]): Appointment {
   const contact = contacts.find(c => c.id === dbAppointment.contact_id);
+
+  let date = dbAppointment.date;
+  let time = dbAppointment.time;
+  let duration = dbAppointment.duration;
+
+  if ((!date || !time) && dbAppointment.start_time) {
+    const start = new Date(dbAppointment.start_time);
+    const end = dbAppointment.end_time ? new Date(dbAppointment.end_time) : null;
+
+    date = start.toISOString().split('T')[0];
+    time = `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`;
+
+    if (!duration) {
+      duration =
+        end && !Number.isNaN(end.getTime())
+          ? Math.max(15, Math.round((end.getTime() - start.getTime()) / (1000 * 60)))
+          : 60;
+    }
+  }
+
   return {
     id: dbAppointment.id,
     contactId: dbAppointment.contact_id,
     contactName: contact ? `${contact.firstName} ${contact.lastName}` : 'Unknown',
     title: dbAppointment.title,
     type: dbAppointment.type,
-    date: dbAppointment.date,
-    time: dbAppointment.time,
-    duration: dbAppointment.duration,
+    date: date || new Date().toISOString().split('T')[0],
+    time: time || '09:00',
+    duration: duration || 60,
     assignedTo: dbAppointment.assigned_to || '',
     location: dbAppointment.location || '',
     notes: dbAppointment.notes,
@@ -193,6 +213,7 @@ function dbInvoiceToAppInvoice(dbInvoice: any, contacts: Contact[]): Invoice {
 function CRMApp() {
   const { profile, user } = useAuth();
   const [state, dispatch] = useReducer(crmReducer, initialState);
+  const realtimeFailedRef = useRef(false);
 
   // Load data from database
   const loadData = useCallback(async () => {
@@ -380,11 +401,43 @@ function CRMApp() {
       onTeamMemberChange: () => {
         loadData();
       },
+      onStatusChange: (status, error) => {
+        if ((status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') && !realtimeFailedRef.current) {
+          realtimeFailedRef.current = true;
+          console.warn('Realtime unavailable; continuing with periodic reload fallback.', { status, error });
+          dispatch({
+            type: 'ADD_NOTIFICATION',
+            payload: {
+              id: `notif-realtime-${Date.now()}`,
+              type: 'warning',
+              title: 'Realtime connection unavailable',
+              message: 'Live sync is temporarily unavailable. Data will continue refreshing automatically.',
+              timestamp: new Date().toISOString(),
+              read: false,
+            },
+          });
+        } else if (status === 'SUBSCRIBED') {
+          realtimeFailedRef.current = false;
+        }
+      },
     });
 
     return () => {
       db.unsubscribe(channel);
     };
+  }, [profile?.company_id, loadData]);
+
+  // Polling fallback when realtime websocket is unavailable.
+  useEffect(() => {
+    if (!profile?.company_id) return;
+
+    const poller = window.setInterval(() => {
+      if (realtimeFailedRef.current) {
+        loadData();
+      }
+    }, 20000);
+
+    return () => window.clearInterval(poller);
   }, [profile?.company_id, loadData]);
 
   // Load data on mount

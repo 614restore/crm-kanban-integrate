@@ -1023,6 +1023,7 @@ class DatabaseService {
     onLeadSourceChange?: (payload: any) => void;
     onBoardChange?: (payload: any) => void;
     onTeamMemberChange?: (payload: any) => void;
+    onStatusChange?: (status: string, error?: Error) => void;
   }) {
     const channel = supabase.channel('all-changes');
 
@@ -1087,7 +1088,11 @@ class DatabaseService {
       );
     }
 
-    return channel.subscribe();
+    return channel.subscribe((status, error) => {
+      if (callbacks.onStatusChange) {
+        callbacks.onStatusChange(status, error || undefined);
+      }
+    });
   }
 
   unsubscribe(channel: any) {
