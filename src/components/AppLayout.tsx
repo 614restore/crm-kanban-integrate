@@ -392,6 +392,29 @@ function CRMApp() {
     loadData();
   }, [loadData]);
 
+  // Fail-safe: avoid getting stuck on the loading screen if initial data calls stall
+  useEffect(() => {
+    if (!state.isLoading || state.isInitialized) return;
+
+    const timer = window.setTimeout(() => {
+      console.warn('Initial CRM data load timed out; showing app shell with empty data.');
+      dispatch({
+        type: 'INITIALIZE_DATA',
+        payload: {
+          contacts: [],
+          appointments: [],
+          invoices: [],
+          boards: defaultBoards,
+          leadSources: defaultLeadSources,
+          automations: [],
+          teamMembers: [],
+        },
+      });
+    }, 15000);
+
+    return () => window.clearTimeout(timer);
+  }, [state.isLoading, state.isInitialized]);
+
   // Set current user from profile
   useEffect(() => {
     if (profile) {

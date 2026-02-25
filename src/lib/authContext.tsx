@@ -113,6 +113,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Fail-safe: never block the app forever on auth loading
+  useEffect(() => {
+    if (!loading) return;
+
+    const timer = window.setTimeout(() => {
+      console.warn('Auth loading timed out; continuing with current session state.');
+      setLoading(false);
+    }, 12000);
+
+    return () => window.clearTimeout(timer);
+  }, [loading]);
+
   const signIn = async (email: string, password: string) => {
     try {
       const { error } = await supabase.auth.signInWithPassword({
