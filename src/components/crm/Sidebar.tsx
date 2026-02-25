@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useCRM, ViewType, canViewFinancials, canManageTeam } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
+import { db } from '@/lib/database';
 import {
   LayoutDashboard,
   Kanban,
@@ -44,8 +45,41 @@ export default function Sidebar() {
   const { state, dispatch } = useCRM();
   const { profile, signOut } = useAuth();
   const { currentView, sidebarCollapsed, currentUser } = state;
+  const [companyName, setCompanyName] = useState('StormCraft');
+  const [companyLogoUrl, setCompanyLogoUrl] = useState<string | null>(null);
 
   const userRole = currentUser?.role || 'sales';
+
+  const loadCompanyBrand = useCallback(async () => {
+    if (!profile?.company_id) {
+      setCompanyName('StormCraft');
+      setCompanyLogoUrl(null);
+      return;
+    }
+
+    try {
+      const company = await db.getCompany(profile.company_id);
+      if (!company) return;
+
+      setCompanyName(company.name || 'StormCraft');
+      setCompanyLogoUrl(company.logo_url || null);
+    } catch (error) {
+      console.error('Failed to load company branding:', error);
+    }
+  }, [profile?.company_id]);
+
+  useEffect(() => {
+    loadCompanyBrand();
+  }, [loadCompanyBrand]);
+
+  useEffect(() => {
+    const onCompanyUpdated = () => {
+      loadCompanyBrand();
+    };
+
+    window.addEventListener('crm-company-updated', onCompanyUpdated);
+    return () => window.removeEventListener('crm-company-updated', onCompanyUpdated);
+  }, [loadCompanyBrand]);
 
   const filteredNavItems = navItems.filter((item) => {
     if (item.requiresPermission === 'financials') {
@@ -74,11 +108,20 @@ export default function Sidebar() {
       {/* Logo */}
       <div className="h-16 flex items-center justify-between px-4 border-b border-slate-700">
         {!sidebarCollapsed && (
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
-              <Building2 size={18} className="text-white" />
-            </div>
-            <span className="font-bold text-lg">StormCraft</span>
+          <div className="flex items-center gap-2 min-w-0">
+            {companyLogoUrl ? (
+              <img
+                src={companyLogoUrl}
+                alt="Company logo"
+                className="w-8 h-8 rounded-lg object-cover"
+                onError={() => setCompanyLogoUrl(null)}
+              />
+            ) : (
+              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
+                <Building2 size={18} className="text-white" />
+              </div>
+            )}
+            <span className="font-bold text-lg truncate">{companyName}</span>
           </div>
         )}
         <button
@@ -122,7 +165,7 @@ export default function Sidebar() {
             {!sidebarCollapsed && (
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-white truncate">
-                  {profile.first_name && profile.last_name 
+                  {profile.first_name && profile.last_name
                     ? `${profile.first_name} ${profile.last_name}`
                     : profile.email}
                 </p>

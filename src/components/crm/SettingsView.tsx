@@ -182,6 +182,7 @@ export default function SettingsView() {
       });
 
       if (result) {
+        window.dispatchEvent(new Event('crm-company-updated'));
         toast.success('Company profile saved successfully!');
       } else {
         toast.error('Failed to save company profile');
@@ -253,6 +254,7 @@ export default function SettingsView() {
           }
 
           setCompanyLogo(updatedCompany.logo_url || result.url);
+          window.dispatchEvent(new Event('crm-company-updated'));
           toast.success("Logo uploaded and saved successfully");
         }
       } else {
