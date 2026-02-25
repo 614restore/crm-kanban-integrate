@@ -72,10 +72,12 @@ export default function QuickAddModal() {
     setIsSubmitting(true);
 
     try {
+      const effectiveCompanyId = profile?.company_id || state.companyId || null;
+
       // If user has a company, save to database
-      if (profile?.company_id) {
+      if (effectiveCompanyId) {
         const dbContact = await db.createContact({
-          company_id: profile.company_id,
+          company_id: effectiveCompanyId,
           first_name: formData.firstName,
           last_name: formData.lastName,
           email: formData.email || undefined,
@@ -104,39 +106,40 @@ export default function QuickAddModal() {
         if (!dbContact) {
           throw new Error('Failed to create contact');
         }
-      } else {
-        // No company - use local state only
-        const newContact: Contact = {
-          id: `c-${Date.now()}`,
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          email: formData.email,
-          phone1: formData.phone1,
-          phone2: formData.phone2 || undefined,
-          address: formData.address,
-          city: formData.city,
-          state: formData.state,
-          zip: formData.zip,
-          status: formData.status,
-          leadSource: formData.leadSource,
-          assignedTo: formData.assignedTo,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          tags: [],
-          projectType: formData.projectType || undefined,
-          projectValue: formData.projectValue ? parseFloat(formData.projectValue) : undefined,
-          isRetail: formData.isRetail,
-          retailNotes: formData.retailNotes || undefined,
-          insuranceCompany: formData.insuranceCompany || undefined,
-          policyNumber: formData.policyNumber || undefined,
-          claimNumber: formData.claimNumber || undefined,
-          adjusterName: formData.adjusterName || undefined,
-          adjusterPhone: formData.adjusterPhone || undefined,
-          deductible: formData.deductible ? parseFloat(formData.deductible) : undefined,
-          notes: formData.notes || undefined,
+
+        const createdContact: Contact = {
+          id: dbContact.id,
+          firstName: dbContact.first_name,
+          lastName: dbContact.last_name,
+          email: dbContact.email || '',
+          phone1: dbContact.phone1 || '',
+          phone2: dbContact.phone2 || undefined,
+          address: dbContact.address || '',
+          city: dbContact.city || '',
+          state: dbContact.state || '',
+          zip: dbContact.zip || '',
+          status: dbContact.status as CustomerStatus,
+          leadSource: dbContact.lead_source || formData.leadSource,
+          assignedTo: dbContact.assigned_to || formData.assignedTo,
+          createdAt: dbContact.created_at,
+          updatedAt: dbContact.updated_at,
+          tags: dbContact.tags || [],
+          projectType: dbContact.project_type || undefined,
+          projectValue: dbContact.project_value || undefined,
+          isRetail: dbContact.is_retail,
+          retailNotes: dbContact.retail_notes || undefined,
+          insuranceCompany: dbContact.insurance_company || undefined,
+          policyNumber: dbContact.policy_number || undefined,
+          claimNumber: dbContact.claim_number || undefined,
+          adjusterName: dbContact.adjuster_name || undefined,
+          adjusterPhone: dbContact.adjuster_phone || undefined,
+          deductible: dbContact.deductible || undefined,
+          notes: dbContact.notes || undefined,
         };
 
-        dispatch({ type: 'ADD_CONTACT', payload: newContact });
+        dispatch({ type: 'ADD_CONTACT', payload: createdContact });
+      } else {
+        throw new Error('No company context found. Please log out and sign in again.');
       }
 
       dispatch({
