@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useCRM, useUpcomingAppointments } from '@/lib/crmStore';
 import { Appointment, formatDate } from '@/lib/crmData';
+import { db } from '@/lib/database';
+import { toast } from 'sonner';
 import {
   Calendar,
   Clock,
@@ -124,6 +126,98 @@ export default function CalendarView() {
     return sortedAppointments.filter((apt) => apt.date === dateStr);
   };
 
+  const handleCreateAppointment = async () => {
+    if (state.contacts.length === 0) {
+      toast.error('Add a contact first before creating an appointment');
+      return;
+    }
+
+    const contact = state.contacts[0];
+    const defaultDate = selectedDate.toISOString().split('T')[0];
+    const title = window.prompt('Appointment title', 'Initial Inspection');
+    if (!title?.trim()) return;
+
+    const time = window.prompt('Appointment time (HH:MM)', '09:00') || '09:00';
+
+    const newAppointment: Appointment = {
+      id: `apt-${Date.now()}`,
+      contactId: contact.id,
+      contactName: `${contact.firstName} ${contact.lastName}`,
+      title: title.trim(),
+      type: 'inspection',
+      date: defaultDate,
+      time,
+      duration: 60,
+      assignedTo: state.currentUser?.id || '',
+      location: contact.address || '',
+      notes: '',
+      status: 'scheduled',
+    };
+
+    if (state.companyId) {
+      const created = await db.createAppointment({
+        company_id: state.companyId,
+        contact_id: contact.id,
+        title: newAppointment.title,
+        type: newAppointment.type,
+        date: newAppointment.date,
+        time: newAppointment.time,
+        duration: newAppointment.duration,
+        assigned_to: newAppointment.assignedTo || undefined,
+        location: newAppointment.location || undefined,
+        notes: newAppointment.notes || undefined,
+        status: newAppointment.status,
+      });
+
+      if (created) {
+        newAppointment.id = created.id;
+      }
+    }
+
+    dispatch({ type: 'ADD_APPOINTMENT', payload: newAppointment });
+    toast.success('Appointment created');
+  };
+
+  const handleEditAppointment = async (appointment: Appointment) => {
+    const title = window.prompt('Edit appointment title', appointment.title);
+    if (!title?.trim()) return;
+
+    const updatedAppointment: Appointment = {
+      ...appointment,
+      title: title.trim(),
+    };
+
+    if (state.companyId) {
+      const updated = await db.updateAppointment(appointment.id, {
+        title: updatedAppointment.title,
+      });
+
+      if (!updated) {
+        toast.error('Failed to update appointment');
+        return;
+      }
+    }
+
+    dispatch({ type: 'UPDATE_APPOINTMENT', payload: updatedAppointment });
+    toast.success('Appointment updated');
+  };
+
+  const handleDeleteAppointment = async (appointment: Appointment) => {
+    const confirmed = window.confirm(`Delete appointment \"${appointment.title}\"?`);
+    if (!confirmed) return;
+
+    if (state.companyId) {
+      const ok = await db.deleteAppointment(appointment.id);
+      if (!ok) {
+        toast.error('Failed to delete appointment');
+        return;
+      }
+    }
+
+    dispatch({ type: 'DELETE_APPOINTMENT', payload: appointment.id });
+    toast.success('Appointment deleted');
+  };
+
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
@@ -142,7 +236,10 @@ export default function CalendarView() {
             >
               Today
             </button>
-            <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+            <button
+              onClick={handleCreateAppointment}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
               <Plus size={18} />
               <span className="font-medium">New Appointment</span>
             </button>
@@ -299,10 +396,16 @@ export default function CalendarView() {
                               />
                             )}
                             <div className="flex items-center gap-1">
-                              <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                              <button
+                                onClick={() => handleEditAppointment(apt)}
+                                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                              >
                                 <Edit2 size={16} className="text-gray-500" />
                               </button>
-                              <button className="p-2 hover:bg-red-100 rounded-lg transition-colors">
+                              <button
+                                onClick={() => handleDeleteAppointment(apt)}
+                                className="p-2 hover:bg-red-100 rounded-lg transition-colors"
+                              >
                                 <Trash2 size={16} className="text-red-500" />
                               </button>
                             </div>

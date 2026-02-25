@@ -7,6 +7,7 @@ import {
   defaultBoards,
   defaultLeadSources,
   Contact,
+  Communication,
   Appointment,
   Invoice,
   KanbanBoard,
@@ -150,6 +151,21 @@ function dbContactToAppContact(dbContact: any): Contact {
     isRetail: dbContact.is_retail,
     retailNotes: dbContact.retail_notes,
     notes: dbContact.notes,
+    communications: [],
+  };
+}
+
+function dbCommunicationToAppCommunication(dbCommunication: any, fallbackUserName: string): Communication {
+  return {
+    id: dbCommunication.id,
+    contactId: dbCommunication.contact_id,
+    type: dbCommunication.type,
+    direction: dbCommunication.direction,
+    subject: dbCommunication.subject,
+    content: dbCommunication.content,
+    timestamp: dbCommunication.created_at,
+    userId: dbCommunication.user_id || '',
+    userName: fallbackUserName,
   };
 }
 
@@ -241,6 +257,7 @@ function CRMApp() {
       // Load all data in parallel
       const [
         dbContacts,
+        dbCommunications,
         dbAppointments,
         dbInvoices,
         dbBoards,
@@ -249,6 +266,7 @@ function CRMApp() {
         dbTeamMembers,
       ] = await Promise.all([
         db.getContacts(profile.company_id),
+        db.getCommunications(profile.company_id),
         db.getAppointments(profile.company_id),
         db.getInvoices(profile.company_id),
         db.getKanbanBoards(profile.company_id),
@@ -260,11 +278,28 @@ function CRMApp() {
       // Convert DB contacts to app contacts
       const contacts = dbContacts.map(dbContactToAppContact);
 
+      // Attach communications to contacts
+      const communicationsByContact = (dbCommunications || []).reduce((acc, comm) => {
+        if (!acc[comm.contact_id]) {
+          acc[comm.contact_id] = [];
+        }
+        acc[comm.contact_id].push(comm);
+        return acc;
+      }, {} as Record<string, any[]>);
+
+      const enrichedContacts = contacts.map((contact) => {
+        const comms = communicationsByContact[contact.id] || [];
+        return {
+          ...contact,
+          communications: comms.map((comm) => dbCommunicationToAppCommunication(comm, 'Team Member')),
+        };
+      });
+
       // Convert DB appointments to app appointments
-      const appointments = dbAppointments.map(apt => dbAppointmentToAppAppointment(apt, contacts));
+      const appointments = dbAppointments.map(apt => dbAppointmentToAppAppointment(apt, enrichedContacts));
 
       // Convert DB invoices to app invoices
-      const invoices = dbInvoices.map(inv => dbInvoiceToAppInvoice(inv, contacts));
+      const invoices = dbInvoices.map(inv => dbInvoiceToAppInvoice(inv, enrichedContacts));
 
       // Convert DB boards to app boards (with columns)
       const boards: KanbanBoard[] = dbBoards.length > 0 
@@ -323,7 +358,7 @@ function CRMApp() {
       dispatch({
         type: 'INITIALIZE_DATA',
         payload: {
-          contacts,
+          contacts: enrichedContacts,
           appointments,
           invoices,
           boards,
@@ -391,6 +426,7 @@ function CRMApp() {
       },
       onCommunicationChange: (payload) => {
         console.log('Communication change:', payload);
+        loadData();
       },
       onLeadSourceChange: () => {
         loadData();

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useCRM, useCurrentBoard, canCreateBoard, canEditBoard } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
+import { toast } from 'sonner';
 import {
   Contact,
   KanbanBoard,
@@ -302,7 +303,10 @@ export default function PipelineBoard() {
                         {contacts.length}
                       </span>
                     </div>
-                    <button className="p-1 hover:bg-gray-200 rounded transition-colors">
+                    <button
+                      onClick={() => toast.info('Column settings are coming next')}
+                      className="p-1 hover:bg-gray-200 rounded transition-colors"
+                    >
                       <MoreVertical size={16} className="text-gray-400" />
                     </button>
                   </div>

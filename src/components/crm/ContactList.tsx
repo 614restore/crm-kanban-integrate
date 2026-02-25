@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { db } from '@/lib/database';
 import { useCRM, useFilteredContacts } from '@/lib/crmStore';
+import { toast } from 'sonner';
 import {
   Contact,
   statusLabels,
@@ -36,6 +37,7 @@ type SortDirection = 'asc' | 'desc';
 export default function ContactList() {
   const { state, dispatch } = useCRM();
   const filteredContacts = useFilteredContacts();
+  const importInputRef = useRef<HTMLInputElement>(null);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
   const [sortField, setSortField] = useState<SortField>('createdAt');
@@ -122,8 +124,117 @@ export default function ContactList() {
     </button>
   );
 
+  const handleExportContacts = () => {
+    if (sortedContacts.length === 0) {
+      toast.error('No contacts to export');
+      return;
+    }
+
+    const headers = ['first_name', 'last_name', 'email', 'phone', 'status', 'city', 'state'];
+    const rows = sortedContacts.map((c) => [
+      c.firstName,
+      c.lastName,
+      c.email,
+      c.phone1,
+      c.status,
+      c.city,
+      c.state,
+    ]);
+
+    const csv = [headers.join(','), ...rows.map((row) => row.map((v) => `"${String(v || '').replace(/"/g, '""')}"`).join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `contacts-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success('Contacts export downloaded');
+  };
+
+  const handleImportContacts = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const text = await file.text();
+    const lines = text.split(/\r?\n/).filter(Boolean);
+    if (lines.length < 2) {
+      toast.error('CSV is empty');
+      return;
+    }
+
+    const headers = lines[0].split(',').map((h) => h.trim().replace(/^"|"$/g, ''));
+    const index = (name: string) => headers.findIndex((h) => h.toLowerCase() === name.toLowerCase());
+
+    const firstNameIdx = index('first_name');
+    const lastNameIdx = index('last_name');
+    if (firstNameIdx === -1 || lastNameIdx === -1) {
+      toast.error('CSV must include first_name and last_name columns');
+      return;
+    }
+
+    let imported = 0;
+    for (let i = 1; i < lines.length; i += 1) {
+      const cols = lines[i].split(',').map((c) => c.trim().replace(/^"|"$/g, ''));
+      const firstName = cols[firstNameIdx] || '';
+      const lastName = cols[lastNameIdx] || '';
+      if (!firstName || !lastName) continue;
+
+      const newContact: Contact = {
+        id: `c-import-${Date.now()}-${i}`,
+        firstName,
+        lastName,
+        email: cols[index('email')] || '',
+        phone1: cols[index('phone')] || '',
+        address: '',
+        city: cols[index('city')] || '',
+        state: cols[index('state')] || '',
+        zip: '',
+        status: (cols[index('status')] as any) || 'lead',
+        leadSource: 'Import',
+        assignedTo: state.currentUser?.id || '',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        tags: [],
+      };
+
+      if (state.companyId) {
+        await db.createContact({
+          company_id: state.companyId,
+          first_name: newContact.firstName,
+          last_name: newContact.lastName,
+          email: newContact.email || undefined,
+          phone1: newContact.phone1 || undefined,
+          city: newContact.city || undefined,
+          state: newContact.state || undefined,
+          status: newContact.status,
+          lead_source: newContact.leadSource,
+          assigned_to: newContact.assignedTo || undefined,
+          tags: [],
+        });
+      } else {
+        dispatch({ type: 'ADD_CONTACT', payload: newContact });
+      }
+
+      imported += 1;
+    }
+
+    toast.success(`Imported ${imported} contacts`);
+    e.target.value = '';
+  };
+
   return (
     <div className="h-full flex flex-col">
+      <input
+        ref={importInputRef}
+        type="file"
+        accept=".csv,text/csv"
+        className="hidden"
+        onChange={handleImportContacts}
+      />
+
       {/* Header */}
       <div className="p-6 bg-white border-b border-gray-200">
         <div className="flex items-center justify-between mb-4">
@@ -134,11 +245,17 @@ export default function ContactList() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <button className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+            <button
+              onClick={handleExportContacts}
+              className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            >
               <Download size={18} />
               <span className="text-sm font-medium">Export</span>
             </button>
-            <button className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+            <button
+              onClick={() => importInputRef.current?.click()}
+              className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            >
               <Upload size={18} />
               <span className="text-sm font-medium">Import</span>
             </button>

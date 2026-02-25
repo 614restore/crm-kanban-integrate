@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
 import { useCRM } from '@/lib/crmStore';
+import { useAuth } from '@/lib/authContext';
+import { db } from '@/lib/database';
+import { toast } from 'sonner';
 import {
   formatDateTime,
   getContactFullName,
-  getTeamMemberById,
+  Communication,
 } from '@/lib/crmData';
 import {
   Mail,
@@ -27,9 +30,11 @@ type CommFilter = 'all' | 'email' | 'sms' | 'call' | 'note' | 'insurance';
 
 export default function CommunicationHub() {
   const { state, dispatch } = useCRM();
+  const { profile } = useAuth();
   const [filter, setFilter] = useState<CommFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedComm, setSelectedComm] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState('');
 
   // Gather all communications from all contacts
   const allCommunications = state.contacts.flatMap((contact) =>
@@ -98,6 +103,90 @@ export default function CommunicationHub() {
     ? filteredCommunications.find((c) => c.id === selectedComm)
     : null;
 
+  const appendCommunicationToContact = (contactId: string, communication: Communication) => {
+    const target = state.contacts.find((contact) => contact.id === contactId);
+    if (!target) return;
+
+    dispatch({
+      type: 'UPDATE_CONTACT',
+      payload: {
+        ...target,
+        communications: [communication, ...(target.communications || [])],
+      },
+    });
+  };
+
+  const persistCommunication = async (contactId: string, content: string) => {
+    const fallbackUserId = state.currentUser?.id || '';
+    const fallbackUserName = state.currentUser?.name || 'Team Member';
+
+    const draft: Communication = {
+      id: `comm-${Date.now()}`,
+      contactId,
+      type: 'note',
+      direction: 'outbound',
+      content,
+      timestamp: new Date().toISOString(),
+      userId: fallbackUserId,
+      userName: fallbackUserName,
+    };
+
+    if (!profile?.company_id) {
+      appendCommunicationToContact(contactId, draft);
+      return draft;
+    }
+
+    const created = await db.createCommunication({
+      company_id: profile.company_id,
+      contact_id: contactId,
+      type: draft.type,
+      direction: draft.direction,
+      content: draft.content,
+      user_id: fallbackUserId || undefined,
+    });
+
+    if (!created) {
+      appendCommunicationToContact(contactId, draft);
+      return draft;
+    }
+
+    const persisted: Communication = {
+      ...draft,
+      id: created.id,
+      timestamp: created.created_at,
+    };
+
+    appendCommunicationToContact(contactId, persisted);
+    return persisted;
+  };
+
+  const handleCompose = async () => {
+    const contact = selectedCommData?.contact || state.contacts[0];
+    if (!contact) {
+      toast.error('No contact available to compose a message');
+      return;
+    }
+
+    const content = window.prompt('Compose note/message', '');
+    if (!content?.trim()) return;
+
+    await persistCommunication(contact.id, content.trim());
+    toast.success('Communication saved');
+  };
+
+  const handleSendReply = async () => {
+    if (!selectedCommData?.contact?.id) {
+      toast.error('Select a communication first');
+      return;
+    }
+
+    if (!replyText.trim()) return;
+
+    await persistCommunication(selectedCommData.contact.id, replyText.trim());
+    setReplyText('');
+    toast.success('Reply saved');
+  };
+
   return (
     <div className="h-full flex">
       {/* Left Panel - Communication List */}
@@ -106,7 +195,10 @@ export default function CommunicationHub() {
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-gray-900">Communications</h2>
-            <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+            <button
+              onClick={handleCompose}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
               <Plus size={18} />
               <span className="font-medium">Compose</span>
             </button>
@@ -287,9 +379,19 @@ export default function CommunicationHub() {
                 <input
                   type="text"
                   placeholder="Type a reply..."
+                  value={replyText}
+                  onChange={(e) => setReplyText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      void handleSendReply();
+                    }
+                  }}
                   className="flex-1 px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                 />
-                <button className="p-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                <button
+                  onClick={() => void handleSendReply()}
+                  className="p-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
                   <Send size={20} />
                 </button>
               </div>

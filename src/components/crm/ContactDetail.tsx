@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useCRM, useCurrentContact } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
+import { toast } from 'sonner';
 import {
   Contact,
   Job,
@@ -171,6 +172,35 @@ export default function ContactDetail() {
     } catch (error) {
       console.error('Error adding note:', error);
     }
+  };
+
+  const handleQuickCall = () => {
+    if (!contact.phone1) {
+      toast.error('No phone number available');
+      return;
+    }
+    window.open(`tel:${contact.phone1}`, '_self');
+  };
+
+  const handleQuickEmail = () => {
+    if (!contact.email) {
+      toast.error('No email available');
+      return;
+    }
+    window.open(`mailto:${contact.email}`, '_self');
+  };
+
+  const handleQuickSms = () => {
+    if (!contact.phone1) {
+      toast.error('No phone number available');
+      return;
+    }
+    window.open(`sms:${contact.phone1}`, '_self');
+  };
+
+  const handleScheduleAppointment = () => {
+    dispatch({ type: 'SET_VIEW', payload: 'calendar' });
+    toast.info('Use New Appointment in Calendar to schedule this customer');
   };
 
   const tabs = [
@@ -584,19 +614,19 @@ export default function ContactDetail() {
               <div className="bg-white rounded-xl border border-gray-200 p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
                 <div className="space-y-2">
-                  <button className="w-full flex items-center gap-3 px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors text-left">
+                  <button onClick={handleQuickCall} className="w-full flex items-center gap-3 px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors text-left">
                     <Phone size={18} className="text-blue-600" />
                     <span className="font-medium text-gray-700">Call Customer</span>
                   </button>
-                  <button className="w-full flex items-center gap-3 px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors text-left">
+                  <button onClick={handleQuickEmail} className="w-full flex items-center gap-3 px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors text-left">
                     <Mail size={18} className="text-blue-600" />
                     <span className="font-medium text-gray-700">Send Email</span>
                   </button>
-                  <button className="w-full flex items-center gap-3 px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors text-left">
+                  <button onClick={handleQuickSms} className="w-full flex items-center gap-3 px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors text-left">
                     <MessageSquare size={18} className="text-blue-600" />
                     <span className="font-medium text-gray-700">Send SMS</span>
                   </button>
-                  <button className="w-full flex items-center gap-3 px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors text-left">
+                  <button onClick={handleScheduleAppointment} className="w-full flex items-center gap-3 px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors text-left">
                     <Calendar size={18} className="text-blue-600" />
                     <span className="font-medium text-gray-700">Schedule Appointment</span>
                   </button>
@@ -685,7 +715,7 @@ export default function ContactDetail() {
           <div className="bg-white rounded-xl border border-gray-200">
             <div className="p-6 border-b border-gray-200 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-900">Documents</h3>
-              <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+              <button onClick={() => dispatch({ type: 'SET_VIEW', payload: 'documents' })} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
                 <Upload size={18} />
                 Upload Document
               </button>
@@ -705,10 +735,10 @@ export default function ContactDetail() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                    <button onClick={() => doc.url && window.open(doc.url, '_blank', 'noopener,noreferrer')} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
                       <Download size={18} className="text-gray-500" />
                     </button>
-                    <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                    <button onClick={() => doc.url && window.open(doc.url, '_blank', 'noopener,noreferrer')} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
                       <ExternalLink size={18} className="text-gray-500" />
                     </button>
                   </div>
@@ -781,7 +811,7 @@ export default function ContactDetail() {
                   <Plus size={18} />
                   Create Invoice
                 </button>
-                <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                <button onClick={() => toast.info('Record payment flow is coming next')} className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
                   <DollarSign size={18} />
                   Record Payment
                 </button>
@@ -794,7 +824,7 @@ export default function ContactDetail() {
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-900">Jobs</h3>
-              <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+              <button onClick={() => toast.info('Add job flow is coming next')} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
                 <Plus size={18} />
                 Add Job
               </button>
