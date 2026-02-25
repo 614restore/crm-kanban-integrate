@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useCRM, canManageLeadSources } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { LeadSource, defaultLeadSources } from '@/lib/crmData';
@@ -48,7 +48,7 @@ interface CompanyFormData {
 
 export default function SettingsView() {
   const { state, dispatch } = useCRM();
-  const { profile, updateProfile, signOut } = useAuth();
+  const { profile, user, updateProfile, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState<SettingsTab>('company');
   const [newLeadSource, setNewLeadSource] = useState('');
   const [showAddLeadSource, setShowAddLeadSource] = useState(false);
@@ -94,70 +94,113 @@ export default function SettingsView() {
   const canManageSources = canManageLeadSources(userRole);
   const effectiveCompanyId = profile?.company_id || state.companyId || null;
 
-  const resolveCompanyId = async (): Promise<string | null> => {
-    if (effectiveCompanyId) return effectiveCompanyId;
+  const resolveCompanyId = useCallback(async (): Promise<string | null> => {
+    const currentCompanyId = profile?.company_id || state.companyId || null;
+    if (currentCompanyId) return currentCompanyId;
 
-    if (!profile?.id || !profile?.email) {
+    const userId = profile?.id || user?.id;
+    const userEmail = profile?.email || user?.email || '';
+
+    if (!userId || !userEmail) {
       return null;
     }
 
     try {
-      const ensured = await ensureUserHasCompany(profile.id, profile.email);
-      if (!ensured) return null;
-
-      const { data, error } = await supabase
+      const profileResult = await supabase
         .from('profiles')
         .select('company_id')
-        .eq('id', profile.id)
+        .eq('id', userId)
         .single();
 
-      if (error || !data?.company_id) {
-        console.error('Failed to resolve company after ensureUserHasCompany:', error);
+      if (!profileResult.error && profileResult.data?.company_id) {
+        dispatch({ type: 'SET_COMPANY_ID', payload: profileResult.data.company_id });
+        return profileResult.data.company_id;
+      }
+
+      const ensured = await ensureUserHasCompany(userId, userEmail);
+      if (ensured) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('company_id')
+          .eq('id', userId)
+          .single();
+
+        if (!error && data?.company_id) {
+          dispatch({ type: 'SET_COMPANY_ID', payload: data.company_id });
+          return data.company_id;
+        }
+      }
+
+      // Last-resort fallback: create and link a company directly from settings.
+      const companyName = userEmail.split('@')[0] || 'My Company';
+      const createdCompany = await db.createCompany({
+        name: companyName + "'s Company",
+        email: userEmail,
+        phone: '',
+        address: '',
+        city: '',
+        state: '',
+        zip: '',
+        website: '',
+      });
+
+      if (!createdCompany?.id) {
         return null;
       }
 
-      dispatch({ type: 'SET_COMPANY_ID', payload: data.company_id });
-      return data.company_id;
+      const { error: linkError } = await supabase
+        .from('profiles')
+        .update({ company_id: createdCompany.id })
+        .eq('id', userId);
+
+      if (linkError) {
+        console.error('Failed to link fallback company to profile:', linkError);
+        return null;
+      }
+
+      dispatch({ type: 'SET_COMPANY_ID', payload: createdCompany.id });
+      return createdCompany.id;
     } catch (error) {
       console.error('resolveCompanyId error:', error);
       return null;
     }
-  };
+  }, [dispatch, profile?.company_id, profile?.email, profile?.id, state.companyId, user?.email, user?.id]);
 
   // Combine default and custom lead sources
   const allLeadSources = [...defaultLeadSources, ...state.leadSources.filter((ls) => ls.isCustom)];
 
-  // Load company data on mount
+  // Load company data on mount and recover missing company context if needed.
   useEffect(() => {
     const loadCompanyData = async () => {
-      if (effectiveCompanyId) {
-        setIsLoadingCompany(true);
-        try {
-          const company = await db.getCompany(effectiveCompanyId);
-          if (company) {
-            setCompanyForm({
-              name: company.name || 'StormCraft Roofing',
-              phone: company.phone || '',
-              email: company.email || '',
-              website: company.website || '',
-              address: company.address || '',
-            });
-            if (company.logo_url && !company.logo_url.startsWith('blob:')) {
-              setCompanyLogo(company.logo_url);
-            } else {
-              setCompanyLogo(null);
-            }
+      const companyId = effectiveCompanyId || await resolveCompanyId();
+      if (!companyId) return;
+
+      setIsLoadingCompany(true);
+      try {
+        const company = await db.getCompany(companyId);
+        if (company) {
+          setCompanyForm({
+            name: company.name || 'StormCraft Roofing',
+            phone: company.phone || '',
+            email: company.email || '',
+            website: company.website || '',
+            address: company.address || '',
+          });
+          if (company.logo_url && !company.logo_url.startsWith('blob:')) {
+            setCompanyLogo(company.logo_url);
+          } else {
+            setCompanyLogo(null);
           }
-        } catch (error) {
-          console.error('Error loading company data:', error);
-        } finally {
-          setIsLoadingCompany(false);
         }
+      } catch (error) {
+        console.error('Error loading company data:', error);
+      } finally {
+        setIsLoadingCompany(false);
       }
     };
 
     loadCompanyData();
-  }, [effectiveCompanyId]);
+  }, [effectiveCompanyId, resolveCompanyId]);
 
   const handleAddLeadSource = async () => {
     const sourceName = newLeadSource.trim();
@@ -209,7 +252,7 @@ export default function SettingsView() {
     const companyId = effectiveCompanyId || await resolveCompanyId();
 
     if (!companyId) {
-      toast.error('No company associated with your account')
+      toast.error('No company associated with your account. Please sign out and sign back in if this continues.')
       return;
     }
 
