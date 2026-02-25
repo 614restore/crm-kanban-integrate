@@ -65,6 +65,15 @@ export default function SettingsView() {
   });
   const [companyLogo, setCompanyLogo] = useState<string | null>(null);
   const [profileAvatar, setProfileAvatar] = useState<string | null>(profile?.avatar_url || null);
+
+  useEffect(() => {
+    setProfileForm({
+      first_name: profile?.first_name || "",
+      last_name: profile?.last_name || "",
+    });
+    setProfileAvatar(profile?.avatar_url || null);
+  }, [profile?.first_name, profile?.last_name, profile?.avatar_url]);
+
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isLoadingCompany, setIsLoadingCompany] = useState(false);
@@ -157,12 +166,16 @@ export default function SettingsView() {
   const handleSaveProfile = async () => {
     if (profile) {
       try {
-        await updateProfile({
+        const { error } = await updateProfile({
           first_name: profileForm.first_name,
           last_name: profileForm.last_name,
         });
+        if (error) {
+          throw error;
+        }
+
         setEditingProfile(false);
-        toast.success('Profile updated successfully');
+        toast.success("Profile updated successfully");
       } catch (error) {
         toast.error('Failed to update profile');
         console.error('Profile update error:', error);
@@ -173,6 +186,8 @@ export default function SettingsView() {
   const handleCompanyLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    const previousLogo = companyLogo;
 
     // Validate file
     const validationError = validateImageFile(file, 5);
@@ -194,13 +209,20 @@ export default function SettingsView() {
         
         if (result.error) {
           toast.error(`Upload failed: ${result.error}`);
-          setCompanyLogo(null);
+          setCompanyLogo(previousLogo);
         } else {
           setCompanyLogo(result.url);
           
-          // Update company logo URL in database
-          await db.updateCompany(profile.company_id, { logo_url: result.url });
-          toast.success('Logo uploaded and saved successfully');
+          // Update company logo URL in database and verify persistence
+          const updatedCompany = await db.updateCompany(profile.company_id, { logo_url: result.url });
+          if (!updatedCompany) {
+            setCompanyLogo(previousLogo);
+            toast.error("Logo uploaded, but failed to save to company profile");
+            return;
+          }
+
+          setCompanyLogo(updatedCompany.logo_url || result.url);
+          toast.success("Logo uploaded and saved successfully");
         }
       } else {
         toast.success('Logo preview loaded (connect database to persist)');
@@ -208,7 +230,7 @@ export default function SettingsView() {
     } catch (error) {
       console.error('Logo upload error:', error);
       toast.error('Failed to upload logo');
-      setCompanyLogo(null);
+      setCompanyLogo(previousLogo);
     } finally {
       setIsUploadingLogo(false);
     }
@@ -244,8 +266,12 @@ export default function SettingsView() {
           
           // Update profile with new avatar URL
           try {
-            await updateProfile({ avatar_url: result.url });
-            toast.success('Avatar uploaded and saved successfully');
+            const { error } = await updateProfile({ avatar_url: result.url });
+            if (error) {
+              throw error;
+            }
+
+            toast.success("Avatar uploaded and saved successfully");
           } catch (updateError) {
             console.error('Failed to update profile with new avatar:', updateError);
             toast.error('Avatar uploaded but failed to save to profile');
