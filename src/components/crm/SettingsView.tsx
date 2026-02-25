@@ -271,7 +271,8 @@ export default function SettingsView() {
       }
     } catch (error) {
       console.error('Logo upload error:', error);
-      toast.error('Failed to upload logo');
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      toast.error(`Failed to upload logo: ${message}`);
       setCompanyLogo(previousLogo);
     } finally {
       setIsUploadingLogo(false);

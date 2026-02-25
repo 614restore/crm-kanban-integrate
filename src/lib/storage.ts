@@ -34,7 +34,10 @@ export async function uploadFile(
 
     if (error) {
       console.error('Upload error:', error);
-      return { url: '', path: '', error: error.message };
+      const status = (error as any).statusCode || (error as any).status || '';
+      const details = (error as any).error || (error as any).name || '';
+      const parts = [error.message, status ? `status ${status}` : '', details].filter(Boolean);
+      return { url: '', path: '', error: parts.join(' | ') };
     }
 
     // Get public URL
@@ -46,10 +49,17 @@ export async function uploadFile(
     };
   } catch (error) {
     console.error('Upload exception:', error);
+    let message = 'Unknown error';
+    if (error instanceof Error) {
+      message = error.message;
+    } else if (error && typeof error === 'object') {
+      message = JSON.stringify(error);
+    }
+
     return {
       url: '',
       path: '',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: message,
     };
   }
 }
