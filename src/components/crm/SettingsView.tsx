@@ -4,7 +4,7 @@ import { useAuth } from '@/lib/authContext';
 import { LeadSource, defaultLeadSources } from '@/lib/crmData';
 import { toast } from 'sonner';
 import { db } from '@/lib/database';
-import { uploadCompanyLogo, uploadUserAvatar, validateImageFile, createPreviewUrl } from '@/lib/storage';
+import { uploadCompanyLogo, uploadUserAvatar, validateImageFile } from '@/lib/storage';
 import {
   Settings,
   Building2,
@@ -256,16 +256,27 @@ export default function SettingsView() {
     setIsUploadingLogo(true);
 
     try {
-      // Create preview immediately
-      const previewUrl = await createPreviewUrl(file);
-      setCompanyLogo(previewUrl);
+      // Non-blocking preview: do not fail upload if preview creation fails.
+      let previewUrl = previousLogo;
+      try {
+        previewUrl = URL.createObjectURL(file);
+        setCompanyLogo(previewUrl);
+      } catch (previewError) {
+        console.warn('Logo preview creation failed:', previewError);
+      }
 
       // Upload to Supabase if user has company
       if (profile?.company_id) {
         const result = await uploadCompanyLogo(file, profile.company_id);
-        
+
         if (result.error) {
-          // Fallback path: persist as inline data URL when storage bucket is unavailable.
+          // Fallback path: persist the preview URL when storage bucket upload fails.
+          if (!previewUrl) {
+            toast.error(`Upload failed: ${result.error}`);
+            setCompanyLogo(previousLogo);
+            return;
+          }
+
           const updatedCompany = await db.updateCompany(profile.company_id, { logo_url: previewUrl });
           if (!updatedCompany) {
             toast.error(`Upload failed: ${result.error}`);
@@ -277,19 +288,17 @@ export default function SettingsView() {
           window.dispatchEvent(new Event('crm-company-updated'));
           toast.success('Logo saved (storage fallback mode)');
         } else {
-          setCompanyLogo(result.url);
-          
           // Update company logo URL in database and verify persistence
           const updatedCompany = await db.updateCompany(profile.company_id, { logo_url: result.url });
           if (!updatedCompany) {
             setCompanyLogo(previousLogo);
-            toast.error("Logo uploaded, but failed to save to company profile");
+            toast.error('Logo uploaded, but failed to save to company profile');
             return;
           }
 
           setCompanyLogo(updatedCompany.logo_url || result.url);
           window.dispatchEvent(new Event('crm-company-updated'));
-          toast.success("Logo uploaded and saved successfully");
+          toast.success('Logo uploaded and saved successfully');
         }
       } else {
         toast.success('Logo preview loaded (connect database to persist)');
@@ -300,6 +309,7 @@ export default function SettingsView() {
       toast.error(`Failed to upload logo: ${message}`);
       setCompanyLogo(previousLogo);
     } finally {
+      e.target.value = '';
       setIsUploadingLogo(false);
     }
   };
