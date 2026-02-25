@@ -82,6 +82,8 @@ export interface DbAppointment {
   date: string;
   time: string;
   duration: number;
+  start_time?: string;
+  end_time?: string;
   assigned_to?: string;
   location?: string;
   notes?: string;
@@ -388,31 +390,123 @@ class DatabaseService {
 
   // Appointment operations
   async getAppointments(companyId: string): Promise<DbAppointment[]> {
-    const { data, error } = await supabase
-      .from('appointments')
-      .select('*')
-      .eq('company_id', companyId)
-      .order('date', { ascending: true });
-    
+    // Support both legacy schema (date/time/duration) and newer schema (start_time/end_time).
+    const tryFetch = async (orderBy: 'date' | 'start_time') =>
+      supabase
+        .from('appointments')
+        .select('*')
+        .eq('company_id', companyId)
+        .order(orderBy, { ascending: true });
+
+    let data: any[] | null = null;
+    let error: any = null;
+
+    const startTimeResult = await tryFetch('start_time');
+    if (startTimeResult.error) {
+      const dateResult = await tryFetch('date');
+      data = dateResult.data;
+      error = dateResult.error;
+    } else {
+      data = startTimeResult.data;
+      error = null;
+    }
+
     if (error) {
       console.error('Error fetching appointments:', error);
       return [];
     }
-    return data || [];
+
+    const normalized = (data || []).map((apt: any) => {
+      if (apt.date && apt.time) return apt as DbAppointment;
+
+      if (apt.start_time) {
+        const start = new Date(apt.start_time);
+        const end = apt.end_time ? new Date(apt.end_time) : null;
+        const duration =
+          end && !Number.isNaN(end.getTime())
+            ? Math.max(15, Math.round((end.getTime() - start.getTime()) / (1000 * 60)))
+            : 60;
+
+        const hh = String(start.getHours()).padStart(2, '0');
+        const mm = String(start.getMinutes()).padStart(2, '0');
+
+        return {
+          ...apt,
+          date: start.toISOString().split('T')[0],
+          time: `${hh}:${mm}`,
+          duration,
+        } as DbAppointment;
+      }
+
+      return {
+        ...apt,
+        date: new Date().toISOString().split('T')[0],
+        time: '09:00',
+        duration: 60,
+      } as DbAppointment;
+    });
+
+    return normalized;
   }
 
   async createAppointment(appointment: Partial<DbAppointment>): Promise<DbAppointment | null> {
-    const { data, error } = await supabase
+    const toStartAndEnd = () => {
+      const date = appointment.date || new Date().toISOString().split('T')[0];
+      const time = appointment.time || '09:00';
+      const duration = appointment.duration || 60;
+      const start = new Date(`${date}T${time}:00`);
+      const end = new Date(start.getTime() + duration * 60 * 1000);
+
+      return {
+        company_id: appointment.company_id,
+        contact_id: appointment.contact_id,
+        title: appointment.title,
+        type: appointment.type,
+        start_time: start.toISOString(),
+        end_time: end.toISOString(),
+        assigned_to: appointment.assigned_to,
+        location: appointment.location,
+        notes: appointment.notes,
+        status: appointment.status,
+      };
+    };
+
+    const toDateTime = () => ({
+      company_id: appointment.company_id,
+      contact_id: appointment.contact_id,
+      title: appointment.title,
+      type: appointment.type,
+      date: appointment.date,
+      time: appointment.time,
+      duration: appointment.duration,
+      assigned_to: appointment.assigned_to,
+      location: appointment.location,
+      notes: appointment.notes,
+      status: appointment.status,
+    });
+
+    const firstAttempt = await supabase
       .from('appointments')
-      .insert(appointment)
+      .insert(toStartAndEnd())
       .select()
       .single();
-    
-    if (error) {
-      console.error('Error creating appointment:', error);
+
+    if (!firstAttempt.error) {
+      return firstAttempt.data as DbAppointment;
+    }
+
+    const secondAttempt = await supabase
+      .from('appointments')
+      .insert(toDateTime())
+      .select()
+      .single();
+
+    if (secondAttempt.error) {
+      console.error('Error creating appointment:', secondAttempt.error);
       return null;
     }
-    return data;
+
+    return secondAttempt.data as DbAppointment;
   }
 
   async updateAppointment(appointmentId: string, updates: Partial<DbAppointment>): Promise<DbAppointment | null> {
