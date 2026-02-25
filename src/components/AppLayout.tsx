@@ -235,9 +235,12 @@ function CRMApp() {
   const { profile, user } = useAuth();
   const [state, dispatch] = useReducer(crmReducer, initialState);
   const realtimeFailedRef = useRef(false);
+  const isReloadingRef = useRef(false);
+  const queuedReloadRef = useRef(false);
 
   // Load data from database
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = options?.silent ?? false;
     if (!profile?.company_id) {
       // No company yet - show empty state
       dispatch({
@@ -255,7 +258,9 @@ function CRMApp() {
       return;
     }
 
-    dispatch({ type: 'SET_LOADING', payload: true });
+    if (!silent) {
+      dispatch({ type: 'SET_LOADING', payload: true });
+    }
     dispatch({ type: 'SET_COMPANY_ID', payload: profile.company_id });
 
     try {
@@ -391,6 +396,24 @@ function CRMApp() {
     }
   }, [profile?.company_id]);
 
+  const requestSoftReload = useCallback(() => {
+    if (isReloadingRef.current) {
+      queuedReloadRef.current = true;
+      return;
+    }
+
+    isReloadingRef.current = true;
+    void loadData({ silent: true }).finally(() => {
+      isReloadingRef.current = false;
+      if (queuedReloadRef.current) {
+        queuedReloadRef.current = false;
+        window.setTimeout(() => {
+          requestSoftReload();
+        }, 150);
+      }
+    });
+  }, [loadData]);
+
   // Set up real-time subscriptions
   useEffect(() => {
     if (!profile?.company_id) return;
@@ -422,25 +445,25 @@ function CRMApp() {
       onAppointmentChange: (payload) => {
         console.log('Appointment change:', payload);
         // Reload appointments to get contact names
-        loadData();
+        requestSoftReload();
       },
       onInvoiceChange: (payload) => {
         console.log('Invoice change:', payload);
         // Reload invoices to get contact names
-        loadData();
+        requestSoftReload();
       },
       onCommunicationChange: (payload) => {
         console.log('Communication change:', payload);
-        loadData();
+        requestSoftReload();
       },
       onLeadSourceChange: () => {
-        loadData();
+        requestSoftReload();
       },
       onBoardChange: () => {
-        loadData();
+        requestSoftReload();
       },
       onTeamMemberChange: () => {
-        loadData();
+        requestSoftReload();
       },
       onStatusChange: (status, error) => {
         if ((status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') && !realtimeFailedRef.current) {
@@ -466,7 +489,7 @@ function CRMApp() {
     return () => {
       db.unsubscribe(channel);
     };
-  }, [profile?.company_id, loadData]);
+  }, [profile?.company_id, loadData, requestSoftReload]);
 
   // Polling fallback when realtime websocket is unavailable.
   useEffect(() => {
@@ -474,12 +497,12 @@ function CRMApp() {
 
     const poller = window.setInterval(() => {
       if (realtimeFailedRef.current) {
-        loadData();
+        requestSoftReload();
       }
     }, 20000);
 
     return () => window.clearInterval(poller);
-  }, [profile?.company_id, loadData]);
+  }, [profile?.company_id, requestSoftReload]);
 
   // Load data on mount
   useEffect(() => {

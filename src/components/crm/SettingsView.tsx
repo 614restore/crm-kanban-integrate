@@ -277,21 +277,6 @@ export default function SettingsView() {
     }
   };
 
-  const fileToDataUrl = async (file: File): Promise<string> => {
-    const buffer = await file.arrayBuffer();
-    const bytes = new Uint8Array(buffer);
-    let binary = '';
-    const chunkSize = 0x8000;
-
-    for (let i = 0; i < bytes.length; i += chunkSize) {
-      const chunk = bytes.subarray(i, i + chunkSize);
-      binary += String.fromCharCode(...chunk);
-    }
-
-    const mime = file.type || 'application/octet-stream';
-    return `data:${mime};base64,${btoa(binary)}`;
-  };
-
   const getReadableError = (error: unknown): string => {
     if (error instanceof Error) return error.message;
     if (typeof error === 'string') return error;
@@ -461,30 +446,9 @@ export default function SettingsView() {
         const result = await uploadCompanyLogo(file, companyId);
 
         if (result.error) {
-          // Fallback path: persist a real data URL (never blob:) when storage upload fails.
-          let fallbackDataUrl = previousLogo;
-          try {
-            fallbackDataUrl = await fileToDataUrl(file);
-          } catch (dataUrlError) {
-            console.error('Failed to generate data URL fallback:', dataUrlError);
-          }
-
-          if (!fallbackDataUrl || fallbackDataUrl.startsWith('blob:')) {
-            toast.error(`Upload failed: ${result.error}`);
-            setCompanyLogo(previousLogo);
-            return;
-          }
-
-          const updatedCompany = await db.updateCompany(companyId, { logo_url: fallbackDataUrl });
-          if (!updatedCompany) {
-            toast.error(`Upload failed: ${result.error}`);
-            setCompanyLogo(previousLogo);
-            return;
-          }
-
-          setCompanyLogo(updatedCompany.logo_url || fallbackDataUrl);
-          window.dispatchEvent(new Event('crm-company-updated'));
-          toast.success('Logo saved (storage fallback mode)');
+          toast.error(`Upload failed: ${result.error}`);
+          setCompanyLogo(previousLogo);
+          return;
         } else {
           // Update company logo URL in database and verify persistence
           const updatedCompany = await db.updateCompany(companyId, { logo_url: result.url });
