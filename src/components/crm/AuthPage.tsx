@@ -30,6 +30,12 @@ export default function AuthPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  const isAlreadyRegisteredError = (message?: string | null) => {
+    if (!message) return false;
+    const normalized = message.toLowerCase();
+    return normalized.includes('user already registered') || normalized.includes('already registered');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -59,7 +65,12 @@ export default function AuthPage() {
           role,
         });
         if (error) {
-          setError(error.message || 'Failed to create account. Please try again.');
+          if (isAlreadyRegisteredError(error.message)) {
+            setMode('login');
+            setError('This email is already registered. Please sign in or reset your password.');
+          } else {
+            setError(error.message || 'Failed to create account. Please try again.');
+          }
         } else {
           setSuccess('Account created! Please check your email to verify your account.');
           setMode('login');
