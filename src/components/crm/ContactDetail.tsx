@@ -55,6 +55,7 @@ export default function ContactDetail() {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isReassigning, setIsReassigning] = useState(false);
   const [editedContact, setEditedContact] = useState<Contact | null>(null);
   const [newNote, setNewNote] = useState('');
 
@@ -201,6 +202,39 @@ export default function ContactDetail() {
   const handleScheduleAppointment = () => {
     dispatch({ type: 'SET_VIEW', payload: 'calendar' });
     toast.info('Use New Appointment in Calendar to schedule this customer');
+  };
+
+  const handleReassignContact = async (newAssigneeId: string) => {
+    if (newAssigneeId === contact.assignedTo) return;
+
+    setIsReassigning(true);
+    try {
+      const updated = await db.updateContact(contact.id, {
+        assigned_to: newAssigneeId || null,
+      });
+
+      if (!updated) {
+        toast.error('Failed to reassign contact');
+        return;
+      }
+
+      dispatch({
+        type: 'UPDATE_CONTACT',
+        payload: {
+          ...contact,
+          assignedTo: newAssigneeId,
+          updatedAt: new Date().toISOString(),
+        },
+      });
+
+      const newAssignee = state.teamMembers.find((tm) => tm.id === newAssigneeId);
+      toast.success(`Reassigned to ${newAssignee?.name || 'team member'}`);
+    } catch (error) {
+      console.error('Error reassigning contact:', error);
+      toast.error('Failed to reassign contact');
+    } finally {
+      setIsReassigning(false);
+    }
   };
 
   const tabs = [
@@ -608,6 +642,27 @@ export default function ContactDetail() {
                 ) : (
                   <p className="text-gray-500">Not assigned</p>
                 )}
+
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-gray-500 mb-1">
+                    Reassign Contact
+                  </label>
+                  <select
+                    value={contact.assignedTo || ''}
+                    onChange={(e) => {
+                      void handleReassignContact(e.target.value);
+                    }}
+                    disabled={isReassigning}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none disabled:opacity-50"
+                  >
+                    <option value="">Unassigned</option>
+                    {state.teamMembers.map((tm) => (
+                      <option key={tm.id} value={tm.id}>
+                        {tm.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               {/* Quick Actions */}
