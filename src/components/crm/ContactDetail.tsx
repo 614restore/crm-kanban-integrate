@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useCRM, useCurrentContact } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
@@ -65,6 +65,8 @@ export default function ContactDetail() {
   const [isReassigning, setIsReassigning] = useState(false);
   const [editedContact, setEditedContact] = useState<Contact | null>(null);
   const [newNote, setNewNote] = useState('');
+  const [quickNote, setQuickNote] = useState('');
+  const [isSavingQuickNote, setIsSavingQuickNote] = useState(false);
   const [mentionStart, setMentionStart] = useState<number | null>(null);
   const [mentionSuggestions, setMentionSuggestions] = useState<ReturnType<typeof getMentionTargets>>([]);
   const noteInputRef = useRef<HTMLInputElement>(null);
@@ -79,6 +81,10 @@ export default function ContactDetail() {
   }
 
   const assignee = state.teamMembers.find((tm) => tm.id === contact.assignedTo);
+
+  useEffect(() => {
+    setQuickNote(contact.notes || '');
+  }, [contact.id, contact.notes]);
 
   const syncMentionSuggestions = (text: string, caret: number) => {
     const active = findActiveMentionQuery(text, caret);
@@ -222,6 +228,36 @@ export default function ContactDetail() {
       setMentionSuggestions([]);
     } catch (error) {
       console.error('Error adding note:', error);
+    }
+  };
+
+  const handleSaveQuickNote = async () => {
+    const trimmed = quickNote.trim();
+
+    setIsSavingQuickNote(true);
+    try {
+      if (profile?.company_id) {
+        const updated = await db.updateContact(contact.id, { notes: trimmed || null });
+        if (!updated) {
+          toast.error('Failed to save note');
+          return;
+        }
+      }
+
+      dispatch({
+        type: 'UPDATE_CONTACT',
+        payload: {
+          ...contact,
+          notes: trimmed || undefined,
+          updatedAt: new Date().toISOString(),
+        },
+      });
+      toast.success('Note saved');
+    } catch (error) {
+      console.error('Error saving note:', error);
+      toast.error('Failed to save note');
+    } finally {
+      setIsSavingQuickNote(false);
     }
   };
 
@@ -736,9 +772,28 @@ export default function ContactDetail() {
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none resize-none"
                   />
                 ) : (
-                  <p className="text-gray-700 whitespace-pre-wrap">
-                    {contact.notes || 'No notes added yet.'}
-                  </p>
+                  <div className="space-y-3">
+                    <p className="text-gray-700 whitespace-pre-wrap">
+                      {contact.notes || 'No notes added yet.'}
+                    </p>
+                    <textarea
+                      value={quickNote}
+                      onChange={(e) => setQuickNote(e.target.value)}
+                      rows={4}
+                      placeholder="Add or update internal notes for this customer..."
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none resize-none"
+                    />
+                    <div className="flex justify-end">
+                      <button
+                        onClick={() => { void handleSaveQuickNote(); }}
+                        disabled={isSavingQuickNote}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                      >
+                        {isSavingQuickNote ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                        Save Note
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
