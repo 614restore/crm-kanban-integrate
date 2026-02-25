@@ -12,7 +12,7 @@ type FormStep = 'basic' | 'project' | 'insurance';
 
 export default function QuickAddModal() {
   const { state, dispatch } = useCRM();
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const [currentStep, setCurrentStep] = useState<FormStep>('basic');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
@@ -42,27 +42,65 @@ export default function QuickAddModal() {
   });
 
   const resolveCompanyId = async (): Promise<string | null> => {
-    if (profile?.company_id) return profile.company_id;
-    if (state.companyId) return state.companyId;
+    const currentCompanyId = profile?.company_id || state.companyId || null;
+    if (currentCompanyId) return currentCompanyId;
 
-    if (!profile?.id || !profile?.email) return null;
+    const userId = profile?.id || user?.id;
+    const userEmail = profile?.email || user?.email || '';
+    if (!userId || !userEmail) return null;
 
-    const ensured = await ensureUserHasCompany(profile.id, profile.email);
-    if (!ensured) return null;
-
-    const { data, error } = await supabase
+    const profileResult = await supabase
       .from('profiles')
       .select('company_id')
-      .eq('id', profile.id)
+      .eq('id', userId)
       .single();
 
-    if (error || !data?.company_id) {
-      console.error('Failed to resolve company for Quick Add:', error);
+    if (!profileResult.error && profileResult.data?.company_id) {
+      dispatch({ type: 'SET_COMPANY_ID', payload: profileResult.data.company_id });
+      return profileResult.data.company_id;
+    }
+
+    const ensured = await ensureUserHasCompany(userId, userEmail);
+    if (ensured) {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('company_id')
+        .eq('id', userId)
+        .single();
+
+      if (!error && data?.company_id) {
+        dispatch({ type: 'SET_COMPANY_ID', payload: data.company_id });
+        return data.company_id;
+      }
+    }
+
+    // Final fallback: create and link a company in case previous steps could not repair context.
+    const companyName = userEmail.split('@')[0] || 'My Company';
+    const createdCompany = await db.createCompany({
+      name: companyName + "'s Company",
+      email: userEmail,
+      phone: '',
+      address: '',
+      city: '',
+      state: '',
+      zip: '',
+      website: '',
+    });
+
+    if (!createdCompany?.id) return null;
+
+    const { error: linkError } = await supabase
+      .from('profiles')
+      .update({ company_id: createdCompany.id })
+      .eq('id', userId);
+
+    if (linkError) {
+      console.error('Failed to link fallback company for Quick Add:', linkError);
       return null;
     }
 
-    dispatch({ type: 'SET_COMPANY_ID', payload: data.company_id });
-    return data.company_id;
+    dispatch({ type: 'SET_COMPANY_ID', payload: createdCompany.id });
+    return createdCompany.id;
   };
 
   const handleClose = () => {
