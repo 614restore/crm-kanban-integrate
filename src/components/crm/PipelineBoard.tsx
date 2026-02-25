@@ -187,8 +187,8 @@ export default function PipelineBoard() {
           savedBoard = {
             id: created.id,
             name: created.name,
-            type: created.type as any,
-            visibleTo: (created.visible_to || editingBoard.visibleTo) as any,
+            type: created.type as KanbanBoard['type'],
+            visibleTo: (created.visible_to || editingBoard.visibleTo) as KanbanBoard['visibleTo'],
             createdBy: created.created_by || profile?.id || 'unknown',
             isDefault: created.is_default,
             columns:
@@ -231,8 +231,8 @@ export default function PipelineBoard() {
           savedBoard = {
             id: updatedBoard.id,
             name: updatedBoard.name,
-            type: updatedBoard.type as any,
-            visibleTo: (updatedBoard.visible_to || editingBoard.visibleTo) as any,
+            type: updatedBoard.type as KanbanBoard['type'],
+            visibleTo: (updatedBoard.visible_to || editingBoard.visibleTo) as KanbanBoard['visibleTo'],
             createdBy: updatedBoard.created_by || editingBoard.createdBy,
             isDefault: updatedBoard.is_default,
             columns:
@@ -416,7 +416,7 @@ export default function PipelineBoard() {
                       </span>
                     </div>
                     <button
-                      onClick={() => toast.info('Use board editor to adjust columns')}
+                      onClick={() => { if (canEdit && currentBoard) { setEditingBoard(currentBoard); setShowBoardEditor(true); } else { toast.info('Board editing requires manager, admin, or owner access'); } }}
                       className="p-1 hover:bg-gray-200 rounded transition-colors"
                     >
                       <MoreVertical size={16} className="text-gray-400" />

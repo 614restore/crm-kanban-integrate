@@ -987,7 +987,7 @@ export default function ContactDetail() {
                   <Plus size={18} />
                   Create Invoice
                 </button>
-                <button onClick={() => toast.info('Record payment flow is coming next')} className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                <button onClick={() => { dispatch({ type: 'SET_VIEW', payload: 'financial' }); dispatch({ type: 'TOGGLE_INVOICE_MODAL' }); }} className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
                   <DollarSign size={18} />
                   Record Payment
                 </button>
@@ -1000,7 +1000,7 @@ export default function ContactDetail() {
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-900">Jobs</h3>
-              <button onClick={() => toast.info('Add job flow is coming next')} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+              <button onClick={() => { dispatch({ type: 'SET_VIEW', payload: 'calendar' }); toast.info('Create a new appointment for this customer in Calendar'); }} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
                 <Plus size={18} />
                 Add Job
               </button>

@@ -103,10 +103,41 @@ export default function FinancialDashboard() {
       });
 
       toast.success(`Invoice emailed to ${contact.email}`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to send invoice email:', error);
-      toast.error(error?.message || 'Failed to send invoice email');
+      const message = error instanceof Error ? error.message : 'Failed to send invoice email';
+      toast.error(message);
     }
+  };
+
+  const handleCycleInvoiceStatus = async (invoiceId: string) => {
+    const invoice = state.invoices.find((inv) => inv.id === invoiceId);
+    if (!invoice) return;
+
+    const next = window.prompt('Set status: draft | sent | paid | overdue | cancelled', invoice.status);
+    if (!next) return;
+
+    const normalized = next.trim().toLowerCase();
+    if (!['draft', 'sent', 'paid', 'overdue', 'cancelled'].includes(normalized)) {
+      toast.error('Invalid status');
+      return;
+    }
+
+    const updated = await db.updateInvoice(invoiceId, { status: normalized });
+    if (!updated) {
+      toast.error('Failed to update invoice status');
+      return;
+    }
+
+    dispatch({
+      type: 'UPDATE_INVOICE',
+      payload: {
+        ...invoice,
+        status: normalized as Invoice['status'],
+      },
+    });
+
+    toast.success('Invoice status updated');
   };
 
   const allInvoices = [...state.invoices];
@@ -414,9 +445,9 @@ export default function FinancialDashboard() {
                         </button>
                       )}
                       <button
-                        onClick={() => toast.info('More actions coming soon')}
+                        onClick={() => handleCycleInvoiceStatus(invoice.id)}
                         className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                        title="More"
+                        title="Change status"
                       >
                         <MoreVertical size={16} className="text-gray-500" />
                       </button>

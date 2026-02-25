@@ -200,22 +200,28 @@ export default function ContactList() {
         tags: [],
       };
 
-      if (state.companyId) {
-        await db.createContact({
-          company_id: state.companyId,
-          first_name: newContact.firstName,
-          last_name: newContact.lastName,
-          email: newContact.email || undefined,
-          phone1: newContact.phone1 || undefined,
-          city: newContact.city || undefined,
-          state: newContact.state || undefined,
-          status: newContact.status,
-          lead_source: newContact.leadSource,
-          assigned_to: newContact.assignedTo || undefined,
-          tags: [],
-        });
-      } else {
-        dispatch({ type: 'ADD_CONTACT', payload: newContact });
+      if (!state.companyId) {
+        toast.error('No company selected. Import requires an active company workspace.');
+        break;
+      }
+
+      const created = await db.createContact({
+        company_id: state.companyId,
+        first_name: newContact.firstName,
+        last_name: newContact.lastName,
+        email: newContact.email || undefined,
+        phone1: newContact.phone1 || undefined,
+        city: newContact.city || undefined,
+        state: newContact.state || undefined,
+        status: newContact.status,
+        lead_source: newContact.leadSource,
+        assigned_to: newContact.assignedTo || undefined,
+        tags: [],
+      });
+
+      if (!created) {
+        toast.error(`Failed to import contact: ${newContact.firstName} ${newContact.lastName}`);
+        continue;
       }
 
       imported += 1;

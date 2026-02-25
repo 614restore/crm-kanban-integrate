@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useCRM, canManageTeam } from '@/lib/crmStore';
+import { useCRM, canManageTeam, getAssignableRoles, canModifyMember, canAssignRole } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
 import { sendEmail } from '@/lib/emailApi';
@@ -41,6 +41,7 @@ export default function TeamView() {
 
   const userRole = state.currentUser?.role || 'sales';
   const canManage = canManageTeam(userRole);
+  const assignableRoles = getAssignableRoles(userRole);
 
   // Filter team members
   const filteredMembers = state.teamMembers.filter((tm) => {
@@ -77,6 +78,11 @@ export default function TeamView() {
   };
 
   const handleInvite = async () => {
+    if (assignableRoles.length === 0) {
+      toast.error('You do not have permission to invite team members');
+      return;
+    }
+
     if (!state.companyId) {
       toast.error('No company linked. Please refresh and try again.');
       return;
@@ -135,21 +141,31 @@ export default function TeamView() {
       setShowInviteModal(false);
       setInviteEmail('');
       setInviteRole('sales');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to send invitation:', error);
-      toast.error(error?.message || 'Failed to send invitation');
+      const message = error instanceof Error ? error.message : 'Failed to send invitation';
+      toast.error(message);
     } finally {
       setIsSendingInvite(false);
     }
   };
 
   const handleEditMember = (member: TeamMember) => {
+    if (!canModifyMember(userRole, member.role)) {
+      toast.error('You do not have permission to modify this team member');
+      return;
+    }
     setSelectedMember(member);
     setShowEditModal(true);
   };
 
   const handleSaveMember = async () => {
     if (!selectedMember) return;
+
+    if (!canModifyMember(userRole, selectedMember.role) || !canAssignRole(userRole, selectedMember.role)) {
+      toast.error('You do not have permission to assign this role');
+      return;
+    }
 
     setIsSavingMember(true);
     try {
@@ -423,9 +439,9 @@ export default function TeamView() {
                   onChange={(e) => setInviteRole(e.target.value as UserRole)}
                   className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                 >
-                  {Object.entries(roleLabels).map(([value, label]) => (
+                  {assignableRoles.map((value) => (
                     <option key={value} value={value}>
-                      {label}
+                      {roleLabels[value]}
                     </option>
                   ))}
                 </select>
@@ -521,9 +537,9 @@ export default function TeamView() {
                   }
                   className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                 >
-                  {Object.entries(roleLabels).map(([value, label]) => (
+                  {assignableRoles.map((value) => (
                     <option key={value} value={value}>
-                      {label}
+                      {roleLabels[value]}
                     </option>
                   ))}
                 </select>

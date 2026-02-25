@@ -500,3 +500,32 @@ export function canViewFinancials(role: UserRole): boolean {
 export function canCreateInvoice(role: UserRole): boolean {
   return ['owner', 'manager', 'admin', 'billing'].includes(role);
 }
+
+const roleHierarchy: Record<UserRole, number> = {
+  owner: 6,
+  manager: 5,
+  admin: 4,
+  billing: 3,
+  production: 2,
+  sales: 1,
+  canvas: 1,
+};
+
+export function canAssignRole(actorRole: UserRole, targetRole: UserRole): boolean {
+  if (actorRole === 'owner') return true;
+  if (actorRole === 'manager') return targetRole !== 'owner';
+  if (actorRole === 'admin') return !['owner', 'manager', 'admin'].includes(targetRole);
+  return false;
+}
+
+export function getAssignableRoles(actorRole: UserRole): UserRole[] {
+  const roles: UserRole[] = ['owner', 'manager', 'admin', 'sales', 'production', 'billing', 'canvas'];
+  return roles.filter((role) => canAssignRole(actorRole, role));
+}
+
+export function canModifyMember(actorRole: UserRole, memberRole: UserRole): boolean {
+  if (actorRole === 'owner') return true;
+  if (actorRole === 'manager') return memberRole !== 'owner';
+  if (actorRole === 'admin') return roleHierarchy[memberRole] < roleHierarchy.admin;
+  return false;
+}

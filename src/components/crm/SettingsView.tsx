@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useCRM, canManageLeadSources } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
-import { LeadSource, defaultLeadSources } from '@/lib/crmData';
+import { defaultLeadSources } from '@/lib/crmData';
 import { toast } from 'sonner';
 import { db } from '@/lib/database';
 import { uploadCompanyLogo, uploadUserAvatar, validateImageFile } from '@/lib/storage';
@@ -207,37 +207,33 @@ export default function SettingsView() {
     if (!sourceName) return;
 
     try {
-      if (effectiveCompanyId) {
-        const created = await db.createLeadSource({
-          company_id: effectiveCompanyId,
-          name: sourceName,
-          is_custom: true,
-          created_by: profile?.id,
-        });
-
-        if (!created) {
-          toast.error('Failed to add lead source');
-          return;
-        }
-
-        dispatch({
-          type: 'ADD_LEAD_SOURCE',
-          payload: {
-            id: created.id,
-            name: created.name,
-            isCustom: created.is_custom,
-            createdBy: created.created_by,
-          },
-        });
-      } else {
-        const newSource: LeadSource = {
-          id: `ls-custom-${Date.now()}`,
-          name: sourceName,
-          isCustom: true,
-          createdBy: state.currentUser?.id,
-        };
-        dispatch({ type: 'ADD_LEAD_SOURCE', payload: newSource });
+      const companyId = effectiveCompanyId || await resolveCompanyId();
+      if (!companyId) {
+        toast.error('No company context available. Please refresh and sign in again.');
+        return;
       }
+
+      const created = await db.createLeadSource({
+        company_id: companyId,
+        name: sourceName,
+        is_custom: true,
+        created_by: profile?.id,
+      });
+
+      if (!created) {
+        toast.error('Failed to add lead source');
+        return;
+      }
+
+      dispatch({
+        type: 'ADD_LEAD_SOURCE',
+        payload: {
+          id: created.id,
+          name: created.name,
+          isCustom: created.is_custom,
+          createdBy: created.created_by,
+        },
+      });
 
       setNewLeadSource('');
       setShowAddLeadSource(false);
