@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useCRM } from '@/lib/crmStore';
-import { Appointment, mockTeamMembers } from '@/lib/crmData';
+import { Appointment } from '@/lib/crmData';
 import { db } from '@/lib/database';
 import { X, Calendar, Clock, MapPin, AlignLeft } from 'lucide-react';
 
@@ -13,7 +13,7 @@ export default function AppointmentModal() {
         duration: 60,
         type: 'inspection',
         contactId: state.contacts[0]?.id || '',
-        assignedTo: state.currentUser?.id || mockTeamMembers[0].id,
+        assignedTo: state.currentUser?.id || state.teamMembers[0]?.id || '',
         location: '',
         notes: ''
     });
@@ -45,7 +45,7 @@ export default function AppointmentModal() {
             duration: 60,
             type: 'inspection',
             contactId: state.contacts[0]?.id || '',
-            assignedTo: state.currentUser?.id || mockTeamMembers[0].id,
+            assignedTo: state.currentUser?.id || state.teamMembers[0]?.id || '',
             location: '',
             notes: ''
         });

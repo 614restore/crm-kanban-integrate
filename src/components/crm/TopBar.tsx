@@ -12,7 +12,7 @@ import {
   Info,
   AlertTriangle,
 } from 'lucide-react';
-import { statusLabels, mockTeamMembers, CustomerStatus } from '@/lib/crmData';
+import { statusLabels, CustomerStatus } from '@/lib/crmData';
 
 export default function TopBar() {
   const { state, dispatch } = useCRM();
@@ -144,7 +144,7 @@ export default function TopBar() {
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                   >
                     <option value="all">All Team Members</option>
-                    {mockTeamMembers.map((tm) => (
+                    {state.teamMembers.map((tm) => (
                       <option key={tm.id} value={tm.id}>
                         {tm.name}
                       </option>

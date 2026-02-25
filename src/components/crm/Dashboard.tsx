@@ -6,8 +6,6 @@ import {
   formatDate,
   statusLabels,
   statusColors,
-  getTeamMemberById,
-  mockTeamMembers,
   getContactFullName,
 } from '@/lib/crmData';
 import {
@@ -46,7 +44,7 @@ export default function Dashboard() {
   );
 
   // Top performers
-  const topPerformers = mockTeamMembers
+  const topPerformers = state.teamMembers
     .filter((tm) => tm.performance && tm.performance.revenue > 0)
     .sort((a, b) => (b.performance?.revenue || 0) - (a.performance?.revenue || 0))
     .slice(0, 3);
@@ -242,7 +240,7 @@ export default function Dashboard() {
           </div>
           <div className="divide-y divide-gray-50">
             {recentActivity.map((contact) => {
-              const assignee = getTeamMemberById(contact.assignedTo);
+              const assignee = state.teamMembers.find((tm) => tm.id === contact.assignedTo);
               return (
                 <div
                   key={contact.id}

@@ -370,7 +370,15 @@ function CRMApp() {
       },
       onCommunicationChange: (payload) => {
         console.log('Communication change:', payload);
-        // Could trigger a notification or refresh communications view
+      },
+      onLeadSourceChange: () => {
+        loadData();
+      },
+      onBoardChange: () => {
+        loadData();
+      },
+      onTeamMemberChange: () => {
+        loadData();
       },
     });
 

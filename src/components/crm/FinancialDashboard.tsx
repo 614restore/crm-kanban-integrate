@@ -4,7 +4,6 @@ import {
   formatCurrency,
   formatDate,
   getContactFullName,
-  mockInvoices,
   Invoice,
 } from '@/lib/crmData';
 import {
@@ -35,8 +34,7 @@ export default function FinancialDashboard() {
   const [invoiceFilter, setInvoiceFilter] = useState<InvoiceFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Combine mock invoices with state invoices
-  const allInvoices = [...mockInvoices, ...state.invoices];
+  const allInvoices = [...state.invoices];
 
   // Filter invoices
   const filteredInvoices = allInvoices.filter((inv) => {

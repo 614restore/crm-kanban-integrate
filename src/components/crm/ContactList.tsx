@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { db } from '@/lib/database';
 import { useCRM, useFilteredContacts } from '@/lib/crmStore';
 import {
   Contact,
@@ -6,9 +7,7 @@ import {
   statusColors,
   formatCurrency,
   formatDate,
-  getTeamMemberById,
   getContactFullName,
-  mockTeamMembers,
 } from '@/lib/crmData';
 import {
   Search,
@@ -94,12 +93,20 @@ export default function ContactList() {
     dispatch({ type: 'SELECT_CONTACT', payload: contactId });
   };
 
-  const handleDeleteSelected = () => {
-    if (confirm(`Are you sure you want to delete ${selectedContacts.size} contacts?`)) {
-      selectedContacts.forEach((id) => {
-        dispatch({ type: 'DELETE_CONTACT', payload: id });
-      });
+  const handleDeleteSelected = async () => {
+    if (!confirm(`Are you sure you want to delete ${selectedContacts.size} contacts?`)) return;
+
+    try {
+      if (state.companyId) {
+        await Promise.all(Array.from(selectedContacts).map((id) => db.deleteContact(id)));
+      } else {
+        selectedContacts.forEach((id) => {
+          dispatch({ type: 'DELETE_CONTACT', payload: id });
+        });
+      }
       setSelectedContacts(new Set());
+    } catch (error) {
+      console.error('Error deleting selected contacts:', error);
     }
   };
 
@@ -231,7 +238,7 @@ export default function ContactList() {
             {/* Table Body */}
             <div className="divide-y divide-gray-100">
               {sortedContacts.map((contact) => {
-                const assignee = getTeamMemberById(contact.assignedTo);
+                const assignee = state.teamMembers.find((tm) => tm.id === contact.assignedTo);
                 const isSelected = selectedContacts.has(contact.id);
 
                 return (
@@ -337,7 +344,7 @@ export default function ContactList() {
           // Grid View
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {sortedContacts.map((contact) => {
-              const assignee = getTeamMemberById(contact.assignedTo);
+              const assignee = state.teamMembers.find((tm) => tm.id === contact.assignedTo);
               const isSelected = selectedContacts.has(contact.id);
 
               return (

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
-import { Contact, defaultLeadSources, mockTeamMembers, CustomerStatus } from '@/lib/crmData';
+import { Contact, defaultLeadSources, CustomerStatus } from '@/lib/crmData';
 import { X, User, Phone, Mail, MapPin, DollarSign, Tag, Shield, Building, Loader2 } from 'lucide-react';
 
 type FormStep = 'basic' | 'project' | 'insurance';
@@ -23,7 +23,7 @@ export default function QuickAddModal() {
     state: '',
     zip: '',
     leadSource: 'Door Knock',
-    assignedTo: state.currentUser?.id || mockTeamMembers[0].id,
+    assignedTo: state.currentUser?.id || state.teamMembers[0]?.id || '',
     status: 'lead' as CustomerStatus,
     projectType: '',
     projectValue: '',
@@ -51,7 +51,7 @@ export default function QuickAddModal() {
       state: '',
       zip: '',
       leadSource: 'Door Knock',
-      assignedTo: state.currentUser?.id || mockTeamMembers[0].id,
+      assignedTo: state.currentUser?.id || state.teamMembers[0]?.id || '',
       status: 'lead',
       projectType: '',
       projectValue: '',
@@ -101,40 +101,8 @@ export default function QuickAddModal() {
           deductible: formData.deductible ? parseFloat(formData.deductible) : undefined,
           notes: formData.notes || undefined,
         });
-
-        if (dbContact) {
-          // Convert to app contact format
-          const newContact: Contact = {
-            id: dbContact.id,
-            firstName: dbContact.first_name,
-            lastName: dbContact.last_name,
-            email: dbContact.email || '',
-            phone1: dbContact.phone1 || '',
-            phone2: dbContact.phone2,
-            address: dbContact.address || '',
-            city: dbContact.city || '',
-            state: dbContact.state || '',
-            zip: dbContact.zip || '',
-            status: dbContact.status as CustomerStatus,
-            leadSource: dbContact.lead_source || '',
-            assignedTo: dbContact.assigned_to || '',
-            createdAt: dbContact.created_at,
-            updatedAt: dbContact.updated_at,
-            tags: dbContact.tags || [],
-            projectType: dbContact.project_type,
-            projectValue: dbContact.project_value,
-            isRetail: dbContact.is_retail,
-            retailNotes: dbContact.retail_notes,
-            insuranceCompany: dbContact.insurance_company,
-            policyNumber: dbContact.policy_number,
-            claimNumber: dbContact.claim_number,
-            adjusterName: dbContact.adjuster_name,
-            adjusterPhone: dbContact.adjuster_phone,
-            deductible: dbContact.deductible,
-            notes: dbContact.notes,
-          };
-
-          dispatch({ type: 'ADD_CONTACT', payload: newContact });
+        if (!dbContact) {
+          throw new Error('Failed to create contact');
         }
       } else {
         // No company - use local state only

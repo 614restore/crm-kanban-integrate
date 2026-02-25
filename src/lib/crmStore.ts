@@ -91,6 +91,7 @@ export type CRMAction =
   | { type: 'DELETE_BOARD'; payload: string }
   | { type: 'SET_BOARDS'; payload: KanbanBoard[] }
   | { type: 'ADD_LEAD_SOURCE'; payload: LeadSource }
+  | { type: 'DELETE_LEAD_SOURCE'; payload: string }
   | { type: 'SET_LEAD_SOURCES'; payload: LeadSource[] }
   | { type: 'ADD_APPOINTMENT'; payload: Appointment }
   | { type: 'UPDATE_APPOINTMENT'; payload: Appointment }
@@ -212,6 +213,9 @@ export function crmReducer(state: CRMState, action: CRMAction): CRMState {
     
     case 'ADD_LEAD_SOURCE':
       return { ...state, leadSources: [...state.leadSources, action.payload] };
+
+    case 'DELETE_LEAD_SOURCE':
+      return { ...state, leadSources: state.leadSources.filter((ls) => ls.id !== action.payload) };
     
     case 'SET_LEAD_SOURCES':
       return { ...state, leadSources: action.payload };

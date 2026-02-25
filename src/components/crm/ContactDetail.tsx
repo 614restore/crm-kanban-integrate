@@ -12,9 +12,7 @@ import {
   formatCurrency,
   formatDate,
   formatDateTime,
-  getTeamMemberById,
   getContactFullName,
-  mockTeamMembers,
   defaultLeadSources,
   CustomerStatus,
 } from '@/lib/crmData';
@@ -67,7 +65,7 @@ export default function ContactDetail() {
     );
   }
 
-  const assignee = state.teamMembers.find(tm => tm.id === contact.assignedTo) || getTeamMemberById(contact.assignedTo);
+  const assignee = state.teamMembers.find((tm) => tm.id === contact.assignedTo);
 
   const handleBack = () => {
     dispatch({ type: 'SELECT_CONTACT', payload: null });

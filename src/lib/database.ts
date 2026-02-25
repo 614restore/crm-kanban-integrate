@@ -926,6 +926,9 @@ class DatabaseService {
     onAppointmentChange?: (payload: any) => void;
     onInvoiceChange?: (payload: any) => void;
     onCommunicationChange?: (payload: any) => void;
+    onLeadSourceChange?: (payload: any) => void;
+    onBoardChange?: (payload: any) => void;
+    onTeamMemberChange?: (payload: any) => void;
   }) {
     const channel = supabase.channel('all-changes');
 
@@ -958,6 +961,35 @@ class DatabaseService {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'communications', filter: `company_id=eq.${companyId}` },
         callbacks.onCommunicationChange
+      );
+    }
+
+    if (callbacks.onLeadSourceChange) {
+      channel.on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'lead_sources', filter: `company_id=eq.${companyId}` },
+        callbacks.onLeadSourceChange
+      );
+    }
+
+    if (callbacks.onBoardChange) {
+      channel.on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'kanban_boards', filter: `company_id=eq.${companyId}` },
+        callbacks.onBoardChange
+      );
+      channel.on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'kanban_columns' },
+        callbacks.onBoardChange
+      );
+    }
+
+    if (callbacks.onTeamMemberChange) {
+      channel.on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'profiles', filter: `company_id=eq.${companyId}` },
+        callbacks.onTeamMemberChange
       );
     }
 

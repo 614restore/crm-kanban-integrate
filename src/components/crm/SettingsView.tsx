@@ -118,18 +118,49 @@ export default function SettingsView() {
     loadCompanyData();
   }, [profile?.company_id]);
 
-  const handleAddLeadSource = () => {
-    if (newLeadSource.trim()) {
-      const newSource: LeadSource = {
-        id: `ls-custom-${Date.now()}`,
-        name: newLeadSource.trim(),
-        isCustom: true,
-        createdBy: state.currentUser?.id,
-      };
-      dispatch({ type: 'ADD_LEAD_SOURCE', payload: newSource });
+  const handleAddLeadSource = async () => {
+    const sourceName = newLeadSource.trim();
+    if (!sourceName) return;
+
+    try {
+      if (profile?.company_id) {
+        const created = await db.createLeadSource({
+          company_id: profile.company_id,
+          name: sourceName,
+          is_custom: true,
+          created_by: profile.id,
+        });
+
+        if (!created) {
+          toast.error('Failed to add lead source');
+          return;
+        }
+
+        dispatch({
+          type: 'ADD_LEAD_SOURCE',
+          payload: {
+            id: created.id,
+            name: created.name,
+            isCustom: created.is_custom,
+            createdBy: created.created_by,
+          },
+        });
+      } else {
+        const newSource: LeadSource = {
+          id: `ls-custom-${Date.now()}`,
+          name: sourceName,
+          isCustom: true,
+          createdBy: state.currentUser?.id,
+        };
+        dispatch({ type: 'ADD_LEAD_SOURCE', payload: newSource });
+      }
+
       setNewLeadSource('');
       setShowAddLeadSource(false);
       toast.success('Lead source added successfully');
+    } catch (error) {
+      console.error('Error adding lead source:', error);
+      toast.error('Failed to add lead source');
     }
   };
 
@@ -571,9 +602,22 @@ export default function SettingsView() {
                       </div>
                       {source.isCustom && (
                         <button
-                          onClick={() => {
-                            dispatch({ type: 'DELETE_LEAD_SOURCE', payload: source.id });
-                            toast.success('Lead source deleted');
+                          onClick={async () => {
+                            try {
+                              if (profile?.company_id) {
+                                const ok = await db.deleteLeadSource(source.id);
+                                if (!ok) {
+                                  toast.error('Failed to delete lead source');
+                                  return;
+                                }
+                              }
+
+                              dispatch({ type: 'DELETE_LEAD_SOURCE', payload: source.id });
+                              toast.success('Lead source deleted');
+                            } catch (error) {
+                              console.error('Error deleting lead source:', error);
+                              toast.error('Failed to delete lead source');
+                            }
                           }}
                           className="p-1.5 hover:bg-red-100 rounded transition-colors"
                         >

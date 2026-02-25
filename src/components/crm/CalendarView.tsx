@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useCRM, useUpcomingAppointments } from '@/lib/crmStore';
-import { Appointment, formatDate, mockTeamMembers, getTeamMemberById } from '@/lib/crmData';
+import { Appointment, formatDate } from '@/lib/crmData';
 import {
   Calendar,
   Clock,
@@ -178,7 +178,7 @@ export default function CalendarView() {
               className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
             >
               <option value="all">All Team Members</option>
-              {mockTeamMembers.map((tm) => (
+              {state.teamMembers.map((tm) => (
                 <option key={tm.id} value={tm.id}>
                   {tm.name}
                 </option>
@@ -249,7 +249,7 @@ export default function CalendarView() {
 
                 <div className="space-y-3">
                   {appointments.map((apt) => {
-                    const assignee = getTeamMemberById(apt.assignedTo);
+                    const assignee = state.teamMembers.find((tm) => tm.id === apt.assignedTo);
                     return (
                       <div
                         key={apt.id}
