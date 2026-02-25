@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { formatDate, getContactFullName } from '@/lib/crmData';
 import { db } from '@/lib/database';
-import { uploadDocument, validateDocumentFile, formatFileSize } from '@/lib/storage';
+import { uploadDocument, validateDocumentFile, formatFileSize, getDocumentSignedUrl, isHttpUrl } from '@/lib/storage';
 import { toast } from 'sonner';
 import {
   FileText,
@@ -55,23 +55,28 @@ export default function DocumentCenter() {
       }
 
       const docs = await db.getDocuments(state.companyId);
-      const mapped: DocumentItem[] = docs.map((doc) => {
+      const mapped: DocumentItem[] = await Promise.all(docs.map(async (doc) => {
         const linkedContact = state.contacts.find((contact) => contact.id === doc.contact_id);
         const type = (doc.type || 'other') as DocCategory;
+        const url = doc.url
+          ? (isHttpUrl(doc.url) && !doc.url.includes('/projectceo-documents/')
+              ? doc.url
+              : (await getDocumentSignedUrl(doc.url)) || undefined)
+          : undefined;
 
         return {
           id: doc.id,
           name: doc.name,
           type,
           category: type,
-          url: doc.url,
+          url,
           size: doc.size || 'Unknown',
           uploadedAt: doc.created_at,
           uploadedBy: doc.uploaded_by || 'Team member',
           contactName: linkedContact ? getContactFullName(linkedContact) : undefined,
           contactId: doc.contact_id || undefined,
         };
-      });
+      }));
 
       setUploadedDocuments(mapped);
     };
@@ -117,7 +122,7 @@ export default function DocumentCenter() {
         company_id: state.companyId,
         name: file.name,
         type: category,
-        url: uploadResult.url,
+        url: uploadResult.path,
         size: formatFileSize(file.size),
         uploaded_by: state.currentUser?.id,
       });
@@ -127,13 +132,19 @@ export default function DocumentCenter() {
         return;
       }
 
+      const signedUrl = created.url
+        ? (isHttpUrl(created.url) && !created.url.includes('/projectceo-documents/')
+            ? created.url
+            : (await getDocumentSignedUrl(created.url)) || undefined)
+        : undefined;
+
       setUploadedDocuments((prev) => [
         {
           id: created.id,
           name: created.name,
           type: created.type,
           category: created.type as DocCategory,
-          url: created.url,
+          url: signedUrl,
           size: created.size || formatFileSize(file.size),
           uploadedAt: created.created_at,
           uploadedBy: created.uploaded_by || 'Team member',
@@ -229,6 +240,37 @@ export default function DocumentCenter() {
         return 'bg-red-100 text-red-800';
       default:
         return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const resolveDocumentUrl = async (url?: string): Promise<string | null> => {
+    if (!url) return null;
+    if (isHttpUrl(url) && !url.includes('/projectceo-documents/')) return url;
+    return getDocumentSignedUrl(url);
+  };
+
+  const handleOpenDocument = async (url?: string) => {
+    const resolved = await resolveDocumentUrl(url);
+    if (!resolved) {
+      toast.error('Unable to open document');
+      return;
+    }
+    window.open(resolved, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleCopyDocumentLink = async (url?: string) => {
+    const resolved = await resolveDocumentUrl(url);
+    if (!resolved) {
+      toast.error('Unable to copy link');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(resolved);
+      toast.success('Document link copied');
+    } catch (error) {
+      console.error('Failed to copy document link:', error);
+      toast.error('Unable to copy link');
     }
   };
 
@@ -413,7 +455,7 @@ export default function DocumentCenter() {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-1">
                           <button
-                            onClick={() => doc.url && window.open(doc.url, '_blank', 'noopener,noreferrer')}
+                            onClick={() => handleOpenDocument(doc.url)}
                             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                           >
                             <Eye
@@ -422,22 +464,13 @@ export default function DocumentCenter() {
                             />
                           </button>
                           <button
-                            onClick={() => doc.url && window.open(doc.url, '_blank', 'noopener,noreferrer')}
+                            onClick={() => handleOpenDocument(doc.url)}
                             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                           >
                             <Download size={16} className="text-gray-500" />
                           </button>
                           <button
-                            onClick={async () => {
-                              if (!doc.url) return;
-                              try {
-                                await navigator.clipboard.writeText(doc.url);
-                                toast.success('Document link copied');
-                              } catch (error) {
-                                console.error('Failed to copy document link:', error);
-                                toast.error('Unable to copy link');
-                              }
-                            }}
+                            onClick={() => handleCopyDocumentLink(doc.url)}
                             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                           >
                             <Share2 size={16} className="text-gray-500" />
@@ -471,7 +504,7 @@ export default function DocumentCenter() {
                   className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow cursor-pointer group"
                 >
                   <div
-                    onClick={() => doc.url && window.open(doc.url, '_blank', 'noopener,noreferrer')}
+                    onClick={() => handleOpenDocument(doc.url)}
                     className="aspect-square bg-gray-50 rounded-lg flex items-center justify-center mb-3"
                   >
                     {getFileIcon(doc.type)}
@@ -488,7 +521,7 @@ export default function DocumentCenter() {
                     </span>
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
-                        onClick={() => doc.url && window.open(doc.url, '_blank', 'noopener,noreferrer')}
+                        onClick={() => handleOpenDocument(doc.url)}
                         className="p-1 hover:bg-gray-100 rounded"
                       >
                         <Download size={14} className="text-gray-500" />

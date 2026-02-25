@@ -6,6 +6,39 @@ export interface UploadResult {
   error?: string;
 }
 
+export function isHttpUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value);
+}
+
+export function extractDocumentPath(value: string): string {
+  if (!value) return '';
+  if (!isHttpUrl(value)) return value;
+
+  // Backward compatibility: convert previously stored public URLs to object path.
+  const marker = '/storage/v1/object/public/projectceo-documents/';
+  const idx = value.indexOf(marker);
+  if (idx === -1) return value;
+  return decodeURIComponent(value.slice(idx + marker.length).split('?')[0]);
+}
+
+export async function getDocumentSignedUrl(pathOrUrl: string, expiresInSeconds: number = 3600): Promise<string | null> {
+  const path = extractDocumentPath(pathOrUrl);
+  if (!path || (isHttpUrl(path) && !path.includes('/projectceo-documents/'))) {
+    return isHttpUrl(pathOrUrl) ? pathOrUrl : null;
+  }
+
+  const { data, error } = await supabase.storage
+    .from('projectceo-documents')
+    .createSignedUrl(path, expiresInSeconds);
+
+  if (error) {
+    console.error('Signed URL error:', error);
+    return null;
+  }
+
+  return data?.signedUrl || null;
+}
+
 /**
  * Upload a file to Supabase Storage
  * @param file - The file to upload
