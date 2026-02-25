@@ -104,8 +104,10 @@ export default function SettingsView() {
               website: company.website || '',
               address: company.address || '',
             });
-            if (company.logo_url) {
+            if (company.logo_url && !company.logo_url.startsWith('blob:')) {
               setCompanyLogo(company.logo_url);
+            } else {
+              setCompanyLogo(null);
             }
           }
         } catch (error) {
@@ -196,6 +198,21 @@ export default function SettingsView() {
     }
   };
 
+  const fileToDataUrl = async (file: File): Promise<string> => {
+    const buffer = await file.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    const chunkSize = 0x8000;
+
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      const chunk = bytes.subarray(i, i + chunkSize);
+      binary += String.fromCharCode(...chunk);
+    }
+
+    const mime = file.type || 'application/octet-stream';
+    return `data:${mime};base64,${btoa(binary)}`;
+  };
+
   const getReadableError = (error: unknown): string => {
     if (error instanceof Error) return error.message;
     if (typeof error === 'string') return error;
@@ -271,21 +288,28 @@ export default function SettingsView() {
         const result = await uploadCompanyLogo(file, effectiveCompanyId);
 
         if (result.error) {
-          // Fallback path: persist the preview URL when storage bucket upload fails.
-          if (!previewUrl) {
+          // Fallback path: persist a real data URL (never blob:) when storage upload fails.
+          let fallbackDataUrl = previousLogo;
+          try {
+            fallbackDataUrl = await fileToDataUrl(file);
+          } catch (dataUrlError) {
+            console.error('Failed to generate data URL fallback:', dataUrlError);
+          }
+
+          if (!fallbackDataUrl || fallbackDataUrl.startsWith('blob:')) {
             toast.error(`Upload failed: ${result.error}`);
             setCompanyLogo(previousLogo);
             return;
           }
 
-          const updatedCompany = await db.updateCompany(effectiveCompanyId, { logo_url: previewUrl });
+          const updatedCompany = await db.updateCompany(effectiveCompanyId, { logo_url: fallbackDataUrl });
           if (!updatedCompany) {
             toast.error(`Upload failed: ${result.error}`);
             setCompanyLogo(previousLogo);
             return;
           }
 
-          setCompanyLogo(updatedCompany.logo_url || previewUrl);
+          setCompanyLogo(updatedCompany.logo_url || fallbackDataUrl);
           window.dispatchEvent(new Event('crm-company-updated'));
           toast.success('Logo saved (storage fallback mode)');
         } else {
