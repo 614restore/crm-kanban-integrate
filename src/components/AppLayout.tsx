@@ -62,6 +62,11 @@ const initialState: CRMState = {
   notifications: [],
 };
 
+function buildFallbackAvatar(firstName?: string, lastName?: string, email?: string) {
+  const avatarName = `${firstName || ''} ${lastName || ''}`.trim() || email || 'User';
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(avatarName)}&background=random`;
+}
+
 // View Router Component
 function ViewRouter() {
   const { state } = React.useContext(CRMContext)!;
@@ -349,7 +354,7 @@ function CRMApp() {
         name: `${tm.first_name || ''} ${tm.last_name || ''}`.trim() || tm.email,
         email: tm.email,
         role: (tm.role || 'sales') as any,
-        avatar: tm.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(tm.first_name || tm.email)}&background=random`,
+        avatar: tm.avatar_url || buildFallbackAvatar(tm.first_name, tm.last_name, tm.email),
         phone: tm.phone || '',
         department: tm.department || 'General',
         isActive: tm.is_active,
@@ -512,7 +517,7 @@ function CRMApp() {
         name: `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || profile.email,
         email: profile.email,
         role: (profile.role || 'sales') as any,
-        avatar: profile.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.first_name || profile.email)}&background=random`,
+        avatar: profile.avatar_url || buildFallbackAvatar(profile.first_name, profile.last_name, profile.email),
         phone: profile.phone || '',
         department: profile.department || 'General',
         isActive: profile.is_active !== false,
