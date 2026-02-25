@@ -1,26 +1,35 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Use environment variables with fallback to hardcoded values for development
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://aixvqeyviciiehxegtby.databasepad.com';
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjZhYTE1YWNiLTkwOTItNDdlOS1iZGY3LTVlNWUzNGIzMjAzNSJ9.eyJwcm9qZWN0SWQiOiJhaXh2cWV5dmljaWllaHhlZ3RieSIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzcxNzE3OTY1LCJleHAiOjIwODcwNzc5NjUsImlzcyI6ImZhbW91cy5kYXRhYmFzZXBhZCIsImF1ZCI6ImZhbW91cy5jbGllbnRzIn0.DQi8xUGzvj6168-e2B2sDUWu9hYadi62LHhNF3AnGns';
+const projectUrl = 'https://qgvuzrvpyyrrulhwlzma.supabase.co';
+const projectAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFndnV6cnZweXlycnVsaHdsem1hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEzOTU0OTksImV4cCI6MjA4Njk3MTQ5OX0.kQVOflThF52iRCl-VApsGZFwzSMJXdvocIa-7y0NX8M';
 
-// Validate configuration
-if (!supabaseUrl || !supabaseKey) {
-  console.error('Missing Supabase configuration. Please check your .env file.');
+const configuredUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const configuredKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+
+const urlLooksLegacy = !!configuredUrl && configuredUrl.includes('databasepad.com');
+const keyLooksLegacy = !!configuredKey && configuredKey.includes('aixvqeyviciiehxegtby');
+
+// Guardrail: force known-good Supabase project when stale legacy env values are present.
+const supabaseUrl = !configuredUrl || urlLooksLegacy ? projectUrl : configuredUrl;
+const supabaseKey = !configuredKey || keyLooksLegacy ? projectAnonKey : configuredKey;
+
+if (urlLooksLegacy || keyLooksLegacy) {
+  console.warn('Legacy backend config detected in env; using Supabase project defaults.');
 }
 
-// Initialize Supabase client with lock configuration to prevent timeouts
+if (!supabaseUrl || !supabaseKey) {
+  console.error('Missing Supabase configuration. Please check your environment values.');
+}
+
 const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
-    // Fix LockManager timeout issues
     storage: typeof window !== 'undefined' ? window.localStorage : undefined,
     storageKey: 'sb-auth-token',
     flowType: 'pkce',
   },
-  // Increase global timeout to prevent lock timeout errors
   global: {
     headers: {
       'x-client-info': 'crm-kanban-app',
