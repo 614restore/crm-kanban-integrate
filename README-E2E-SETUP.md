@@ -15,7 +15,7 @@ Follow these steps to run the end-to-end invite test and configure email sending
   - `E2E_INVITEE_EMAIL` (optional)
   - `E2E_COMPANY_ID` (optional)
   - `E2E_INVITER_ID` (optional)
-  - `RESEND_API_KEY` (for `api/send-invite` when deployed)
+  - `RESEND_API_KEY` (for `api/send-email` when deployed)
 
 4) Local `.env` for development (do NOT commit)
 Create a `.env` file in the project root with:
@@ -43,7 +43,7 @@ node scripts/e2e-invite.mjs
 - In Actions, select `E2E Invite Test` and click `Run workflow`.
 
 7) Deploy serverless email endpoint
-- The `api/send-invite.mjs` file is a minimal serverless handler that expects `RESEND_API_KEY` in env. Deploy it to Vercel or Netlify (or convert to your platform's function format) and ensure the production environment variable `RESEND_API_KEY` is configured.
+- The `api/send-email.mjs` file is a minimal serverless handler that expects `RESEND_API_KEY` in env. Deploy it to Vercel or Netlify (or convert to your platform's function format) and ensure the production environment variable `RESEND_API_KEY` is configured.
 
 Security notes
 - Never expose `SUPABASE_KEY` service-role in the browser.
@@ -52,6 +52,10 @@ Security notes
 
 If you'd like, I can:
 - Add a cleanup workflow step to remove created test rows automatically.
-- Convert `api/send-invite.mjs` to a Vercel function format (I can create a `vercel.json` and small helper).
+- Convert `api/send-email.mjs` to a Vercel function format (I can create a `vercel.json` and small helper).
 
 *** End of guide ***
+
+
+## Frontend Email API Base
+- If your frontend runs on GitHub Pages, set `VITE_EMAIL_API_BASE_URL=https://crm-kanban-integrate.vercel.app` before building so invite/invoice email buttons can reach your Vercel API.

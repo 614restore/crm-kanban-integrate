@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useCRM, useFinancialStats } from '@/lib/crmStore';
 import { db } from '@/lib/database';
+import { sendEmail } from '@/lib/emailApi';
 import { exportToExcel } from '@/lib/exportUtils';
 import { toast } from 'sonner';
 import {
@@ -67,21 +68,45 @@ export default function FinancialDashboard() {
       return;
     }
 
-    const updated = await db.updateInvoice(invoiceId, { status: 'sent' });
-    if (!updated) {
-      toast.error('Failed to mark invoice as sent');
+    const contact = state.contacts.find((c) => c.id === existingInvoice.contactId);
+    if (!contact?.email) {
+      toast.error('Customer email is missing');
       return;
     }
 
-    dispatch({
-      type: 'UPDATE_INVOICE',
-      payload: {
-        ...existingInvoice,
-        status: 'sent',
-      },
-    });
+    try {
+      await sendEmail({
+        to: contact.email,
+        subject: `Invoice ${existingInvoice.id} from 614 Restore CRM`,
+        html: `
+          <p>Hello ${contact.firstName},</p>
+          <p>Your invoice is ready.</p>
+          <p><strong>Invoice:</strong> ${existingInvoice.id}</p>
+          <p><strong>Amount:</strong> ${formatCurrency(existingInvoice.amount)}</p>
+          <p><strong>Due Date:</strong> ${formatDate(existingInvoice.dueDate)}</p>
+          <p>Please reply to this email if you have any questions.</p>
+        `,
+      });
 
-    toast.success('Invoice marked as sent');
+      const updated = await db.updateInvoice(invoiceId, { status: 'sent' });
+      if (!updated) {
+        toast.error('Invoice email sent, but failed to update status');
+        return;
+      }
+
+      dispatch({
+        type: 'UPDATE_INVOICE',
+        payload: {
+          ...existingInvoice,
+          status: 'sent',
+        },
+      });
+
+      toast.success(`Invoice emailed to ${contact.email}`);
+    } catch (error: any) {
+      console.error('Failed to send invoice email:', error);
+      toast.error(error?.message || 'Failed to send invoice email');
+    }
   };
 
   const allInvoices = [...state.invoices];

@@ -200,6 +200,18 @@ export interface DbProfile {
   updated_at: string;
 }
 
+export interface DbInvite {
+  id: string;
+  company_id: string;
+  email: string;
+  role: string;
+  invited_by?: string;
+  token?: string;
+  accepted?: boolean;
+  created_at?: string;
+  accepted_at?: string;
+}
+
 // Database service class
 class DatabaseService {
   // Company operations
@@ -950,6 +962,33 @@ class DatabaseService {
     return data;
   }
 
+  // Invite operations
+  async createInvite(invite: Partial<DbInvite>): Promise<DbInvite | null> {
+    const tables: Array<'invitations' | 'invites'> = ['invitations', 'invites'];
+
+    for (const table of tables) {
+      const { data, error } = await supabase
+        .from(table)
+        .insert(invite)
+        .select()
+        .single();
+
+      if (!error) {
+        return data as DbInvite;
+      }
+
+      const missingTable = error.code === '42P01' || /relation .* does not exist/i.test(error.message || '');
+      if (missingTable) {
+        continue;
+      }
+
+      console.error('Error creating invite in table', table, error);
+      return null;
+    }
+
+    console.error('Error creating invite: neither invitations nor invites table exists.');
+    return null;
+  }
   // Real-time subscriptions
   subscribeToContacts(companyId: string, callback: (payload: any) => void) {
     return supabase

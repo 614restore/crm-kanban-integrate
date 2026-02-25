@@ -36,6 +36,7 @@ async function main() {
       role: 'sales',
       invited_by: INVITER_ID,
       accepted: false,
+      token,
       created_at: new Date().toISOString(),
     };
     const { data: invite, error: inviteErr } = await supabase.from('invites').insert(invitePayload).select().single();

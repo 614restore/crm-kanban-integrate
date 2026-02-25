@@ -1,6 +1,10 @@
 import React, { useState } from 'react';
 import { useCRM, canManageTeam } from '@/lib/crmStore';
+import { useAuth } from '@/lib/authContext';
+import { db } from '@/lib/database';
+import { sendEmail } from '@/lib/emailApi';
 import { TeamMember, formatCurrency, roleLabels, UserRole } from '@/lib/crmData';
+import { toast } from 'sonner';
 import {
   Users,
   Plus,
@@ -19,10 +23,12 @@ import {
   TrendingUp,
   Target,
   DollarSign,
+  Loader2,
 } from 'lucide-react';
 
 export default function TeamView() {
   const { state, dispatch } = useCRM();
+  const { profile } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -30,6 +36,8 @@ export default function TeamView() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<UserRole>('sales');
   const [copied, setCopied] = useState(false);
+  const [isSendingInvite, setIsSendingInvite] = useState(false);
+  const [isSavingMember, setIsSavingMember] = useState(false);
 
   const userRole = state.currentUser?.role || 'sales';
   const canManage = canManageTeam(userRole);
@@ -68,22 +76,71 @@ export default function TeamView() {
       });
   };
 
-  const handleInvite = () => {
-    // In a real app, this would send an invitation email
-    dispatch({
-      type: 'ADD_NOTIFICATION',
-      payload: {
-        id: `notif-${Date.now()}`,
-        type: 'success',
-        title: 'Invitation Sent',
-        message: `An invitation has been sent to ${inviteEmail}`,
-        timestamp: new Date().toISOString(),
-        read: false,
-      },
-    });
-    setShowInviteModal(false);
-    setInviteEmail('');
-    setInviteRole('sales');
+  const handleInvite = async () => {
+    if (!state.companyId) {
+      toast.error('No company linked. Please refresh and try again.');
+      return;
+    }
+
+    if (!inviteEmail.trim()) {
+      toast.error('Please enter an email address.');
+      return;
+    }
+
+    setIsSendingInvite(true);
+    try {
+      const token = globalThis.crypto?.randomUUID?.() || `invite-${Date.now()}`;
+      const appUrl = import.meta.env.VITE_APP_URL || window.location.origin;
+      const inviteLink = `${appUrl}?invite=${encodeURIComponent(token)}&company=${encodeURIComponent(state.companyId)}`;
+
+      const inviteRecord = await db.createInvite({
+        company_id: state.companyId,
+        email: inviteEmail.trim().toLowerCase(),
+        role: inviteRole,
+        invited_by: profile?.id,
+        token,
+        accepted: false,
+        created_at: new Date().toISOString(),
+      });
+
+      if (!inviteRecord) {
+        toast.error('Failed to create invite record in database');
+        return;
+      }
+
+      await sendEmail({
+        to: inviteEmail.trim().toLowerCase(),
+        subject: 'You were invited to join the CRM team',
+        html: `
+          <p>You were invited to join the CRM team as <strong>${inviteRole}</strong>.</p>
+          <p>Company ID: <strong>${state.companyId}</strong></p>
+          <p>Use this link to join:</p>
+          <p><a href="${inviteLink}">${inviteLink}</a></p>
+        `,
+      });
+
+      dispatch({
+        type: 'ADD_NOTIFICATION',
+        payload: {
+          id: `notif-${Date.now()}`,
+          type: 'success',
+          title: 'Invitation Sent',
+          message: `An invitation email was sent to ${inviteEmail}`,
+          timestamp: new Date().toISOString(),
+          read: false,
+        },
+      });
+
+      toast.success('Invitation sent');
+      setShowInviteModal(false);
+      setInviteEmail('');
+      setInviteRole('sales');
+    } catch (error: any) {
+      console.error('Failed to send invitation:', error);
+      toast.error(error?.message || 'Failed to send invitation');
+    } finally {
+      setIsSendingInvite(false);
+    }
   };
 
   const handleEditMember = (member: TeamMember) => {
@@ -91,11 +148,36 @@ export default function TeamView() {
     setShowEditModal(true);
   };
 
-  const handleSaveMember = () => {
-    if (selectedMember) {
+  const handleSaveMember = async () => {
+    if (!selectedMember) return;
+
+    setIsSavingMember(true);
+    try {
+      const [firstName, ...lastParts] = selectedMember.name.trim().split(/\s+/);
+      const updated = await db.updateProfile(selectedMember.id, {
+        first_name: firstName || '',
+        last_name: lastParts.join(' '),
+        email: selectedMember.email,
+        role: selectedMember.role,
+        department: selectedMember.department,
+        phone: selectedMember.phone,
+        is_active: selectedMember.isActive,
+      });
+
+      if (!updated) {
+        toast.error('Failed to save team member');
+        return;
+      }
+
       dispatch({ type: 'UPDATE_TEAM_MEMBER', payload: selectedMember });
+      toast.success('Team member updated');
       setShowEditModal(false);
       setSelectedMember(null);
+    } catch (error) {
+      console.error('Failed to save team member:', error);
+      toast.error('Failed to save team member');
+    } finally {
+      setIsSavingMember(false);
     }
   };
 
@@ -364,10 +446,16 @@ export default function TeamView() {
               </button>
               <button
                 onClick={handleInvite}
-                disabled={!inviteEmail}
+                disabled={!inviteEmail || isSendingInvite}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50"
               >
-                Send Invitation
+                {isSendingInvite ? (
+                  <span className="inline-flex items-center gap-2">
+                    <Loader2 size={16} className="animate-spin" /> Sending...
+                  </span>
+                ) : (
+                  'Send Invitation'
+                )}
               </button>
             </div>
           </div>
@@ -478,9 +566,10 @@ export default function TeamView() {
               </button>
               <button
                 onClick={handleSaveMember}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                disabled={isSavingMember}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50"
               >
-                <Save size={18} />
+                {isSavingMember ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
                 Save Changes
               </button>
             </div>
