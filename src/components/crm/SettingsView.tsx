@@ -285,8 +285,31 @@ export default function SettingsView() {
     }
   };
 
-  const readFileAsDataUrl = (file: File): Promise<string> =>
-    new Promise((resolve, reject) => {
+  const readFileAsDataUrl = async (file: File): Promise<string> => {
+    const mimeType = file.type && file.type.startsWith('image/') ? file.type : 'image/jpeg';
+
+    // Primary path: ArrayBuffer read is more reliable than FileReader on some WebKit sessions.
+    try {
+      const buffer = await file.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      const chunkSize = 0x8000;
+      let binary = '';
+
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        const chunk = bytes.subarray(i, i + chunkSize);
+        binary += String.fromCharCode(...chunk);
+      }
+
+      if (binary.length > 0) {
+        const base64 = btoa(binary);
+        return 'data:' + mimeType + ';base64,' + base64;
+      }
+    } catch (arrayBufferError) {
+      console.warn('ArrayBuffer image fallback read failed:', arrayBufferError);
+    }
+
+    // Secondary path: FileReader DataURL.
+    return await new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => {
         const result = reader.result;
@@ -299,6 +322,7 @@ export default function SettingsView() {
       reader.onerror = () => reject(new Error('Failed to read image fallback'));
       reader.readAsDataURL(file);
     });
+  };
 
   const loadImageFromDataUrl = (dataUrl: string): Promise<HTMLImageElement> =>
     new Promise((resolve, reject) => {
