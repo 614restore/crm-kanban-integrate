@@ -414,8 +414,13 @@ function CRMApp() {
     });
   }, [loadData]);
 
-  // Set up real-time subscriptions
+  // Set up real-time subscriptions (skipped on static GH Pages to avoid noisy websocket failures)
   useEffect(() => {
+    const realtimeDisabled =
+      typeof window !== 'undefined' &&
+      (window.location.hostname.endsWith('github.io') || import.meta.env.VITE_DISABLE_REALTIME === 'true');
+
+    if (realtimeDisabled) return;
     if (!profile?.company_id) return;
 
     const channel = db.subscribeToAll(profile.company_id, {
