@@ -115,7 +115,7 @@ export default function SettingsView() {
           .select('company_id')
           .eq('id', userId)
           .single(),
-        6000,
+        15000,
         'Lookup user company'
       );
 
@@ -126,8 +126,8 @@ export default function SettingsView() {
 
       return null;
     } catch (error) {
-      console.error('resolveCompanyId error:', error);
-      return null;
+      console.warn('resolveCompanyId fallback to cached company_id:', error);
+      return state.companyId || null;
     }
   }, [dispatch, profile?.company_id, profile?.id, state.companyId, user?.id]);
 
