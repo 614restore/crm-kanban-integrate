@@ -432,34 +432,30 @@ export default function SettingsView() {
 
     setIsStartingFresh(true);
     try {
-      const newCompanyName = `${profile.email.split('@')[0] || 'My'}'s Company`;
-      const newCompany = await db.createCompany({
-        name: newCompanyName,
-        email: profile.email,
-        phone: '',
-        address: '',
-        website: '',
-      });
+      const { data: newCompanyId, error: startFreshError } = await withTimeout(
+        supabase.rpc('start_fresh_workspace'),
+        15000,
+        'Start fresh workspace'
+      );
 
-      if (!newCompany) {
-        toast.error('Failed to create a new company workspace');
-        return;
+      if (startFreshError || !newCompanyId) {
+        throw startFreshError || new Error('Failed to create new company workspace');
       }
 
-      const profileUpdate = await updateProfile({ company_id: newCompany.id });
+      const profileUpdate = await updateProfile({ company_id: newCompanyId as string });
       if (profileUpdate.error) {
         throw profileUpdate.error;
       }
 
-      await ensureDefaultLeadSources(newCompany.id);
+      await ensureDefaultLeadSources(newCompanyId as string);
 
-      dispatch({ type: 'SET_COMPANY_ID', payload: newCompany.id });
+      dispatch({ type: 'SET_COMPANY_ID', payload: newCompanyId as string });
       dispatch({ type: 'SET_VIEW', payload: 'dashboard' });
       window.dispatchEvent(new Event('crm-company-updated'));
       toast.success('Fresh workspace created. You are now in a brand-new company.');
     } catch (error) {
       console.error('Start fresh workspace error:', error);
-      toast.error('Failed to start fresh workspace');
+      toast.error('Failed to start fresh workspace: ' + getReadableError(error));
     } finally {
       setIsStartingFresh(false);
     }
