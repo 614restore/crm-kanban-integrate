@@ -428,6 +428,9 @@ export default function SettingsView() {
     return 'Unknown error';
   };
 
+  const isFileReadError = (message: string): boolean =>
+    /I\/O read operation failed|NotReadableError|Failed to read image fallback|Failed to decode image fallback|WebKitBlobResource/i.test(message);
+
   const handleSaveProfile = async () => {
     if (profile) {
       try {
@@ -637,7 +640,12 @@ export default function SettingsView() {
         }
       } catch (fallbackError) {
         const message = getReadableError(error);
-        toast.error(`Failed to upload logo: ${message} | fallback failed: ${getReadableError(fallbackError)}`);
+        const fallbackMessage = getReadableError(fallbackError);
+        if (isFileReadError(message) || isFileReadError(fallbackMessage)) {
+          toast.error('Browser could not read this image file. Save a copy locally as JPG/PNG and retry.');
+        } else {
+          toast.error(`Failed to upload logo: ${message} | fallback failed: ${fallbackMessage}`);
+        }
         setCompanyLogo(previousLogo);
       }
     } finally {
@@ -748,7 +756,12 @@ export default function SettingsView() {
         toast.success('Avatar saved using compatibility mode');
       } catch (fallbackError) {
         const message = getReadableError(error);
-        toast.error(`Failed to upload avatar: ${message} | fallback failed: ${getReadableError(fallbackError)}`);
+        const fallbackMessage = getReadableError(fallbackError);
+        if (isFileReadError(message) || isFileReadError(fallbackMessage)) {
+          toast.error('Browser could not read this image file. Save a copy locally as JPG/PNG and retry.');
+        } else {
+          toast.error(`Failed to upload avatar: ${message} | fallback failed: ${fallbackMessage}`);
+        }
         setProfileAvatar(profile?.avatar_url || null);
       }
     } finally {

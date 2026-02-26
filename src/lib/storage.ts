@@ -139,9 +139,9 @@ export async function uploadFile(
     const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
     const filePath = folder ? `${folder}/${fileName}` : fileName;
 
-    const fileBuffer = await file.arrayBuffer();
-    const makeBlobPayload = () => new Blob([fileBuffer], { type: file.type || 'application/octet-stream' });
-    const makeFilePayload = () => new File([fileBuffer], file.name, { type: file.type || 'application/octet-stream' });
+    const mimeType = file.type || 'application/octet-stream';
+    const makeBlobPayload = () => file.slice(0, file.size, mimeType);
+    const makeFilePayload = () => new File([file.slice(0, file.size, mimeType)], file.name, { type: mimeType });
 
     // First attempt: SDK upload with a fresh payload object (avoids exhausted body streams).
     let result = await uploadViaSdk(bucket, filePath, makeFilePayload());
@@ -192,6 +192,9 @@ export async function uploadFile(
     let message = 'Unknown error';
     if (error instanceof Error) {
       message = error.message;
+      if (error.name === 'NotReadableError' || /I\/O read operation failed/i.test(error.message)) {
+        message = 'Browser could not read this file. Save it locally as JPG/PNG and try again.';
+      }
     } else if (error && typeof error === 'object') {
       message = JSON.stringify(error);
     }
