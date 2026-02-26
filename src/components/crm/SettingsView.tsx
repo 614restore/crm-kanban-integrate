@@ -332,14 +332,11 @@ export default function SettingsView() {
       img.src = dataUrl;
     });
 
-  const resizeImageToDataUrl = async (
-    file: File,
+  const resizeImageSourceToDataUrl = async (
+    sourceImage: HTMLImageElement,
     maxDimension: number = 512,
     quality: number = 0.82
   ): Promise<string> => {
-    const sourceDataUrl = await readFileAsDataUrl(file);
-    const sourceImage = await loadImageFromDataUrl(sourceDataUrl);
-
     const scale = Math.min(1, maxDimension / Math.max(sourceImage.width, sourceImage.height));
     const width = Math.max(1, Math.round(sourceImage.width * scale));
     const height = Math.max(1, Math.round(sourceImage.height * scale));
@@ -353,7 +350,6 @@ export default function SettingsView() {
 
     ctx.drawImage(sourceImage, 0, 0, width, height);
 
-    // WebP first, then JPEG fallback for browser compatibility.
     let dataUrl = '';
     try {
       dataUrl = canvas.toDataURL('image/webp', quality);
@@ -370,6 +366,25 @@ export default function SettingsView() {
     }
 
     return dataUrl;
+  };
+
+  const resizeImageToDataUrl = async (
+    file: File,
+    maxDimension: number = 512,
+    quality: number = 0.82
+  ): Promise<string> => {
+    const sourceDataUrl = await readFileAsDataUrl(file);
+    const sourceImage = await loadImageFromDataUrl(sourceDataUrl);
+    return resizeImageSourceToDataUrl(sourceImage, maxDimension, quality);
+  };
+
+  const resizeImageUrlToDataUrl = async (
+    sourceUrl: string,
+    maxDimension: number = 512,
+    quality: number = 0.82
+  ): Promise<string> => {
+    const sourceImage = await loadImageFromDataUrl(sourceUrl);
+    return resizeImageSourceToDataUrl(sourceImage, maxDimension, quality);
   };
 
   const withTimeout = async <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
@@ -520,6 +535,8 @@ export default function SettingsView() {
     if (!file) return;
 
     const previousLogo = companyLogo;
+    let previewUrl: string | null = null;
+    let preparedFallbackDataUrl: string | null = null;
 
     // Validate file
     const validationError = validateImageFile(file, 5);
@@ -540,12 +557,24 @@ export default function SettingsView() {
       }
 
       // Non-blocking preview: do not fail upload if preview creation fails.
-      let previewUrl = previousLogo;
       try {
         previewUrl = URL.createObjectURL(file);
         setCompanyLogo(previewUrl);
       } catch (previewError) {
         console.warn('Logo preview creation failed:', previewError);
+      }
+
+      // Precompute fallback immediately while browser still has reliable file access.
+      try {
+        preparedFallbackDataUrl = await withTimeout(resizeImageToDataUrl(file, 520, 0.84), 12000, 'Company logo fallback prepare');
+      } catch (prepareError) {
+        if (previewUrl) {
+          try {
+            preparedFallbackDataUrl = await withTimeout(resizeImageUrlToDataUrl(previewUrl, 520, 0.84), 12000, 'Company logo fallback prepare from preview');
+          } catch (previewPrepareError) {
+            console.warn('Company logo fallback preparation failed:', prepareError, previewPrepareError);
+          }
+        }
       }
 
       // Upload to Supabase if user has company
@@ -554,7 +583,7 @@ export default function SettingsView() {
 
         if (result.error) {
           try {
-            const fallbackDataUrl = await resizeImageToDataUrl(file, 520, 0.84);
+            const fallbackDataUrl = preparedFallbackDataUrl || await resizeImageToDataUrl(file, 520, 0.84);
             const fallbackSave = await withTimeout(db.updateCompany(companyId, { logo_url: fallbackDataUrl }), 12000, 'Company logo fallback save');
             if (!fallbackSave?.logo_url) throw new Error('Fallback save did not persist');
             setCompanyLogo(fallbackSave.logo_url);
@@ -594,7 +623,7 @@ export default function SettingsView() {
       try {
         const companyId = effectiveCompanyId || await resolveCompanyId();
         if (companyId) {
-          const fallbackDataUrl = await withTimeout(resizeImageToDataUrl(file, 520, 0.84), 12000, 'Company logo fallback encode');
+          const fallbackDataUrl = preparedFallbackDataUrl || await withTimeout(resizeImageToDataUrl(file, 520, 0.84), 12000, 'Company logo fallback encode');
           const fallbackSave = await withTimeout(db.updateCompany(companyId, { logo_url: fallbackDataUrl }), 12000, 'Company logo fallback save');
           if (fallbackSave?.logo_url) {
             setCompanyLogo(fallbackSave.logo_url);
@@ -612,6 +641,13 @@ export default function SettingsView() {
         setCompanyLogo(previousLogo);
       }
     } finally {
+      if (previewUrl && previewUrl.startsWith('blob:')) {
+        try {
+          URL.revokeObjectURL(previewUrl);
+        } catch {
+          // ignore blob URL revoke errors
+        }
+      }
       e.target.value = '';
       setIsUploadingLogo(false);
     }
@@ -622,6 +658,8 @@ export default function SettingsView() {
     if (!file) return;
 
     const previousAvatar = profileAvatar;
+    let previewUrl: string | null = null;
+    let preparedFallbackDataUrl: string | null = null;
 
     // Validate file
     const validationError = validateImageFile(file, 2);
@@ -635,10 +673,23 @@ export default function SettingsView() {
     try {
       // Create preview immediately (non-blocking)
       try {
-        const previewUrl = URL.createObjectURL(file);
+        previewUrl = URL.createObjectURL(file);
         setProfileAvatar(previewUrl);
       } catch (previewError) {
         console.warn('Avatar preview creation failed:', previewError);
+      }
+
+      // Precompute fallback immediately while browser still has reliable file access.
+      try {
+        preparedFallbackDataUrl = await withTimeout(resizeImageToDataUrl(file, 400, 0.82), 12000, 'Profile avatar fallback prepare');
+      } catch (prepareError) {
+        if (previewUrl) {
+          try {
+            preparedFallbackDataUrl = await withTimeout(resizeImageUrlToDataUrl(previewUrl, 400, 0.82), 12000, 'Profile avatar fallback prepare from preview');
+          } catch (previewPrepareError) {
+            console.warn('Profile avatar fallback preparation failed:', prepareError, previewPrepareError);
+          }
+        }
       }
 
       // Upload to Supabase if user is authenticated
@@ -647,7 +698,7 @@ export default function SettingsView() {
         
         if (result.error) {
           try {
-            const fallbackDataUrl = await resizeImageToDataUrl(file, 400, 0.82);
+            const fallbackDataUrl = preparedFallbackDataUrl || await resizeImageToDataUrl(file, 400, 0.82);
             const { error: fallbackErr } = await withTimeout(updateProfile({ avatar_url: fallbackDataUrl }), 12000, 'Profile avatar fallback save');
             if (fallbackErr) throw fallbackErr;
             setProfileAvatar(fallbackDataUrl);
@@ -690,7 +741,7 @@ export default function SettingsView() {
     } catch (error) {
       console.error('Avatar upload error:', error);
       try {
-        const fallbackDataUrl = await withTimeout(resizeImageToDataUrl(file, 400, 0.82), 12000, 'Profile avatar fallback encode');
+        const fallbackDataUrl = preparedFallbackDataUrl || await withTimeout(resizeImageToDataUrl(file, 400, 0.82), 12000, 'Profile avatar fallback encode');
         const { error: fallbackErr } = await withTimeout(updateProfile({ avatar_url: fallbackDataUrl }), 12000, 'Profile avatar fallback save');
         if (fallbackErr) throw fallbackErr;
         setProfileAvatar(fallbackDataUrl);
@@ -701,6 +752,13 @@ export default function SettingsView() {
         setProfileAvatar(profile?.avatar_url || null);
       }
     } finally {
+      if (previewUrl && previewUrl.startsWith('blob:')) {
+        try {
+          URL.revokeObjectURL(previewUrl);
+        } catch {
+          // ignore blob URL revoke errors
+        }
+      }
       e.target.value = '';
       setIsUploadingAvatar(false);
     }
