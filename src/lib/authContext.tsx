@@ -174,9 +174,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signOut = async () => {
-    await supabase.auth.signOut();
+  const clearLocalAuthState = () => {
+    setSession(null);
+    setUser(null);
     setProfile(null);
+    setLoading(false);
+
+    if (typeof window !== 'undefined') {
+      try {
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < window.localStorage.length; i += 1) {
+          const key = window.localStorage.key(i);
+          if (!key) continue;
+          if (key.startsWith('sb-') && key.includes('auth-token')) {
+            keysToRemove.push(key);
+          }
+        }
+
+        keysToRemove.push('sb-auth-token');
+
+        keysToRemove.forEach((key) => {
+          try {
+            window.localStorage.removeItem(key);
+          } catch {
+            // ignore storage cleanup errors
+          }
+        });
+      } catch {
+        // ignore storage access errors
+      }
+    }
+  };
+
+  const signOut = async () => {
+    clearLocalAuthState();
+
+    try {
+      await Promise.race([
+        supabase.auth.signOut({ scope: 'local' }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Local sign-out timeout')), 5000)),
+      ]);
+    } catch (error) {
+      console.warn('Local sign-out fallback applied:', error);
+    }
+
+    try {
+      supabase.removeAllChannels();
+    } catch (error) {
+      console.warn('Failed to remove realtime channels during sign-out:', error);
+    }
+
+    clearLocalAuthState();
   };
 
   const resetPassword = async (email: string) => {
