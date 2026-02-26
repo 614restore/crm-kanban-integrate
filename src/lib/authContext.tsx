@@ -194,19 +194,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!user) return { error: new Error('No user logged in') };
 
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
         .update({
           ...updates,
           updated_at: new Date().toISOString(),
         })
-        .eq('id', user.id);
+        .eq('id', user.id)
+        .select('*')
+        .single();
 
-      if (!error) {
-        setProfile((prev) => (prev ? { ...prev, ...updates } : null));
+      if (error || !data) {
+        return { error: error || new Error('Profile update did not persist') };
       }
 
-      return { error };
+      setProfile(data as Profile);
+      return { error: null };
     } catch (err) {
       return { error: err as Error };
     }

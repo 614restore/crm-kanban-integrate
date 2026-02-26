@@ -468,13 +468,20 @@ export default function SettingsView() {
         } else {
           // Update company logo URL in database and verify persistence
           const updatedCompany = await withTimeout(db.updateCompany(companyId, { logo_url: result.url }), 12000, 'Company logo save');
-          if (!updatedCompany) {
+          if (!updatedCompany?.logo_url) {
             setCompanyLogo(previousLogo);
-            toast.error('Logo uploaded, but failed to save to company profile');
+            toast.error('Logo uploaded, but failed to persist to company profile');
             return;
           }
 
-          setCompanyLogo(updatedCompany.logo_url || result.url);
+          const verifyCompany = await withTimeout(db.getCompany(companyId), 12000, 'Company logo verify');
+          if (!verifyCompany?.logo_url) {
+            setCompanyLogo(previousLogo);
+            toast.error('Logo save could not be verified. Please retry.');
+            return;
+          }
+
+          setCompanyLogo(verifyCompany.logo_url);
           window.dispatchEvent(new Event('crm-company-updated'));
           toast.success('Logo uploaded and saved successfully');
         }
@@ -495,6 +502,8 @@ export default function SettingsView() {
   const handleProfileAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    const previousAvatar = profileAvatar;
 
     // Validate file
     const validationError = validateImageFile(file, 2);
@@ -531,10 +540,22 @@ export default function SettingsView() {
               throw error;
             }
 
+            const { data: verifyProfile, error: verifyError } = await supabase
+              .from('profiles')
+              .select('avatar_url')
+              .eq('id', profile.id)
+              .single();
+
+            if (verifyError || !verifyProfile?.avatar_url) {
+              throw verifyError || new Error('Avatar save could not be verified');
+            }
+
+            setProfileAvatar(verifyProfile.avatar_url);
             toast.success("Avatar uploaded and saved successfully");
           } catch (updateError) {
             console.error('Failed to update profile with new avatar:', updateError);
-            toast.error('Avatar uploaded but failed to save to profile');
+            setProfileAvatar(previousAvatar || profile.avatar_url || null);
+            toast.error(`Avatar uploaded but failed to save to profile: ${getReadableError(updateError)}`);
           }
         }
       } else {
