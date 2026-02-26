@@ -277,6 +277,33 @@ export default function SettingsView() {
     }
   };
 
+  const resizeImageToDataUrl = async (
+    file: File,
+    maxDimension: number = 512,
+    quality: number = 0.82
+  ): Promise<string> => {
+    const imageBitmap = await createImageBitmap(file);
+    const scale = Math.min(1, maxDimension / Math.max(imageBitmap.width, imageBitmap.height));
+    const width = Math.max(1, Math.round(imageBitmap.width * scale));
+    const height = Math.max(1, Math.round(imageBitmap.height * scale));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Failed to prepare image canvas');
+
+    ctx.drawImage(imageBitmap, 0, 0, width, height);
+    const dataUrl = canvas.toDataURL('image/webp', quality);
+
+    if (!dataUrl || !dataUrl.startsWith('data:image/')) {
+      throw new Error('Failed to encode image fallback');
+    }
+
+    return dataUrl;
+  };
+
   const withTimeout = async <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
@@ -462,9 +489,19 @@ export default function SettingsView() {
         const result = await withTimeout(uploadCompanyLogo(file, companyId), 25000, 'Company logo upload');
 
         if (result.error) {
-          toast.error(`Upload failed: ${result.error}`);
-          setCompanyLogo(previousLogo);
-          return;
+          try {
+            const fallbackDataUrl = await resizeImageToDataUrl(file, 520, 0.84);
+            const fallbackSave = await withTimeout(db.updateCompany(companyId, { logo_url: fallbackDataUrl }), 12000, 'Company logo fallback save');
+            if (!fallbackSave?.logo_url) throw new Error('Fallback save did not persist');
+            setCompanyLogo(fallbackSave.logo_url);
+            window.dispatchEvent(new Event('crm-company-updated'));
+            toast.success('Logo saved using compatibility mode');
+            return;
+          } catch (fallbackError) {
+            toast.error(`Upload failed: ${result.error} | fallback failed: ${getReadableError(fallbackError)}`);
+            setCompanyLogo(previousLogo);
+            return;
+          }
         } else {
           // Update company logo URL in database and verify persistence
           const updatedCompany = await withTimeout(db.updateCompany(companyId, { logo_url: result.url }), 12000, 'Company logo save');
@@ -528,8 +565,16 @@ export default function SettingsView() {
         const result = await withTimeout(uploadUserAvatar(file, profile.id), 25000, 'Profile avatar upload');
         
         if (result.error) {
-          toast.error(`Upload failed: ${result.error}`);
-          setProfileAvatar(profile.avatar_url || null);
+          try {
+            const fallbackDataUrl = await resizeImageToDataUrl(file, 400, 0.82);
+            const { error: fallbackErr } = await withTimeout(updateProfile({ avatar_url: fallbackDataUrl }), 12000, 'Profile avatar fallback save');
+            if (fallbackErr) throw fallbackErr;
+            setProfileAvatar(fallbackDataUrl);
+            toast.success('Avatar saved using compatibility mode');
+          } catch (fallbackError) {
+            toast.error(`Upload failed: ${result.error} | fallback failed: ${getReadableError(fallbackError)}`);
+            setProfileAvatar(profile.avatar_url || null);
+          }
         } else {
           setProfileAvatar(result.url);
           
