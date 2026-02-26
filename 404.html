@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Opening CRM…</title>
+  <script>
+    (function () {
+      var pathSegmentsToKeep = 1;
+      var l = window.location;
+      var attemptKey = 'gh_pages_spa_redirect_attempted';
+
+      try {
+        var attempted = window.sessionStorage.getItem(attemptKey) === '1';
+
+        // Prevent infinite redirect loop if Pages keeps serving 404 for the app root.
+        if (attempted) {
+          var appRoot = l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
+            l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/') + '/';
+
+          var fallbackLink = document.getElementById('open-app-link');
+          if (fallbackLink) fallbackLink.href = appRoot;
+          var status = document.getElementById('status-text');
+          if (status) status.textContent = 'Automatic redirect was stopped to prevent a loop.';
+          return;
+        }
+
+        window.sessionStorage.setItem(attemptKey, '1');
+
+        l.replace(
+          l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
+          l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/') + '/?/' +
+          l.pathname.slice(1).split('/').slice(pathSegmentsToKeep).join('/').replace(/&/g, '~and~') +
+          (l.search ? '&' + l.search.slice(1).replace(/&/g, '~and~') : '') +
+          l.hash
+        );
+      } catch (e) {
+        console.error('Redirect error:', e);
+      }
+    })();
+  </script>
+</head>
+<body>
+  <div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:system-ui,-apple-system,sans-serif;padding:24px;">
+    <div style="text-align:center;max-width:460px;">
+      <h1 style="margin:0 0 8px;">Opening CRM…</h1>
+      <p id="status-text" style="margin:0 0 16px;color:#555;">Trying to load your app route.</p>
+      <a id="open-app-link" href="/crm-kanban-integrate/" style="display:inline-block;padding:10px 14px;border-radius:8px;background:#1d4ed8;color:#fff;text-decoration:none;">Open App</a>
+    </div>
+  </div>
+</body>
+</html>
