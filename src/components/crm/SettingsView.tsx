@@ -391,6 +391,20 @@ export default function SettingsView() {
 
   const readErrorHint = 'Browser could not read this image file. Use Save URL below, or export the image as JPG/PNG and re-upload.';
 
+  const handleCompanyLogoPaste = async (e: React.ClipboardEvent<HTMLDivElement>) => {
+    const file = Array.from(e.clipboardData.files).find((f) => f.type.startsWith('image/'));
+    if (!file) return;
+    e.preventDefault();
+    await handleCompanyLogoChange({ target: { files: [file], value: '' } } as React.ChangeEvent<HTMLInputElement>);
+  };
+
+  const handleAvatarPaste = async (e: React.ClipboardEvent<HTMLDivElement>) => {
+    const file = Array.from(e.clipboardData.files).find((f) => f.type.startsWith('image/'));
+    if (!file) return;
+    e.preventDefault();
+    await handleProfileAvatarChange({ target: { files: [file], value: '' } } as React.ChangeEvent<HTMLInputElement>);
+  };
+
   const handleSaveProfile = async () => {
     if (profile) {
       try {
@@ -1018,7 +1032,11 @@ export default function SettingsView() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-6">
+                <div
+                  className="grid grid-cols-2 gap-6"
+                  onPaste={handleCompanyLogoPaste}
+                  title="Paste an image here to upload the company logo"
+                >
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Company Name
@@ -1188,7 +1206,11 @@ export default function SettingsView() {
             <div>
               <h3 className="text-xl font-semibold text-gray-900 mb-6">My Profile</h3>
               <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-6">
-                <div className="flex items-center gap-6">
+                <div
+                  className="flex items-center gap-6"
+                  onPaste={handleAvatarPaste}
+                  title="Paste an image here to upload your avatar"
+                >
                   <div className="relative group">
                     {isUploadingAvatar ? (
                       <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center">
