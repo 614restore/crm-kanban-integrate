@@ -345,15 +345,6 @@ export default function SettingsView() {
     return resizeImageSourceToDataUrl(sourceImage, maxDimension, quality);
   };
 
-  const resizeImageUrlToDataUrl = async (
-    sourceUrl: string,
-    maxDimension: number = 512,
-    quality: number = 0.82
-  ): Promise<string> => {
-    const sourceImage = await loadImageFromDataUrl(sourceUrl);
-    return resizeImageSourceToDataUrl(sourceImage, maxDimension, quality);
-  };
-
   const withTimeout = async <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
@@ -396,7 +387,9 @@ export default function SettingsView() {
   };
 
   const isFileReadError = (message: string): boolean =>
-    /I\/O read operation failed|NotReadableError|Failed to read image fallback|Failed to decode image fallback|WebKitBlobResource/i.test(message);
+    /I\/O read operation failed|NotReadableError|Failed to read image fallback|Failed to decode image fallback|WebKitBlobResource|Browser could not read the selected file/i.test(message);
+
+  const readErrorHint = 'Browser could not read this image file. Use Save URL below, or export the image as JPG/PNG and re-upload.';
 
   const handleSaveProfile = async () => {
     if (profile) {
@@ -561,7 +554,6 @@ export default function SettingsView() {
 
     const previousLogo = companyLogo;
     let previewUrl: string | null = null;
-    let preparedFallbackDataUrl: string | null = null;
 
     // Validate file
     const validationError = validateImageFile(file, 5);
@@ -589,26 +581,19 @@ export default function SettingsView() {
         console.warn('Logo preview creation failed:', previewError);
       }
 
-      // Precompute fallback immediately while browser still has reliable file access.
-      try {
-        preparedFallbackDataUrl = await withTimeout(resizeImageToDataUrl(file, 520, 0.84), 12000, 'Company logo fallback prepare');
-      } catch (prepareError) {
-        if (previewUrl) {
-          try {
-            preparedFallbackDataUrl = await withTimeout(resizeImageUrlToDataUrl(previewUrl, 520, 0.84), 12000, 'Company logo fallback prepare from preview');
-          } catch (previewPrepareError) {
-            console.warn('Company logo fallback preparation failed:', prepareError, previewPrepareError);
-          }
-        }
-      }
-
       // Upload to Supabase if user has company
       if (companyId) {
         const result = await withTimeout(uploadCompanyLogo(file, companyId), 25000, 'Company logo upload');
 
         if (result.error) {
+          if (isFileReadError(result.error)) {
+            toast.error(readErrorHint);
+            setCompanyLogo(previousLogo);
+            return;
+          }
+
           try {
-            const fallbackDataUrl = preparedFallbackDataUrl || await resizeImageToDataUrl(file, 520, 0.84);
+            const fallbackDataUrl = await resizeImageToDataUrl(file, 520, 0.84);
             const fallbackSave = await withTimeout(db.updateCompany(companyId, { logo_url: fallbackDataUrl }), 12000, 'Company logo fallback save');
             if (!fallbackSave?.logo_url) throw new Error('Fallback save did not persist');
             setCompanyLogo(fallbackSave.logo_url);
@@ -645,10 +630,17 @@ export default function SettingsView() {
       }
     } catch (error) {
       console.error('Logo upload error:', error);
+      const message = getReadableError(error);
+      if (isFileReadError(message)) {
+        toast.error(readErrorHint);
+        setCompanyLogo(previousLogo);
+        return;
+      }
+
       try {
         const companyId = effectiveCompanyId || await resolveCompanyId();
         if (companyId) {
-          const fallbackDataUrl = preparedFallbackDataUrl || await withTimeout(resizeImageToDataUrl(file, 520, 0.84), 12000, 'Company logo fallback encode');
+          const fallbackDataUrl = await withTimeout(resizeImageToDataUrl(file, 520, 0.84), 12000, 'Company logo fallback encode');
           const fallbackSave = await withTimeout(db.updateCompany(companyId, { logo_url: fallbackDataUrl }), 12000, 'Company logo fallback save');
           if (fallbackSave?.logo_url) {
             setCompanyLogo(fallbackSave.logo_url);
@@ -661,7 +653,6 @@ export default function SettingsView() {
           throw new Error('No company context available');
         }
       } catch (fallbackError) {
-        const message = getReadableError(error);
         const fallbackMessage = getReadableError(fallbackError);
         if (isFileReadError(message) || isFileReadError(fallbackMessage)) {
           toast.error(readErrorHint);
@@ -689,7 +680,6 @@ export default function SettingsView() {
 
     const previousAvatar = profileAvatar;
     let previewUrl: string | null = null;
-    let preparedFallbackDataUrl: string | null = null;
 
     // Validate file
     const validationError = validateImageFile(file, 2);
@@ -709,26 +699,19 @@ export default function SettingsView() {
         console.warn('Avatar preview creation failed:', previewError);
       }
 
-      // Precompute fallback immediately while browser still has reliable file access.
-      try {
-        preparedFallbackDataUrl = await withTimeout(resizeImageToDataUrl(file, 400, 0.82), 12000, 'Profile avatar fallback prepare');
-      } catch (prepareError) {
-        if (previewUrl) {
-          try {
-            preparedFallbackDataUrl = await withTimeout(resizeImageUrlToDataUrl(previewUrl, 400, 0.82), 12000, 'Profile avatar fallback prepare from preview');
-          } catch (previewPrepareError) {
-            console.warn('Profile avatar fallback preparation failed:', prepareError, previewPrepareError);
-          }
-        }
-      }
-
       // Upload to Supabase if user is authenticated
       if (profile?.id) {
         const result = await withTimeout(uploadUserAvatar(file, profile.id), 25000, 'Profile avatar upload');
         
         if (result.error) {
+          if (isFileReadError(result.error)) {
+            toast.error(readErrorHint);
+            setProfileAvatar(profile.avatar_url || null);
+            return;
+          }
+
           try {
-            const fallbackDataUrl = preparedFallbackDataUrl || await resizeImageToDataUrl(file, 400, 0.82);
+            const fallbackDataUrl = await resizeImageToDataUrl(file, 400, 0.82);
             const { error: fallbackErr } = await withTimeout(updateProfile({ avatar_url: fallbackDataUrl }), 12000, 'Profile avatar fallback save');
             if (fallbackErr) throw fallbackErr;
             setProfileAvatar(fallbackDataUrl);
@@ -770,17 +753,23 @@ export default function SettingsView() {
       }
     } catch (error) {
       console.error('Avatar upload error:', error);
+      const message = getReadableError(error);
+      if (isFileReadError(message)) {
+        toast.error(readErrorHint);
+        setProfileAvatar(profile?.avatar_url || null);
+        return;
+      }
+
       try {
-        const fallbackDataUrl = preparedFallbackDataUrl || await withTimeout(resizeImageToDataUrl(file, 400, 0.82), 12000, 'Profile avatar fallback encode');
+        const fallbackDataUrl = await withTimeout(resizeImageToDataUrl(file, 400, 0.82), 12000, 'Profile avatar fallback encode');
         const { error: fallbackErr } = await withTimeout(updateProfile({ avatar_url: fallbackDataUrl }), 12000, 'Profile avatar fallback save');
         if (fallbackErr) throw fallbackErr;
         setProfileAvatar(fallbackDataUrl);
         toast.success('Avatar saved using compatibility mode');
       } catch (fallbackError) {
-        const message = getReadableError(error);
         const fallbackMessage = getReadableError(fallbackError);
         if (isFileReadError(message) || isFileReadError(fallbackMessage)) {
-          toast.error('Browser could not read this image file. Save a copy locally as JPG/PNG and retry.');
+          toast.error(readErrorHint);
         } else {
           toast.error(`Failed to upload avatar: ${message} | fallback failed: ${fallbackMessage}`);
         }
