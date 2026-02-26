@@ -65,7 +65,6 @@ async function uploadBinaryViaRest(
           apikey: supabaseKey,
           Authorization: `Bearer ${accessToken}`,
           'x-upsert': 'false',
-          'cache-control': '3600',
           'content-type': payload.type || 'application/octet-stream',
         },
         body: payload,
@@ -92,6 +91,24 @@ async function uploadBinaryViaRest(
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function uploadViaSdk(
+  bucket: string,
+  path: string,
+  file: File
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const { error } = await supabase.storage.from(bucket).upload(path, file, {
+    upsert: false,
+    cacheControl: "3600",
+    contentType: file.type || undefined,
+  });
+
+  if (error) {
+    return { ok: false, message: error.message || "Storage upload failed" };
+  }
+
+  return { ok: true };
 }
 
 /**
@@ -122,8 +139,14 @@ export async function uploadFile(
     const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
     const filePath = folder ? `${folder}/${fileName}` : fileName;
 
-    // First attempt (direct REST upload for deterministic timeout behavior)
-    let result = await uploadBinaryViaRest(bucket, filePath, file, accessToken, 20000);
+    // First attempt: Supabase SDK upload (best browser compatibility).
+    let result = await uploadViaSdk(bucket, filePath, file);
+
+    // Fallback path: direct REST upload for cases where SDK returns opaque storage errors.
+    if (!result.ok) {
+      console.warn('SDK upload failed, trying REST fallback:', result.message);
+      result = await uploadBinaryViaRest(bucket, filePath, file, accessToken, 20000);
+    }
 
     // Retry once for transient network/auth failures.
     if (!result.ok) {
@@ -144,6 +167,11 @@ export async function uploadFile(
       const { data: latestSession } = await supabase.auth.getSession();
       const retryToken = latestSession?.session?.access_token || accessToken;
       result = await uploadBinaryViaRest(bucket, filePath, blobPayload, retryToken, 25000);
+
+      if (!result.ok) {
+        // Final retry with SDK after token refresh in case REST preflight/network failed.
+        result = await uploadViaSdk(bucket, filePath, file);
+      }
     }
 
     if (!result.ok) {

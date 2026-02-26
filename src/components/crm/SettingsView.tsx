@@ -277,15 +277,40 @@ export default function SettingsView() {
     }
   };
 
+  const readFileAsDataUrl = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result;
+        if (typeof result === 'string' && result.startsWith('data:image/')) {
+          resolve(result);
+        } else {
+          reject(new Error('Failed to read image fallback'));
+        }
+      };
+      reader.onerror = () => reject(new Error('Failed to read image fallback'));
+      reader.readAsDataURL(file);
+    });
+
+  const loadImageFromDataUrl = (dataUrl: string): Promise<HTMLImageElement> =>
+    new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('Failed to decode image fallback'));
+      img.src = dataUrl;
+    });
+
   const resizeImageToDataUrl = async (
     file: File,
     maxDimension: number = 512,
     quality: number = 0.82
   ): Promise<string> => {
-    const imageBitmap = await createImageBitmap(file);
-    const scale = Math.min(1, maxDimension / Math.max(imageBitmap.width, imageBitmap.height));
-    const width = Math.max(1, Math.round(imageBitmap.width * scale));
-    const height = Math.max(1, Math.round(imageBitmap.height * scale));
+    const sourceDataUrl = await readFileAsDataUrl(file);
+    const sourceImage = await loadImageFromDataUrl(sourceDataUrl);
+
+    const scale = Math.min(1, maxDimension / Math.max(sourceImage.width, sourceImage.height));
+    const width = Math.max(1, Math.round(sourceImage.width * scale));
+    const height = Math.max(1, Math.round(sourceImage.height * scale));
 
     const canvas = document.createElement('canvas');
     canvas.width = width;
@@ -294,8 +319,19 @@ export default function SettingsView() {
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Failed to prepare image canvas');
 
-    ctx.drawImage(imageBitmap, 0, 0, width, height);
-    const dataUrl = canvas.toDataURL('image/webp', quality);
+    ctx.drawImage(sourceImage, 0, 0, width, height);
+
+    // WebP first, then JPEG fallback for browser compatibility.
+    let dataUrl = '';
+    try {
+      dataUrl = canvas.toDataURL('image/webp', quality);
+    } catch {
+      dataUrl = '';
+    }
+
+    if (!dataUrl || !dataUrl.startsWith('data:image/')) {
+      dataUrl = canvas.toDataURL('image/jpeg', quality);
+    }
 
     if (!dataUrl || !dataUrl.startsWith('data:image/')) {
       throw new Error('Failed to encode image fallback');
@@ -612,6 +648,7 @@ export default function SettingsView() {
       toast.error(`Failed to upload avatar: ${message}`);
       setProfileAvatar(profile?.avatar_url || null);
     } finally {
+      e.target.value = '';
       setIsUploadingAvatar(false);
     }
   };
