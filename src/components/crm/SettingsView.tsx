@@ -34,7 +34,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { ensureDefaultLeadSources, ensureUserHasCompany } from '@/lib/setupCompany';
+import { ensureDefaultLeadSources } from '@/lib/setupCompany';
 
 type SettingsTab = 'company' | 'profile' | 'integrations' | 'notifications' | 'security' | 'billing' | 'api';
 
@@ -99,72 +99,32 @@ export default function SettingsView() {
     if (currentCompanyId) return currentCompanyId;
 
     const userId = profile?.id || user?.id;
-    const userEmail = profile?.email || user?.email || '';
-
-    if (!userId || !userEmail) {
+    if (!userId) {
       return null;
     }
 
     try {
-      const profileResult = await supabase
-        .from('profiles')
-        .select('company_id')
-        .eq('id', userId)
-        .single();
+      const profileResult = await withTimeout(
+        supabase
+          .from('profiles')
+          .select('company_id')
+          .eq('id', userId)
+          .single(),
+        6000,
+        'Lookup user company'
+      );
 
       if (!profileResult.error && profileResult.data?.company_id) {
         dispatch({ type: 'SET_COMPANY_ID', payload: profileResult.data.company_id });
         return profileResult.data.company_id;
       }
 
-      const ensured = await ensureUserHasCompany(userId, userEmail);
-      if (ensured) {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('company_id')
-          .eq('id', userId)
-          .single();
-
-        if (!error && data?.company_id) {
-          dispatch({ type: 'SET_COMPANY_ID', payload: data.company_id });
-          return data.company_id;
-        }
-      }
-
-      // Last-resort fallback: create and link a company directly from settings.
-      const companyName = userEmail.split('@')[0] || 'My Company';
-      const createdCompany = await db.createCompany({
-        name: companyName + "'s Company",
-        email: userEmail,
-        phone: '',
-        address: '',
-        city: '',
-        state: '',
-        zip: '',
-        website: '',
-      });
-
-      if (!createdCompany?.id) {
-        return null;
-      }
-
-      const { error: linkError } = await supabase
-        .from('profiles')
-        .update({ company_id: createdCompany.id })
-        .eq('id', userId);
-
-      if (linkError) {
-        console.error('Failed to link fallback company to profile:', linkError);
-        return null;
-      }
-
-      dispatch({ type: 'SET_COMPANY_ID', payload: createdCompany.id });
-      return createdCompany.id;
+      return null;
     } catch (error) {
       console.error('resolveCompanyId error:', error);
       return null;
     }
-  }, [dispatch, profile?.company_id, profile?.email, profile?.id, state.companyId, user?.email, user?.id]);
+  }, [dispatch, profile?.company_id, profile?.id, state.companyId, user?.id]);
 
   // Combine default and custom lead sources
   const allLeadSources = [...defaultLeadSources, ...state.leadSources.filter((ls) => ls.isCustom)];
@@ -176,7 +136,7 @@ export default function SettingsView() {
     const loadCompanyData = async () => {
       setIsLoadingCompany(true);
       try {
-        const companyId = effectiveCompanyId || await withTimeout(resolveCompanyId(), 10000, 'Resolve company context');
+        const companyId = effectiveCompanyId || await withTimeout(resolveCompanyId(), 7000, 'Resolve company context');
         if (!companyId) return;
 
         const company = await withTimeout(db.getCompany(companyId), 10000, 'Load company profile');
