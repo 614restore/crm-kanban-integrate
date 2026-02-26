@@ -25,17 +25,31 @@ function getApiBaseUrl(): string | null {
   return null;
 }
 
-export async function sendEmail(payload: SendEmailPayload) {
+export async function sendEmail(payload: SendEmailPayload, timeoutMs: number = 12000) {
   const baseUrl = getApiBaseUrl();
   if (!baseUrl) {
     throw new Error('Email API is not configured. Set VITE_EMAIL_API_BASE_URL to your Vercel app URL.');
   }
 
-  const response = await fetch(`${baseUrl}/api/send-email`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}/api/send-email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error(`Email API timed out after ${Math.round(timeoutMs / 1000)}s`);
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timer);
+  }
 
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {

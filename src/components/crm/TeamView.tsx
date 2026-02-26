@@ -39,6 +39,19 @@ export default function TeamView() {
   const [isSendingInvite, setIsSendingInvite] = useState(false);
   const [isSavingMember, setIsSavingMember] = useState(false);
 
+  const withTimeout = async <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const timeoutPromise = new Promise<T>((_, reject) => {
+      timeoutId = window.setTimeout(() => reject(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`)), ms);
+    });
+
+    try {
+      return await Promise.race([promise, timeoutPromise]);
+    } finally {
+      if (timeoutId) window.clearTimeout(timeoutId);
+    }
+  };
+
   const userRole = state.currentUser?.role || 'sales';
   const canManage = canManageTeam(userRole);
   const assignableRoles = getAssignableRoles(userRole);
@@ -88,56 +101,72 @@ export default function TeamView() {
       return;
     }
 
-    if (!inviteEmail.trim()) {
+    const normalizedEmail = inviteEmail.trim().toLowerCase();
+    if (!normalizedEmail) {
       toast.error('Please enter an email address.');
       return;
     }
 
     setIsSendingInvite(true);
     try {
-      const token = globalThis.crypto?.randomUUID?.() || `invite-${Date.now()}`;
+      const token = globalThis.crypto?.randomUUID?.() || 'invite-' + Date.now();
       const appUrl = import.meta.env.VITE_APP_URL || window.location.origin;
-      const inviteLink = `${appUrl}?invite=${encodeURIComponent(token)}&company=${encodeURIComponent(state.companyId)}`;
+      const inviteLink = appUrl + '?invite=' + encodeURIComponent(token) + '&company=' + encodeURIComponent(state.companyId);
 
-      const inviteRecord = await db.createInvite({
-        company_id: state.companyId,
-        email: inviteEmail.trim().toLowerCase(),
-        role: inviteRole,
-        invited_by: profile?.id,
-        token,
-        accepted: false,
-        created_at: new Date().toISOString(),
-      });
+      const inviteRecord = await withTimeout(
+        db.createInvite({
+          company_id: state.companyId,
+          email: normalizedEmail,
+          role: inviteRole,
+          invited_by: profile?.id,
+          token,
+          accepted: false,
+          created_at: new Date().toISOString(),
+        }),
+        12000,
+        'Create invite'
+      );
 
       if (!inviteRecord) {
         toast.error('Failed to create invite record in database');
         return;
       }
 
-      await sendEmail({
-        to: inviteEmail.trim().toLowerCase(),
-        subject: 'You were invited to join the CRM team',
-        html: `
-          <p>You were invited to join the CRM team as <strong>${inviteRole}</strong>.</p>
-          <p>Company ID: <strong>${state.companyId}</strong></p>
-          <p>Use this link to join:</p>
-          <p><a href="${inviteLink}">${inviteLink}</a></p>
-        `,
-      });
+      let emailSent = true;
+      try {
+        await withTimeout(
+          sendEmail({
+            to: normalizedEmail,
+            subject: 'You were invited to join the CRM team',
+            html:
+              '<p>You were invited to join the CRM team as <strong>' + inviteRole + '</strong>.</p>' +
+              '<p>Company ID: <strong>' + state.companyId + '</strong></p>' +
+              '<p>Use this link to join:</p>' +
+              '<p><a href="' + inviteLink + '">' + inviteLink + '</a></p>',
+          }, 10000),
+          12000,
+          'Send invite email'
+        );
+      } catch (emailError) {
+        emailSent = false;
+        console.error('Invite email delivery failed:', emailError);
+      }
 
       dispatch({
         type: 'ADD_NOTIFICATION',
         payload: {
-          id: `notif-${Date.now()}`,
-          type: 'success',
-          title: 'Invitation Sent',
-          message: `An invitation email was sent to ${inviteEmail}`,
+          id: 'notif-' + Date.now(),
+          type: emailSent ? 'success' : 'warning',
+          title: emailSent ? 'Invitation Sent' : 'Invite Created',
+          message: emailSent
+            ? 'An invitation email was sent to ' + normalizedEmail
+            : 'Invite created for ' + normalizedEmail + '. Email delivery failed; share company ID manually.',
           timestamp: new Date().toISOString(),
           read: false,
         },
       });
 
-      toast.success('Invitation sent');
+      toast.success(emailSent ? 'Invitation sent' : 'Invite created, but email failed to send');
       setShowInviteModal(false);
       setInviteEmail('');
       setInviteRole('sales');
