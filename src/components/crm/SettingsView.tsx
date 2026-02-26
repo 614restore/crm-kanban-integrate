@@ -171,14 +171,16 @@ export default function SettingsView() {
 
   // Load company data on mount and recover missing company context if needed.
   useEffect(() => {
-    const loadCompanyData = async () => {
-      const companyId = effectiveCompanyId || await resolveCompanyId();
-      if (!companyId) return;
+    let cancelled = false;
 
+    const loadCompanyData = async () => {
       setIsLoadingCompany(true);
       try {
-        const company = await db.getCompany(companyId);
-        if (company) {
+        const companyId = effectiveCompanyId || await withTimeout(resolveCompanyId(), 10000, 'Resolve company context');
+        if (!companyId) return;
+
+        const company = await withTimeout(db.getCompany(companyId), 10000, 'Load company profile');
+        if (company && !cancelled) {
           setCompanyForm({
             name: company.name || 'StormCraft Roofing',
             phone: company.phone || '',
@@ -195,11 +197,17 @@ export default function SettingsView() {
       } catch (error) {
         console.error('Error loading company data:', error);
       } finally {
-        setIsLoadingCompany(false);
+        if (!cancelled) {
+          setIsLoadingCompany(false);
+        }
       }
     };
 
     loadCompanyData();
+
+    return () => {
+      cancelled = true;
+    };
   }, [effectiveCompanyId, resolveCompanyId]);
 
   const handleAddLeadSource = async () => {
@@ -792,14 +800,6 @@ export default function SettingsView() {
       category: 'Automation',
     },
   ];
-
-  if (isLoadingCompany && activeTab === 'company') {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <Loader2 className="animate-spin text-blue-600" size={40} />
-      </div>
-    );
-  }
 
   return (
     <div className="h-full flex">
