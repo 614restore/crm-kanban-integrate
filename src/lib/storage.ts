@@ -6,6 +6,10 @@ export interface UploadResult {
   error?: string;
 }
 
+function isFileReadErrorMessage(message: string): boolean {
+  return /I\/O read operation failed|NotReadableError|WebKitBlobResource|Failed to read/i.test(message);
+}
+
 export function isHttpUrl(value: string): boolean {
   return /^https?:\/\//i.test(value);
 }
@@ -153,6 +157,14 @@ export async function uploadFile(
     }
 
     // Retry once for transient network/auth failures.
+    if (!result.ok && isFileReadErrorMessage(result.message)) {
+      return {
+        url: '',
+        path: '',
+        error: 'Browser could not read the selected file.',
+      };
+    }
+
     if (!result.ok) {
       console.warn('Upload transient failure, retrying once:', result.message);
       try {
@@ -177,7 +189,10 @@ export async function uploadFile(
     }
 
     if (!result.ok) {
-      return { url: '', path: '', error: result.message };
+      const message = isFileReadErrorMessage(result.message)
+        ? 'Browser could not read the selected file.'
+        : result.message;
+      return { url: '', path: '', error: message };
     }
 
     // Public URL is used for logos/avatars; documents store path and are later resolved to signed URLs.

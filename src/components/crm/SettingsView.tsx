@@ -642,7 +642,7 @@ export default function SettingsView() {
         const message = getReadableError(error);
         const fallbackMessage = getReadableError(fallbackError);
         if (isFileReadError(message) || isFileReadError(fallbackMessage)) {
-          toast.error('Browser could not read this image file. Save a copy locally as JPG/PNG and retry.');
+          toast.error(readErrorHint);
         } else {
           toast.error(`Failed to upload logo: ${message} | fallback failed: ${fallbackMessage}`);
         }
