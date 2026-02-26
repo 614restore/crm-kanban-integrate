@@ -563,9 +563,26 @@ export default function SettingsView() {
       }
     } catch (error) {
       console.error('Logo upload error:', error);
-      const message = getReadableError(error);
-      toast.error(`Failed to upload logo: ${message}`);
-      setCompanyLogo(previousLogo);
+      try {
+        const companyId = effectiveCompanyId || await resolveCompanyId();
+        if (companyId) {
+          const fallbackDataUrl = await withTimeout(resizeImageToDataUrl(file, 520, 0.84), 12000, 'Company logo fallback encode');
+          const fallbackSave = await withTimeout(db.updateCompany(companyId, { logo_url: fallbackDataUrl }), 12000, 'Company logo fallback save');
+          if (fallbackSave?.logo_url) {
+            setCompanyLogo(fallbackSave.logo_url);
+            window.dispatchEvent(new Event('crm-company-updated'));
+            toast.success('Logo saved using compatibility mode');
+          } else {
+            throw new Error('Fallback save did not persist');
+          }
+        } else {
+          throw new Error('No company context available');
+        }
+      } catch (fallbackError) {
+        const message = getReadableError(error);
+        toast.error(`Failed to upload logo: ${message} | fallback failed: ${getReadableError(fallbackError)}`);
+        setCompanyLogo(previousLogo);
+      }
     } finally {
       e.target.value = '';
       setIsUploadingLogo(false);
@@ -644,9 +661,17 @@ export default function SettingsView() {
       }
     } catch (error) {
       console.error('Avatar upload error:', error);
-      const message = getReadableError(error);
-      toast.error(`Failed to upload avatar: ${message}`);
-      setProfileAvatar(profile?.avatar_url || null);
+      try {
+        const fallbackDataUrl = await withTimeout(resizeImageToDataUrl(file, 400, 0.82), 12000, 'Profile avatar fallback encode');
+        const { error: fallbackErr } = await withTimeout(updateProfile({ avatar_url: fallbackDataUrl }), 12000, 'Profile avatar fallback save');
+        if (fallbackErr) throw fallbackErr;
+        setProfileAvatar(fallbackDataUrl);
+        toast.success('Avatar saved using compatibility mode');
+      } catch (fallbackError) {
+        const message = getReadableError(error);
+        toast.error(`Failed to upload avatar: ${message} | fallback failed: ${getReadableError(fallbackError)}`);
+        setProfileAvatar(profile?.avatar_url || null);
+      }
     } finally {
       e.target.value = '';
       setIsUploadingAvatar(false);

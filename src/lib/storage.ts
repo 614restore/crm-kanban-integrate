@@ -139,13 +139,17 @@ export async function uploadFile(
     const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
     const filePath = folder ? `${folder}/${fileName}` : fileName;
 
-    // First attempt: Supabase SDK upload (best browser compatibility).
-    let result = await uploadViaSdk(bucket, filePath, file);
+    const fileBuffer = await file.arrayBuffer();
+    const makeBlobPayload = () => new Blob([fileBuffer], { type: file.type || 'application/octet-stream' });
+    const makeFilePayload = () => new File([fileBuffer], file.name, { type: file.type || 'application/octet-stream' });
 
-    // Fallback path: direct REST upload for cases where SDK returns opaque storage errors.
+    // First attempt: SDK upload with a fresh payload object (avoids exhausted body streams).
+    let result = await uploadViaSdk(bucket, filePath, makeFilePayload());
+
+    // Fallback path: direct REST upload with fresh blob payload.
     if (!result.ok) {
       console.warn('SDK upload failed, trying REST fallback:', result.message);
-      result = await uploadBinaryViaRest(bucket, filePath, file, accessToken, 20000);
+      result = await uploadBinaryViaRest(bucket, filePath, makeBlobPayload(), accessToken, 20000);
     }
 
     // Retry once for transient network/auth failures.
@@ -162,15 +166,13 @@ export async function uploadFile(
       }
 
       await new Promise((resolve) => setTimeout(resolve, 250));
-      const buffer = await file.arrayBuffer();
-      const blobPayload = new Blob([buffer], { type: file.type || 'application/octet-stream' });
       const { data: latestSession } = await supabase.auth.getSession();
       const retryToken = latestSession?.session?.access_token || accessToken;
-      result = await uploadBinaryViaRest(bucket, filePath, blobPayload, retryToken, 25000);
 
+      // Retry SDK first, then REST, both with fresh payloads.
+      result = await uploadViaSdk(bucket, filePath, makeFilePayload());
       if (!result.ok) {
-        // Final retry with SDK after token refresh in case REST preflight/network failed.
-        result = await uploadViaSdk(bucket, filePath, file);
+        result = await uploadBinaryViaRest(bucket, filePath, makeBlobPayload(), retryToken, 25000);
       }
     }
 
