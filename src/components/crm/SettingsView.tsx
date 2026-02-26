@@ -70,6 +70,8 @@ export default function SettingsView() {
   });
   const [companyLogo, setCompanyLogo] = useState<string | null>(null);
   const [profileAvatar, setProfileAvatar] = useState<string | null>(profile?.avatar_url || null);
+  const [companyLogoUrlInput, setCompanyLogoUrlInput] = useState('');
+  const [profileAvatarUrlInput, setProfileAvatarUrlInput] = useState(profile?.avatar_url || '');
 
   useEffect(() => {
     setProfileForm({
@@ -77,10 +79,13 @@ export default function SettingsView() {
       last_name: profile?.last_name || "",
     });
     setProfileAvatar(profile?.avatar_url || null);
+    setProfileAvatarUrlInput(profile?.avatar_url || '');
   }, [profile?.first_name, profile?.last_name, profile?.avatar_url]);
 
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [isSavingLogoUrl, setIsSavingLogoUrl] = useState(false);
+  const [isSavingAvatarUrl, setIsSavingAvatarUrl] = useState(false);
   const [isLoadingCompany, setIsLoadingCompany] = useState(false);
   const [isStartingFresh, setIsStartingFresh] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
@@ -150,8 +155,10 @@ export default function SettingsView() {
           });
           if (company.logo_url && !company.logo_url.startsWith('blob:')) {
             setCompanyLogo(company.logo_url);
+            setCompanyLogoUrlInput(company.logo_url);
           } else {
             setCompanyLogo(null);
+            setCompanyLogoUrlInput('');
           }
         }
       } catch (error) {
@@ -490,6 +497,61 @@ export default function SettingsView() {
       );
     } finally {
       setIsDeletingAccount(false);
+    }
+  };
+
+  const isValidImageUrl = (value: string): boolean =>
+    /^https?:///i.test(value) || /^data:image//i.test(value);
+
+  const handleSaveCompanyLogoUrl = async () => {
+    const companyId = effectiveCompanyId || await resolveCompanyId();
+    if (!companyId) {
+      toast.error('No company context available. Please refresh and sign in again.');
+      return;
+    }
+
+    const value = companyLogoUrlInput.trim();
+    if (value && !isValidImageUrl(value)) {
+      toast.error('Enter a valid image URL (https://... or data:image/...)');
+      return;
+    }
+
+    setIsSavingLogoUrl(true);
+    try {
+      const updated = await withTimeout(db.updateCompany(companyId, { logo_url: value || null }), 12000, 'Save company logo URL');
+      if (!updated) {
+        toast.error('Failed to save company logo URL');
+        return;
+      }
+      setCompanyLogo(value || null);
+      window.dispatchEvent(new Event('crm-company-updated'));
+      toast.success(value ? 'Company logo URL saved' : 'Company logo cleared');
+    } catch (error) {
+      toast.error('Failed to save company logo URL: ' + getReadableError(error));
+    } finally {
+      setIsSavingLogoUrl(false);
+    }
+  };
+
+  const handleSaveAvatarUrl = async () => {
+    const value = profileAvatarUrlInput.trim();
+    if (value && !isValidImageUrl(value)) {
+      toast.error('Enter a valid image URL (https://... or data:image/...)');
+      return;
+    }
+
+    setIsSavingAvatarUrl(true);
+    try {
+      const { error } = await withTimeout(updateProfile({ avatar_url: value || null }), 12000, 'Save profile avatar URL');
+      if (error) {
+        throw error;
+      }
+      setProfileAvatar(value || null);
+      toast.success(value ? 'Profile photo URL saved' : 'Profile photo cleared');
+    } catch (error) {
+      toast.error('Failed to save profile photo URL: ' + getReadableError(error));
+    } finally {
+      setIsSavingAvatarUrl(false);
     }
   };
 
@@ -948,6 +1010,22 @@ export default function SettingsView() {
                       )}
                     </button>
                     <p className="text-xs text-gray-400 mt-1">Max 5MB • JPG, PNG, GIF, WebP</p>
+                    <div className="mt-3 flex gap-2">
+                      <input
+                        type="url"
+                        value={companyLogoUrlInput}
+                        onChange={(e) => setCompanyLogoUrlInput(e.target.value)}
+                        placeholder="Or paste logo image URL"
+                        className="w-72 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                      />
+                      <button
+                        onClick={handleSaveCompanyLogoUrl}
+                        disabled={isSavingLogoUrl}
+                        className="px-3 py-1.5 text-sm bg-slate-800 text-white rounded-lg hover:bg-slate-700 disabled:opacity-50"
+                      >
+                        {isSavingLogoUrl ? 'Saving...' : 'Save URL'}
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -1175,6 +1253,22 @@ export default function SettingsView() {
                       )}
                     </button>
                     <p className="text-xs text-gray-400 mt-1">Max 2MB • JPG, PNG, GIF, WebP</p>
+                    <div className="mt-3 flex gap-2">
+                      <input
+                        type="url"
+                        value={profileAvatarUrlInput}
+                        onChange={(e) => setProfileAvatarUrlInput(e.target.value)}
+                        placeholder="Or paste profile image URL"
+                        className="w-72 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                      />
+                      <button
+                        onClick={handleSaveAvatarUrl}
+                        disabled={isSavingAvatarUrl}
+                        className="px-3 py-1.5 text-sm bg-slate-800 text-white rounded-lg hover:bg-slate-700 disabled:opacity-50"
+                      >
+                        {isSavingAvatarUrl ? 'Saving...' : 'Save URL'}
+                      </button>
+                    </div>
                   </div>
                 </div>
 
