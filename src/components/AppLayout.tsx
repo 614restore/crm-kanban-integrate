@@ -469,17 +469,7 @@ function CRMApp() {
         if ((status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') && !realtimeFailedRef.current) {
           realtimeFailedRef.current = true;
           console.warn('Realtime unavailable; continuing with periodic reload fallback.', { status, error });
-          dispatch({
-            type: 'ADD_NOTIFICATION',
-            payload: {
-              id: `notif-realtime-${Date.now()}`,
-              type: 'warning',
-              title: 'Realtime connection unavailable',
-              message: 'Live sync is temporarily unavailable. Data will continue refreshing automatically.',
-              timestamp: new Date().toISOString(),
-              read: false,
-            },
-          });
+          // Keep fallback silent in-app; avoid noisy warning notifications for known websocket issues.
         } else if (status === 'SUBSCRIBED') {
           realtimeFailedRef.current = false;
         }
