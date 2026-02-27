@@ -98,17 +98,28 @@ export default function ContactList() {
   const handleDeleteSelected = async () => {
     if (!confirm(`Are you sure you want to delete ${selectedContacts.size} contacts?`)) return;
 
+    if (!state.companyId) {
+      toast.error('No company selected. Please refresh and sign in again.');
+      return;
+    }
+
     try {
-      if (state.companyId) {
-        await Promise.all(Array.from(selectedContacts).map((id) => db.deleteContact(id)));
-      } else {
-        selectedContacts.forEach((id) => {
-          dispatch({ type: 'DELETE_CONTACT', payload: id });
-        });
+      const selectedIds = Array.from(selectedContacts);
+      const results = await Promise.all(selectedIds.map((id) => db.deleteContact(id)));
+      const failed = results.filter((ok) => !ok).length;
+
+      if (failed > 0) {
+        toast.error(`Failed to delete ${failed} contact${failed === 1 ? '' : 's'}.`);
       }
+
+      selectedIds
+        .filter((_, index) => results[index])
+        .forEach((id) => dispatch({ type: 'DELETE_CONTACT', payload: id }));
+
       setSelectedContacts(new Set());
     } catch (error) {
       console.error('Error deleting selected contacts:', error);
+      toast.error('Failed to delete selected contacts');
     }
   };
 

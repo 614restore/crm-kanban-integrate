@@ -234,6 +234,11 @@ npm install typescript@latest -D
 - `npm run build:dev` - Development build with source maps
 - `npm run preview` - Preview production build locally
 - `npm run lint` - Run ESLint
+- `npm run doctor` - Validate repository health checks
+- `npm run test` - Run automated regression tests
+- `npm run test:month` - Run accelerated 30-day soak simulation
+- `npm run e2e:invite` - Run invite end-to-end script (requires env vars)
+- `npm run ci:quality` - Run doctor + tests + soak + build
 - `npm run deploy` - Deploy to GitHub Pages
 
 ## 🤝 Contributing

@@ -179,7 +179,12 @@ export default function CalendarView() {
       status: 'scheduled',
     };
 
-    if (state.companyId) {
+    if (!state.companyId) {
+      toast.error('No company selected. Please refresh and sign in again.');
+      return;
+    }
+
+    {
       const created = await db.createAppointment({
         company_id: state.companyId,
         contact_id: contact.id,
@@ -194,9 +199,12 @@ export default function CalendarView() {
         status: newAppointment.status,
       });
 
-      if (created) {
-        newAppointment.id = created.id;
+      if (!created) {
+        toast.error('Failed to create appointment');
+        return;
       }
+
+      newAppointment.id = created.id;
     }
 
     dispatch({ type: 'ADD_APPOINTMENT', payload: newAppointment });
@@ -216,16 +224,19 @@ export default function CalendarView() {
       notes: notesInput.trim(),
     };
 
-    if (state.companyId) {
-      const updated = await db.updateAppointment(appointment.id, {
-        title: updatedAppointment.title,
-        notes: updatedAppointment.notes || undefined,
-      });
+    if (!state.companyId) {
+      toast.error('No company selected. Please refresh and sign in again.');
+      return;
+    }
 
-      if (!updated) {
-        toast.error('Failed to update appointment');
-        return;
-      }
+    const updated = await db.updateAppointment(appointment.id, {
+      title: updatedAppointment.title,
+      notes: updatedAppointment.notes || undefined,
+    });
+
+    if (!updated) {
+      toast.error('Failed to update appointment');
+      return;
     }
 
     dispatch({ type: 'UPDATE_APPOINTMENT', payload: updatedAppointment });
@@ -233,15 +244,18 @@ export default function CalendarView() {
   };
 
   const handleDeleteAppointment = async (appointment: Appointment) => {
-    const confirmed = window.confirm(`Delete appointment \"${appointment.title}\"?`);
+    const confirmed = window.confirm(`Delete appointment "${appointment.title}"?`);
     if (!confirmed) return;
 
-    if (state.companyId) {
-      const ok = await db.deleteAppointment(appointment.id);
-      if (!ok) {
-        toast.error('Failed to delete appointment');
-        return;
-      }
+    if (!state.companyId) {
+      toast.error('No company selected. Please refresh and sign in again.');
+      return;
+    }
+
+    const ok = await db.deleteAppointment(appointment.id);
+    if (!ok) {
+      toast.error('Failed to delete appointment');
+      return;
     }
 
     dispatch({ type: 'DELETE_APPOINTMENT', payload: appointment.id });

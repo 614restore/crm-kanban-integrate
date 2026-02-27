@@ -81,6 +81,7 @@ export default function ContactDetail() {
   }
 
   const assignee = state.teamMembers.find((tm) => tm.id === contact.assignedTo);
+  const effectiveCompanyId = profile?.company_id || state.companyId || null;
 
   useEffect(() => {
     setQuickNote(contact.notes || '');
@@ -129,38 +130,47 @@ export default function ContactDetail() {
     
     setIsSaving(true);
     try {
-      // Update in database if user has company
-      if (profile?.company_id) {
-        await db.updateContact(editedContact.id, {
-          first_name: editedContact.firstName,
-          last_name: editedContact.lastName,
-          email: editedContact.email,
-          phone1: editedContact.phone1,
-          phone2: editedContact.phone2,
-          address: editedContact.address,
-          city: editedContact.city,
-          state: editedContact.state,
-          zip: editedContact.zip,
-          lead_source: editedContact.leadSource,
-          assigned_to: editedContact.assignedTo,
-          insurance_company: editedContact.insuranceCompany,
-          policy_number: editedContact.policyNumber,
-          claim_number: editedContact.claimNumber,
-          adjuster_name: editedContact.adjusterName,
-          adjuster_phone: editedContact.adjusterPhone,
-          adjuster_email: editedContact.adjusterEmail,
-          deductible: editedContact.deductible,
-          is_retail: editedContact.isRetail,
-          retail_notes: editedContact.retailNotes,
-          notes: editedContact.notes,
-        });
+      if (!effectiveCompanyId) {
+        toast.error('No company context available. Please refresh and sign in again.');
+        return;
+      }
+
+      const updated = await db.updateContact(editedContact.id, {
+        first_name: editedContact.firstName,
+        last_name: editedContact.lastName,
+        email: editedContact.email,
+        phone1: editedContact.phone1,
+        phone2: editedContact.phone2,
+        address: editedContact.address,
+        city: editedContact.city,
+        state: editedContact.state,
+        zip: editedContact.zip,
+        lead_source: editedContact.leadSource,
+        assigned_to: editedContact.assignedTo,
+        insurance_company: editedContact.insuranceCompany,
+        policy_number: editedContact.policyNumber,
+        claim_number: editedContact.claimNumber,
+        adjuster_name: editedContact.adjusterName,
+        adjuster_phone: editedContact.adjusterPhone,
+        adjuster_email: editedContact.adjusterEmail,
+        deductible: editedContact.deductible,
+        is_retail: editedContact.isRetail,
+        retail_notes: editedContact.retailNotes,
+        notes: editedContact.notes,
+      });
+
+      if (!updated) {
+        toast.error('Failed to save contact changes');
+        return;
       }
 
       dispatch({ type: 'UPDATE_CONTACT', payload: { ...editedContact, updatedAt: new Date().toISOString() } });
       setIsEditing(false);
       setEditedContact(null);
+      toast.success('Contact saved');
     } catch (error) {
       console.error('Error saving contact:', error);
+      toast.error('Failed to save contact');
     } finally {
       setIsSaving(false);
     }
@@ -173,15 +183,24 @@ export default function ContactDetail() {
 
   const handleStatusChange = async (newStatus: CustomerStatus) => {
     try {
-      if (profile?.company_id) {
-        await db.updateContact(contact.id, { status: newStatus });
+      if (!effectiveCompanyId) {
+        toast.error('No company context available. Please refresh and sign in again.');
+        return;
       }
+
+      const updated = await db.updateContact(contact.id, { status: newStatus });
+      if (!updated) {
+        toast.error('Failed to update status');
+        return;
+      }
+
       dispatch({
         type: 'UPDATE_CONTACT_STATUS',
         payload: { contactId: contact.id, status: newStatus },
       });
     } catch (error) {
       console.error('Error updating status:', error);
+      toast.error('Failed to update status');
     }
   };
 
@@ -195,24 +214,32 @@ export default function ContactDetail() {
     }
 
     try {
-      if (profile?.company_id) {
-        await db.createCommunication({
-          company_id: profile.company_id,
-          contact_id: contact.id,
-          type: 'note',
-          direction: 'outbound',
-          content: newNote,
-          user_id: profile.id,
-        });
+      if (!effectiveCompanyId) {
+        toast.error('No company context available. Please refresh and sign in again.');
+        return;
+      }
+
+      const createdCommunication = await db.createCommunication({
+        company_id: effectiveCompanyId,
+        contact_id: contact.id,
+        type: 'note',
+        direction: 'outbound',
+        content: newNote,
+        user_id: profile?.id,
+      });
+
+      if (!createdCommunication) {
+        toast.error('Failed to save note');
+        return;
       }
 
       const newComm: Communication = {
-        id: `comm-${Date.now()}`,
+        id: createdCommunication.id,
         contactId: contact.id,
         type: 'note',
         direction: 'outbound',
         content: newNote,
-        timestamp: new Date().toISOString(),
+        timestamp: createdCommunication.created_at || new Date().toISOString(),
         userId: state.currentUser?.id || 'unknown',
         userName: state.currentUser?.name || 'Unknown User',
       };
@@ -226,8 +253,10 @@ export default function ContactDetail() {
       setNewNote('');
       setMentionStart(null);
       setMentionSuggestions([]);
+      toast.success('Note saved');
     } catch (error) {
       console.error('Error adding note:', error);
+      toast.error('Failed to save note');
     }
   };
 

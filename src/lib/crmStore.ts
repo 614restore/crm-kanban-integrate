@@ -395,17 +395,41 @@ export function useBoardContacts(boardId: string) {
   return contactsByColumn;
 }
 
+function parseAppointmentDate(appointment: Appointment): Date {
+  const raw = appointment.date?.trim();
+  if (!raw) return new Date(NaN);
+
+  // Date-only values should count for the whole local day.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    const [year, month, day] = raw.split('-').map(Number);
+    return new Date(year, month - 1, day, 23, 59, 59, 999);
+  }
+
+  return new Date(raw);
+}
+
+export function getUpcomingAppointments(
+  appointments: Appointment[],
+  now: Date = new Date(),
+  days: number = 7
+) {
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const futureDate = new Date(startOfToday);
+  futureDate.setDate(futureDate.getDate() + days);
+  futureDate.setHours(23, 59, 59, 999);
+
+  return appointments
+    .filter((apt) => {
+      const aptDate = parseAppointmentDate(apt);
+      if (Number.isNaN(aptDate.getTime())) return false;
+      return aptDate >= startOfToday && aptDate <= futureDate && apt.status === 'scheduled';
+    })
+    .sort((a, b) => parseAppointmentDate(a).getTime() - parseAppointmentDate(b).getTime());
+}
+
 export function useUpcomingAppointments(days: number = 7) {
   const { state } = useCRM();
-  const now = new Date();
-  const futureDate = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
-  
-  return state.appointments
-    .filter((apt) => {
-      const aptDate = new Date(apt.date);
-      return aptDate >= now && aptDate <= futureDate && apt.status === 'scheduled';
-    })
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  return getUpcomingAppointments(state.appointments, new Date(), days);
 }
 
 export function usePipelineStats() {

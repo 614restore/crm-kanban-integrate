@@ -1,10 +1,14 @@
 import React, { useState } from 'react';
 import { useCRM } from '@/lib/crmStore';
+import { useAuth } from '@/lib/authContext';
+import { db } from '@/lib/database';
 import { Invoice, InvoiceItem, formatCurrency, getContactFullName } from '@/lib/crmData';
+import { toast } from 'sonner';
 import { X, Plus, Trash2, Save, Send, DollarSign } from 'lucide-react';
 
 export default function InvoiceModal() {
   const { state, dispatch } = useCRM();
+  const { profile } = useAuth();
   const [selectedContactId, setSelectedContactId] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [items, setItems] = useState<InvoiceItem[]>([
@@ -42,19 +46,52 @@ export default function InvoiceModal() {
   const tax = subtotal * 0.0825; // 8.25% tax
   const total = subtotal + tax;
 
-  const handleSave = (status: 'draft' | 'sent') => {
-    if (!selectedContactId || !dueDate || items.length === 0) return;
+  const handleSave = async (status: 'draft' | 'sent') => {
+    const validItems = items.filter((item) => item.description && item.total > 0);
+    if (!selectedContactId || !dueDate || validItems.length === 0) {
+      toast.error('Please select a customer, due date, and at least one line item');
+      return;
+    }
+
+    const effectiveCompanyId = profile?.company_id || state.companyId;
+    if (!effectiveCompanyId) {
+      toast.error('No company selected. Please refresh and sign in again.');
+      return;
+    }
+
+    const createdInvoice = await db.createInvoice(
+      {
+        company_id: effectiveCompanyId,
+        contact_id: selectedContactId,
+        amount: total,
+        tax_amount: tax,
+        status,
+        due_date: dueDate,
+        notes: notes || undefined,
+      },
+      validItems.map((item) => ({
+        description: item.description,
+        quantity: item.quantity,
+        unit_price: item.unitPrice,
+        total: item.total,
+      }))
+    );
+
+    if (!createdInvoice) {
+      toast.error('Failed to save invoice');
+      return;
+    }
 
     const newInvoice: Invoice = {
-      id: `INV-${Date.now()}`,
+      id: createdInvoice.id,
       contactId: selectedContactId,
       contactName: selectedContact ? getContactFullName(selectedContact) : '',
-      jobId: '',
-      amount: total,
-      status,
-      dueDate,
-      createdAt: new Date().toISOString(),
-      items: items.filter((item) => item.description && item.total > 0),
+      jobId: createdInvoice.job_id || '',
+      amount: createdInvoice.amount,
+      status: createdInvoice.status as Invoice['status'],
+      dueDate: createdInvoice.due_date || dueDate,
+      createdAt: createdInvoice.created_at,
+      items: validItems,
     };
 
     dispatch({ type: 'ADD_INVOICE', payload: newInvoice });
@@ -64,7 +101,7 @@ export default function InvoiceModal() {
         id: `notif-${Date.now()}`,
         type: 'success',
         title: status === 'sent' ? 'Invoice Sent' : 'Invoice Saved',
-        message: `Invoice ${newInvoice.id} has been ${status === 'sent' ? 'sent to' : 'saved for'} ${newInvoice.contactName}`,
+        message: `Invoice has been ${status === 'sent' ? 'sent to' : 'saved for'} ${newInvoice.contactName}`,
         timestamp: new Date().toISOString(),
         read: false,
       },
