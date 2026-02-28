@@ -163,7 +163,7 @@ export default function SettingsView() {
     const loadCompanyData = async () => {
       setIsLoadingCompany(true);
       try {
-        const companyId = effectiveCompanyId || await withTimeout(resolveCompanyId(), 7000, 'Resolve company context');
+        const companyId = effectiveCompanyId || await resolveCompanyId();
         if (!companyId) return;
 
         const company = await withTimeout(db.getCompany(companyId), 10000, 'Load company profile');
