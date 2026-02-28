@@ -830,21 +830,23 @@ export default function SettingsView() {
         const result = await withTimeout(uploadUserAvatar(uploadFile, profile.id), 25000, 'Profile avatar upload');
         
         if (result.error) {
-          if (isFileReadError(result.error)) {
-            toast.error(readErrorHint);
-            setProfileAvatar(profile.avatar_url || null);
-            return;
-          }
-
           try {
-            const fallbackDataUrl = await resizeImageToDataUrl(file, 400, 0.82);
+            const fallbackDataUrl =
+              previewUrl && previewUrl.startsWith('blob:')
+                ? await resizeImageFromObjectUrlToDataUrl(previewUrl, 400, 0.82)
+                : await resizeImageToDataUrl(file, 400, 0.82);
             const { error: fallbackErr } = await withTimeout(updateProfile({ avatar_url: fallbackDataUrl }), 12000, 'Profile avatar fallback save');
             if (fallbackErr) throw fallbackErr;
             setProfileAvatar(fallbackDataUrl);
             setProfileAvatarUrlInput(fallbackDataUrl);
             toast.success('Avatar saved using compatibility mode');
           } catch (fallbackError) {
-            toast.error(`Upload failed: ${result.error} | fallback failed: ${getReadableError(fallbackError)}`);
+            const fallbackMessage = getReadableError(fallbackError);
+            if (isFileReadError(result.error) && isFileReadError(fallbackMessage)) {
+              toast.error(readErrorHint);
+            } else {
+              toast.error(`Upload failed: ${result.error} | fallback failed: ${fallbackMessage}`);
+            }
             setProfileAvatar(profile.avatar_url || null);
           }
         } else {
@@ -872,14 +874,15 @@ export default function SettingsView() {
     } catch (error) {
       console.error('Avatar upload error:', error);
       const message = getReadableError(error);
-      if (isFileReadError(message)) {
-        toast.error(readErrorHint);
-        setProfileAvatar(profile?.avatar_url || null);
-        return;
-      }
 
       try {
-        const fallbackDataUrl = await withTimeout(resizeImageToDataUrl(file, 400, 0.82), 12000, 'Profile avatar fallback encode');
+        const fallbackDataUrl = await withTimeout(
+          previewUrl && previewUrl.startsWith('blob:')
+            ? resizeImageFromObjectUrlToDataUrl(previewUrl, 400, 0.82)
+            : resizeImageToDataUrl(file, 400, 0.82),
+          12000,
+          'Profile avatar fallback encode'
+        );
         const { error: fallbackErr } = await withTimeout(updateProfile({ avatar_url: fallbackDataUrl }), 12000, 'Profile avatar fallback save');
         if (fallbackErr) throw fallbackErr;
         setProfileAvatar(fallbackDataUrl);
