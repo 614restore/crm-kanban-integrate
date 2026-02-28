@@ -144,8 +144,19 @@ export async function uploadFile(
     const filePath = folder ? `${folder}/${fileName}` : fileName;
 
     const mimeType = file.type || 'application/octet-stream';
-    const makeBlobPayload = () => file.slice(0, file.size, mimeType);
-    const makeFilePayload = () => new File([file.slice(0, file.size, mimeType)], file.name, { type: mimeType });
+    let fileBytes: ArrayBuffer | null = null;
+    try {
+      fileBytes = await file.arrayBuffer();
+    } catch (readError) {
+      console.warn('Could not pre-read file bytes, falling back to slice payloads:', readError);
+    }
+
+    const makeBlobPayload = () =>
+      fileBytes ? new Blob([fileBytes], { type: mimeType }) : file.slice(0, file.size, mimeType);
+    const makeFilePayload = () =>
+      fileBytes
+        ? new File([fileBytes], file.name, { type: mimeType })
+        : new File([file.slice(0, file.size, mimeType)], file.name, { type: mimeType });
 
     // First attempt: SDK upload with a fresh payload object (avoids exhausted body streams).
     let result = await uploadViaSdk(bucket, filePath, makeFilePayload());

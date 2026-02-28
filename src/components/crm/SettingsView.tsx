@@ -388,16 +388,18 @@ export default function SettingsView() {
     maxDimension: number = 520,
     quality: number = 0.84
   ): Promise<string> => {
-    // First choice mirrors avatar/company preview path; if decode fails, fall back to file read path.
-    if (previewUrl && previewUrl.startsWith('blob:')) {
-      try {
-        return await resizeImageFromObjectUrlToDataUrl(previewUrl, maxDimension, quality);
-      } catch (previewDecodeError) {
-        console.warn('Logo preview decode fallback failed, trying file read path:', previewDecodeError);
-      }
+    // Prefer direct file read first to avoid WebKit blob URL decode instability.
+    try {
+      return await resizeImageToDataUrl(file, maxDimension, quality);
+    } catch (fileReadError) {
+      console.warn('Logo file-read fallback failed, trying preview decode path:', fileReadError);
     }
 
-    return resizeImageToDataUrl(file, maxDimension, quality);
+    if (previewUrl && previewUrl.startsWith('blob:')) {
+      return resizeImageFromObjectUrlToDataUrl(previewUrl, maxDimension, quality);
+    }
+
+    throw new Error('Failed to build logo fallback image');
   };
 
   const resizeImageSourceToBlob = (
