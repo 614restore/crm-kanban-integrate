@@ -71,6 +71,13 @@ export default function ContactDetail() {
   const [mentionSuggestions, setMentionSuggestions] = useState<ReturnType<typeof getMentionTargets>>([]);
   const noteInputRef = useRef<HTMLInputElement>(null);
   const mentionTargets = useMemo(() => getMentionTargets(state.teamMembers), [state.teamMembers]);
+  const contactId = contact?.id;
+  const contactNotes = contact?.notes ?? '';
+
+  useEffect(() => {
+    if (!contactId) return;
+    setQuickNote(contactNotes);
+  }, [contactId, contactNotes]);
 
   if (!contact) {
     return (
@@ -82,10 +89,6 @@ export default function ContactDetail() {
 
   const assignee = state.teamMembers.find((tm) => tm.id === contact.assignedTo);
   const effectiveCompanyId = profile?.company_id || state.companyId || null;
-
-  useEffect(() => {
-    setQuickNote(contact.notes || '');
-  }, [contact.id, contact.notes]);
 
   const syncMentionSuggestions = (text: string, caret: number) => {
     const active = findActiveMentionQuery(text, caret);
