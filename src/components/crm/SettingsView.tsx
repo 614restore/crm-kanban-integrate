@@ -345,6 +345,101 @@ export default function SettingsView() {
     return resizeImageSourceToDataUrl(sourceImage, maxDimension, quality);
   };
 
+  const resizeImageSourceToBlob = (
+    sourceImage: HTMLImageElement,
+    maxDimension: number,
+    quality: number,
+    outputType: string
+  ): Promise<Blob | null> =>
+    new Promise((resolve) => {
+      const scale = Math.min(1, maxDimension / Math.max(sourceImage.width, sourceImage.height));
+      const width = Math.max(1, Math.round(sourceImage.width * scale));
+      const height = Math.max(1, Math.round(sourceImage.height * scale));
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        resolve(null);
+        return;
+      }
+
+      ctx.drawImage(sourceImage, 0, 0, width, height);
+      canvas.toBlob((blob) => resolve(blob), outputType, quality);
+    });
+
+  const optimizeImageForUpload = async (
+    file: File,
+    maxDimension: number,
+    quality: number,
+    maxBytes: number
+  ): Promise<File> => {
+    // Preserve compatibility for already-light files and formats where re-encoding is risky.
+    if (file.size <= maxBytes) {
+      return file;
+    }
+    if (file.type === 'image/gif' || file.type === 'image/svg+xml') {
+      return file;
+    }
+
+    try {
+      const objectUrl = URL.createObjectURL(file);
+      const sourceImage = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('Failed to decode image for optimization'));
+        img.src = objectUrl;
+      });
+
+      try {
+        const preferredType =
+          file.type === 'image/png' || file.type === 'image/jpeg' || file.type === 'image/webp'
+            ? file.type
+            : 'image/jpeg';
+        const optimizedBlob = await resizeImageSourceToBlob(sourceImage, maxDimension, quality, preferredType);
+        if (!optimizedBlob || optimizedBlob.size === 0 || optimizedBlob.size >= file.size) {
+          return file;
+        }
+
+        const extension =
+          preferredType === 'image/png'
+            ? 'png'
+            : preferredType === 'image/webp'
+            ? 'webp'
+            : 'jpg';
+        const originalBase = file.name.replace(/\.[^/.]+$/, '');
+        return new File([optimizedBlob], `${originalBase}.${extension}`, { type: preferredType });
+      } finally {
+        URL.revokeObjectURL(objectUrl);
+      }
+    } catch (error) {
+      console.warn('Image optimization skipped:', error);
+      return file;
+    }
+  };
+
+  const retryCompanyLogoSave = async (companyId: string, logoUrl: string): Promise<Awaited<ReturnType<typeof db.updateCompany>>> => {
+    let last: Awaited<ReturnType<typeof db.updateCompany>> = null;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      last = await withTimeout(db.updateCompany(companyId, { logo_url: logoUrl }), 12000, 'Company logo save');
+      if (last?.logo_url) return last;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    return last;
+  };
+
+  const retryAvatarSave = async (avatarUrl: string): Promise<{ error: Error | null }> => {
+    let last: { error: Error | null } = { error: new Error('Unknown avatar save failure') };
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      last = await withTimeout(updateProfile({ avatar_url: avatarUrl }), 12000, 'Profile avatar save');
+      if (!last.error) return last;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    return last;
+  };
+
   const withTimeout = async <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
@@ -595,9 +690,11 @@ export default function SettingsView() {
         console.warn('Logo preview creation failed:', previewError);
       }
 
+      const uploadFile = await optimizeImageForUpload(file, 900, 0.84, 450 * 1024);
+
       // Upload to Supabase if user has company
       if (companyId) {
-        const result = await withTimeout(uploadCompanyLogo(file, companyId), 25000, 'Company logo upload');
+        const result = await withTimeout(uploadCompanyLogo(uploadFile, companyId), 25000, 'Company logo upload');
 
         if (result.error) {
           if (isFileReadError(result.error)) {
@@ -611,6 +708,7 @@ export default function SettingsView() {
             const fallbackSave = await withTimeout(db.updateCompany(companyId, { logo_url: fallbackDataUrl }), 12000, 'Company logo fallback save');
             if (!fallbackSave?.logo_url) throw new Error('Fallback save did not persist');
             setCompanyLogo(fallbackSave.logo_url);
+            setCompanyLogoUrlInput(fallbackSave.logo_url);
             window.dispatchEvent(new Event('crm-company-updated'));
             toast.success('Logo saved using compatibility mode');
             return;
@@ -620,22 +718,16 @@ export default function SettingsView() {
             return;
           }
         } else {
-          // Update company logo URL in database and verify persistence
-          const updatedCompany = await withTimeout(db.updateCompany(companyId, { logo_url: result.url }), 12000, 'Company logo save');
+          // Persist logo URL in company profile.
+          const updatedCompany = await retryCompanyLogoSave(companyId, result.url);
           if (!updatedCompany?.logo_url) {
             setCompanyLogo(previousLogo);
             toast.error('Logo uploaded, but failed to persist to company profile');
             return;
           }
 
-          const verifyCompany = await withTimeout(db.getCompany(companyId), 12000, 'Company logo verify');
-          if (!verifyCompany?.logo_url) {
-            setCompanyLogo(previousLogo);
-            toast.error('Logo save could not be verified. Please retry.');
-            return;
-          }
-
-          setCompanyLogo(verifyCompany.logo_url);
+          setCompanyLogo(updatedCompany.logo_url);
+          setCompanyLogoUrlInput(updatedCompany.logo_url);
           window.dispatchEvent(new Event('crm-company-updated'));
           toast.success('Logo uploaded and saved successfully');
         }
@@ -658,6 +750,7 @@ export default function SettingsView() {
           const fallbackSave = await withTimeout(db.updateCompany(companyId, { logo_url: fallbackDataUrl }), 12000, 'Company logo fallback save');
           if (fallbackSave?.logo_url) {
             setCompanyLogo(fallbackSave.logo_url);
+            setCompanyLogoUrlInput(fallbackSave.logo_url);
             window.dispatchEvent(new Event('crm-company-updated'));
             toast.success('Logo saved using compatibility mode');
           } else {
@@ -713,9 +806,11 @@ export default function SettingsView() {
         console.warn('Avatar preview creation failed:', previewError);
       }
 
+      const uploadFile = await optimizeImageForUpload(file, 640, 0.82, 280 * 1024);
+
       // Upload to Supabase if user is authenticated
       if (profile?.id) {
-        const result = await withTimeout(uploadUserAvatar(file, profile.id), 25000, 'Profile avatar upload');
+        const result = await withTimeout(uploadUserAvatar(uploadFile, profile.id), 25000, 'Profile avatar upload');
         
         if (result.error) {
           if (isFileReadError(result.error)) {
@@ -729,6 +824,7 @@ export default function SettingsView() {
             const { error: fallbackErr } = await withTimeout(updateProfile({ avatar_url: fallbackDataUrl }), 12000, 'Profile avatar fallback save');
             if (fallbackErr) throw fallbackErr;
             setProfileAvatar(fallbackDataUrl);
+            setProfileAvatarUrlInput(fallbackDataUrl);
             toast.success('Avatar saved using compatibility mode');
           } catch (fallbackError) {
             toast.error(`Upload failed: ${result.error} | fallback failed: ${getReadableError(fallbackError)}`);
@@ -739,22 +835,13 @@ export default function SettingsView() {
           
           // Update profile with new avatar URL
           try {
-            const { error } = await withTimeout(updateProfile({ avatar_url: result.url }), 12000, 'Profile avatar save');
+            const { error } = await retryAvatarSave(result.url);
             if (error) {
               throw error;
             }
 
-            const { data: verifyProfile, error: verifyError } = await supabase
-              .from('profiles')
-              .select('avatar_url')
-              .eq('id', profile.id)
-              .single();
-
-            if (verifyError || !verifyProfile?.avatar_url) {
-              throw verifyError || new Error('Avatar save could not be verified');
-            }
-
-            setProfileAvatar(verifyProfile.avatar_url);
+            setProfileAvatar(result.url);
+            setProfileAvatarUrlInput(result.url);
             toast.success("Avatar uploaded and saved successfully");
           } catch (updateError) {
             console.error('Failed to update profile with new avatar:', updateError);
@@ -779,6 +866,7 @@ export default function SettingsView() {
         const { error: fallbackErr } = await withTimeout(updateProfile({ avatar_url: fallbackDataUrl }), 12000, 'Profile avatar fallback save');
         if (fallbackErr) throw fallbackErr;
         setProfileAvatar(fallbackDataUrl);
+        setProfileAvatarUrlInput(fallbackDataUrl);
         toast.success('Avatar saved using compatibility mode');
       } catch (fallbackError) {
         const fallbackMessage = getReadableError(fallbackError);
