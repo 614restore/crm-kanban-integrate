@@ -434,10 +434,23 @@ export default function SettingsView() {
     }
   };
 
-  const retryCompanyLogoSave = async (companyId: string, logoUrl: string): Promise<Awaited<ReturnType<typeof db.updateCompany>>> => {
-    let last: Awaited<ReturnType<typeof db.updateCompany>> = null;
+  const saveCompanyLogoUrl = async (companyId: string, logoUrl: string | null): Promise<{ logo_url: string | null }> => {
+    const { data, error } = await supabase
+      .from('companies')
+      .update({ logo_url: logoUrl, updated_at: new Date().toISOString() })
+      .eq('id', companyId)
+      .select('logo_url')
+      .single();
+
+    if (error) throw error;
+    if (!data) throw new Error('Company logo save did not persist');
+    return { logo_url: data.logo_url || null };
+  };
+
+  const retryCompanyLogoSave = async (companyId: string, logoUrl: string): Promise<{ logo_url: string | null } | null> => {
+    let last: { logo_url: string | null } | null = null;
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      last = await withTimeout(db.updateCompany(companyId, { logo_url: logoUrl }), 12000, 'Company logo save');
+      last = await withTimeout(saveCompanyLogoUrl(companyId, logoUrl), 12000, 'Company logo save');
       if (last?.logo_url) return last;
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
@@ -634,12 +647,13 @@ export default function SettingsView() {
 
     setIsSavingLogoUrl(true);
     try {
-      const updated = await withTimeout(db.updateCompany(companyId, { logo_url: value || null }), 12000, 'Save company logo URL');
+      const updated = await withTimeout(saveCompanyLogoUrl(companyId, value || null), 12000, 'Save company logo URL');
       if (!updated) {
         toast.error('Failed to save company logo URL');
         return;
       }
-      setCompanyLogo(value || null);
+      setCompanyLogo(updated.logo_url || null);
+      setCompanyLogoUrlInput(updated.logo_url || '');
       window.dispatchEvent(new Event('crm-company-updated'));
       toast.success(value ? 'Company logo URL saved' : 'Company logo cleared');
     } catch (error) {
@@ -716,7 +730,7 @@ export default function SettingsView() {
               previewUrl && previewUrl.startsWith('blob:')
                 ? await resizeImageFromObjectUrlToDataUrl(previewUrl, 520, 0.84)
                 : await resizeImageToDataUrl(file, 520, 0.84);
-            const fallbackSave = await withTimeout(db.updateCompany(companyId, { logo_url: fallbackDataUrl }), 12000, 'Company logo fallback save');
+            const fallbackSave = await withTimeout(saveCompanyLogoUrl(companyId, fallbackDataUrl), 12000, 'Company logo fallback save');
             if (!fallbackSave?.logo_url) throw new Error('Fallback save did not persist');
             setCompanyLogo(fallbackSave.logo_url);
             setCompanyLogoUrlInput(fallbackSave.logo_url);
@@ -764,7 +778,7 @@ export default function SettingsView() {
             12000,
             'Company logo fallback encode'
           );
-          const fallbackSave = await withTimeout(db.updateCompany(companyId, { logo_url: fallbackDataUrl }), 12000, 'Company logo fallback save');
+          const fallbackSave = await withTimeout(saveCompanyLogoUrl(companyId, fallbackDataUrl), 12000, 'Company logo fallback save');
           if (fallbackSave?.logo_url) {
             setCompanyLogo(fallbackSave.logo_url);
             setCompanyLogoUrlInput(fallbackSave.logo_url);
@@ -778,7 +792,7 @@ export default function SettingsView() {
         }
       } catch (fallbackError) {
         const fallbackMessage = getReadableError(fallbackError);
-        if (isFileReadError(message) || isFileReadError(fallbackMessage)) {
+        if (isFileReadError(message) && isFileReadError(fallbackMessage)) {
           toast.error(readErrorHint);
         } else {
           toast.error(`Failed to upload logo: ${message} | fallback failed: ${fallbackMessage}`);
