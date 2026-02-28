@@ -345,6 +345,20 @@ export default function SettingsView() {
     return resizeImageSourceToDataUrl(sourceImage, maxDimension, quality);
   };
 
+  const resizeImageFromObjectUrlToDataUrl = async (
+    objectUrl: string,
+    maxDimension: number = 512,
+    quality: number = 0.82
+  ): Promise<string> => {
+    const sourceImage = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('Failed to decode preview image fallback'));
+      img.src = objectUrl;
+    });
+    return resizeImageSourceToDataUrl(sourceImage, maxDimension, quality);
+  };
+
   const resizeImageSourceToBlob = (
     sourceImage: HTMLImageElement,
     maxDimension: number,
@@ -698,7 +712,10 @@ export default function SettingsView() {
 
         if (result.error) {
           try {
-            const fallbackDataUrl = await resizeImageToDataUrl(file, 520, 0.84);
+            const fallbackDataUrl =
+              previewUrl && previewUrl.startsWith('blob:')
+                ? await resizeImageFromObjectUrlToDataUrl(previewUrl, 520, 0.84)
+                : await resizeImageToDataUrl(file, 520, 0.84);
             const fallbackSave = await withTimeout(db.updateCompany(companyId, { logo_url: fallbackDataUrl }), 12000, 'Company logo fallback save');
             if (!fallbackSave?.logo_url) throw new Error('Fallback save did not persist');
             setCompanyLogo(fallbackSave.logo_url);
@@ -740,7 +757,13 @@ export default function SettingsView() {
       try {
         const companyId = effectiveCompanyId || await resolveCompanyId();
         if (companyId) {
-          const fallbackDataUrl = await withTimeout(resizeImageToDataUrl(file, 520, 0.84), 12000, 'Company logo fallback encode');
+          const fallbackDataUrl = await withTimeout(
+            previewUrl && previewUrl.startsWith('blob:')
+              ? resizeImageFromObjectUrlToDataUrl(previewUrl, 520, 0.84)
+              : resizeImageToDataUrl(file, 520, 0.84),
+            12000,
+            'Company logo fallback encode'
+          );
           const fallbackSave = await withTimeout(db.updateCompany(companyId, { logo_url: fallbackDataUrl }), 12000, 'Company logo fallback save');
           if (fallbackSave?.logo_url) {
             setCompanyLogo(fallbackSave.logo_url);
