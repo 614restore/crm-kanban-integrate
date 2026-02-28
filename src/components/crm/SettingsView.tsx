@@ -697,12 +697,6 @@ export default function SettingsView() {
         const result = await withTimeout(uploadCompanyLogo(uploadFile, companyId), 25000, 'Company logo upload');
 
         if (result.error) {
-          if (isFileReadError(result.error)) {
-            toast.error(readErrorHint);
-            setCompanyLogo(previousLogo);
-            return;
-          }
-
           try {
             const fallbackDataUrl = await resizeImageToDataUrl(file, 520, 0.84);
             const fallbackSave = await withTimeout(db.updateCompany(companyId, { logo_url: fallbackDataUrl }), 12000, 'Company logo fallback save');
@@ -713,7 +707,12 @@ export default function SettingsView() {
             toast.success('Logo saved using compatibility mode');
             return;
           } catch (fallbackError) {
-            toast.error(`Upload failed: ${result.error} | fallback failed: ${getReadableError(fallbackError)}`);
+            const fallbackMessage = getReadableError(fallbackError);
+            if (isFileReadError(result.error) && isFileReadError(fallbackMessage)) {
+              toast.error(readErrorHint);
+            } else {
+              toast.error(`Upload failed: ${result.error} | fallback failed: ${fallbackMessage}`);
+            }
             setCompanyLogo(previousLogo);
             return;
           }
@@ -737,11 +736,6 @@ export default function SettingsView() {
     } catch (error) {
       console.error('Logo upload error:', error);
       const message = getReadableError(error);
-      if (isFileReadError(message)) {
-        toast.error(readErrorHint);
-        setCompanyLogo(previousLogo);
-        return;
-      }
 
       try {
         const companyId = effectiveCompanyId || await resolveCompanyId();

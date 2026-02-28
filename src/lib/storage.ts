@@ -7,7 +7,7 @@ export interface UploadResult {
 }
 
 function isFileReadErrorMessage(message: string): boolean {
-  return /I\/O read operation failed|NotReadableError|WebKitBlobResource|Failed to read/i.test(message);
+  return /I\/O read operation failed|NotReadableError|WebKitBlobResource/i.test(message);
 }
 
 export function isHttpUrl(value: string): boolean {
