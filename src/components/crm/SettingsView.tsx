@@ -476,16 +476,29 @@ export default function SettingsView() {
   };
 
   const saveCompanyLogoUrl = async (companyId: string, logoUrl: string | null): Promise<{ logo_url: string | null }> => {
-    const { data, error } = await supabase
-      .from('companies')
-      .update({ logo_url: logoUrl, updated_at: new Date().toISOString() })
-      .eq('id', companyId)
-      .select('logo_url')
-      .single();
+    const tryDirect = async () => {
+      const { data, error } = await supabase
+        .from('companies')
+        .update({ logo_url: logoUrl, updated_at: new Date().toISOString() })
+        .eq('id', companyId)
+        .select('logo_url')
+        .single();
 
-    if (error) throw error;
-    if (!data) throw new Error('Company logo save did not persist');
-    return { logo_url: data.logo_url || null };
+      if (error) throw error;
+      if (!data) throw new Error('Company logo save did not persist');
+      return { logo_url: data.logo_url || null };
+    };
+
+    try {
+      return await tryDirect();
+    } catch (directError) {
+      // Last-resort RPC path for environments with stricter company update policies.
+      const { data: rpcData, error: rpcError } = await supabase.rpc('set_my_company_logo', {
+        p_logo_url: logoUrl,
+      });
+      if (rpcError) throw directError;
+      return { logo_url: (rpcData as string | null) || null };
+    }
   };
 
   const retryCompanyLogoSave = async (companyId: string, logoUrl: string): Promise<{ logo_url: string | null } | null> => {
@@ -733,6 +746,7 @@ export default function SettingsView() {
     const previousLogo = companyLogo;
     let previewUrl: string | null = null;
     let precomputedFallbackDataUrl: string | null = null;
+    let compatibilitySaved = false;
 
     // Validate file
     const validationError = validateImageFile(file, 5);
@@ -771,6 +785,25 @@ export default function SettingsView() {
         console.warn('Logo fallback precompute failed:', precomputeError);
       }
 
+      // Save a compatibility-safe version first, then attempt storage upload as an upgrade.
+      if (precomputedFallbackDataUrl) {
+        try {
+          const baselineSave = await withTimeout(
+            saveCompanyLogoUrl(companyId, precomputedFallbackDataUrl),
+            12000,
+            'Company logo baseline save'
+          );
+          if (baselineSave?.logo_url) {
+            compatibilitySaved = true;
+            setCompanyLogo(baselineSave.logo_url);
+            setCompanyLogoUrlInput(baselineSave.logo_url);
+            window.dispatchEvent(new Event('crm-company-updated'));
+          }
+        } catch (baselineError) {
+          console.warn('Company logo baseline save failed, continuing with upload path:', baselineError);
+        }
+      }
+
       const uploadFile = await optimizeImageForUpload(file, 900, 0.84, 450 * 1024);
 
       // Upload to Supabase if user has company
@@ -778,6 +811,11 @@ export default function SettingsView() {
         const result = await withTimeout(uploadCompanyLogo(uploadFile, companyId), 32000, 'Company logo upload');
 
         if (result.error) {
+          if (compatibilitySaved) {
+            toast.success('Logo saved using compatibility mode');
+            return;
+          }
+
           try {
             const fallbackDataUrl = precomputedFallbackDataUrl || await buildLogoFallbackDataUrl(file, previewUrl, 520, 0.84);
             const fallbackSave = await withTimeout(saveCompanyLogoUrl(companyId, fallbackDataUrl), 12000, 'Company logo fallback save');
@@ -817,6 +855,11 @@ export default function SettingsView() {
     } catch (error) {
       console.error('Logo upload error:', error);
       const message = getReadableError(error);
+
+      if (compatibilitySaved) {
+        toast.success('Logo saved using compatibility mode');
+        return;
+      }
 
       try {
         const companyId = effectiveCompanyId || await resolveCompanyId();
