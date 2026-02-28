@@ -359,6 +359,24 @@ export default function SettingsView() {
     return resizeImageSourceToDataUrl(sourceImage, maxDimension, quality);
   };
 
+  const buildLogoFallbackDataUrl = async (
+    file: File,
+    previewUrl: string | null,
+    maxDimension: number = 520,
+    quality: number = 0.84
+  ): Promise<string> => {
+    // First choice mirrors avatar/company preview path; if decode fails, fall back to file read path.
+    if (previewUrl && previewUrl.startsWith('blob:')) {
+      try {
+        return await resizeImageFromObjectUrlToDataUrl(previewUrl, maxDimension, quality);
+      } catch (previewDecodeError) {
+        console.warn('Logo preview decode fallback failed, trying file read path:', previewDecodeError);
+      }
+    }
+
+    return resizeImageToDataUrl(file, maxDimension, quality);
+  };
+
   const resizeImageSourceToBlob = (
     sourceImage: HTMLImageElement,
     maxDimension: number,
@@ -722,14 +740,11 @@ export default function SettingsView() {
 
       // Upload to Supabase if user has company
       if (companyId) {
-        const result = await withTimeout(uploadCompanyLogo(uploadFile, companyId), 25000, 'Company logo upload');
+        const result = await withTimeout(uploadCompanyLogo(uploadFile, companyId), 32000, 'Company logo upload');
 
         if (result.error) {
           try {
-            const fallbackDataUrl =
-              previewUrl && previewUrl.startsWith('blob:')
-                ? await resizeImageFromObjectUrlToDataUrl(previewUrl, 520, 0.84)
-                : await resizeImageToDataUrl(file, 520, 0.84);
+            const fallbackDataUrl = await buildLogoFallbackDataUrl(file, previewUrl, 520, 0.84);
             const fallbackSave = await withTimeout(saveCompanyLogoUrl(companyId, fallbackDataUrl), 12000, 'Company logo fallback save');
             if (!fallbackSave?.logo_url) throw new Error('Fallback save did not persist');
             setCompanyLogo(fallbackSave.logo_url);
@@ -771,13 +786,7 @@ export default function SettingsView() {
       try {
         const companyId = effectiveCompanyId || await resolveCompanyId();
         if (companyId) {
-          const fallbackDataUrl = await withTimeout(
-            previewUrl && previewUrl.startsWith('blob:')
-              ? resizeImageFromObjectUrlToDataUrl(previewUrl, 520, 0.84)
-              : resizeImageToDataUrl(file, 520, 0.84),
-            12000,
-            'Company logo fallback encode'
-          );
+          const fallbackDataUrl = await withTimeout(buildLogoFallbackDataUrl(file, previewUrl, 520, 0.84), 12000, 'Company logo fallback encode');
           const fallbackSave = await withTimeout(saveCompanyLogoUrl(companyId, fallbackDataUrl), 12000, 'Company logo fallback save');
           if (fallbackSave?.logo_url) {
             setCompanyLogo(fallbackSave.logo_url);
