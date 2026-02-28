@@ -159,7 +159,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .update({
               first_name: metadata.first_name,
               last_name: metadata.last_name,
-              role: metadata.role || 'sales',
+              // Creator signups default to owner unless an explicit role is provided (e.g. invite flow).
+              role: metadata.role || 'owner',
             })
             .eq('id', data.user.id);
         }

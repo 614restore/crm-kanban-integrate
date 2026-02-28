@@ -52,7 +52,7 @@ export default function TeamView() {
     }
   };
 
-  const userRole = state.currentUser?.role || 'sales';
+  const userRole = (state.currentUser?.role || profile?.role || 'sales') as UserRole;
   const canManage = canManageTeam(userRole);
   const assignableRoles = getAssignableRoles(userRole);
 

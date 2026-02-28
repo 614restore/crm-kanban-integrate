@@ -40,7 +40,7 @@ export default function PipelineBoard() {
   const [editingBoard, setEditingBoard] = useState<KanbanBoard | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  const userRole = state.currentUser?.role || 'sales';
+  const userRole = (state.currentUser?.role || profile?.role || 'sales') as any;
   const canCreate = canCreateBoard(userRole);
   const canEdit = canEditBoard(userRole);
   const effectiveCompanyId = profile?.company_id || state.companyId || null;

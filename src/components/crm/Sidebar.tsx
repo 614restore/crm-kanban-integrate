@@ -48,7 +48,7 @@ export default function Sidebar() {
   const [companyName, setCompanyName] = useState('StormCraft');
   const [companyLogoUrl, setCompanyLogoUrl] = useState<string | null>(null);
 
-  const userRole = currentUser?.role || 'sales';
+  const userRole = (currentUser?.role || profile?.role || 'sales') as any;
 
   const loadCompanyBrand = useCallback(async () => {
     if (!profile?.company_id) {

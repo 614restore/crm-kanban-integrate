@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/lib/authContext';
 import { supabase } from '@/lib/supabase';
-import { roleLabels, UserRole } from '@/lib/crmData';
 import {
   Building2,
   Mail,
@@ -25,7 +24,6 @@ export default function AuthPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [role, setRole] = useState<UserRole>('sales');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,7 +76,6 @@ export default function AuthPage() {
         const { error } = await signUp(email, password, {
           first_name: firstName,
           last_name: lastName,
-          role,
         });
         if (error) {
           if (isAlreadyRegisteredError(error.message)) {
@@ -301,20 +298,6 @@ export default function AuthPage() {
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-                    <select
-                      value={role}
-                      onChange={(e) => setRole(e.target.value as UserRole)}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                    >
-                      {Object.entries(roleLabels).map(([value, label]) => (
-                        <option key={value} value={value}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
                 </>
               )}
 

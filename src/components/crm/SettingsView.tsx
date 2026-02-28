@@ -95,7 +95,7 @@ export default function SettingsView() {
   const companyLogoInputRef = useRef<HTMLInputElement>(null);
   const profileAvatarInputRef = useRef<HTMLInputElement>(null);
 
-  const userRole = state.currentUser?.role || 'sales';
+  const userRole = (state.currentUser?.role || profile?.role || 'sales') as any;
   const canManageSources = canManageLeadSources(userRole);
   const effectiveCompanyId = profile?.company_id || state.companyId || null;
 
