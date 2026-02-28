@@ -41,6 +41,28 @@ const navItems: NavItem[] = [
   { id: 'settings', label: 'Settings', icon: <Settings size={20} /> },
 ];
 
+function normalizeCompanyName(rawName?: string | null, email?: string | null): string {
+  const trimmed = (rawName || '').trim();
+  const emailLike = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  if (trimmed && !emailLike.test(trimmed)) {
+    return trimmed;
+  }
+
+  const source = (email || trimmed || '').trim();
+  if (source.includes('@')) {
+    const local = source.split('@')[0].replace(/[._-]+/g, ' ').trim();
+    if (local) {
+      return local
+        .split(/\s+/)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ') + ' Company';
+    }
+  }
+
+  return 'My Company';
+}
+
 export default function Sidebar() {
   const { state, dispatch } = useCRM();
   const { profile, signOut } = useAuth();
@@ -61,7 +83,7 @@ export default function Sidebar() {
       const company = await db.getCompany(profile.company_id);
       if (!company) return;
 
-      setCompanyName(company.name || 'StormCraft');
+      setCompanyName(normalizeCompanyName(company.name, company.email));
       setCompanyLogoUrl(company.logo_url || null);
     } catch (error) {
       console.error('Failed to load company branding:', error);

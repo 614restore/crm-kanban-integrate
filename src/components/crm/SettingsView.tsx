@@ -46,6 +46,28 @@ interface CompanyFormData {
   address: string;
 }
 
+function normalizeCompanyName(rawName?: string | null, email?: string | null): string {
+  const trimmed = (rawName || '').trim();
+  const emailLike = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  if (trimmed && !emailLike.test(trimmed)) {
+    return trimmed;
+  }
+
+  const source = (email || trimmed || '').trim();
+  if (source.includes('@')) {
+    const local = source.split('@')[0].replace(/[._-]+/g, ' ').trim();
+    if (local) {
+      return local
+        .split(/\s+/)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ') + ' Company';
+    }
+  }
+
+  return 'My Company';
+}
+
 export default function SettingsView() {
   const { state, dispatch } = useCRM();
   const { profile, user, updateProfile, signOut } = useAuth();
@@ -146,8 +168,9 @@ export default function SettingsView() {
 
         const company = await withTimeout(db.getCompany(companyId), 10000, 'Load company profile');
         if (company && !cancelled) {
+          const companyName = normalizeCompanyName(company.name, company.email);
           setCompanyForm({
-            name: company.name || 'StormCraft Roofing',
+            name: companyName,
             phone: company.phone || '',
             email: company.email || '',
             website: company.website || '',
@@ -709,6 +732,7 @@ export default function SettingsView() {
 
     const previousLogo = companyLogo;
     let previewUrl: string | null = null;
+    let precomputedFallbackDataUrl: string | null = null;
 
     // Validate file
     const validationError = validateImageFile(file, 5);
@@ -736,6 +760,17 @@ export default function SettingsView() {
         console.warn('Logo preview creation failed:', previewError);
       }
 
+      // Precompute a local compatibility fallback before network upload.
+      try {
+        precomputedFallbackDataUrl = await withTimeout(
+          buildLogoFallbackDataUrl(file, previewUrl, 520, 0.84),
+          10000,
+          'Company logo fallback precompute'
+        );
+      } catch (precomputeError) {
+        console.warn('Logo fallback precompute failed:', precomputeError);
+      }
+
       const uploadFile = await optimizeImageForUpload(file, 900, 0.84, 450 * 1024);
 
       // Upload to Supabase if user has company
@@ -744,7 +779,7 @@ export default function SettingsView() {
 
         if (result.error) {
           try {
-            const fallbackDataUrl = await buildLogoFallbackDataUrl(file, previewUrl, 520, 0.84);
+            const fallbackDataUrl = precomputedFallbackDataUrl || await buildLogoFallbackDataUrl(file, previewUrl, 520, 0.84);
             const fallbackSave = await withTimeout(saveCompanyLogoUrl(companyId, fallbackDataUrl), 12000, 'Company logo fallback save');
             if (!fallbackSave?.logo_url) throw new Error('Fallback save did not persist');
             setCompanyLogo(fallbackSave.logo_url);
@@ -786,7 +821,7 @@ export default function SettingsView() {
       try {
         const companyId = effectiveCompanyId || await resolveCompanyId();
         if (companyId) {
-          const fallbackDataUrl = await withTimeout(buildLogoFallbackDataUrl(file, previewUrl, 520, 0.84), 12000, 'Company logo fallback encode');
+          const fallbackDataUrl = precomputedFallbackDataUrl || await withTimeout(buildLogoFallbackDataUrl(file, previewUrl, 520, 0.84), 12000, 'Company logo fallback encode');
           const fallbackSave = await withTimeout(saveCompanyLogoUrl(companyId, fallbackDataUrl), 12000, 'Company logo fallback save');
           if (fallbackSave?.logo_url) {
             setCompanyLogo(fallbackSave.logo_url);
