@@ -13,6 +13,8 @@ import type {
   Supplier,
   MaterialOrder,
   Estimate,
+  Project,
+  WorkOrder,
 } from './crmData';
 
 export type ViewType =
@@ -29,6 +31,9 @@ export type ViewType =
   | 'settings'
   | 'suppliers'
   | 'estimates'
+  | 'projects'
+  | 'work-orders'
+  | 'material-orders'
   | 'ai-assistant';
 
 export interface CRMState {
@@ -52,6 +57,8 @@ export interface CRMState {
   suppliers: Supplier[];
   materialOrders: MaterialOrder[];
   estimates: Estimate[];
+  projects: Project[];
+  workOrders: WorkOrder[];
   
   // UI state
   sidebarCollapsed: boolean;
@@ -120,6 +127,26 @@ export type CRMAction =
   | { type: 'SET_COMPANY_ID'; payload: string }
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_INITIALIZED'; payload: boolean }
+  | { type: 'ADD_SUPPLIER'; payload: Supplier }
+  | { type: 'UPDATE_SUPPLIER'; payload: Supplier }
+  | { type: 'DELETE_SUPPLIER'; payload: string }
+  | { type: 'SET_SUPPLIERS'; payload: Supplier[] }
+  | { type: 'ADD_MATERIAL_ORDER'; payload: MaterialOrder }
+  | { type: 'UPDATE_MATERIAL_ORDER'; payload: MaterialOrder }
+  | { type: 'DELETE_MATERIAL_ORDER'; payload: string }
+  | { type: 'SET_MATERIAL_ORDERS'; payload: MaterialOrder[] }
+  | { type: 'ADD_ESTIMATE'; payload: Estimate }
+  | { type: 'UPDATE_ESTIMATE'; payload: Estimate }
+  | { type: 'DELETE_ESTIMATE'; payload: string }
+  | { type: 'SET_ESTIMATES'; payload: Estimate[] }
+  | { type: 'ADD_PROJECT'; payload: Project }
+  | { type: 'UPDATE_PROJECT'; payload: Project }
+  | { type: 'DELETE_PROJECT'; payload: string }
+  | { type: 'SET_PROJECTS'; payload: Project[] }
+  | { type: 'ADD_WORK_ORDER'; payload: WorkOrder }
+  | { type: 'UPDATE_WORK_ORDER'; payload: WorkOrder }
+  | { type: 'DELETE_WORK_ORDER'; payload: string }
+  | { type: 'SET_WORK_ORDERS'; payload: WorkOrder[] }
   | { type: 'INITIALIZE_DATA'; payload: {
       contacts: Contact[];
       appointments: Appointment[];
@@ -131,6 +158,8 @@ export type CRMAction =
       suppliers: Supplier[];
       materialOrders: MaterialOrder[];
       estimates: Estimate[];
+      projects: Project[];
+      workOrders: WorkOrder[];
     }};
 
 export function crmReducer(state: CRMState, action: CRMAction): CRMState {
@@ -367,6 +396,46 @@ export function crmReducer(state: CRMState, action: CRMAction): CRMState {
     case 'SET_INITIALIZED':
       return { ...state, isInitialized: action.payload };
     
+    case 'ADD_PROJECT':
+      return { ...state, projects: [...state.projects, action.payload] };
+    
+    case 'UPDATE_PROJECT':
+      return {
+        ...state,
+        projects: state.projects.map((p) =>
+          p.id === action.payload.id ? action.payload : p
+        ),
+      };
+    
+    case 'DELETE_PROJECT':
+      return {
+        ...state,
+        projects: state.projects.filter((p) => p.id !== action.payload),
+      };
+    
+    case 'SET_PROJECTS':
+      return { ...state, projects: action.payload };
+    
+    case 'ADD_WORK_ORDER':
+      return { ...state, workOrders: [...state.workOrders, action.payload] };
+    
+    case 'UPDATE_WORK_ORDER':
+      return {
+        ...state,
+        workOrders: state.workOrders.map((wo) =>
+          wo.id === action.payload.id ? action.payload : wo
+        ),
+      };
+    
+    case 'DELETE_WORK_ORDER':
+      return {
+        ...state,
+        workOrders: state.workOrders.filter((wo) => wo.id !== action.payload),
+      };
+    
+    case 'SET_WORK_ORDERS':
+      return { ...state, workOrders: action.payload };
+    
     case 'INITIALIZE_DATA':
       return {
         ...state,
@@ -377,6 +446,11 @@ export function crmReducer(state: CRMState, action: CRMAction): CRMState {
         leadSources: action.payload.leadSources,
         automations: action.payload.automations,
         teamMembers: action.payload.teamMembers,
+        suppliers: action.payload.suppliers,
+        materialOrders: action.payload.materialOrders,
+        estimates: action.payload.estimates,
+        projects: action.payload.projects,
+        workOrders: action.payload.workOrders,
         isInitialized: true,
         isLoading: false,
       };

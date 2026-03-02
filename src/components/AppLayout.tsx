@@ -55,6 +55,8 @@ const initialState: CRMState = {
   suppliers: [],
   materialOrders: [],
   estimates: [],
+  projects: [],
+  workOrders: [],
   sidebarCollapsed: false,
   searchQuery: '',
   filterStatus: 'all',
@@ -265,6 +267,8 @@ function CRMApp() {
           suppliers: [],
           materialOrders: [],
           estimates: [],
+          projects: [],
+          workOrders: [],
         },
       });
       return;
@@ -390,6 +394,8 @@ function CRMApp() {
           suppliers: [],
           materialOrders: [],
           estimates: [],
+          projects: [],
+          workOrders: [],
         },
       });
 
@@ -409,6 +415,8 @@ function CRMApp() {
           suppliers: [],
           materialOrders: [],
           estimates: [],
+          projects: [],
+          workOrders: [],
         },
       });
     }

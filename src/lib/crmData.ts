@@ -286,6 +286,75 @@ export interface EstimateItem {
   total: number;
 }
 
+export interface Project {
+  id: string;
+  projectNumber: string;
+  name: string;
+  contactId: string;
+  contactName: string;
+  estimateId?: string;
+  description?: string;
+  status: 'planning' | 'scheduled' | 'in_progress' | 'on_hold' | 'completed' | 'cancelled';
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  startDate?: string;
+  endDate?: string;
+  completedDate?: string;
+  estimatedBudget: number;
+  actualCost: number;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  projectManagerId?: string;
+  projectManagerName?: string;
+  notes?: string;
+  tags?: string[];
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkOrder {
+  id: string;
+  workOrderNumber: string;
+  projectId?: string;
+  projectName?: string;
+  contactId: string;
+  contactName: string;
+  title: string;
+  description?: string;
+  status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled' | 'on_hold';
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  scheduledDate?: string;
+  startedAt?: string;
+  completedAt?: string;
+  assignedTo: string[]; // Array of team member IDs
+  assignedToNames?: string[];
+  estimatedHours?: number;
+  actualHours?: number;
+  laborCost: number;
+  materialCost: number;
+  totalCost: number;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  notes?: string;
+  attachments?: string[];
+  checklistItems?: WorkOrderChecklistItem[];
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkOrderChecklistItem {
+  id: string;
+  description: string;
+  completed: boolean;
+  completedBy?: string;
+  completedAt?: string;
+}
+
 // Avatar URLs
 export const avatars = {
   male1: 'https://d64gsuwffb70l.cloudfront.net/6999e82c82de1e7a627673e6_1771694251592_d27903bd.jpg',

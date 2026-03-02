@@ -288,6 +288,64 @@ export interface DbEstimateItem {
   total: number;
 }
 
+export interface DbProject {
+  id: string;
+  company_id: string;
+  project_number: string;
+  name: string;
+  contact_id: string;
+  estimate_id?: string;
+  description?: string;
+  status: string;
+  priority: string;
+  start_date?: string;
+  end_date?: string;
+  completed_date?: string;
+  estimated_budget: number;
+  actual_cost: number;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  project_manager_id?: string;
+  notes?: string;
+  tags?: string[];
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DbWorkOrder {
+  id: string;
+  company_id: string;
+  work_order_number: string;
+  project_id?: string;
+  contact_id: string;
+  title: string;
+  description?: string;
+  status: string;
+  priority: string;
+  scheduled_date?: string;
+  started_at?: string;
+  completed_at?: string;
+  assigned_to: string[];
+  estimated_hours?: number;
+  actual_hours?: number;
+  labor_cost: number;
+  material_cost: number;
+  total_cost: number;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  notes?: string;
+  attachments?: string[];
+  checklist_items?: any[];
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface DbInvite {
   id: string;
   company_id: string;
@@ -1475,6 +1533,178 @@ class DatabaseService {
     return this.updateEstimate(estimateId, {
       status: 'declined',
       declined_at: new Date().toISOString(),
+    });
+  }
+
+  // Project operations
+  async getProjects(companyId: string): Promise<DbProject[]> {
+    const { data, error } = await supabase
+      .from('projects')
+      .select('*')
+      .eq('company_id', companyId)
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('Error fetching projects:', error);
+      return [];
+    }
+    return data || [];
+  }
+
+  async getProjectsByContact(contactId: string): Promise<DbProject[]> {
+    const { data, error } = await supabase
+      .from('projects')
+      .select('*')
+      .eq('contact_id', contactId)
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('Error fetching projects by contact:', error);
+      return [];
+    }
+    return data || [];
+  }
+
+  async createProject(project: Partial<DbProject>): Promise<DbProject | null> {
+    const { data, error } = await supabase
+      .from('projects')
+      .insert([project])
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error creating project:', error);
+      return null;
+    }
+    return data;
+  }
+
+  async updateProject(projectId: string, updates: Partial<DbProject>): Promise<DbProject | null> {
+    const { data, error } = await supabase
+      .from('projects')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', projectId)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error updating project:', error);
+      return null;
+    }
+    return data;
+  }
+
+  async deleteProject(projectId: string): Promise<boolean> {
+    const { error } = await supabase
+      .from('projects')
+      .delete()
+      .eq('id', projectId);
+    
+    if (error) {
+      console.error('Error deleting project:', error);
+      return false;
+    }
+    return true;
+  }
+
+  // Work Order operations
+  async getWorkOrders(companyId: string): Promise<DbWorkOrder[]> {
+    const { data, error } = await supabase
+      .from('work_orders')
+      .select('*')
+      .eq('company_id', companyId)
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('Error fetching work orders:', error);
+      return [];
+    }
+    return data || [];
+  }
+
+  async getWorkOrdersByProject(projectId: string): Promise<DbWorkOrder[]> {
+    const { data, error } = await supabase
+      .from('work_orders')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('scheduled_date', { ascending: true });
+    
+    if (error) {
+      console.error('Error fetching work orders by project:', error);
+      return [];
+    }
+    return data || [];
+  }
+
+  async getWorkOrdersByContact(contactId: string): Promise<DbWorkOrder[]> {
+    const { data, error } = await supabase
+      .from('work_orders')
+      .select('*')
+      .eq('contact_id', contactId)
+      .order('scheduled_date', { ascending: false });
+    
+    if (error) {
+      console.error('Error fetching work orders by contact:', error);
+      return [];
+    }
+    return data || [];
+  }
+
+  async createWorkOrder(workOrder: Partial<DbWorkOrder>): Promise<DbWorkOrder | null> {
+    const { data, error } = await supabase
+      .from('work_orders')
+      .insert([workOrder])
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error creating work order:', error);
+      return null;
+    }
+    return data;
+  }
+
+  async updateWorkOrder(workOrderId: string, updates: Partial<DbWorkOrder>): Promise<DbWorkOrder | null> {
+    const { data, error } = await supabase
+      .from('work_orders')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', workOrderId)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error updating work order:', error);
+      return null;
+    }
+    return data;
+  }
+
+  async deleteWorkOrder(workOrderId: string): Promise<boolean> {
+    const { error } = await supabase
+      .from('work_orders')
+      .delete()
+      .eq('id', workOrderId);
+    
+    if (error) {
+      console.error('Error deleting work order:', error);
+      return false;
+    }
+    return true;
+  }
+
+  // Update work order status helpers
+  async startWorkOrder(workOrderId: string): Promise<DbWorkOrder | null> {
+    return this.updateWorkOrder(workOrderId, {
+      status: 'in_progress',
+      started_at: new Date().toISOString(),
+    });
+  }
+
+  async completeWorkOrder(workOrderId: string, actualHours?: number): Promise<DbWorkOrder | null> {
+    return this.updateWorkOrder(workOrderId, {
+      status: 'completed',
+      completed_at: new Date().toISOString(),
+      ...(actualHours !== undefined && { actual_hours: actualHours }),
     });
   }
 }
