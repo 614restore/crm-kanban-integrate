@@ -10,6 +10,9 @@ import type {
   Automation,
   CustomerStatus,
   UserRole,
+  Supplier,
+  MaterialOrder,
+  Estimate,
 } from './crmData';
 
 export type ViewType =
@@ -24,6 +27,8 @@ export type ViewType =
   | 'team'
   | 'automations'
   | 'settings'
+  | 'suppliers'
+  | 'estimates'
   | 'ai-assistant';
 
 export interface CRMState {
@@ -44,6 +49,9 @@ export interface CRMState {
   appointments: Appointment[];
   invoices: Invoice[];
   automations: Automation[];
+  suppliers: Supplier[];
+  materialOrders: MaterialOrder[];
+  estimates: Estimate[];
   
   // UI state
   sidebarCollapsed: boolean;
@@ -120,6 +128,9 @@ export type CRMAction =
       leadSources: LeadSource[];
       automations: Automation[];
       teamMembers: TeamMember[];
+      suppliers: Supplier[];
+      materialOrders: MaterialOrder[];
+      estimates: Estimate[];
     }};
 
 export function crmReducer(state: CRMState, action: CRMAction): CRMState {
@@ -253,6 +264,57 @@ export function crmReducer(state: CRMState, action: CRMAction): CRMState {
     
     case 'SET_INVOICES':
       return { ...state, invoices: action.payload };
+    
+    case 'ADD_SUPPLIER':
+      return { ...state, suppliers: [...state.suppliers, action.payload] };
+    
+    case 'UPDATE_SUPPLIER':
+      return {
+        ...state,
+        suppliers: state.suppliers.map((s) =>
+          s.id === action.payload.id ? action.payload : s
+        ),
+      };
+    
+    case 'DELETE_SUPPLIER':
+      return { ...state, suppliers: state.suppliers.filter((s) => s.id !== action.payload) };
+    
+    case 'SET_SUPPLIERS':
+      return { ...state, suppliers: action.payload };
+    
+    case 'ADD_MATERIAL_ORDER':
+      return { ...state, materialOrders: [...state.materialOrders, action.payload] };
+    
+    case 'UPDATE_MATERIAL_ORDER':
+      return {
+        ...state,
+        materialOrders: state.materialOrders.map((mo) =>
+          mo.id === action.payload.id ? action.payload : mo
+        ),
+      };
+    
+    case 'DELETE_MATERIAL_ORDER':
+      return { ...state, materialOrders: state.materialOrders.filter((mo) => mo.id !== action.payload) };
+    
+    case 'SET_MATERIAL_ORDERS':
+      return { ...state, materialOrders: action.payload };
+    
+    case 'ADD_ESTIMATE':
+      return { ...state, estimates: [...state.estimates, action.payload] };
+    
+    case 'UPDATE_ESTIMATE':
+      return {
+        ...state,
+        estimates: state.estimates.map((e) =>
+          e.id === action.payload.id ? action.payload : e
+        ),
+      };
+    
+    case 'DELETE_ESTIMATE':
+      return { ...state, estimates: state.estimates.filter((e) => e.id !== action.payload) };
+    
+    case 'SET_ESTIMATES':
+      return { ...state, estimates: action.payload };
     
     case 'ADD_TEAM_MEMBER':
       return { ...state, teamMembers: [...state.teamMembers, action.payload] };

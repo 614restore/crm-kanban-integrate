@@ -81,6 +81,14 @@ export interface Job {
   notes?: string;
 }
 
+export interface CommunicationAttachment {
+  id: string;
+  name: string;
+  url: string;
+  size: string;
+  type: string;
+}
+
 export interface Communication {
   id: string;
   contactId: string;
@@ -91,6 +99,8 @@ export interface Communication {
   timestamp: string;
   userId: string;
   userName: string;
+  attachments?: CommunicationAttachment[];
+  mentions?: string[]; // Array of mentioned user IDs
 }
 
 export interface Document {
@@ -108,6 +118,7 @@ export interface TeamMember {
   id: string;
   name: string;
   email: string;
+  work_email?: string; // Configured work email for integration
   role: UserRole;
   avatar: string;
   phone: string;
@@ -187,6 +198,92 @@ export interface Automation {
   action: string;
   isActive: boolean;
   createdBy: string;
+}
+
+export interface Supplier {
+  id: string;
+  name: string;
+  contactName?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  website?: string;
+  accountNumber?: string;
+  paymentTerms?: string;
+  notes?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MaterialOrder {
+  id: string;
+  supplierId: string;
+  supplierName: string;
+  contactId?: string;
+  jobId?: string;
+  orderNumber?: string;
+  orderDate: string;
+  expectedDeliveryDate?: string;
+  actualDeliveryDate?: string;
+  status: 'pending' | 'ordered' | 'partial' | 'delivered' | 'cancelled';
+  subtotal: number;
+  tax: number;
+  shipping: number;
+  total: number;
+  items: MaterialOrderItem[];
+  notes?: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MaterialOrderItem {
+  id: string;
+  description: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  total: number;
+}
+
+export interface Estimate {
+  id: string;
+  contactId: string;
+  contactName: string;
+  jobId?: string;
+  estimateNumber: string;
+  title: string;
+  description?: string;
+  status: 'draft' | 'sent' | 'viewed' | 'accepted' | 'declined' | 'expired';
+  amount: number;
+  tax: number;
+  total: number;
+  validUntil?: string;
+  createdAt: string;
+  sentAt?: string;
+  viewedAt?: string;
+  acceptedAt?: string;
+  declinedAt?: string;
+  signedBy?: string;
+  signatureData?: string;
+  items: EstimateItem[];
+  terms?: string;
+  notes?: string;
+  createdBy: string;
+  updatedAt: string;
+}
+
+export interface EstimateItem {
+  id: string;
+  description: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  total: number;
 }
 
 // Avatar URLs
