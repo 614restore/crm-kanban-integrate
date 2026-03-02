@@ -19,6 +19,9 @@ import {
   Building2,
   LogOut,
   Store,
+  FolderKanban,
+  Clipboard,
+  Package,
 } from 'lucide-react';
 
 interface NavItem {
@@ -38,6 +41,9 @@ const navItems: NavItem[] = [
   { id: 'financial', label: 'Financial', icon: <DollarSign size={20} />, requiresPermission: 'financials' },
   { id: 'suppliers', label: 'Suppliers', icon: <Store size={20} /> },
   { id: 'estimates', label: 'Estimates', icon: <FileText size={20} /> },
+  { id: 'projects', label: 'Projects', icon: <FolderKanban size={20} /> },
+  { id: 'work-orders', label: 'Work Orders', icon: <Clipboard size={20} /> },
+  { id: 'material-orders', label: 'Material Orders', icon: <Package size={20} /> },
   { id: 'team', label: 'Team', icon: <UserCog size={20} />, requiresPermission: 'team' },
   { id: 'automations', label: 'Automations', icon: <Zap size={20} /> },
   { id: 'ai-assistant', label: 'AI Assistant', icon: <Bot size={20} /> },

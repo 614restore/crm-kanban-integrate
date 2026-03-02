@@ -36,6 +36,9 @@ import InvoiceModal from './crm/InvoiceModal';
 import AuthPage from './crm/AuthPage';
 import SuppliersView from './crm/SuppliersView';
 import EstimatesView from './crm/EstimatesView';
+import ProjectsView from './crm/ProjectsView';
+import WorkOrdersView from './crm/WorkOrdersView';
+import MaterialOrdersView from './crm/MaterialOrdersView';
 import { Building2, Loader2 } from 'lucide-react';
 
 // Initial CRM state (completely empty)
@@ -103,6 +106,12 @@ function ViewRouter() {
       return <SuppliersView />;
     case 'estimates':
       return <EstimatesView />;
+    case 'projects':
+      return <ProjectsView />;
+    case 'work-orders':
+      return <WorkOrdersView />;
+    case 'material-orders':
+      return <MaterialOrdersView />;
     case 'settings':
       return <SettingsView />;
     case 'ai-assistant':
