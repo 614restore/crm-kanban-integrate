@@ -9,6 +9,7 @@ import {
   getMentionTargets,
   validateMentions,
 } from '@/lib/mentions';
+import { uploadDocument, validateDocumentFile, formatFileSize, getDocumentSignedUrl, isHttpUrl } from '@/lib/storage';
 import { toast } from 'sonner';
 import {
   Contact,
@@ -69,7 +70,10 @@ export default function ContactDetail() {
   const [isSavingQuickNote, setIsSavingQuickNote] = useState(false);
   const [mentionStart, setMentionStart] = useState<number | null>(null);
   const [mentionSuggestions, setMentionSuggestions] = useState<ReturnType<typeof getMentionTargets>>([]);
+  const [isUploadingDocument, setIsUploadingDocument] = useState(false);
+  const [contactDocuments, setContactDocuments] = useState<Document[]>([]);
   const noteInputRef = useRef<HTMLInputElement>(null);
+  const documentInputRef = useRef<HTMLInputElement>(null);
   const mentionTargets = useMemo(() => getMentionTargets(state.teamMembers), [state.teamMembers]);
   const contactId = contact?.id;
   const contactNotes = contact?.notes ?? '';
@@ -78,6 +82,194 @@ export default function ContactDetail() {
     if (!contactId) return;
     setQuickNote(contactNotes);
   }, [contactId, contactNotes]);
+
+  // Load contact documents with signed URLs
+  useEffect(() => {
+    const loadContactDocuments = async () => {
+      if (!contactId) {
+        setContactDocuments([]);
+        return;
+      }
+
+      console.log(`[ContactDetail] Loading documents for contact: ${contactId}`);
+      const docs = await db.getDocumentsByContact(contactId);
+      console.log(`[ContactDetail] Found ${docs.length} document(s) for this contact`);
+
+      const docsWithSignedUrls = await Promise.all(
+        docs.map(async (doc) => {
+          // Store the path in the URL field, signed URLs will be created on-demand when opening
+          const url = doc.url;
+
+          return {
+            id: doc.id,
+            contactId: doc.contact_id || '',
+            name: doc.name,
+            type: doc.type as 'contract' | 'estimate' | 'invoice' | 'photo' | 'insurance' | 'other',
+            url,  // Store path, not signed URL - we'll create signed URLs on-demand
+            uploadedAt: doc.created_at,
+            uploadedBy: doc.uploaded_by || 'Team member',
+            size: doc.size || 'Unknown',
+          };
+        })
+      );
+
+      setContactDocuments(docsWithSignedUrls);
+    };
+
+    loadContactDocuments();
+  }, [contactId]);
+
+  const handleUploadDocument = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !contactId) return;
+
+    if (!effectiveCompanyId) {
+      toast.error('No company context available. Please refresh and sign in again.');
+      return;
+    }
+
+    const validationError = validateDocumentFile(file, 15);
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+
+    console.log(`[ContactDetail] Uploading document: ${file.name} for contact ${contactId}`);
+    setIsUploadingDocument(true);
+
+    try {
+      const uploadResult = await uploadDocument(file, effectiveCompanyId, contactId);
+
+      if (uploadResult.error) {
+        console.error('[ContactDetail] Upload failed:', uploadResult.error);
+        toast.error(`Upload failed: ${uploadResult.error}`);
+        setIsUploadingDocument(false);
+        event.target.value = '';
+        return;
+      }
+
+      console.log(`[ContactDetail] Upload successful, path: ${uploadResult.path}`);
+
+      // Verify the file exists
+      const verifyUrl = await getDocumentSignedUrl(uploadResult.path, 60);
+      if (!verifyUrl) {
+        console.error('[ContactDetail] File upload succeeded but verification failed');
+        toast.error('Upload completed but file verification failed.');
+        setIsUploadingDocument(false);
+        event.target.value = '';
+        return;
+      }
+
+      // Infer document category
+      const inferCategory = (file: File): 'contract' | 'estimate' | 'invoice' | 'photo' | 'insurance' | 'other' => {
+        const fileName = file.name.toLowerCase();
+        if (fileName.includes('contract')) return 'contract';
+        if (fileName.includes('estimate')) return 'estimate';
+        if (fileName.includes('invoice')) return 'invoice';
+        if (file.type.startsWith('image/')) return 'photo';
+        if (fileName.includes('insurance')) return 'insurance';
+        return 'other';
+      };
+
+      const category = inferCategory(file);
+      const created = await db.createDocument({
+        company_id: effectiveCompanyId,
+        contact_id: contactId,
+        name: file.name,
+        type: category,
+        url: uploadResult.path,
+        size: formatFileSize(file.size),
+        uploaded_by: profile?.id,
+      });
+
+      if (!created) {
+        console.error('[ContactDetail] Failed to save document record');
+        toast.error('File uploaded but failed to save document record');
+        setIsUploadingDocument(false);
+        event.target.value = '';
+        return;
+      }
+
+      console.log(`[ContactDetail] Document record saved with ID: ${created.id}`);
+
+      const newDoc: Document = {
+        id: created.id,
+        contactId: created.contact_id || '',
+        name: created.name,
+        type: created.type as 'contract' | 'estimate' | 'invoice' | 'photo' | 'insurance' | 'other',
+        url: created.url,  // Store the path, not signed URL
+        uploadedAt: created.created_at,
+        uploadedBy: created.uploaded_by || 'Team member',
+        size: created.size || formatFileSize(file.size),
+      };
+
+      setContactDocuments((prev) => [newDoc, ...prev]);
+      toast.success(`${file.name} uploaded successfully!`);
+    } catch (error) {
+      console.error('[ContactDetail] Document upload error:', error);
+      toast.error('Failed to upload file: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    } finally {
+      setIsUploadingDocument(false);
+      event.target.value = '';
+    }
+  };
+
+  const handleDeleteDocument = async (docId: string) => {
+    const confirmed = window.confirm('Delete this document?');
+    if (!confirmed) return;
+
+    const ok = await db.deleteDocument(docId);
+    if (!ok) {
+      toast.error('Failed to delete document');
+      return;
+    }
+
+    setContactDocuments((prev) => prev.filter((doc) => doc.id !== docId));
+    toast.success('Document deleted');
+  };
+
+  const handleOpenDocument = async (url?: string, docName?: string) => {
+    if (!url) {
+      console.error('[ContactDetail] Document URL is missing');
+      toast.error('Document URL not available. The document may not have been uploaded correctly.');
+      return;
+    }
+
+    console.log(`[ContactDetail] Opening document: ${docName || 'unknown'}`);
+    console.log(`[ContactDetail] URL type: ${isHttpUrl(url) ? 'HTTP URL' : 'Storage path'}`);
+
+    try {
+      // If it's already a full HTTP URL, open it directly
+      if (isHttpUrl(url) && !url.includes('/projectceo-documents/')) {
+        console.log('[ContactDetail] Opening direct HTTP URL');
+        window.open(url, '_blank', 'noopener,noreferrer');
+        return;
+      }
+
+      // If it's a storage path or Supabase URL, try to get/refresh the signed URL
+      console.log('[ContactDetail] Attempting to create/refresh signed URL...');
+      const signedUrl = await getDocumentSignedUrl(url, 3600);
+      
+      if (!signedUrl) {
+        console.error('[ContactDetail] Failed to create signed URL');
+        console.error('[ContactDetail] This usually means:');
+        console.error('[ContactDetail]   1. The projectceo-documents bucket does not exist');
+        console.error('[ContactDetail]   2. Storage policies are not configured');
+        console.error('[ContactDetail]   3. The file was deleted or path is incorrect');
+        toast.error(
+          'Unable to open document. Check console for details or verify Supabase bucket setup.',
+          { duration: 5000 }
+        );
+        return;
+      }
+
+      console.log('[ContactDetail] ✓ Signed URL created, opening document');
+      window.open(signedUrl, '_blank', 'noopener,noreferrer');
+    } catch (error) {
+      console.error('[ContactDetail] Error opening document:', error);
+      toast.error('Failed to open document: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
+  };
 
   if (!contact) {
     return (
@@ -1070,15 +1262,26 @@ export default function ContactDetail() {
 
         {activeTab === 'documents' && (
           <div className="bg-white rounded-xl border border-gray-200">
+            <input
+              ref={documentInputRef}
+              type="file"
+              className="hidden"
+              onChange={handleUploadDocument}
+              disabled={isUploadingDocument}
+            />
             <div className="p-6 border-b border-gray-200 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-900">Documents</h3>
-              <button onClick={() => dispatch({ type: 'SET_VIEW', payload: 'documents' })} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                <Upload size={18} />
-                Upload Document
+              <button 
+                onClick={() => documentInputRef.current?.click()} 
+                disabled={isUploadingDocument}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isUploadingDocument ? <Loader2 size={18} className="animate-spin" /> : <Upload size={18} />}
+                {isUploadingDocument ? 'Uploading...' : 'Upload Document'}
               </button>
             </div>
             <div className="divide-y divide-gray-100">
-              {(contact.documents || []).map((doc) => (
+              {contactDocuments.map((doc) => (
                 <div key={doc.id} className="p-4 flex items-center justify-between hover:bg-gray-50">
                   <div className="flex items-center gap-4">
                     <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
@@ -1092,19 +1295,40 @@ export default function ContactDetail() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button onClick={() => doc.url && window.open(doc.url, '_blank', 'noopener,noreferrer')} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                    <button 
+                      onClick={() => handleOpenDocument(doc.url, doc.name)} 
+                      className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                      title="Download document"
+                    >
                       <Download size={18} className="text-gray-500" />
                     </button>
-                    <button onClick={() => doc.url && window.open(doc.url, '_blank', 'noopener,noreferrer')} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                    <button 
+                      onClick={() => handleOpenDocument(doc.url, doc.name)} 
+                      className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                      title="Open in new tab"
+                    >
                       <ExternalLink size={18} className="text-gray-500" />
+                    </button>
+                    <button 
+                      onClick={() => handleDeleteDocument(doc.id)} 
+                      className="p-2 hover:bg-red-100 rounded-lg transition-colors"
+                      title="Delete document"
+                    >
+                      <Trash2 size={18} className="text-red-500" />
                     </button>
                   </div>
                 </div>
               ))}
-              {(!contact.documents || contact.documents.length === 0) && (
+              {contactDocuments.length === 0 && (
                 <div className="p-12 text-center text-gray-500">
                   <FileText size={32} className="mx-auto mb-2 opacity-50" />
                   <p>No documents uploaded yet</p>
+                  <button 
+                    onClick={() => documentInputRef.current?.click()}
+                    className="mt-4 text-blue-600 hover:text-blue-700 text-sm font-medium"
+                  >
+                    Upload your first document
+                  </button>
                 </div>
               )}
             </div>

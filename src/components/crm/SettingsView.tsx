@@ -127,10 +127,12 @@ export default function SettingsView() {
 
     const userId = profile?.id || user?.id;
     if (!userId) {
+      console.warn('No user ID available for company lookup');
       return null;
     }
 
     try {
+      // Try to fetch the profile with company_id
       const profileResult = await withTimeout(
         supabase
           .from('profiles')
@@ -146,12 +148,35 @@ export default function SettingsView() {
         return profileResult.data.company_id;
       }
 
+      // If no company_id found, try to create one automatically
+      console.log('No company_id found, attempting to create default company...');
+      const userEmail = user?.email || profile?.email || '';
+      
+      if (userEmail) {
+        const { setupNewUser } = await import('@/lib/setupCompany');
+        const setupSuccess = await setupNewUser(userId, userEmail);
+        
+        if (setupSuccess) {
+          // Fetch the profile again to get the new company_id
+          const retryResult = await supabase
+            .from('profiles')
+            .select('company_id')
+            .eq('id', userId)
+            .single();
+          
+          if (retryResult.data?.company_id) {
+            dispatch({ type: 'SET_COMPANY_ID', payload: retryResult.data.company_id });
+            return retryResult.data.company_id;
+          }
+        }
+      }
+
       return null;
     } catch (error) {
-      console.warn('resolveCompanyId fallback to cached company_id:', error);
+      console.warn('resolveCompanyId error:', error);
       return state.companyId || null;
     }
-  }, [dispatch, profile?.company_id, profile?.id, state.companyId, user?.id]);
+  }, [dispatch, profile?.company_id, profile?.id, profile?.email, state.companyId, user?.id, user?.email]);
 
   // Combine default and custom lead sources
   const allLeadSources = [...defaultLeadSources, ...state.leadSources.filter((ls) => ls.isCustom)];
@@ -207,7 +232,7 @@ export default function SettingsView() {
     try {
       const companyId = effectiveCompanyId || await resolveCompanyId();
       if (!companyId) {
-        toast.error('No company context available. Please refresh and sign in again.');
+        toast.error('Unable to find your company. Your account may need to be set up. Please sign out and sign back in.');
         return;
       }
 
@@ -246,7 +271,7 @@ export default function SettingsView() {
     const companyId = effectiveCompanyId || await resolveCompanyId();
 
     if (!companyId) {
-      toast.error('No company associated with your account. Please sign out and sign back in if this continues.')
+      toast.error('Unable to find your company. Your account may need to be set up. Please sign out and sign back in.');
       return;
     }
 
@@ -691,7 +716,7 @@ export default function SettingsView() {
   const handleSaveCompanyLogoUrl = async () => {
     const companyId = effectiveCompanyId || await resolveCompanyId();
     if (!companyId) {
-      toast.error('No company context available. Please refresh and sign in again.');
+      toast.error('Unable to find your company. Your account may need to be set up. Please sign out and sign back in.');
       return;
     }
 
@@ -760,12 +785,22 @@ export default function SettingsView() {
     setIsUploadingLogo(true);
 
     try {
+      // Show loading toast while resolving company
+      const loadingToastId = toast.loading?.('Preparing upload...') || undefined;
+      
       const companyId = effectiveCompanyId || await resolveCompanyId();
 
       if (!companyId) {
-        toast.error('No company context available. Please refresh and sign in again.');
+        toast.error('Unable to find your company. Your account may need to be set up. Please sign out and sign back in.');
         setCompanyLogo(previousLogo);
+        setIsUploadingLogo(false);
+        e.target.value = '';
         return;
+      }
+      
+      // Dismiss loading toast
+      if (loadingToastId && toast.dismiss) {
+        toast.dismiss(loadingToastId);
       }
 
       // Non-blocking preview: do not fail upload if preview creation fails.
@@ -815,6 +850,8 @@ export default function SettingsView() {
         if (result.error) {
           if (compatibilitySaved) {
             toast.success('Logo saved using compatibility mode');
+            setIsUploadingLogo(false);
+            e.target.value = '';
             return;
           }
 
@@ -826,6 +863,8 @@ export default function SettingsView() {
             setCompanyLogoUrlInput(fallbackSave.logo_url);
             window.dispatchEvent(new Event('crm-company-updated'));
             toast.success('Logo saved using compatibility mode');
+            setIsUploadingLogo(false);
+            e.target.value = '';
             return;
           } catch (fallbackError) {
             const fallbackMessage = getReadableError(fallbackError);
@@ -835,6 +874,8 @@ export default function SettingsView() {
               toast.error(`Upload failed: ${result.error} | fallback failed: ${fallbackMessage}`);
             }
             setCompanyLogo(previousLogo);
+            setIsUploadingLogo(false);
+            e.target.value = '';
             return;
           }
         } else {
@@ -843,6 +884,8 @@ export default function SettingsView() {
           if (!updatedCompany?.logo_url) {
             setCompanyLogo(previousLogo);
             toast.error('Logo uploaded, but failed to persist to company profile');
+            setIsUploadingLogo(false);
+            e.target.value = '';
             return;
           }
 
@@ -860,6 +903,8 @@ export default function SettingsView() {
 
       if (compatibilitySaved) {
         toast.success('Logo saved using compatibility mode');
+        setIsUploadingLogo(false);
+        e.target.value = '';
         return;
       }
 

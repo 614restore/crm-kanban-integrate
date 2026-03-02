@@ -27,7 +27,7 @@ const supabase = createClient(supabaseUrl, supabaseKey, {
     persistSession: true,
     detectSessionInUrl: true,
     storage: typeof window !== 'undefined' ? window.localStorage : undefined,
-    storageKey: 'sb-qgvuzrvpyyrrulhwlzma-auth-token',
+    storageKey: 'sb-auth-token',
     flowType: 'pkce',
   },
   global: {

@@ -31,16 +31,55 @@ export async function getDocumentSignedUrl(pathOrUrl: string, expiresInSeconds: 
     return isHttpUrl(pathOrUrl) ? pathOrUrl : null;
   }
 
+  console.log(`[Storage] Creating signed URL for document...`);
+  console.log(`[Storage] - Original input: ${pathOrUrl}`);
+  console.log(`[Storage] - Extracted path: ${path}`);
+  console.log(`[Storage] - Bucket: projectceo-documents`);
+
+  // First, check if the file exists
+  try {
+    const { data: fileData, error: listError } = await supabase.storage
+      .from('projectceo-documents')
+      .list(path.includes('/') ? path.substring(0, path.lastIndexOf('/')) : '', {
+        search: path.includes('/') ? path.substring(path.lastIndexOf('/') + 1) : path
+      });
+    
+    if (listError) {
+      console.error('[Storage] Error checking file existence:', listError);
+      console.error('[Storage] This might indicate the bucket does not exist or has wrong permissions');
+    } else if (!fileData || fileData.length === 0) {
+      console.error('[Storage] File not found in bucket at path:', path);
+      console.error('[Storage] Make sure the file was uploaded successfully and the path is correct');
+    } else {
+      console.log('[Storage] File exists in bucket:', fileData[0]);
+    }
+  } catch (checkError) {
+    console.warn('[Storage] Could not verify file existence:', checkError);
+  }
+
   const { data, error } = await supabase.storage
     .from('projectceo-documents')
     .createSignedUrl(path, expiresInSeconds);
 
   if (error) {
-    console.error('Signed URL error:', error);
+    console.error('[Storage] Signed URL creation failed!');
+    console.error('[Storage] Error details:', JSON.stringify(error, null, 2));
+    console.error('[Storage] Common causes:');
+    console.error('[Storage]   1. Bucket "projectceo-documents" does not exist');
+    console.error('[Storage]   2. Bucket policies are not configured (needs SELECT policy for authenticated users)');
+    console.error('[Storage]   3. File does not exist at the specified path');
+    console.error('[Storage]   4. User is not authenticated properly');
     return null;
   }
 
-  return data?.signedUrl || null;
+  if (!data?.signedUrl) {
+    console.error('[Storage] Signed URL is empty despite no error');
+    return null;
+  }
+
+  console.log(`[Storage] ✓ Signed URL created successfully`);
+  console.log(`[Storage] URL will expire in ${expiresInSeconds} seconds`);
+  return data.signedUrl;
 }
 
 function encodeStoragePath(path: string): string {
@@ -60,6 +99,8 @@ async function uploadBinaryViaRest(
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
+  console.log(`[Storage] REST upload attempt to ${bucket}/${path}`);
+  
   try {
     const response = await fetch(
       `${supabaseUrl}/storage/v1/object/${bucket}/${encodeStoragePath(path)}`,
@@ -78,12 +119,15 @@ async function uploadBinaryViaRest(
 
     if (!response.ok) {
       const text = await response.text();
+      console.error(`[Storage] REST upload failed: HTTP ${response.status}`, text);
       return { ok: false, message: text || `HTTP ${response.status}` };
     }
 
+    console.log(`[Storage] ✓ REST upload successful`);
     return { ok: true };
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
+      console.error(`[Storage] REST upload timeout`);
       return { ok: false, message: `Request timed out after ${Math.round(timeoutMs / 1000)}s` };
     }
 
@@ -102,6 +146,8 @@ async function uploadViaSdk(
   path: string,
   file: File
 ): Promise<{ ok: true } | { ok: false; message: string }> {
+  console.log(`[Storage] SDK upload attempt to ${bucket}/${path}`);
+  
   const { error } = await supabase.storage.from(bucket).upload(path, file, {
     upsert: false,
     cacheControl: "3600",
@@ -109,9 +155,11 @@ async function uploadViaSdk(
   });
 
   if (error) {
+    console.error(`[Storage] SDK upload failed:`, error);
     return { ok: false, message: error.message || "Storage upload failed" };
   }
 
+  console.log(`[Storage] ✓ SDK upload successful`);
   return { ok: true };
 }
 
@@ -131,12 +179,15 @@ export async function uploadFile(
     const { data: authData } = await supabase.auth.getSession();
     const accessToken = authData?.session?.access_token;
     if (!accessToken) {
+      console.error('[Storage] No access token available');
       return {
         url: '',
         path: '',
         error: 'Session expired. Please sign in again and retry.',
       };
     }
+
+    console.log(`[Storage] Uploading file to bucket: ${bucket}, folder: ${folder || 'root'}`);
 
     // Generate unique filename
     const fileExt = file.name.split('.').pop();
@@ -159,11 +210,13 @@ export async function uploadFile(
         : new File([file.slice(0, file.size, mimeType)], file.name, { type: mimeType });
 
     // First attempt: SDK upload with a fresh payload object (avoids exhausted body streams).
+    console.log('[Storage] --- Upload Method 1: Supabase SDK ---');
     let result = await uploadViaSdk(bucket, filePath, makeFilePayload());
 
     // Fallback path: direct REST upload with fresh blob payload.
     if (!result.ok) {
-      console.warn('SDK upload failed, trying REST fallback:', result.message);
+      console.warn('[Storage] SDK upload failed, trying REST fallback:', result.message);
+      console.log('[Storage] --- Upload Method 2: REST API ---');
       result = await uploadBinaryViaRest(bucket, filePath, makeBlobPayload(), accessToken, 20000);
     }
 
@@ -203,8 +256,11 @@ export async function uploadFile(
       const message = isFileReadErrorMessage(result.message)
         ? 'Browser could not read the selected file.'
         : result.message;
+      console.error(`[Storage] Upload failed for ${bucket}/${filePath}:`, message);
       return { url: '', path: '', error: message };
     }
+
+    console.log(`[Storage] Upload successful to ${bucket}/${filePath}`);
 
     // Public URL is used for logos/avatars; documents store path and are later resolved to signed URLs.
     const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(filePath);

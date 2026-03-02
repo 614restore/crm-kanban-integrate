@@ -70,8 +70,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         if (setupSuccess) {
           // Fetch profile again to get the new company_id
-          return await fetchProfile(userId);
+          const updatedProfile = await fetchProfile(userId);
+          if (updatedProfile?.company_id) {
+            console.log('✅ Company setup successful, company_id:', updatedProfile.company_id);
+          } else {
+            console.warn('⚠️ Setup reported success but no company_id found, retrying...');
+            // Retry once after a brief delay
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            const retryProfile = await fetchProfile(userId);
+            if (retryProfile?.company_id) {
+              console.log('✅ Company setup successful on retry, company_id:', retryProfile.company_id);
+            } else {
+              console.error('❌ Company setup failed even after retry');
+            }
+            return retryProfile;
+          }
+          return updatedProfile;
+        } else {
+          console.error('❌ Company setup failed');
         }
+      } else if (profileData?.company_id) {
+        console.log('✓ User already has company_id:', profileData.company_id);
       }
       
       return profileData;
@@ -159,8 +178,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .update({
               first_name: metadata.first_name,
               last_name: metadata.last_name,
-              // Creator signups default to owner unless an explicit role is provided (e.g. invite flow).
-              role: metadata.role || 'owner',
+              role: metadata.role || 'sales',
             })
             .eq('id', data.user.id);
         }
@@ -175,57 +193,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const clearLocalAuthState = () => {
-    setSession(null);
-    setUser(null);
-    setProfile(null);
-    setLoading(false);
-
-    if (typeof window !== 'undefined') {
-      try {
-        const keysToRemove: string[] = [];
-        for (let i = 0; i < window.localStorage.length; i += 1) {
-          const key = window.localStorage.key(i);
-          if (!key) continue;
-          if (key.startsWith('sb-') && key.includes('auth-token')) {
-            keysToRemove.push(key);
-          }
-        }
-
-        keysToRemove.push('sb-auth-token');
-
-        keysToRemove.forEach((key) => {
-          try {
-            window.localStorage.removeItem(key);
-          } catch {
-            // ignore storage cleanup errors
-          }
-        });
-      } catch {
-        // ignore storage access errors
-      }
-    }
-  };
-
   const signOut = async () => {
-    clearLocalAuthState();
-
     try {
-      await Promise.race([
-        supabase.auth.signOut({ scope: 'local' }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Local sign-out timeout')), 5000)),
-      ]);
-    } catch (error) {
-      console.warn('Local sign-out fallback applied:', error);
+      console.log('[Auth] Signing out...');
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('[Auth] Sign out error:', error);
+        throw error;
+      }
+      console.log('[Auth] Sign out successful');
+      setSession(null);
+      setUser(null);
+      setProfile(null);
+      // Clear any cached data
+      window.location.href = '/';
+    } catch (err) {
+      console.error('[Auth] Sign out failed:', err);
+      // Force logout by clearing state even if API call fails
+      setSession(null);
+      setUser(null);
+      setProfile(null);
+      window.location.href = '/';
     }
-
-    try {
-      supabase.removeAllChannels();
-    } catch (error) {
-      console.warn('Failed to remove realtime channels during sign-out:', error);
-    }
-
-    clearLocalAuthState();
   };
 
   const resetPassword = async (email: string) => {
@@ -243,22 +232,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!user) return { error: new Error('No user logged in') };
 
     try {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('profiles')
         .update({
           ...updates,
           updated_at: new Date().toISOString(),
         })
-        .eq('id', user.id)
-        .select('*')
-        .single();
+        .eq('id', user.id);
 
-      if (error || !data) {
-        return { error: error || new Error('Profile update did not persist') };
+      if (!error) {
+        setProfile((prev) => (prev ? { ...prev, ...updates } : null));
       }
 
-      setProfile(data as Profile);
-      return { error: null };
+      return { error };
     } catch (err) {
       return { error: err as Error };
     }

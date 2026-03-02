@@ -28,39 +28,39 @@ VITE_APP_URL=http://localhost:5173
 ### Step 3: Create Storage Buckets
 
 1. In Supabase Dashboard, go to **Storage**
-2. Create three buckets:
-   - `logos` (public)
+2. Create three buckets with these **exact names**:
+   - `company-logos` (public)
    - `avatars` (public)
-   - `documents` (private)
+   - `projectceo-documents` (private)
 
 ### Step 4: Set Bucket Policies
 
 Run these SQL commands in **SQL Editor**:
 
 ```sql
--- Logos bucket policies
-CREATE POLICY "Public logos read" 
+-- Company logos bucket policies
+CREATE POLICY "Public company-logos read" 
 ON storage.objects FOR SELECT 
-USING (bucket_id = 'logos');
+USING (bucket_id = 'company-logos');
 
-CREATE POLICY "Authenticated logos upload" 
+CREATE POLICY "Authenticated company-logos upload" 
 ON storage.objects FOR INSERT 
 WITH CHECK (
-  bucket_id = 'logos' 
+  bucket_id = 'company-logos' 
   AND auth.role() = 'authenticated'
 );
 
-CREATE POLICY "Authenticated logos update" 
+CREATE POLICY "Authenticated company-logos update" 
 ON storage.objects FOR UPDATE 
 USING (
-  bucket_id = 'logos' 
+  bucket_id = 'company-logos' 
   AND auth.role() = 'authenticated'
 );
 
-CREATE POLICY "Authenticated logos delete" 
+CREATE POLICY "Authenticated company-logos delete" 
 ON storage.objects FOR DELETE 
 USING (
-  bucket_id = 'logos' 
+  bucket_id = 'company-logos' 
   AND auth.role() = 'authenticated'
 );
 
@@ -90,32 +90,32 @@ USING (
   AND auth.role() = 'authenticated'
 );
 
--- Documents bucket policies (private)
-CREATE POLICY "Authenticated documents read" 
+-- Documents bucket policies (private with signed URLs)
+CREATE POLICY "Authenticated projectceo-documents read" 
 ON storage.objects FOR SELECT 
 USING (
-  bucket_id = 'documents' 
+  bucket_id = 'projectceo-documents' 
   AND auth.role() = 'authenticated'
 );
 
-CREATE POLICY "Authenticated documents upload" 
+CREATE POLICY "Authenticated projectceo-documents upload" 
 ON storage.objects FOR INSERT 
 WITH CHECK (
-  bucket_id = 'documents' 
+  bucket_id = 'projectceo-documents' 
   AND auth.role() = 'authenticated'
 );
 
-CREATE POLICY "Authenticated documents update" 
+CREATE POLICY "Authenticated projectceo-documents update" 
 ON storage.objects FOR UPDATE 
 USING (
-  bucket_id = 'documents' 
+  bucket_id = 'projectceo-documents' 
   AND auth.role() = 'authenticated'
 );
 
-CREATE POLICY "Authenticated documents delete" 
+CREATE POLICY "Authenticated projectceo-documents delete" 
 ON storage.objects FOR DELETE 
 USING (
-  bucket_id = 'documents' 
+  bucket_id = 'projectceo-documents' 
   AND auth.role() = 'authenticated'
 );
 ```
