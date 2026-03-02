@@ -34,6 +34,8 @@ import AIAssistant from './crm/AIAssistant';
 import QuickAddModal from './crm/QuickAddModal';
 import InvoiceModal from './crm/InvoiceModal';
 import AuthPage from './crm/AuthPage';
+import SuppliersView from './crm/SuppliersView';
+import EstimatesView from './crm/EstimatesView';
 import { Building2, Loader2 } from 'lucide-react';
 
 // Initial CRM state (completely empty)
@@ -50,6 +52,9 @@ const initialState: CRMState = {
   appointments: [],
   invoices: [],
   automations: [],
+  suppliers: [],
+  materialOrders: [],
+  estimates: [],
   sidebarCollapsed: false,
   searchQuery: '',
   filterStatus: 'all',
@@ -92,6 +97,10 @@ function ViewRouter() {
       return <TeamView />;
     case 'automations':
       return <AutomationsView />;
+    case 'suppliers':
+      return <SuppliersView />;
+    case 'estimates':
+      return <EstimatesView />;
     case 'settings':
       return <SettingsView />;
     case 'ai-assistant':
@@ -253,6 +262,9 @@ function CRMApp() {
           leadSources: defaultLeadSources,
           automations: [],
           teamMembers: [],
+          suppliers: [],
+          materialOrders: [],
+          estimates: [],
         },
       });
       return;
@@ -375,6 +387,9 @@ function CRMApp() {
           leadSources,
           automations,
           teamMembers,
+          suppliers: [],
+          materialOrders: [],
+          estimates: [],
         },
       });
 
@@ -391,6 +406,9 @@ function CRMApp() {
           leadSources: defaultLeadSources,
           automations: [],
           teamMembers: [],
+          suppliers: [],
+          materialOrders: [],
+          estimates: [],
         },
       });
     }

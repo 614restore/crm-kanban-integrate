@@ -195,9 +195,97 @@ export interface DbProfile {
   department?: string;
   phone?: string;
   avatar_url?: string;
+  work_email?: string;
   is_active: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export interface DbSupplier {
+  id: string;
+  company_id: string;
+  name: string;
+  contact_name?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  website?: string;
+  account_number?: string;
+  payment_terms?: string;
+  notes?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DbMaterialOrder {
+  id: string;
+  company_id: string;
+  supplier_id: string;
+  contact_id?: string;
+  job_id?: string;
+  order_number?: string;
+  order_date: string;
+  expected_delivery_date?: string;
+  actual_delivery_date?: string;
+  status: string;
+  subtotal: number;
+  tax: number;
+  shipping: number;
+  total: number;
+  notes?: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DbMaterialOrderItem {
+  id: string;
+  order_id: string;
+  description: string;
+  quantity: number;
+  unit: string;
+  unit_price: number;
+  total: number;
+}
+
+export interface DbEstimate {
+  id: string;
+  company_id: string;
+  contact_id: string;
+  job_id?: string;
+  estimate_number: string;
+  title: string;
+  description?: string;
+  status: string;
+  amount: number;
+  tax: number;
+  total: number;
+  valid_until?: string;
+  created_at: string;
+  sent_at?: string;
+  viewed_at?: string;
+  accepted_at?: string;
+  declined_at?: string;
+  signed_by?: string;
+  signature_data?: string;
+  terms?: string;
+  notes?: string;
+  created_by: string;
+  updated_at: string;
+}
+
+export interface DbEstimateItem {
+  id: string;
+  estimate_id: string;
+  description: string;
+  quantity: number;
+  unit: string;
+  unit_price: number;
+  total: number;
 }
 
 export interface DbInvite {
@@ -1171,6 +1259,223 @@ class DatabaseService {
 
   unsubscribe(channel: any) {
     supabase.removeChannel(channel);
+  }
+
+  // Supplier operations
+  async getSuppliers(companyId: string): Promise<DbSupplier[]> {
+    const { data, error } = await supabase
+      .from('suppliers')
+      .select('*')
+      .eq('company_id', companyId)
+      .eq('is_active', true)
+      .order('name', { ascending: true });
+    
+    if (error) {
+      console.error('Error fetching suppliers:', error);
+      return [];
+    }
+    return data || [];
+  }
+
+  async createSupplier(supplier: Partial<DbSupplier>): Promise<DbSupplier | null> {
+    const { data, error } = await supabase
+      .from('suppliers')
+      .insert(supplier)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error creating supplier:', error);
+      return null;
+    }
+    return data;
+  }
+
+  async updateSupplier(supplierId: string, updates: Partial<DbSupplier>): Promise<DbSupplier | null> {
+    const { data, error } = await supabase
+      .from('suppliers')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', supplierId)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error updating supplier:', error);
+      return null;
+    }
+    return data;
+  }
+
+  async deleteSupplier(supplierId: string): Promise<boolean> {
+    const { error } = await supabase
+      .from('suppliers')
+      .update({ is_active: false, updated_at: new Date().toISOString() })
+      .eq('id', supplierId);
+    
+    if (error) {
+      console.error('Error deleting supplier:', error);
+      return false;
+    }
+    return true;
+  }
+
+  // Material Order operations
+  async getMaterialOrders(companyId: string): Promise<DbMaterialOrder[]> {
+    const { data, error } = await supabase
+      .from('material_orders')
+      .select('*')
+      .eq('company_id', companyId)
+      .order('order_date', { ascending: false });
+    
+    if (error) {
+      console.error('Error fetching material orders:', error);
+      return [];
+    }
+    return data || [];
+  }
+
+  async createMaterialOrder(order: Partial<DbMaterialOrder>): Promise<DbMaterialOrder | null> {
+    const { data, error } = await supabase
+      .from('material_orders')
+      .insert(order)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error creating material order:', error);
+      return null;
+    }
+    return data;
+  }
+
+  async updateMaterialOrder(orderId: string, updates: Partial<DbMaterialOrder>): Promise<DbMaterialOrder | null> {
+    const { data, error } = await supabase
+      .from('material_orders')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', orderId)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error updating material order:', error);
+      return null;
+    }
+    return data;
+  }
+
+  async deleteMaterialOrder(orderId: string): Promise<boolean> {
+    const { error } = await supabase
+      .from('material_orders')
+      .delete()
+      .eq('id', orderId);
+    
+    if (error) {
+      console.error('Error deleting material order:', error);
+      return false;
+    }
+    return true;
+  }
+
+  // Estimate operations
+  async getEstimates(companyId: string): Promise<DbEstimate[]> {
+    const { data, error } = await supabase
+      .from('estimates')
+      .select('*')
+      .eq('company_id', companyId)
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('Error fetching estimates:', error);
+      return [];
+    }
+    return data || [];
+  }
+
+  async getEstimatesByContact(contactId: string): Promise<DbEstimate[]> {
+    const { data, error } = await supabase
+      .from('estimates')
+      .select('*')
+      .eq('contact_id', contactId)
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('Error fetching estimates:', error);
+      return [];
+    }
+    return data || [];
+  }
+
+  async createEstimate(estimate: Partial<DbEstimate>): Promise<DbEstimate | null> {
+    const { data, error } = await supabase
+      .from('estimates')
+      .insert(estimate)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error creating estimate:', error);
+      return null;
+    }
+    return data;
+  }
+
+  async updateEstimate(estimateId: string, updates: Partial<DbEstimate>): Promise<DbEstimate | null> {
+    const { data, error } = await supabase
+      .from('estimates')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', estimateId)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error updating estimate:', error);
+      return null;
+    }
+    return data;
+  }
+
+  async deleteEstimate(estimateId: string): Promise<boolean> {
+    const { error } = await supabase
+      .from('estimates')
+      .delete()
+      .eq('id', estimateId);
+    
+    if (error) {
+      console.error('Error deleting estimate:', error);
+      return false;
+    }
+    return true;
+  }
+
+  // Update estimate status with tracking
+  async markEstimateSent(estimateId: string): Promise<DbEstimate | null> {
+    return this.updateEstimate(estimateId, {
+      status: 'sent',
+      sent_at: new Date().toISOString(),
+    });
+  }
+
+  async markEstimateViewed(estimateId: string): Promise<DbEstimate | null> {
+    return this.updateEstimate(estimateId, {
+      status: 'viewed',
+      viewed_at: new Date().toISOString(),
+    });
+  }
+
+  async markEstimateAccepted(estimateId: string, signedBy: string, signatureData?: string): Promise<DbEstimate | null> {
+    return this.updateEstimate(estimateId, {
+      status: 'accepted',
+      accepted_at: new Date().toISOString(),
+      signed_by: signedBy,
+      signature_data: signatureData,
+    });
+  }
+
+  async markEstimateDeclined(estimateId: string): Promise<DbEstimate | null> {
+    return this.updateEstimate(estimateId, {
+      status: 'declined',
+      declined_at: new Date().toISOString(),
+    });
   }
 }
 
