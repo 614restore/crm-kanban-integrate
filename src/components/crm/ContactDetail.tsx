@@ -52,6 +52,7 @@ import {
   Building,
   Tag,
   Loader2,
+  Eye,
 } from 'lucide-react';
 
 type TabType = 'overview' | 'timeline' | 'documents' | 'financial' | 'jobs';
@@ -1298,16 +1299,16 @@ export default function ContactDetail() {
                     <button 
                       onClick={() => handleOpenDocument(doc.url, doc.name)} 
                       className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                      title="Download document"
+                      title="View document"
                     >
-                      <Download size={18} className="text-gray-500" />
+                      <Eye size={18} className="text-gray-500" />
                     </button>
                     <button 
                       onClick={() => handleOpenDocument(doc.url, doc.name)} 
                       className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                      title="Open in new tab"
+                      title="Download document"
                     >
-                      <ExternalLink size={18} className="text-gray-500" />
+                      <Download size={18} className="text-gray-500" />
                     </button>
                     <button 
                       onClick={() => handleDeleteDocument(doc.id)} 
