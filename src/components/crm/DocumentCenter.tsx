@@ -99,7 +99,7 @@ export default function DocumentCenter() {
     if (!file) return;
 
     if (!state.companyId) {
-      toast.error('No company selected');
+      toast.error('No company selected. Please refresh and sign in again.');
       return;
     }
 
@@ -109,13 +109,35 @@ export default function DocumentCenter() {
       return;
     }
 
+    console.log(`[DocumentCenter] Starting upload for file: ${file.name} (${formatFileSize(file.size)})`);
     setIsUploading(true);
+    
     try {
+      console.log(`[DocumentCenter] Uploading to company: ${state.companyId}`);
       const uploadResult = await uploadDocument(file, state.companyId);
+      
       if (uploadResult.error) {
+        console.error('[DocumentCenter] Upload failed:', uploadResult.error);
         toast.error(`Upload failed: ${uploadResult.error}`);
+        setIsUploading(false);
+        event.target.value = '';
         return;
       }
+
+      console.log(`[DocumentCenter] Upload successful, path: ${uploadResult.path}`);
+      
+      // Verify the file actually exists in the bucket
+      console.log('[DocumentCenter] Verifying file exists in bucket...');
+      const verifyUrl = await getDocumentSignedUrl(uploadResult.path, 60);
+      if (!verifyUrl) {
+        console.error('[DocumentCenter] CRITICAL: File upload succeeded but file is not in bucket!');
+        console.error('[DocumentCenter] This indicates the bucket might not exist or upload silently failed');
+        toast.error('Upload completed but file verification failed. Check if projectceo-documents bucket exists in Supabase.');
+        setIsUploading(false);
+        event.target.value = '';
+        return;
+      }
+      console.log('[DocumentCenter] ✓ File verified in bucket');
 
       const category = inferCategory(file);
       const created = await db.createDocument({
@@ -128,7 +150,10 @@ export default function DocumentCenter() {
       });
 
       if (!created) {
+        console.error('[DocumentCenter] Failed to save document record');
         toast.error('File uploaded but failed to save document record');
+        setIsUploading(false);
+        event.target.value = '';
         return;
       }
 
@@ -137,6 +162,8 @@ export default function DocumentCenter() {
             ? created.url
             : (await getDocumentSignedUrl(created.url)) || undefined)
         : undefined;
+
+      console.log(`[DocumentCenter] Document saved with ID: ${created.id}`);
 
       setUploadedDocuments((prev) => [
         {
@@ -152,10 +179,10 @@ export default function DocumentCenter() {
         ...prev,
       ]);
 
-      toast.success('File uploaded');
+      toast.success(`${file.name} uploaded successfully!`);
     } catch (error) {
-      console.error('Document upload error:', error);
-      toast.error('Failed to upload file');
+      console.error('[DocumentCenter] Document upload error:', error);
+      toast.error('Failed to upload file: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setIsUploading(false);
       event.target.value = '';
@@ -246,31 +273,46 @@ export default function DocumentCenter() {
   const resolveDocumentUrl = async (url?: string): Promise<string | null> => {
     if (!url) return null;
     if (isHttpUrl(url) && !url.includes('/projectceo-documents/')) return url;
-    return getDocumentSignedUrl(url);
+    
+    console.log(`[DocumentCenter] Resolving document URL for path: ${url}`);
+    const signedUrl = await getDocumentSignedUrl(url);
+    
+    if (!signedUrl) {
+      console.error('[DocumentCenter] Failed to create signed URL');
+    } else {
+      console.log('[DocumentCenter] Signed URL created successfully');
+    }
+    
+    return signedUrl;
   };
 
   const handleOpenDocument = async (url?: string) => {
+    console.log('[DocumentCenter] Opening document...');
+    console.log('[DocumentCenter] Stored URL/path:', url);
     const resolved = await resolveDocumentUrl(url);
     if (!resolved) {
-      toast.error('Unable to open document');
+      console.error('[DocumentCenter] Failed to resolve document URL');
+      console.error('[DocumentCenter] Check browser console for detailed [Storage] logs above');
+      toast.error('Unable to open document. Check console for details or verify Supabase bucket setup.');
       return;
     }
+    console.log('[DocumentCenter] Opening document in new window');
     window.open(resolved, '_blank', 'noopener,noreferrer');
   };
 
   const handleCopyDocumentLink = async (url?: string) => {
     const resolved = await resolveDocumentUrl(url);
     if (!resolved) {
-      toast.error('Unable to copy link');
+      toast.error('Unable to copy link. The file may not exist or you may not have permission.');
       return;
     }
 
     try {
       await navigator.clipboard.writeText(resolved);
-      toast.success('Document link copied');
+      toast.success('Document link copied to clipboard');
     } catch (error) {
-      console.error('Failed to copy document link:', error);
-      toast.error('Unable to copy link');
+      console.error('[DocumentCenter] Failed to copy document link:', error);
+      toast.error('Unable to copy link to clipboard');
     }
   };
 

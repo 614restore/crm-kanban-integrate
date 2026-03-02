@@ -202,15 +202,13 @@ export default function Sidebar() {
                 <p className="text-xs text-slate-400 capitalize">{profile.role || 'User'}</p>
               </div>
             )}
-            {!sidebarCollapsed && (
-              <button
-                onClick={handleSignOut}
-                className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
-                title="Sign out"
-              >
-                <LogOut size={16} />
-              </button>
-            )}
+            <button
+              onClick={handleSignOut}
+              className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors flex-shrink-0"
+              title="Sign out"
+            >
+              <LogOut size={16} />
+            </button>
           </div>
         ) : currentUser ? (
           <div className={`flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'}`}>

@@ -22,7 +22,7 @@ export async function ensureUserHasCompany(userId: string, userEmail: string): P
 
     // If user already has a company, we're done
     if (profile?.company_id) {
-      console.log('User already has a company');
+      console.log('User already has a company:', profile.company_id);
       return true;
     }
 
@@ -50,21 +50,51 @@ export async function ensureUserHasCompany(userId: string, userEmail: string): P
       return false;
     }
 
-    console.log('Company created:', newCompany.id);
+    console.log('Company created with ID:', newCompany.id);
 
-    // Link the company to the user profile
-    const { error: updateError } = await supabase
-      .from('profiles')
-      .update({ company_id: newCompany.id })
-      .eq('id', userId);
+    // Link the company to the user profile with retry logic
+    let updateAttempts = 0;
+    let updateSuccess = false;
+    
+    while (updateAttempts < 3 && !updateSuccess) {
+      updateAttempts++;
+      console.log(`Attempting to link company to profile (attempt ${updateAttempts}/3)...`);
+      
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ company_id: newCompany.id })
+        .eq('id', userId);
 
-    if (updateError) {
-      console.error('Error linking company to profile:', updateError);
+      if (!updateError) {
+        updateSuccess = true;
+        console.log('✅ Company linked to profile successfully');
+      } else {
+        console.error(`Error linking company to profile (attempt ${updateAttempts}):`, updateError);
+        if (updateAttempts < 3) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+    }
+
+    if (!updateSuccess) {
+      console.error('❌ Failed to link company to profile after all attempts');
       return false;
     }
 
-    console.log('✅ Company setup complete!');
-    return true;
+    // Verify the update
+    const { data: verifyProfile } = await supabase
+      .from('profiles')
+      .select('company_id')
+      .eq('id', userId)
+      .single();
+
+    if (verifyProfile?.company_id === newCompany.id) {
+      console.log('✅ Company setup complete and verified!');
+      return true;
+    } else {
+      console.error('❌ Company update verification failed');
+      return false;
+    }
   } catch (error) {
     console.error('Error in ensureUserHasCompany:', error);
     return false;
