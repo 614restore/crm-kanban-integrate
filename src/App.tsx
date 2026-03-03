@@ -5,7 +5,10 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/components/theme-provider";
+import { useServiceWorker } from "@/lib/serviceWorker";
+import { useEffect } from "react";
 import Index from "./pages/Index";
+import Photos from "./pages/Photos";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -13,15 +16,61 @@ const queryClient = new QueryClient();
 // Get base path from environment (set by Vite)
 const basename = import.meta.env.BASE_URL || "/";
 
+// PWA Update notification component
+const PWAUpdateNotification = () => {
+  const { updateAvailable, activateUpdate, isOffline } = useServiceWorker();
+
+  useEffect(() => {
+    if (updateAvailable) {
+      console.log('🔄 PWA update available');
+    }
+  }, [updateAvailable]);
+
+  if (updateAvailable) {
+    return (
+      <div className="fixed top-0 left-0 right-0 bg-blue-600 text-white p-3 z-50 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium">
+            App update available!
+          </span>
+          <span className="text-xs opacity-90">
+            New features and improvements ready
+          </span>
+        </div>
+        <button
+          onClick={activateUpdate}
+          className="bg-white text-blue-600 px-3 py-1 rounded text-sm font-medium hover:bg-blue-50 transition-colors"
+        >
+          Update Now
+        </button>
+      </div>
+    );
+  }
+
+  if (isOffline) {
+    return (
+      <div className="fixed top-0 left-0 right-0 bg-orange-600 text-white p-2 z-50 text-center">
+        <span className="text-sm">
+          📱 Offline mode - Changes will sync when reconnected
+        </span>
+      </div>
+    );
+  }
+
+  return null;
+};
+
 const App = () => (
   <ThemeProvider defaultTheme="light">
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
+        <PWAUpdateNotification />
         <Toaster />
         <Sonner />
         <BrowserRouter basename={basename}>
           <Routes>
             <Route path="/" element={<Index />} />
+            <Route path="/photos" element={<Photos />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

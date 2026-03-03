@@ -4,6 +4,7 @@ export type CustomerStatus =
   | 'prospect' 
   | 'lead' 
   | 'appt_set' 
+  | 'inspection_completed'
   | 'estimate_sent' 
   | 'contingency' 
   | 'retail' 
@@ -59,6 +60,12 @@ export interface Contact {
   retailNotes?: string;
   // Jobs
   jobs?: Job[];
+  // Inspection Info
+  inspectionScheduled?: boolean;
+  inspectionDate?: string;
+  inspectionCompleted?: boolean;
+  inspectionCompletedDate?: string;
+  inspectionNotes?: string;
   // Communication
   communications?: Communication[];
   // Documents
@@ -437,9 +444,10 @@ export const defaultBoards: KanbanBoard[] = [
     columns: [
       { id: 'col-1', title: 'Lead', status: 'lead', color: '#6366f1', order: 0 },
       { id: 'col-2', title: 'Appt Set', status: 'appt_set', color: '#8b5cf6', order: 1 },
-      { id: 'col-3', title: 'Estimate Sent', status: 'estimate_sent', color: '#a855f7', order: 2 },
-      { id: 'col-4', title: 'Signed Customer', status: 'signed', color: '#22c55e', order: 3 },
-      { id: 'col-5', title: 'Lost', status: 'lost', color: '#ef4444', order: 4 },
+      { id: 'col-2b', title: 'Inspection Completed', status: 'inspection_completed', color: '#06b6d4', order: 2 },
+      { id: 'col-3', title: 'Estimate Sent', status: 'estimate_sent', color: '#a855f7', order: 3 },
+      { id: 'col-4', title: 'Signed Customer', status: 'signed', color: '#22c55e', order: 4 },
+      { id: 'col-5', title: 'Lost', status: 'lost', color: '#ef4444', order: 5 },
     ],
   },
   {
@@ -1352,6 +1360,7 @@ export const statusLabels: Record<CustomerStatus, string> = {
   prospect: 'Prospect',
   lead: 'Lead',
   appt_set: 'Appointment Set',
+  inspection_completed: 'Inspection Completed',
   estimate_sent: 'Estimate Sent',
   contingency: 'Contingency',
   retail: 'Retail Customer',
@@ -1369,6 +1378,7 @@ export const statusColors: Record<CustomerStatus, string> = {
   prospect: 'bg-gray-100 text-gray-800',
   lead: 'bg-blue-100 text-blue-800',
   appt_set: 'bg-purple-100 text-purple-800',
+  inspection_completed: 'bg-cyan-100 text-cyan-800',
   estimate_sent: 'bg-indigo-100 text-indigo-800',
   contingency: 'bg-yellow-100 text-yellow-800',
   retail: 'bg-teal-100 text-teal-800',

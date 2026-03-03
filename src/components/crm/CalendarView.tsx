@@ -243,6 +243,53 @@ export default function CalendarView() {
     toast.success('Appointment updated');
   };
 
+  const handleCompleteInspection = async (appointment: Appointment) => {
+    if (appointment.type !== 'inspection' || appointment.status === 'completed') return;
+    
+    const notes = window.prompt('Add completion notes (optional):', '') || '';
+    
+    // Update appointment to completed
+    const updatedAppointment: Appointment = {
+      ...appointment,
+      status: 'completed',
+      notes: appointment.notes ? `${appointment.notes}\n\nCompleted: ${notes}` : `Completed: ${notes}`,
+    };
+    
+    dispatch({ type: 'UPDATE_APPOINTMENT', payload: updatedAppointment });
+    
+    // The automation in crmStore.ts will automatically move the customer status
+    toast.success('Inspection marked as complete! Customer moved to "Inspection Completed" stage.');
+  };
+
+  const handleScheduleFollowup = async (appointment: Appointment) => {
+    const contact = state.contacts.find(c => c.id === appointment.contactId);
+    if (!contact) return;
+    
+    const followupDate = new Date();
+    followupDate.setDate(followupDate.getDate() + 3); // Default to 3 days later
+    
+    const dateStr = followupDate.toISOString().split('T')[0];
+    const title = `Follow-up: ${appointment.title}`;
+    
+    const newAppointment: Appointment = {
+      id: `apt-${Date.now()}`,
+      contactId: appointment.contactId,
+      contactName: appointment.contactName,
+      title,
+      type: 'follow_up',
+      date: dateStr,
+      time: '09:00',
+      duration: 30,
+      assignedTo: appointment.assignedTo,
+      location: appointment.location,
+      notes: `Follow-up for ${appointment.title}`,
+      status: 'scheduled',
+    };
+    
+    dispatch({ type: 'ADD_APPOINTMENT', payload: newAppointment });
+    toast.success('Follow-up appointment scheduled');
+  };
+
   const handleDeleteAppointment = async (appointment: Appointment) => {
     const confirmed = window.confirm(`Delete appointment "${appointment.title}"?`);
     if (!confirmed) return;
@@ -416,6 +463,16 @@ export default function CalendarView() {
                                 >
                                   {appointmentTypeLabels[apt.type]}
                                 </span>
+                                {apt.status === 'completed' && (
+                                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-200">
+                                    ✓ Completed
+                                  </span>
+                                )}
+                                {apt.status === 'cancelled' && (
+                                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 border border-red-200">
+                                    ✗ Cancelled
+                                  </span>
+                                )}
                               </div>
                               <p className="text-gray-600">{apt.contactName}</p>
                               <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
@@ -440,6 +497,24 @@ export default function CalendarView() {
                               />
                             )}
                             <div className="flex items-center gap-1">
+                              {apt.type === 'inspection' && apt.status === 'scheduled' && (
+                                <button
+                                  onClick={() => handleCompleteInspection(apt)}
+                                  className="p-2 hover:bg-green-100 rounded-lg transition-colors"
+                                  title="Mark inspection complete"
+                                >
+                                  <CheckCircle size={16} className="text-green-600" />
+                                </button>
+                              )}
+                              {apt.status === 'completed' && (
+                                <button
+                                  onClick={() => handleScheduleFollowup(apt)}
+                                  className="p-2 hover:bg-blue-100 rounded-lg transition-colors"
+                                  title="Schedule follow-up"
+                                >
+                                  <Calendar size={16} className="text-blue-600" />
+                                </button>
+                              )}
                               <button
                                 onClick={() => handleEditAppointment(apt)}
                                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors"

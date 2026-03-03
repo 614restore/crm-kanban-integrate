@@ -1,0 +1,18 @@
+CRM Performance Test Report
+Generated: Mon Mar  2 23:56:38 EST 2026
+==========================
+
+Bundle Size: 1.24MB
+JavaScript Bundle: 1.16MB
+CSS Bundle: .08MB
+Code Chunks:        1
+Build Time: 2.43s
+
+Mobile Performance:
+3G Load Time: 6.7s
+4G Load Time: 1.0s
+
+Competitive Analysis:
+Better than Roofr (2.2MB): YES
+Better than JobNimbus (2.8MB): YES
+Better than AccuLynx (3.1MB): YES

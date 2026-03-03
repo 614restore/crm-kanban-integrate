@@ -39,6 +39,11 @@ import EstimatesView from './crm/EstimatesView';
 import ProjectsView from './crm/ProjectsView';
 import WorkOrdersView from './crm/WorkOrdersView';
 import MaterialOrdersView from './crm/MaterialOrdersView';
+import ExpenseTracker from './crm/ExpenseTracker';
+import DocumentTemplates from './crm/DocumentTemplates';
+import ReportsAnalytics from './crm/ReportsAnalytics';
+import ResponsiveLayout from './mobile/ResponsiveLayout';
+import { useIsMobile } from '@/hooks/useMediaQuery';
 import { Building2, Loader2 } from 'lucide-react';
 
 // Initial CRM state (completely empty)
@@ -112,6 +117,12 @@ function ViewRouter() {
       return <WorkOrdersView />;
     case 'material-orders':
       return <MaterialOrdersView />;
+    case 'expenses':
+      return <ExpenseTracker />;
+    case 'document-templates':
+      return <DocumentTemplates />;
+    case 'reports':
+      return <ReportsAnalytics />;
     case 'settings':
       return <SettingsView />;
     case 'ai-assistant':
@@ -574,17 +585,23 @@ function CRMApp() {
 
   return (
     <CRMContext.Provider value={{ state, dispatch }}>
-      <div className="flex h-screen bg-gray-50 overflow-hidden">
-        <Sidebar />
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <TopBar />
+      <ResponsiveLayout>
+        <div className="flex flex-col h-full">
+          {/* Top bar only on desktop */}
+          <div className="hidden md:block">
+            <TopBar />
+          </div>
+          
+          {/* Main content area */}
           <main className="flex-1 overflow-auto">
             <ViewRouter />
           </main>
         </div>
+        
+        {/* Modals */}
         <QuickAddModal />
         <InvoiceModal />
-      </div>
+      </ResponsiveLayout>
     </CRMContext.Provider>
   );
 }

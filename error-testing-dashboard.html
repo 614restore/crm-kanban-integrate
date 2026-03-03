@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRM Error Handling Test Results</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
+        }
+
+        .card h3 {
+            color: #4a5568;
+            margin-bottom: 15px;
+            Font-size: 1.4rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .status-ready {
+            background: #c6f6d5;
+            color: #2f855a;
+        }
+
+        .status-not-ready {
+            background: #fed7d7;
+            color: #c53030;
+        }
+
+        .status-warning {
+            background: #faf089;
+            color: #d69e2e;
+        }
+
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .metric:last-child {
+            border-bottom: none;
+        }
+
+        .metric-value {
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+
+        .critical { color: #e53e3e; }
+        .error { color: #d69e2e; }
+        .warning { color: #ed8936; }
+        .success { color: #38a169; }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e2e8f0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #38a169, #48bb78);
+            transition: width 0.5s ease;
+        }
+
+        .test-categories {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .category-card {
+            background: #f7fafc;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #4299e1;
+        }
+
+        .category-card.critical {
+            border-left-color: #e53e3e;
+        }
+
+        .category-card.completed {
+            border-left-color: #38a169;
+        }
+
+        .issue-list {
+            max-height: 400px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            border-radius: 6px;
+            padding: 15px;
+        }
+
+        .issue {
+            background: white;
+            margin-bottom: 10px;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid #e2e8f0;
+        }
+
+        .issue.critical {
+            border-left-color: #e53e3e;
+            background: #fef5f5;
+        }
+
+        .issue.error {
+            border-left-color: #d69e2e;
+            background: #fffbf5;
+        }
+
+        .issue.warning {
+            border-left-color: #ed8936;
+            background: #fffaf0;
+        }
+
+        .issue-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .issue-description {
+            color: #666;
+            font-size: 0.9rem;
+            margin-bottom: 8px;
+        }
+
+        .issue-impact {
+            font-size: 0.8rem;
+            color: #8a2be2;
+            font-style: italic;
+        }
+
+        .recommendations {
+            background: white;
+            border-radius: 8px;
+            padding: 25px;
+            margin-top: 20px;
+        }
+
+        .recommendation {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+        }
+
+        .recommendation.priority-1 {
+            border-color: #e53e3e;
+            background: #fef5f5;
+        }
+
+        .recommendation.priority-2 {
+            border-color: #d69e2e;
+            background: #fffbf5;
+        }
+
+        .rec-title {
+            font-weight: bold;
+            color: #2d3748;
+            margin-bottom: 8px;
+        }
+
+        .rec-tasks {
+            margin-top: 10px;
+        }
+
+        .rec-tasks ul {
+            padding-left: 20px;
+        }
+
+        .rec-tasks li {
+            margin-bottom: 5px;
+        }
+
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.3s ease;
+        }
+
+        .btn-primary {
+            background: #4299e1;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #3182ce;
+        }
+
+        .btn-success {
+            background: #38a169;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #2f855a;
+        }
+
+        .btn-warning {
+            background: #d69e2e;
+            color: white;
+        }
+
+        .btn-warning:hover {
+            background: #b7791f;
+        }
+
+        .loading {
+            text-align: center;
+            color: white;
+            font-size: 1.2rem;
+        }
+
+        .timestamp {
+            color: #666;
+            font-size: 0.9rem;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+            
+            .container {
+                padding: 10px;
+            }
+            
+            .header h1 {
+                font-size: 1.8rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 CRM Error Handling Test Results</h1>
+            <p>Comprehensive Error Testing & Production Readiness Assessment</p>
+        </div>
+
+        <div class="controls">
+            <button class="btn btn-primary" onclick="runTests()">🧪 Run Full Test Suite</button>
+            <button class="btn btn-success" onclick="runQuickTest()">⚡ Quick Test</button>
+            <button class="btn btn-warning" onclick="exportResults()">📊 Export Results</button>
+            <div id="test-status" style="margin-left: auto; font-weight: bold;"></div>
+        </div>
+
+        <div id="loading" class="loading" style="display: none;">
+            🔄 Running comprehensive error handling tests...<br>
+            <small>This may take a few minutes to complete all scenarios</small>
+        </div>
+
+        <div id="results-dashboard" style="display: none;">
+            <div class="dashboard">
+                <div class="card">
+                    <h3>
+                        🎯 Production Readiness
+                        <span id="readiness-badge" class="status-badge">Unknown</span>
+                    </h3>
+                    <div class="metric">
+                        <span>Overall Status</span>
+                        <span id="overall-status" class="metric-value">Analyzing...</span>
+                    </div>
+                    <div class="metric">
+                        <span>Critical Issues</span>
+                        <span id="critical-count" class="metric-value critical">0</span>
+                    </div>
+                    <div class="metric">
+                        <span>Standard Errors</span>
+                        <span id="error-count" class="metric-value error">0</span>
+                    </div>
+                    <div class="metric">
+                        <span>Warnings</span>
+                        <span id="warning-count" class="metric-value warning">0</span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>📊 Test Statistics</h3>
+                    <div class="metric">
+                        <span>Total Tests</span>
+                        <span id="total-tests" class="metric-value">0</span>
+                    </div>
+                    <div class="metric">
+                        <span>Tests Passed</span>
+                        <span id="passed-tests" class="metric-value success">0</span>
+                    </div>
+                    <div class="metric">
+                        <span>Tests Failed</span>
+                        <span id="failed-tests" class="metric-value critical">0</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div id="success-progress" class="progress-fill" style="width: 0%"></div>
+                    </div>
+                    <div style="text-align: center; margin-top: 5px; font-size: 0.9rem; color: #666">
+                        Success Rate: <span id="success-rate">0%</span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>⚡ Performance</h3>
+                    <div class="metric">
+                        <span>Test Duration</span>
+                        <span id="test-duration" class="metric-value">0s</span>
+                    </div>
+                    <div class="metric">
+                        <span>Categories Tested</span>
+                        <span id="categories-tested" class="metric-value">0</span>
+                    </div>
+                    <div class="metric">
+                        <span>Contractor Scenarios</span>
+                        <span id="contractor-scenarios" class="metric-value">0</span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>🏗️ Contractor Specific</h3>
+                    <div class="metric">
+                        <span>Storm Response Ready</span>
+                        <span id="storm-ready" class="metric-value">Unknown</span>
+                    </div>
+                    <div class="metric">
+                        <span>Field Crew Support</span>
+                        <span id="field-ready" class="metric-value">Unknown</span>
+                    </div>
+                    <div class="metric">
+                        <span>Network Resilience</span>
+                        <span id="network-resilience" class="metric-value">Unknown</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="test-categories" id="test-categories">
+                <!-- Test categories will be populated here -->
+            </div>
+
+            <div class="card">
+                <h3>🚨 Critical Issues</h3>
+                <div id="critical-issues" class="issue-list">
+                    <div style="text-align: center; color: #666; padding: 20px;">
+                        No critical issues to display. Run tests to see results.
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>⚠️ Standard Errors</h3>
+                <div id="standard-errors" class="issue-list">
+                    <div style="text-align: center; color: #666; padding: 20px;">
+                        No standard errors to display. Run tests to see results.
+                    </div>
+                </div>
+            </div>
+
+            <div class="recommendations">
+                <h3 style="margin-bottom: 20px;">🛠️ Remediation Recommendations</h3>
+                <div id="recommendations-list">
+                    <div style="text-align: center; color: #666; padding: 20px;">
+                        Recommendations will appear after test completion.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="timestamp" id="timestamp"></div>
+    </div>
+
+    <script>
+        let testResults = null;
+        let testInProgress = false;
+
+        // Load all test scripts
+        function loadTestScripts() {
+            const scripts = [
+                './comprehensive-error-testing.js',
+                './auth-edge-case-testing.js',
+                './business-logic-testing.js',
+                './resilience-testing.js',
+                './error-test-orchestrator.js'
+            ];
+
+            return Promise.all(scripts.map(src => {
+                return new Promise((resolve, reject) => {
+                    const script = document.createElement('script');
+                    script.src = src;
+                    script.onload = resolve;
+                    script.onerror = () => {
+                        console.warn(`Could not load ${src}, continuing...`);
+                        resolve(); // Continue even if script fails to load
+                    };
+                    document.head.appendChild(script);
+                });
+            }));
+        }
+
+        async function runTests() {
+            if (testInProgress) return;
+            
+            testInProgress = true;
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('results-dashboard').style.display = 'none';
+            document.getElementById('test-status').textContent = 'Running...';
+
+            try {
+                // Load test scripts
+                await loadTestScripts();
+                
+                // Wait a moment for scripts to initialize
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+                // Run comprehensive tests
+                if (typeof window.runComprehensiveErrorTesting === 'function') {
+                    await window.runComprehensiveErrorTesting();
+                    
+                    // Get results
+                    testResults = window.errorTestResults;
+                    if (testResults) {
+                        displayResults();
+                    } else {
+                        throw new Error('No test results available');
+                    }
+                } else {
+                    throw new Error('Test orchestrator not available');
+                }
+
+            } catch (error) {
+                console.error('Test execution failed:', error);
+                showError('Test execution failed: ' + error.message);
+            } finally {
+                testInProgress = false;
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('test-status').textContent = 'Complete';
+            }
+        }
+
+        async function runQuickTest() {
+            // Simulate quick test with mock data
+            if (testInProgress) return;
+            
+            testInProgress = true;
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('results-dashboard').style.display = 'none';
+            document.getElementById('test-status').textContent = 'Quick Test...';
+
+            // Create mock results for demo
+            await new Promise(resolve => setTimeout(resolve, 2000));
+
+            testResults = {
+                totalTests: 56,
+                passedTests: 48,
+                failedTests: 8,
+                criticalIssues: 2,
+                startTime: new Date(Date.now() - 120000),
+                endTime: new Date(),
+                categories: {
+                    'Network Failures': { duration: 15000, critical: true, completed: true },
+                    'Data Validation': { duration: 8000, critical: true, completed: true },
+                    'Authentication': { duration: 12000, critical: true, completed: true },
+                    'Business Logic': { duration: 18000, critical: true, completed: true },
+                    'User Input': { duration: 6000, critical: false, completed: true },
+                    'Resilience': { duration: 22000, critical: true, completed: true }
+                },
+                errorTracker: {
+                    getCriticalReport: () => ({
+                        critical: [
+                            {
+                                category: 'network',
+                                description: 'Connection timeout during critical workflow',
+                                userImpact: 'Field crews cannot update job status',
+                                reproduction: 'Simulate poor network and update project'
+                            },
+                            {
+                                category: 'validation',
+                                description: 'Invalid email format accepted',
+                                userImpact: 'Email notifications may fail',
+                                reproduction: 'Enter malformed email address'
+                            }
+                        ],
+                        errors: [
+                            {
+                                category: 'auth',
+                                description: 'Session not refreshed properly',
+                                userImpact: 'Users logged out unexpectedly'
+                            },
+                            {
+                                category: 'business-logic',
+                                description: 'Estimate calculation rounding error',
+                                userImpact: 'Minor billing discrepancies'
+                            }
+                        ],
+                        warnings: []
+                    })
+                },
+                recommendations: [
+                    {
+                        priority: 1,
+                        title: 'Fix Critical Network Issues',
+                        description: 'Essential for field operations',
+                        tasks: ['- Add offline capabilities', '- Implement retry logic'],
+                        timeframe: 'Immediate',
+                        effort: 'High'
+                    }
+                ]
+            };
+
+            displayResults();
+            
+            testInProgress = false;
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('test-status').textContent = 'Complete (Demo)';
+        }
+
+        function displayResults() {
+            if (!testResults) return;
+
+            document.getElementById('results-dashboard').style.display = 'block';
+
+            const report = testResults.errorTracker.getCriticalReport();
+            const duration = Math.round((testResults.endTime - testResults.startTime) / 1000);
+            const successRate = Math.round((testResults.passedTests / testResults.totalTests) * 100);
+
+            // Update summary metrics
+            document.getElementById('critical-count').textContent = testResults.criticalIssues;
+            document.getElementById('error-count').textContent = report.errors.length;
+            document.getElementById('warning-count').textContent = report.warnings?.length || 0;
+
+            // Update production readiness
+            const isReady = testResults.criticalIssues === 0;
+            const readinessBadge = document.getElementById('readiness-badge');
+            const overallStatus = document.getElementById('overall-status');
+            
+            if (isReady) {
+                readinessBadge.className = 'status-badge status-ready';
+                readinessBadge.textContent = 'READY';
+                overallStatus.textContent = '✅ Production Ready';
+                overallStatus.className = 'metric-value success';
+            } else {
+                readinessBadge.className = 'status-badge status-not-ready';
+                readinessBadge.textContent = 'NOT READY';
+                overallStatus.textContent = '❌ Needs Work';
+                overallStatus.className = 'metric-value critical';
+            }
+
+            // Update test statistics
+            document.getElementById('total-tests').textContent = testResults.totalTests;
+            document.getElementById('passed-tests').textContent = testResults.passedTests;
+            document.getElementById('failed-tests').textContent = testResults.failedTests;
+            document.getElementById('success-rate').textContent = successRate + '%';
+            document.getElementById('success-progress').style.width = successRate + '%';
+
+            // Update performance metrics
+            document.getElementById('test-duration').textContent = duration + 's';
+            document.getElementById('categories-tested').textContent = Object.keys(testResults.categories).length;
+            document.getElementById('contractor-scenarios').textContent = '10'; // Known number
+
+            // Update contractor-specific metrics
+            const networkErrors = report.errors.filter(e => e.category === 'network').length;
+            const authErrors = report.errors.filter(e => e.category === 'auth').length;
+            
+            document.getElementById('storm-ready').textContent = networkErrors < 2 ? '✅ Ready' : '❌ Issues';
+            document.getElementById('field-ready').textContent = networkErrors < 3 ? '✅ Ready' : '❌ Issues';
+            document.getElementById('network-resilience').textContent = networkErrors === 0 ? '✅ Excellent' : networkErrors < 2 ? '⚠️ Good' : '❌ Poor';
+
+            // Update test categories
+            displayTestCategories();
+
+            // Display issues
+            displayIssues('critical-issues', report.critical);
+            displayIssues('standard-errors', report.errors);
+
+            // Display recommendations
+            displayRecommendations();
+
+            // Update timestamp
+            document.getElementById('timestamp').textContent = `Last updated: ${new Date().toLocaleString()}`;
+        }
+
+        function displayTestCategories() {
+            const container = document.getElementById('test-categories');
+            container.innerHTML = '';
+
+            for (const [category, result] of Object.entries(testResults.categories)) {
+                const card = document.createElement('div');
+                card.className = `category-card ${result.critical ? 'critical' : ''} ${result.completed ? 'completed' : ''}`;
+                
+                const duration = Math.round(result.duration);
+                const status = result.completed ? '✅' : '❌';
+                
+                card.innerHTML = `
+                    <h4>${status} ${category}</h4>
+                    <div style="font-size: 0.9rem; color: #666; margin-top: 5px;">
+                        Duration: ${duration}ms | Critical: ${result.critical ? 'Yes' : 'No'}
+                        ${result.error ? `<br><span style="color: #e53e3e;">Error: ${result.error}</span>` : ''}
+                    </div>
+                `;
+                
+                container.appendChild(card);
+            }
+        }
+
+        function displayIssues(containerId, issues) {
+            const container = document.getElementById(containerId);
+            
+            if (!issues || issues.length === 0) {
+                container.innerHTML = '<div style="text-align: center; color: #666; padding: 20px;">No issues found! ✅</div>';
+                return;
+            }
+
+            container.innerHTML = issues.map((issue, index) => `
+                <div class="issue ${issue.severity || 'error'}">
+                    <div class="issue-title">${index + 1}. [${issue.category?.toUpperCase()}] ${issue.description}</div>
+                    <div class="issue-description">Impact: ${issue.userImpact}</div>
+                    ${issue.reproduction ? `<div class="issue-impact">Reproduce: ${issue.reproduction}</div>` : ''}
+                </div>
+            `).join('');
+        }
+
+        function displayRecommendations() {
+            const container = document.getElementById('recommendations-list');
+            
+            if (!testResults.recommendations || testResults.recommendations.length === 0) {
+                container.innerHTML = '<div style="text-align: center; color: #666; padding: 20px;">No specific recommendations at this time. ✅</div>';
+                return;
+            }
+
+            container.innerHTML = testResults.recommendations.map(rec => `
+                <div class="recommendation priority-${rec.priority}">
+                    <div class="rec-title">Priority ${rec.priority}: ${rec.title}</div>
+                    <div>${rec.description}</div>
+                    <div style="margin-top: 10px; display: flex; gap: 20px; font-size: 0.9rem; color: #666;">
+                        <span><strong>Effort:</strong> ${rec.effort}</span>
+                        <span><strong>Timeframe:</strong> ${rec.timeframe}</span>
+                    </div>
+                    <div class="rec-tasks">
+                        <strong>Tasks:</strong>
+                        <ul>
+                            ${rec.tasks.map(task => `<li>${task}</li>`).join('')}
+                        </ul>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function showError(message) {
+            document.getElementById('results-dashboard').style.display = 'block';
+            document.getElementById('overall-status').textContent = '❌ Test Failed';
+            document.getElementById('overall-status').className = 'metric-value critical';
+            
+            const readinessBadge = document.getElementById('readiness-badge');
+            readinessBadge.className = 'status-badge status-not-ready';
+            readinessBadge.textContent = 'ERROR';
+
+            document.getElementById('critical-issues').innerHTML = `
+                <div class="issue critical">
+                    <div class="issue-title">Test Execution Error</div>
+                    <div class="issue-description">${message}</div>
+                </div>
+            `;
+        }
+
+        function exportResults() {
+            if (!testResults) {
+                alert('No test results to export. Please run tests first.');
+                return;
+            }
+
+            const exportData = {
+                summary: {
+                    timestamp: new Date().toISOString(),
+                    totalTests: testResults.totalTests,
+                    passedTests: testResults.passedTests,
+                    failedTests: testResults.failedTests,
+                    criticalIssues: testResults.criticalIssues,
+                    duration: testResults.endTime - testResults.startTime,
+                    productionReady: testResults.criticalIssues === 0
+                },
+                categories: testResults.categories,
+                issues: testResults.errorTracker.getCriticalReport(),
+                recommendations: testResults.recommendations
+            };
+
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `crm-error-test-results-${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // Auto-load test results if available
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                if (window.errorTestResults) {
+                    testResults = window.errorTestResults;
+                    displayResults();
+                }
+            }, 1000);
+        });
+
+        // Update page title based on results
+        function updatePageTitle() {
+            if (testResults) {
+                const status = testResults.criticalIssues === 0 ? 'READY' : 'NOT READY';
+                document.title = `CRM Error Tests - ${status} (${testResults.criticalIssues} critical)`;
+            }
+        }
+
+        // Refresh results every 30 seconds if tests are running
+        setInterval(() => {
+            if (testInProgress && window.errorTestResults) {
+                testResults = window.errorTestResults;
+                displayResults();
+                updatePageTitle();
+            }
+        }, 30000);
+    </script>
+</body>
+</html>

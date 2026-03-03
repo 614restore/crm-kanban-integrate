@@ -146,6 +146,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
+      // Demo mode authentication
+      const isDemoMode = import.meta.env.VITE_DEMO_MODE === 'true';
+      if (isDemoMode && email === 'demo@example.com' && password === 'password') {
+        // Create mock session for demo mode
+        const mockUser = {
+          id: 'demo-user-id',
+          email: 'demo@example.com',
+          app_metadata: {},
+          user_metadata: {},
+          aud: 'authenticated',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        
+        const mockSession = {
+          access_token: 'demo-access-token',
+          token_type: 'bearer',
+          expires_in: 3600,
+          expires_at: Math.floor(Date.now() / 1000) + 3600,
+          refresh_token: 'demo-refresh-token',
+          user: mockUser,
+        };
+
+        setSession(mockSession as any);
+        setUser(mockUser as any);
+        
+        // Create demo profile
+        const demoProfile = {
+          id: 'demo-user-id',
+          email: 'demo@example.com',
+          first_name: 'Demo',
+          last_name: 'User',
+          role: 'admin',
+          company_id: 'demo-company',
+          is_active: true,
+        };
+        setProfile(demoProfile as any);
+        
+        return { error: null };
+      }
+
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,

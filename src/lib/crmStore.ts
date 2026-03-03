@@ -277,11 +277,35 @@ export function crmReducer(state: CRMState, action: CRMAction): CRMState {
       return { ...state, appointments: [...state.appointments, action.payload] };
     
     case 'UPDATE_APPOINTMENT':
+      // Handle inspection completion automation
+      const updatedAppointment = action.payload;
+      const isInspection = updatedAppointment.type === 'inspection';
+      const isCompleted = updatedAppointment.status === 'completed';
+      
+      let updatedContacts = state.contacts;
+      
+      // Auto-move customer when inspection is completed
+      if (isInspection && isCompleted) {
+        updatedContacts = state.contacts.map((contact) => {
+          if (contact.id === updatedAppointment.contactId && contact.status === 'appt_set') {
+            return {
+              ...contact,
+              status: 'inspection_completed' as CustomerStatus,
+              inspectionCompleted: true,
+              inspectionCompletedDate: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            };
+          }
+          return contact;
+        });
+      }
+      
       return {
         ...state,
         appointments: state.appointments.map((a) =>
           a.id === action.payload.id ? action.payload : a
         ),
+        contacts: updatedContacts,
       };
     
     case 'DELETE_APPOINTMENT':

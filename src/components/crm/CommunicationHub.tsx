@@ -24,9 +24,110 @@ import {
   Clock,
   User,
   ChevronRight,
+  Star,
+  Flag,
+  Template,
+  Zap,
+  X,
 } from 'lucide-react';
 
 type CommFilter = 'all' | 'email' | 'sms' | 'call' | 'note' | 'insurance';
+
+// Communication templates for quick responses
+const communicationTemplates = [
+  {
+    id: 'initial-contact',
+    title: 'Initial Contact',
+    type: 'email',
+    subject: 'Your Storm Damage Assessment Request',
+    content: `Hi {{CUSTOMER_NAME}},
+
+Thank you for reaching out about storm damage assessment. We understand how stressful property damage can be, and we're here to help.
+
+Our next available inspection slot is {{INSPECTION_DATE}}. During this comprehensive assessment, we will:
+
+- Thoroughly inspect all affected areas
+- Document damage with detailed photos  
+- Provide a detailed estimate for insurance
+- Coordinate directly with your insurance adjuster
+
+Please confirm this appointment time works for you. We look forward to helping restore your property.
+
+Best regards,
+{{AGENT_NAME}}`
+  },
+  {
+    id: 'insurance-claim',
+    title: 'Insurance Claim Update',
+    type: 'email',
+    subject: 'Insurance Claim Status Update - Claim #{{CLAIM_NUMBER}}',
+    content: `Hi {{CUSTOMER_NAME}},
+
+I wanted to update you on the progress of your insurance claim (#{{CLAIM_NUMBER}}).
+
+Current Status: {{STATUS}}
+Next Steps: {{NEXT_STEPS}}
+
+We're working closely with {{ADJUSTER_NAME}} to ensure your claim is processed quickly and fairly. 
+
+If you have any questions, please don't hesitate to reach out.
+
+Best regards,
+{{AGENT_NAME}}`
+  },
+  {
+    id: 'estimate-ready',
+    title: 'Estimate Ready for Review',
+    type: 'email',
+    subject: 'Your Storm Damage Estimate is Ready',
+    content: `Hi {{CUSTOMER_NAME}},
+
+Great news! We've completed our assessment and your storm damage estimate is ready for review.
+
+Total Estimate: {{ESTIMATE_AMOUNT}}
+Insurance Deductible: {{DEDUCTIBLE}}
+
+The estimate has been sent to your insurance adjuster and is attached for your records. We recommend reviewing it carefully and let us know if you have any questions.
+
+Next steps:
+1. Review the estimate
+2. Insurance approval process (typically 3-5 business days)
+3. Schedule work commencement
+
+Thank you for choosing us for your restoration needs.
+
+Best regards,
+{{AGENT_NAME}}`
+  },
+  {
+    id: 'work-scheduled',
+    title: 'Work Scheduled',
+    type: 'sms',
+    subject: '',
+    content: `Hi {{CUSTOMER_NAME}}! Your roof work is scheduled to begin {{START_DATE}}. Our crew will arrive by {{START_TIME}}. Please ensure clear driveway access. Any questions? Call {{PHONE}}.`
+  },
+  {
+    id: 'work-complete',
+    title: 'Work Completion',
+    type: 'email',
+    subject: 'Your Roofing Project is Complete!',
+    content: `Hi {{CUSTOMER_NAME}},
+
+Excellent news! We've successfully completed your roofing project.
+
+Project Summary:
+- Start Date: {{START_DATE}}
+- Completion Date: {{COMPLETION_DATE}}
+- Work Performed: {{WORK_DESCRIPTION}}
+
+Your warranty information and final photos are attached. We'll handle the final insurance paperwork and coordinate payment.
+
+Thank you for choosing us. We're here if you need anything!
+
+Best regards,
+{{AGENT_NAME}}`
+  }
+];
 
 export default function CommunicationHub() {
   const { state, dispatch } = useCRM();
@@ -35,6 +136,7 @@ export default function CommunicationHub() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedComm, setSelectedComm] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
+  const [showTemplates, setShowTemplates] = useState(false);
 
   // Gather all communications from all contacts
   const allCommunications = state.contacts.flatMap((contact) =>
@@ -160,6 +262,41 @@ export default function CommunicationHub() {
     return persisted;
   };
 
+  const handleUseTemplate = (template: typeof communicationTemplates[0]) => {
+    const contact = selectedCommData?.contact || state.contacts[0];
+    if (!contact) {
+      toast.error('No contact selected');
+      return;
+    }
+
+    // Replace template variables with actual data
+    let content = template.content;
+    const replacements = {
+      '{{CUSTOMER_NAME}}': getContactFullName(contact),
+      '{{AGENT_NAME}}': state.currentUser?.name || 'Your Agent',
+      '{{PHONE}}': state.currentUser?.phone || '(555) 123-4567',
+      '{{CLAIM_NUMBER}}': contact.claimNumber || '[CLAIM_NUMBER]',
+      '{{ADJUSTER_NAME}}': contact.adjusterName || '[ADJUSTER_NAME]',
+      '{{DEDUCTIBLE}}': contact.deductible ? `$${contact.deductible}` : '[DEDUCTIBLE]',
+      '{{INSPECTION_DATE}}': '[INSPECTION_DATE]',
+      '{{ESTIMATE_AMOUNT}}': contact.projectValue ? `$${contact.projectValue.toLocaleString()}` : '[ESTIMATE_AMOUNT]',
+      '{{START_DATE}}': '[START_DATE]',
+      '{{START_TIME}}': '[START_TIME]',
+      '{{COMPLETION_DATE}}': '[COMPLETION_DATE]',
+      '{{WORK_DESCRIPTION}}': '[WORK_DESCRIPTION]',
+      '{{STATUS}}': '[STATUS]',
+      '{{NEXT_STEPS}}': '[NEXT_STEPS]',
+    };
+
+    Object.entries(replacements).forEach(([placeholder, value]) => {
+      content = content.replace(new RegExp(placeholder, 'g'), value);
+    });
+
+    setReplyText(content);
+    setShowTemplates(false);
+    toast.success(`Template "${template.title}" loaded`);
+  };
+
   const handleCompose = async () => {
     const contact = selectedCommData?.contact || state.contacts[0];
     if (!contact) {
@@ -195,13 +332,22 @@ export default function CommunicationHub() {
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-gray-900">Communications</h2>
-            <button
-              onClick={handleCompose}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <Plus size={18} />
-              <span className="font-medium">Compose</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowTemplates(true)}
+                className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                <Template size={18} />
+                <span className="font-medium">Templates</span>
+              </button>
+              <button
+                onClick={handleCompose}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Plus size={18} />
+                <span className="font-medium">Compose</span>
+              </button>
+            </div>
           </div>
 
           {/* Search */}
@@ -407,6 +553,70 @@ export default function CommunicationHub() {
           </div>
         )}
       </div>
+
+      {/* Template Selection Modal */}
+      {showTemplates && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-semibold text-gray-900">Communication Templates</h3>
+                <button
+                  onClick={() => setShowTemplates(false)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X size={20} className="text-gray-500" />
+                </button>
+              </div>
+              <p className="text-gray-500 mt-1">Choose a template to get started with professional communications</p>
+            </div>
+            
+            <div className="p-6 max-h-[calc(90vh-120px)] overflow-y-auto">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {communicationTemplates.map((template) => (
+                  <div key={template.id} className="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors cursor-pointer">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        {template.type === 'email' ? (
+                          <Mail size={20} className="text-blue-600" />
+                        ) : (
+                          <MessageSquare size={20} className="text-green-600" />
+                        )}
+                        <h4 className="font-medium text-gray-900">{template.title}</h4>
+                      </div>
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${
+                        template.type === 'email' 
+                          ? 'bg-blue-100 text-blue-800' 
+                          : 'bg-green-100 text-green-800'
+                      }`}>
+                        {template.type.toUpperCase()}
+                      </span>
+                    </div>
+                    
+                    {template.subject && (
+                      <p className="text-sm font-medium text-gray-700 mb-2">
+                        Subject: {template.subject}
+                      </p>
+                    )}
+                    
+                    <p className="text-sm text-gray-600 mb-4 line-clamp-3">
+                      {template.content.substring(0, 150)}...
+                    </p>
+                    
+                    <button
+                      onClick={() => handleUseTemplate(template)}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      <Zap size={16} />
+                      Use Template
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

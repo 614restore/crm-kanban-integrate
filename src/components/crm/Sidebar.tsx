@@ -22,6 +22,9 @@ import {
   FolderKanban,
   Clipboard,
   Package,
+  Receipt,
+  FilePlus,
+  BarChart,
 } from 'lucide-react';
 
 interface NavItem {
@@ -38,12 +41,15 @@ const navItems: NavItem[] = [
   { id: 'communications', label: 'Communications', icon: <MessageSquare size={20} /> },
   { id: 'calendar', label: 'Calendar', icon: <Calendar size={20} /> },
   { id: 'documents', label: 'Documents', icon: <FileText size={20} /> },
+  { id: 'document-templates', label: 'Templates', icon: <FilePlus size={20} /> },
   { id: 'financial', label: 'Financial', icon: <DollarSign size={20} />, requiresPermission: 'financials' },
+  { id: 'expenses', label: 'Expenses', icon: <Receipt size={20} /> },
   { id: 'suppliers', label: 'Suppliers', icon: <Store size={20} /> },
   { id: 'estimates', label: 'Estimates', icon: <FileText size={20} /> },
   { id: 'projects', label: 'Projects', icon: <FolderKanban size={20} /> },
   { id: 'work-orders', label: 'Work Orders', icon: <Clipboard size={20} /> },
   { id: 'material-orders', label: 'Material Orders', icon: <Package size={20} /> },
+  { id: 'reports', label: 'Reports', icon: <BarChart size={20} /> },
   { id: 'team', label: 'Team', icon: <UserCog size={20} />, requiresPermission: 'team' },
   { id: 'automations', label: 'Automations', icon: <Zap size={20} /> },
   { id: 'ai-assistant', label: 'AI Assistant', icon: <Bot size={20} /> },

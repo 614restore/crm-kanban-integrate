@@ -629,6 +629,18 @@ export default function ContactDetail() {
                   >
                     {statusLabels[contact.status]}
                   </span>
+                  {contact.inspectionCompleted && (
+                    <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium flex items-center gap-1">
+                      <CheckCircle size={14} />
+                      Inspection Complete
+                    </span>
+                  )}
+                  {contact.inspectionScheduled && !contact.inspectionCompleted && (
+                    <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-medium flex items-center gap-1">
+                      <Clock size={14} />
+                      Inspection Scheduled
+                    </span>
+                  )}
                   {contact.isRetail && (
                     <span className="px-3 py-1 bg-teal-100 text-teal-800 rounded-full text-sm font-medium">
                       Retail
@@ -1025,6 +1037,55 @@ export default function ContactDetail() {
                   </div>
                 </div>
               )}
+
+              {/* Inspection Information */}
+              <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <CheckCircle className="text-blue-600" size={20} />
+                  <h3 className="text-lg font-semibold text-gray-900">Inspection Information</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-500 mb-1">Inspection Status</label>
+                    <div className="flex items-center gap-2">
+                      {contact.inspectionCompleted ? (
+                        <span className="inline-flex items-center gap-1 px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium">
+                          <CheckCircle size={14} />
+                          Completed
+                        </span>
+                      ) : contact.inspectionScheduled ? (
+                        <span className="inline-flex items-center gap-1 px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-medium">
+                          <Clock size={14} />
+                          Scheduled
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 text-gray-800 rounded-full text-sm font-medium">
+                          <AlertCircle size={14} />
+                          Not Scheduled
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {contact.inspectionDate && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-500 mb-1">Inspection Date</label>
+                      <p className="text-gray-900">{formatDate(contact.inspectionDate)}</p>
+                    </div>
+                  )}
+                  {contact.inspectionCompletedDate && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-500 mb-1">Completion Date</label>
+                      <p className="text-gray-900">{formatDate(contact.inspectionCompletedDate)}</p>
+                    </div>
+                  )}
+                  {contact.inspectionNotes && (
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-500 mb-1">Inspection Notes</label>
+                      <p className="text-gray-900 whitespace-pre-wrap">{contact.inspectionNotes}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
 
               {/* Notes */}
               <div className="bg-white rounded-xl border border-gray-200 p-6">

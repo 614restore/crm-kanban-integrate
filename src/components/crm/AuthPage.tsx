@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/authContext';
 import { supabase } from '@/lib/supabase';
+import { roleLabels, UserRole } from '@/lib/crmData';
 import {
   Building2,
   Mail,
@@ -16,6 +17,8 @@ import {
 
 type AuthMode = 'login' | 'signup' | 'reset';
 
+const isDemoMode = import.meta.env.VITE_DEMO_MODE === 'true';
+
 export default function AuthPage() {
   const { signIn, signUp, resetPassword } = useAuth();
   const [mode, setMode] = useState<AuthMode>('login');
@@ -24,10 +27,19 @@ export default function AuthPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [role, setRole] = useState<UserRole>('sales');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  // Demo mode auto-fill
+  useEffect(() => {
+    if (isDemoMode) {
+      setEmail('demo@example.com');
+      setPassword('password');
+    }
+  }, []);
 
   const isAlreadyRegisteredError = (message?: string | null) => {
     if (!message) return false;
@@ -76,6 +88,7 @@ export default function AuthPage() {
         const { error } = await signUp(email, password, {
           first_name: firstName,
           last_name: lastName,
+          role,
         });
         if (error) {
           if (isAlreadyRegisteredError(error.message)) {
@@ -193,6 +206,22 @@ export default function AuthPage() {
               </div>
             )}
 
+            {isDemoMode && mode === 'login' && (
+              <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center gap-3 mb-2">
+                  <CheckCircle className="text-blue-500 flex-shrink-0" size={20} />
+                  <p className="text-blue-800 font-medium text-sm">Demo Mode Active</p>
+                </div>
+                <div className="text-sm text-blue-700">
+                  <p className="mb-1">Use these demo credentials to login:</p>
+                  <div className="font-mono bg-blue-100 p-2 rounded text-xs">
+                    <div>Email: <strong>demo@example.com</strong></div>
+                    <div>Password: <strong>password</strong></div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-5">
               {mode === 'signup' && (
                 <div className="grid grid-cols-2 gap-4">
@@ -298,6 +327,20 @@ export default function AuthPage() {
                     </div>
                   </div>
 
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                    <select
+                      value={role}
+                      onChange={(e) => setRole(e.target.value as UserRole)}
+                      className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                    >
+                      {Object.entries(roleLabels).map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </>
               )}
 
