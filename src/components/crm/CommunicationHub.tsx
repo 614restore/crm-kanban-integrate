@@ -26,7 +26,7 @@ import {
   ChevronRight,
   Star,
   Flag,
-  Template,
+  FileText,
   Zap,
   X,
 } from 'lucide-react';
@@ -337,7 +337,7 @@ export default function CommunicationHub() {
                 onClick={() => setShowTemplates(true)}
                 className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
               >
-                <Template size={18} />
+                <FileText size={18} />
                 <span className="font-medium">Templates</span>
               </button>
               <button
