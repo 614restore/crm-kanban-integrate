@@ -202,6 +202,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     metadata?: { first_name?: string; last_name?: string; role?: string }
   ) => {
     try {
+      if (isDemoMode) {
+        const now = new Date().toISOString();
+        const demoUserId = `demo-user-${Date.now()}`;
+
+        const mockUser = {
+          id: demoUserId,
+          email,
+          app_metadata: {},
+          user_metadata: metadata || {},
+          aud: 'authenticated',
+          created_at: now,
+          updated_at: now,
+        };
+
+        const mockSession = {
+          access_token: `demo-access-token-${Date.now()}`,
+          token_type: 'bearer',
+          expires_in: 3600,
+          expires_at: Math.floor(Date.now() / 1000) + 3600,
+          refresh_token: `demo-refresh-token-${Date.now()}`,
+          user: mockUser,
+        };
+
+        const demoProfile = {
+          id: demoUserId,
+          email,
+          first_name: metadata?.first_name || 'Demo',
+          last_name: metadata?.last_name || 'User',
+          role: metadata?.role || 'admin',
+          company_id: 'demo-company',
+          is_active: true,
+        };
+
+        setSession(mockSession as any);
+        setUser(mockUser as any);
+        setProfile(demoProfile as any);
+
+        return { error: null };
+      }
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
