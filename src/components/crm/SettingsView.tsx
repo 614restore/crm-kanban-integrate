@@ -1724,7 +1724,53 @@ export default function SettingsView() {
           </div>
         )}
 
-        {/* Add other tabs here if needed - notifications, security, billing, api */}
+        {activeTab === 'notifications' && (
+          <div className="max-w-3xl space-y-6">
+            <div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Notification Settings</h3>
+              <p className="text-sm text-gray-500">Configure when and how you receive notifications.</p>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+              <h4 className="text-base font-semibold text-gray-900">Email Notifications</h4>
+              <div className="space-y-3">
+                {['New leads assigned to me', 'Estimate status changes', 'Invoice payments received', 'Appointment reminders', 'Team updates'].map((option) => (
+                  <label key={option} className="flex items-center gap-3"><input type="checkbox" defaultChecked className="rounded"/><span className="text-sm">{option}</span></label>
+                ))}
+              </div>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+              <h4 className="text-base font-semibold text-gray-900">SMS Notifications</h4>
+              <div className="space-y-3">
+                {['Urgent inquiries', 'Job completion', 'Payment reminders'].map((option) => (
+                  <label key={option} className="flex items-center gap-3"><input type="checkbox" className="rounded"/><span className="text-sm">{option}</span></label>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'billing' && (
+          <div className="max-w-3xl space-y-6">
+            <div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Billing & Payments</h3>
+              <p className="text-sm text-gray-500">Manage invoice and payment settings.</p>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+              <h4 className="text-base font-semibold text-gray-900">Payment Gateway</h4>
+              <select className="w-full px-3 py-2 border border-gray-300 rounded-lg"><option>Stripe</option><option>Square</option><option>PayPal</option></select>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+              <h4 className="text-base font-semibold text-gray-900">Invoice Settings</h4>
+              <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-medium mb-2">Invoice Prefix</label><input type="text" defaultValue="INV-" className="w-full px-3 py-2 border rounded-lg"/></div><div><label className="block text-sm font-medium mb-2">Starting #</label><input type="number" defaultValue="1000" className="w-full px-3 py-2 border rounded-lg"/></div></div>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+              <h4 className="text-base font-semibold text-gray-900">Tax Rate</h4>
+              <input type="number" step="0.01" defaultValue="7.5" className="w-full px-3 py-2 border rounded-lg" placeholder="Tax %"/>
+            </div>
+          </div>
+        )}
+
+        {/* Add other tabs here if needed - api */}
       </div>
     </div>
   );
