@@ -1,7 +1,7 @@
 {
-  "name": "StormCraft CRM - 614 Restore",
-  "short_name": "StormCraft",
-  "description": "Storm-response CRM for contractors with offline capabilities",
+  "name": "TrussCTR - 614 Restore",
+  "short_name": "TrussCTR",
+  "description": "Professional CRM for contractors - The CRM you can truss",
   "start_url": "/crm-kanban-integrate/",
   "display": "standalone",
   "background_color": "#0f172a",

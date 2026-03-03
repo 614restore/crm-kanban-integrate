@@ -121,11 +121,14 @@ export default function AuthPage() {
       {/* Left Panel - Branding */}
       <div className="hidden lg:flex lg:w-1/2 flex-col justify-between p-12">
         <div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 mb-2">
             <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
               <Building2 size={28} className="text-white" />
             </div>
-            <span className="text-2xl font-bold text-white">StormCraft CRM</span>
+            <div>
+              <span className="text-2xl font-bold text-white">TrussCTR</span>
+              <p className="text-blue-200 text-sm italic">The CRM you can truss</p>
+            </div>
           </div>
         </div>
 
@@ -167,11 +170,14 @@ export default function AuthPage() {
       <div className="w-full lg:w-1/2 flex items-center justify-center p-8">
         <div className="w-full max-w-md">
           {/* Mobile Logo */}
-          <div className="lg:hidden flex items-center justify-center gap-3 mb-8">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
-              <Building2 size={24} className="text-white" />
+          <div className="lg:hidden flex flex-col items-center justify-center mb-8">
+            <div className="flex items-center gap-3 mb-1">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
+                <Building2 size={24} className="text-white" />
+              </div>
+              <span className="text-xl font-bold text-white">TrussCTR</span>
             </div>
-            <span className="text-xl font-bold text-white">StormCraft CRM</span>
+            <p className="text-blue-200 text-sm italic">The CRM you can truss</p>
           </div>
 
           <div className="bg-white rounded-2xl shadow-2xl p-8">

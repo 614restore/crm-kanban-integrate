@@ -489,7 +489,7 @@ export const mockTeamMembers: TeamMember[] = [
   {
     id: 'tm1',
     name: 'Marcus Johnson',
-    email: 'marcus@stormcraft.com',
+    email: 'marcus@trussctr.com',
     role: 'owner',
     avatar: avatars.male1,
     phone: '(555) 123-4567',
@@ -500,7 +500,7 @@ export const mockTeamMembers: TeamMember[] = [
   {
     id: 'tm2',
     name: 'Sarah Williams',
-    email: 'sarah@stormcraft.com',
+    email: 'sarah@trussctr.com',
     role: 'manager',
     avatar: avatars.female1,
     phone: '(555) 234-5678',
@@ -511,7 +511,7 @@ export const mockTeamMembers: TeamMember[] = [
   {
     id: 'tm3',
     name: 'David Chen',
-    email: 'david@stormcraft.com',
+    email: 'david@trussctr.com',
     role: 'sales',
     avatar: avatars.male2,
     phone: '(555) 345-6789',
@@ -522,7 +522,7 @@ export const mockTeamMembers: TeamMember[] = [
   {
     id: 'tm4',
     name: 'Emily Rodriguez',
-    email: 'emily@stormcraft.com',
+    email: 'emily@trussctr.com',
     role: 'production',
     avatar: avatars.female2,
     phone: '(555) 456-7890',
@@ -533,7 +533,7 @@ export const mockTeamMembers: TeamMember[] = [
   {
     id: 'tm5',
     name: 'James Wilson',
-    email: 'james@stormcraft.com',
+    email: 'james@trussctr.com',
     role: 'canvas',
     avatar: avatars.male3,
     phone: '(555) 567-8901',
@@ -544,7 +544,7 @@ export const mockTeamMembers: TeamMember[] = [
   {
     id: 'tm6',
     name: 'Lisa Thompson',
-    email: 'lisa@stormcraft.com',
+    email: 'lisa@trussctr.com',
     role: 'billing',
     avatar: avatars.female3,
     phone: '(555) 678-9012',
@@ -555,7 +555,7 @@ export const mockTeamMembers: TeamMember[] = [
   {
     id: 'tm7',
     name: 'Michael Brown',
-    email: 'michael@stormcraft.com',
+    email: 'michael@trussctr.com',
     role: 'admin',
     avatar: avatars.male4,
     phone: '(555) 789-0123',
@@ -566,7 +566,7 @@ export const mockTeamMembers: TeamMember[] = [
   {
     id: 'tm8',
     name: 'Amanda Davis',
-    email: 'amanda@stormcraft.com',
+    email: 'amanda@trussctr.com',
     role: 'sales',
     avatar: avatars.female4,
     phone: '(555) 890-1234',
