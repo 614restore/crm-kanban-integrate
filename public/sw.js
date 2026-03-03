@@ -1,7 +1,7 @@
 // Basic service worker for StormCraft CRM
 // This provides offline caching and PWA functionality
 
-const CACHE_NAME = 'stormcraft-v1';
+const CACHE_NAME = 'stormcraft-v2';
 const urlsToCache = [
   '/crm-kanban-integrate/',
   '/crm-kanban-integrate/index.html',
@@ -53,71 +53,41 @@ self.addEventListener('fetch', (event) => {
   }
 
   event.respondWith(
-    caches.match(request)
-      .then((response) => {
-        // Return cached response if found
-        if (response) {
-          return response;
-        }
+    // Always fetch latest app shell first to avoid stale hashed bundles.
+    fetch(request)
+      .then((fetchResponse) => {
+        const shouldCache =
+          request.method === 'GET' &&
+          fetchResponse &&
+          fetchResponse.status === 200 &&
+          (request.mode === 'navigate' || request.destination === 'document');
 
-        // For navigation requests, try network first, fallback to cache
-        if (request.mode === 'navigate') {
-          return fetch(request)
-            .then((fetchResponse) => {
-              // Cache successful responses
-              if (fetchResponse && fetchResponse.status === 200) {
-                const responseToCache = fetchResponse.clone();
-                caches.open(CACHE_NAME)
-                  .then((cache) => {
-                    cache.put(request, responseToCache);
-                  });
-              }
-              return fetchResponse;
-            })
-            .catch(() => {
-              // Network failed, return cached index.html for SPA routing
-              return caches.match('/crm-kanban-integrate/index.html');
-            });
-        }
-
-        // For API requests to Supabase, try network first
-        if (url.hostname.includes('supabase.co')) {
-          return fetch(request)
-            .then((fetchResponse) => {
-              // Don't cache error responses
-              if (fetchResponse && fetchResponse.status === 200) {
-                const responseToCache = fetchResponse.clone();
-                caches.open(CACHE_NAME)
-                  .then((cache) => {
-                    // Cache API responses for 5 minutes
-                    cache.put(request, responseToCache);
-                  });
-              }
-              return fetchResponse;
-            })
-            .catch(() => {
-              // Network failed, check cache
-              return caches.match(request);
-            });
-        }
-
-        // For all other requests, network first with cache fallback
-        return fetch(request)
-          .then((fetchResponse) => {
-            if (fetchResponse && fetchResponse.status === 200 && fetchResponse.type === 'basic') {
-              const responseToCache = fetchResponse.clone();
-              caches.open(CACHE_NAME)
-                .then((cache) => {
-                  cache.put(request, responseToCache);
-                });
-            }
-            return fetchResponse;
-          })
-          .catch(() => {
-            return caches.match(request);
+        if (shouldCache) {
+          const responseToCache = fetchResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(request, responseToCache);
           });
+        }
+
+        return fetchResponse;
+      })
+      .catch(() => {
+        if (request.mode === 'navigate' || request.destination === 'document') {
+          return caches.match(request).then((cachedPage) => {
+            if (cachedPage) return cachedPage;
+            return caches.match('/crm-kanban-integrate/index.html');
+          });
+        }
+
+        return caches.match(request);
       })
   );
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 // Background sync for offline actions
