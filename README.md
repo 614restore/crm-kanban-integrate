@@ -2,6 +2,27 @@
 
 A comprehensive CRM application with Kanban board integration, built with React, TypeScript, Vite, and Supabase.
 
+## 🚨 CRITICAL SECURITY NOTICE
+
+**⚠️ HARDCODED CREDENTIALS REMOVED** - Security vulnerability has been fixed.
+
+**REQUIRED STEPS BEFORE RUNNING:**
+
+1. **Copy environment template**:
+   ```bash
+   cp .env.example .env.local  # Use .env.local for better security
+   ```
+
+2. **Configure your Supabase credentials** in `.env.local`:
+   ```env
+   VITE_SUPABASE_URL=https://your-project-ref.supabase.co
+   VITE_SUPABASE_ANON_KEY=your-anon-key-here
+   ```
+
+3. **⚠️ NEVER commit `.env` or `.env.local` files to Git**
+
+The application will not run without proper environment configuration.
+
 ## 🚀 Features
 
 - **Dashboard**: Overview of key metrics, recent activities, and analytics

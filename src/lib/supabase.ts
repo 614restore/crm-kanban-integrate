@@ -1,24 +1,24 @@
 import { createClient } from '@supabase/supabase-js';
 
-const projectUrl = 'https://qgvuzrvpyyrrulhwlzma.supabase.co';
-const projectAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFndnV6cnZweXlycnVsaHdsem1hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEzOTU0OTksImV4cCI6MjA4Njk3MTQ5OX0.kQVOflThF52iRCl-VApsGZFwzSMJXdvocIa-7y0NX8M';
+// Environment variable configuration - REQUIRED FOR SECURITY
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-const configuredUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const configuredKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
-
-const urlLooksLegacy = !!configuredUrl && configuredUrl.includes('databasepad.com');
-const keyLooksLegacy = !!configuredKey && configuredKey.includes('aixvqeyviciiehxegtby');
-
-// Guardrail: force known-good Supabase project when stale legacy env values are present.
-const supabaseUrl = !configuredUrl || urlLooksLegacy ? projectUrl : configuredUrl;
-const supabaseKey = !configuredKey || keyLooksLegacy ? projectAnonKey : configuredKey;
-
-if (urlLooksLegacy || keyLooksLegacy) {
-  console.warn('Legacy backend config detected in env; using Supabase project defaults.');
+// Validate required environment variables
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error(
+    'Missing Supabase configuration. Please check your environment variables:\n' +
+    '- VITE_SUPABASE_URL\n' +
+    '- VITE_SUPABASE_ANON_KEY\n\n' +
+    'Copy .env.example to .env.local and configure your Supabase credentials.'
+  );
 }
 
-if (!supabaseUrl || !supabaseKey) {
-  console.error('Missing Supabase configuration. Please check your environment values.');
+// Security check: Ensure we're not using placeholder values
+if (supabaseUrl.includes('your-project') || supabaseKey.includes('your-anon-key')) {
+  throw new Error(
+    'Placeholder values detected in environment variables. Please configure real Supabase credentials in your .env.local file.'
+  );
 }
 
 const supabase = createClient(supabaseUrl, supabaseKey, {
