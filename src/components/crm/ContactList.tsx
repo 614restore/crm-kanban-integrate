@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { db } from '@/lib/database';
 import { useCRM, useFilteredContacts } from '@/lib/crmStore';
 import { toast } from 'sonner';
+import { exportContactsToExcel } from '@/lib/exportUtils';
 import {
   Contact,
   statusLabels,
@@ -135,36 +136,6 @@ export default function ContactList() {
     </button>
   );
 
-  const handleExportContacts = () => {
-    if (sortedContacts.length === 0) {
-      toast.error('No contacts to export');
-      return;
-    }
-
-    const headers = ['first_name', 'last_name', 'email', 'phone', 'status', 'city', 'state'];
-    const rows = sortedContacts.map((c) => [
-      c.firstName,
-      c.lastName,
-      c.email,
-      c.phone1,
-      c.status,
-      c.city,
-      c.state,
-    ]);
-
-    const csv = [headers.join(','), ...rows.map((row) => row.map((v) => `"${String(v || '').replace(/"/g, '""')}"`).join(','))].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `contacts-${new Date().toISOString().split('T')[0]}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    toast.success('Contacts export downloaded');
-  };
-
   const handleImportContacts = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -240,6 +211,25 @@ export default function ContactList() {
 
     toast.success(`Imported ${imported} contacts`);
     e.target.value = '';
+  };
+
+  const handleExportContacts = () => {
+    try {
+      const contactsToExport = selectedContacts.size > 0
+        ? sortedContacts.filter(c => selectedContacts.has(c.id))
+        : sortedContacts;
+      
+      if (contactsToExport.length === 0) {
+        toast.error('No contacts to export');
+        return;
+      }
+      
+      exportContactsToExcel(contactsToExport);
+      toast.success(`Exported ${contactsToExport.length} contacts to Excel`);
+    } catch (error) {
+      console.error('Error exporting contacts:', error);
+      toast.error('Failed to export contacts');
+    }
   };
 
   return (

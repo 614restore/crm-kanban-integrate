@@ -15,6 +15,8 @@ import type {
   Estimate,
   Project,
   WorkOrder,
+  DocumentTemplate,
+  CompanyGoals,
 } from './crmData';
 
 export type ViewType =
@@ -59,6 +61,8 @@ export interface CRMState {
   estimates: Estimate[];
   projects: Project[];
   workOrders: WorkOrder[];
+  documentTemplates: DocumentTemplate[];
+  companyGoals: CompanyGoals[];
   
   // UI state
   sidebarCollapsed: boolean;
@@ -147,6 +151,13 @@ export type CRMAction =
   | { type: 'UPDATE_WORK_ORDER'; payload: WorkOrder }
   | { type: 'DELETE_WORK_ORDER'; payload: string }
   | { type: 'SET_WORK_ORDERS'; payload: WorkOrder[] }
+  | { type: 'ADD_DOCUMENT_TEMPLATE'; payload: DocumentTemplate }
+  | { type: 'UPDATE_DOCUMENT_TEMPLATE'; payload: DocumentTemplate }
+  | { type: 'DELETE_DOCUMENT_TEMPLATE'; payload: string }
+  | { type: 'SET_DOCUMENT_TEMPLATES'; payload: DocumentTemplate[] }
+  | { type: 'ADD_COMPANY_GOAL'; payload: CompanyGoals }
+  | { type: 'UPDATE_COMPANY_GOAL'; payload: CompanyGoals }
+  | { type: 'SET_COMPANY_GOALS'; payload: CompanyGoals[] }
   | { type: 'INITIALIZE_DATA'; payload: {
       contacts: Contact[];
       appointments: Appointment[];
@@ -160,6 +171,8 @@ export type CRMAction =
       estimates: Estimate[];
       projects: Project[];
       workOrders: WorkOrder[];
+      documentTemplates: DocumentTemplate[];
+      companyGoals: CompanyGoals[];
     }};
 
 export function crmReducer(state: CRMState, action: CRMAction): CRMState {

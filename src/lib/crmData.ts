@@ -200,6 +200,36 @@ export interface Automation {
   createdBy: string;
 }
 
+export interface DocumentTemplate {
+  id: string;
+  name: string;
+  type: 'contract' | 'change_order' | '3_day_cancel' | 'work_order' | 'invoice' | 'estimate' | 'other';
+  description?: string;
+  fileUrl: string;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  isActive: boolean;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CompanyGoals {
+  id: string;
+  companyId: string;
+  month: string; // Format: YYYY-MM
+  salesGoal?: number;
+  revenueGoal?: number;
+  profitMarginGoal?: number; // Percentage
+  jobsCompletedGoal?: number;
+  leadsGoal?: number;
+  conversionRateGoal?: number; // Percentage
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Supplier {
   id: string;
   name: string;
@@ -301,6 +331,18 @@ export interface Project {
   completedDate?: string;
   estimatedBudget: number;
   actualCost: number;
+  // Expense Goals
+  materialCostGoal?: number;
+  subcontractorCostGoal?: number;
+  salesRepPayGoal?: number;
+  otherExpensesGoal?: number;
+  profitMarginGoal?: number; // Percentage (e.g., 20 = 20%)
+  // Actual Expenses
+  actualMaterialCost?: number;
+  actualSubcontractorCost?: number;
+  actualSalesRepPay?: number;
+  actualOtherExpenses?: number;
+  actualProfitMargin?: number; // Calculated
   address?: string;
   city?: string;
   state?: string;

@@ -3,6 +3,7 @@ import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
 import { Project } from '@/lib/crmData';
+import { exportProjectsToExcel } from '@/lib/exportUtils';
 import {
   FolderKanban,
   Plus,
@@ -23,6 +24,7 @@ import {
   MapPin,
   FileText,
   TrendingUp,
+  Download,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -313,6 +315,20 @@ export default function ProjectsView() {
     }
   };
 
+  const handleExport = () => {
+    try {
+      if (filteredProjects.length === 0) {
+        toast.error('No projects to export');
+        return;
+      }
+      exportProjectsToExcel(filteredProjects);
+      toast.success(`Exported ${filteredProjects.length} projects to Excel`);
+    } catch (error) {
+      console.error('Error exporting projects:', error);
+      toast.error('Failed to export projects');
+    }
+  };
+
   // Helper functions
   const getContactName = (contactId: string) => {
     const contact = state.contacts.find(c => c.id === contactId);
@@ -378,13 +394,22 @@ export default function ProjectsView() {
             <p className="text-sm text-gray-500">Manage customer projects and track progress</p>
           </div>
         </div>
-        <button
-          onClick={() => handleOpenModal()}
-          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-all"
-        >
-          <Plus size={20} />
-          New Project
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleExport}
+            className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <Download size={18} />
+            Export
+          </button>
+          <button
+            onClick={() => handleOpenModal()}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all"
+          >
+            <Plus size={20} />
+            New Project
+          </button>
+        </div>
       </div>
 
       {/* Stats */}

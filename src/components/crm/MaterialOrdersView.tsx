@@ -3,6 +3,7 @@ import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
 import { MaterialOrder } from '@/lib/crmData';
+import { exportMaterialOrdersToExcel } from '@/lib/exportUtils';
 import {
   Package,
   Plus,
@@ -19,6 +20,7 @@ import {
   XCircle,
   Building2,
   FileText,
+  Download,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -54,15 +56,18 @@ export default function MaterialOrdersView() {
   // Form state
   const [orderNumber, setOrderNumber] = useState('');
   const [selectedSupplierId, setSelectedSupplierId] = useState('');
-  const [selectedProjectId, setSelectedProjectId] = useState('');
-  const [selectedWorkOrderId, setSelectedWorkOrderId] = useState('');
-  const [description, setDescription] = useState('');
+  const [selectedContactId, setSelectedContactId] = useState('');
+  const [selectedJobId, setSelectedJobId] = useState('');
   const [status, setStatus] = useState<MaterialOrder['status']>('pending');
   const [orderDate, setOrderDate] = useState('');
   const [expectedDeliveryDate, setExpectedDeliveryDate] = useState('');
   const [actualDeliveryDate, setActualDeliveryDate] = useState('');
-  const [totalAmount, setTotalAmount] = useState('0');
+  const [subtotal, setSubtotal] = useState('0');
+  const [tax, setTax] = useState('0');
+  const [shipping, setShipping] = useState('0');
+  const [total, setTotal] = useState('0');
   const [notes, setNotes] = useState('');
+  const [items, setItems] = useState<MaterialOrder['items']>([]);
 
   // Load material orders on mount
   useEffect(() => {
@@ -76,21 +81,21 @@ export default function MaterialOrdersView() {
       // Convert DB format to app format
       const appOrders: MaterialOrder[] = materialOrders.map(mo => ({
         id: mo.id,
-        orderNumber: mo.order_number,
+        orderNumber: mo.order_number || '',
         supplierId: mo.supplier_id,
-        supplierName: getSupplierName(mo.supplier_id),
-        projectId: mo.project_id,
-        projectName: getProjectName(mo.project_id),
-        workOrderId: mo.work_order_id,
-        workOrderNumber: getWorkOrderNumber(mo.work_order_id),
-        description: mo.description,
+        supplierName: state.suppliers.find(s => s.id === mo.supplier_id)?.name || '',
+        contactId: mo.contact_id,
+        jobId: mo.job_id,
         status: mo.status as MaterialOrder['status'],
         orderDate: mo.order_date,
         expectedDeliveryDate: mo.expected_delivery_date,
         actualDeliveryDate: mo.actual_delivery_date,
-        totalAmount: Number(mo.total_amount),
+        subtotal: Number(mo.subtotal || 0),
+        tax: Number(mo.tax || 0),
+        shipping: Number(mo.shipping || 0),
+        total: Number(mo.total || 0),
+        items: [], // Items loaded separately if needed
         notes: mo.notes,
-        receiptUrl: mo.receipt_url,
         createdBy: mo.created_by,
         createdAt: mo.created_at,
         updatedAt: mo.updated_at,
@@ -105,17 +110,20 @@ export default function MaterialOrdersView() {
   const handleOpenModal = (order?: MaterialOrder) => {
     if (order) {
       setEditingOrder(order);
-      setOrderNumber(order.orderNumber);
+      setOrderNumber(order.orderNumber || '');
       setSelectedSupplierId(order.supplierId);
-      setSelectedProjectId(order.projectId || '');
-      setSelectedWorkOrderId(order.workOrderId || '');
-      setDescription(order.description || '');
+      setSelectedContactId(order.contactId || '');
+      setSelectedJobId(order.jobId || '');
       setStatus(order.status);
       setOrderDate(order.orderDate || '');
       setExpectedDeliveryDate(order.expectedDeliveryDate || '');
       setActualDeliveryDate(order.actualDeliveryDate || '');
-      setTotalAmount(order.totalAmount.toString());
+      setSubtotal(order.subtotal.toString());
+      setTax(order.tax.toString());
+      setShipping(order.shipping.toString());
+      setTotal(order.total.toString());
       setNotes(order.notes || '');
+      setItems(order.items || []);
     } else {
       // Generate order number
       const nextNumber = `MO-${Date.now().toString().slice(-6)}`;
@@ -130,15 +138,18 @@ export default function MaterialOrdersView() {
     setEditingOrder(null);
     setOrderNumber('');
     setSelectedSupplierId('');
-    setSelectedProjectId('');
-    setSelectedWorkOrderId('');
-    setDescription('');
+    setSelectedContactId('');
+    setSelectedJobId('');
     setStatus('pending');
     setOrderDate('');
     setExpectedDeliveryDate('');
     setActualDeliveryDate('');
-    setTotalAmount('0');
+    setSubtotal('0');
+    setTax('0');
+    setShipping('0');
+    setTotal('0');
     setNotes('');
+    setItems([]);
   };
 
   const handleSave = async () => {
@@ -156,14 +167,16 @@ export default function MaterialOrdersView() {
         company_id: profile.company_id,
         order_number: orderNumber,
         supplier_id: selectedSupplierId,
-        project_id: selectedProjectId || undefined,
-        work_order_id: selectedWorkOrderId || undefined,
-        description: description.trim() || undefined,
+        contact_id: selectedContactId || undefined,
+        job_id: selectedJobId || undefined,
         status,
         order_date: orderDate || undefined,
         expected_delivery_date: expectedDeliveryDate || undefined,
         actual_delivery_date: actualDeliveryDate || undefined,
-        total_amount: parseFloat(totalAmount) || 0,
+        subtotal: parseFloat(subtotal) || 0,
+        tax: parseFloat(tax) || 0,
+        shipping: parseFloat(shipping) || 0,
+        total: parseFloat(total) || 0,
         notes: notes.trim() || undefined,
         created_by: profile.id,
       };
@@ -173,21 +186,21 @@ export default function MaterialOrdersView() {
         if (updated) {
           const appOrder: MaterialOrder = {
             id: updated.id,
-            orderNumber: updated.order_number,
+            orderNumber: updated.order_number || '',
             supplierId: updated.supplier_id,
-            supplierName: getSupplierName(updated.supplier_id),
-            projectId: updated.project_id,
-            projectName: getProjectName(updated.project_id),
-            workOrderId: updated.work_order_id,
-            workOrderNumber: getWorkOrderNumber(updated.work_order_id),
-            description: updated.description,
+            supplierName: state.suppliers.find(s => s.id === updated.supplier_id)?.name || '',
+            contactId: updated.contact_id,
+            jobId: updated.job_id,
             status: updated.status as MaterialOrder['status'],
             orderDate: updated.order_date,
             expectedDeliveryDate: updated.expected_delivery_date,
             actualDeliveryDate: updated.actual_delivery_date,
-            totalAmount: Number(updated.total_amount),
+            subtotal: Number(updated.subtotal || 0),
+            tax: Number(updated.tax || 0),
+            shipping: Number(updated.shipping || 0),
+            total: Number(updated.total || 0),
+            items: items || [],
             notes: updated.notes,
-            receiptUrl: updated.receipt_url,
             createdBy: updated.created_by,
             createdAt: updated.created_at,
             updatedAt: updated.updated_at,
@@ -200,21 +213,21 @@ export default function MaterialOrdersView() {
         if (created) {
           const appOrder: MaterialOrder = {
             id: created.id,
-            orderNumber: created.order_number,
+            orderNumber: created.order_number || '',
             supplierId: created.supplier_id,
-            supplierName: getSupplierName(created.supplier_id),
-            projectId: created.project_id,
-            projectName: getProjectName(created.project_id),
-            workOrderId: created.work_order_id,
-            workOrderNumber: getWorkOrderNumber(created.work_order_id),
-            description: created.description,
+            supplierName: state.suppliers.find(s => s.id === created.supplier_id)?.name || '',
+            contactId: created.contact_id,
+            jobId: created.job_id,
             status: created.status as MaterialOrder['status'],
             orderDate: created.order_date,
             expectedDeliveryDate: created.expected_delivery_date,
             actualDeliveryDate: created.actual_delivery_date,
-            totalAmount: Number(created.total_amount),
+            subtotal: Number(created.subtotal || 0),
+            tax: Number(created.tax || 0),
+            shipping: Number(created.shipping || 0),
+            total: Number(created.total || 0),
+            items: items || [],
             notes: created.notes,
-            receiptUrl: created.receipt_url,
             createdBy: created.created_by,
             createdAt: created.created_at,
             updatedAt: created.updated_at,
@@ -245,6 +258,20 @@ export default function MaterialOrdersView() {
     }
   };
 
+  const handleExport = () => {
+    try {
+      if (filteredOrders.length === 0) {
+        toast.error('No material orders to export');
+        return;
+      }
+      exportMaterialOrdersToExcel(filteredOrders);
+      toast.success(`Exported ${filteredOrders.length} material orders to Excel`);
+    } catch (error) {
+      console.error('Error exporting material orders:', error);
+      toast.error('Failed to export material orders');
+    }
+  };
+
   const handleMarkDelivered = async (orderId: string) => {
     try {
       const today = new Date().toISOString().split('T')[0];
@@ -255,21 +282,21 @@ export default function MaterialOrdersView() {
       if (updated) {
         const appOrder: MaterialOrder = {
           id: updated.id,
-          orderNumber: updated.order_number,
+          orderNumber: updated.order_number || '',
           supplierId: updated.supplier_id,
-          supplierName: getSupplierName(updated.supplier_id),
-          projectId: updated.project_id,
-          projectName: getProjectName(updated.project_id),
-          workOrderId: updated.work_order_id,
-          workOrderNumber: getWorkOrderNumber(updated.work_order_id),
-          description: updated.description,
+          supplierName: state.suppliers.find(s => s.id === updated.supplier_id)?.name || '',
+          contactId: updated.contact_id,
+          jobId: updated.job_id,
           status: updated.status as MaterialOrder['status'],
           orderDate: updated.order_date,
           expectedDeliveryDate: updated.expected_delivery_date,
           actualDeliveryDate: updated.actual_delivery_date,
-          totalAmount: Number(updated.total_amount),
+          subtotal: Number(updated.subtotal || 0),
+          tax: Number(updated.tax || 0),
+          shipping: Number(updated.shipping || 0),
+          total: Number(updated.total || 0),
+          items: [],
           notes: updated.notes,
-          receiptUrl: updated.receipt_url,
           createdBy: updated.created_by,
           createdAt: updated.created_at,
           updatedAt: updated.updated_at,
@@ -321,10 +348,9 @@ export default function MaterialOrdersView() {
   const filteredOrders = state.materialOrders.filter((order) => {
     const query = searchQuery.toLowerCase();
     const matchesSearch = 
-      order.orderNumber.toLowerCase().includes(query) ||
+      (order.orderNumber && order.orderNumber.toLowerCase().includes(query)) ||
       order.supplierName.toLowerCase().includes(query) ||
-      (order.projectName && order.projectName.toLowerCase().includes(query)) ||
-      (order.description && order.description.toLowerCase().includes(query));
+      (order.notes && order.notes.toLowerCase().includes(query));
     
     const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
     
@@ -339,7 +365,7 @@ export default function MaterialOrdersView() {
     delivered: state.materialOrders.filter(o => o.status === 'delivered').length,
     totalSpent: state.materialOrders
       .filter(o => o.status === 'delivered')
-      .reduce((sum, o) => sum + o.totalAmount, 0),
+      .reduce((sum, o) => sum + o.total, 0),
   };
 
   return (
@@ -355,13 +381,22 @@ export default function MaterialOrdersView() {
             <p className="text-sm text-gray-500">Track supplier orders and deliveries</p>
           </div>
         </div>
-        <button
-          onClick={() => handleOpenModal()}
-          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all"
-        >
-          <Plus size={20} />
-          New Material Order
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleExport}
+            className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <Download size={18} />
+            Export
+          </button>
+          <button
+            onClick={() => handleOpenModal()}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all"
+          >
+            <Plus size={20} />
+            New Material Order
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -463,21 +498,9 @@ export default function MaterialOrdersView() {
                   </div>
                   <div className="flex items-center gap-4 text-sm text-gray-600 mb-2">
                     <span className="font-mono">{order.orderNumber}</span>
-                    {order.projectName && (
-                      <span className="flex items-center gap-1">
-                        <Building2 size={14} />
-                        {order.projectName}
-                      </span>
-                    )}
-                    {order.workOrderNumber && (
-                      <span className="flex items-center gap-1">
-                        <FileText size={14} />
-                        {order.workOrderNumber}
-                      </span>
-                    )}
                   </div>
-                  {order.description && (
-                    <p className="text-sm text-gray-600">{order.description}</p>
+                  {order.notes && (
+                    <p className="text-sm text-gray-600">{order.notes}</p>
                   )}
                 </div>
                 <div className="flex items-center gap-2">
@@ -525,7 +548,7 @@ export default function MaterialOrdersView() {
                 </div>
                 <div>
                   <p className="text-xs text-gray-500 mb-1">Amount</p>
-                  <p className="text-sm font-semibold text-gray-900">{formatCurrency(order.totalAmount)}</p>
+                  <p className="text-sm font-semibold text-gray-900">{formatCurrency(order.total)}</p>
                 </div>
                 {order.status === 'delivered' && order.actualDeliveryDate && order.expectedDeliveryDate && (
                   <div>
@@ -629,39 +652,19 @@ export default function MaterialOrdersView() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Link to Project (Optional)
+                    Link to Job (Optional)
                   </label>
                   <select
-                    value={selectedProjectId}
-                    onChange={(e) => setSelectedProjectId(e.target.value)}
+                    value={selectedJobId}
+                    onChange={(e) => setSelectedJobId(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                   >
-                    <option value="">No project</option>
+                    <option value="">No job</option>
                     {state.projects.map((project) => (
                       <option key={project.id} value={project.id}>
                         {project.projectNumber} - {project.name}
                       </option>
                     ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Link to Work Order (Optional)
-                  </label>
-                  <select
-                    value={selectedWorkOrderId}
-                    onChange={(e) => setSelectedWorkOrderId(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  >
-                    <option value="">No work order</option>
-                    {state.workOrders
-                      .filter(wo => !selectedProjectId || wo.projectId === selectedProjectId)
-                      .map((workOrder) => (
-                        <option key={workOrder.id} value={workOrder.id}>
-                          {workOrder.workOrderNumber} - {workOrder.title}
-                        </option>
-                      ))}
                   </select>
                 </div>
 
@@ -681,18 +684,76 @@ export default function MaterialOrdersView() {
                   </select>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Total Amount *
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={totalAmount}
-                    onChange={(e) => setTotalAmount(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  />
+                {/* Financial Fields */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Subtotal
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={subtotal}
+                      onChange={(e) => {
+                        setSubtotal(e.target.value);
+                        const newTotal = parseFloat(e.target.value || '0') + parseFloat(tax || '0') + parseFloat(shipping || '0');
+                        setTotal(newTotal.toFixed(2));
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Tax
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={tax}
+                      onChange={(e) => {
+                        setTax(e.target.value);
+                        const newTotal = parseFloat(subtotal || '0') + parseFloat(e.target.value || '0') + parseFloat(shipping || '0');
+                        setTotal(newTotal.toFixed(2));
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Shipping
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={shipping}
+                      onChange={(e) => {
+                        setShipping(e.target.value);
+                        const newTotal = parseFloat(subtotal || '0') + parseFloat(tax || '0') + parseFloat(e.target.value || '0');
+                        setTotal(newTotal.toFixed(2));
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Total
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={total}
+                      onChange={(e) => setTotal(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-gray-50"
+                      readOnly
+                    />
+                  </div>
                 </div>
 
                 <div>
@@ -734,30 +795,16 @@ export default function MaterialOrdersView() {
                 )}
               </div>
 
-              {/* Description */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Description / Items Ordered
-                </label>
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="List materials ordered, quantities, specifications..."
-                  rows={4}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
-                />
-              </div>
-
               {/* Notes */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Internal Notes
+                  Notes / Items Ordered
                 </label>
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Tracking numbers, special instructions, issues..."
-                  rows={2}
+                  placeholder="List materials ordered, quantities, specifications, tracking numbers, special instructions..."
+                  rows={4}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
                 />
               </div>

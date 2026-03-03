@@ -42,65 +42,79 @@ export default function QuickAddModal() {
   });
 
   const resolveCompanyId = async (): Promise<string | null> => {
-    const currentCompanyId = profile?.company_id || state.companyId || null;
-    if (currentCompanyId) return currentCompanyId;
+    // Timeout wrapper to prevent indefinite hanging
+    const timeout = new Promise<string | null>((_, reject) =>
+      setTimeout(() => reject(new Error('Company resolution timed out after 10 seconds')), 10000)
+    );
 
-    const userId = profile?.id || user?.id;
-    const userEmail = profile?.email || user?.email || '';
-    if (!userId || !userEmail) return null;
+    const resolveLogic = async (): Promise<string | null> => {
+      const currentCompanyId = profile?.company_id || state.companyId || null;
+      if (currentCompanyId) return currentCompanyId;
 
-    const profileResult = await supabase
-      .from('profiles')
-      .select('company_id')
-      .eq('id', userId)
-      .single();
+      const userId = profile?.id || user?.id;
+      const userEmail = profile?.email || user?.email || '';
+      if (!userId || !userEmail) return null;
 
-    if (!profileResult.error && profileResult.data?.company_id) {
-      dispatch({ type: 'SET_COMPANY_ID', payload: profileResult.data.company_id });
-      return profileResult.data.company_id;
-    }
-
-    const ensured = await ensureUserHasCompany(userId, userEmail);
-    if (ensured) {
-      const { data, error } = await supabase
+      const profileResult = await supabase
         .from('profiles')
         .select('company_id')
         .eq('id', userId)
         .single();
 
-      if (!error && data?.company_id) {
-        dispatch({ type: 'SET_COMPANY_ID', payload: data.company_id });
-        return data.company_id;
+      if (!profileResult.error && profileResult.data?.company_id) {
+        dispatch({ type: 'SET_COMPANY_ID', payload: profileResult.data.company_id });
+        return profileResult.data.company_id;
       }
+
+      const ensured = await ensureUserHasCompany(userId, userEmail);
+      if (ensured) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('company_id')
+          .eq('id', userId)
+          .single();
+
+        if (!error && data?.company_id) {
+          dispatch({ type: 'SET_COMPANY_ID', payload: data.company_id });
+          return data.company_id;
+        }
+      }
+
+      // Final fallback: create and link a company in case previous steps could not repair context.
+      const companyName = userEmail.split('@')[0] || 'My Company';
+      const createdCompany = await db.createCompany({
+        name: companyName + "'s Company",
+        email: userEmail,
+        phone: '',
+        address: '',
+        city: '',
+        state: '',
+        zip: '',
+        website: '',
+      });
+
+      if (!createdCompany?.id) return null;
+
+      const { error: linkError } = await supabase
+        .from('profiles')
+        .update({ company_id: createdCompany.id })
+        .eq('id', userId);
+
+      if (linkError) {
+        console.error('Failed to link fallback company for Quick Add:', linkError);
+        return null;
+      }
+
+      dispatch({ type: 'SET_COMPANY_ID', payload: createdCompany.id });
+      return createdCompany.id;
+    };
+
+    try {
+      return await Promise.race([resolveLogic(), timeout]);
+    } catch (error) {
+      console.error('Error resolving company ID:', error);
+      throw error;
     }
-
-    // Final fallback: create and link a company in case previous steps could not repair context.
-    const companyName = userEmail.split('@')[0] || 'My Company';
-    const createdCompany = await db.createCompany({
-      name: companyName + "'s Company",
-      email: userEmail,
-      phone: '',
-      address: '',
-      city: '',
-      state: '',
-      zip: '',
-      website: '',
-    });
-
-    if (!createdCompany?.id) return null;
-
-    const { error: linkError } = await supabase
-      .from('profiles')
-      .update({ company_id: createdCompany.id })
-      .eq('id', userId);
-
-    if (linkError) {
-      console.error('Failed to link fallback company for Quick Add:', linkError);
-      return null;
-    }
-
-    dispatch({ type: 'SET_COMPANY_ID', payload: createdCompany.id });
-    return createdCompany.id;
   };
 
   const handleClose = () => {
@@ -137,12 +151,22 @@ export default function QuickAddModal() {
     setIsSubmitting(true);
 
     try {
-      const effectiveCompanyId = profile?.company_id || state.companyId || await resolveCompanyId();
+      // Move company resolution into try block for proper error handling
+      const effectiveCompanyId = profile?.company_id || state.companyId;
+      console.log('[QuickAdd] Starting contact creation...', {
+        hasProfile: !!profile,
+        company_id: effectiveCompanyId,
+        formData: `${formData.firstName} ${formData.lastName}`,
+      });
+      
+      const finalCompanyId = effectiveCompanyId || await resolveCompanyId();
+      console.log('[QuickAdd] Final company ID:', finalCompanyId);
 
       // If user has a company, save to database
-      if (effectiveCompanyId) {
+      if (finalCompanyId) {
+        console.log('[QuickAdd] Creating contact in database...');
         const dbContact = await db.createContact({
-          company_id: effectiveCompanyId,
+          company_id: finalCompanyId,
           first_name: formData.firstName,
           last_name: formData.lastName,
           email: formData.email || undefined,
@@ -168,9 +192,13 @@ export default function QuickAddModal() {
           deductible: formData.deductible ? parseFloat(formData.deductible) : undefined,
           notes: formData.notes || undefined,
         });
+        
         if (!dbContact) {
+          console.error('[QuickAdd] Database returned null for created contact');
           throw new Error('Failed to create contact');
         }
+
+        console.log('[QuickAdd] Contact created in database:', dbContact.id);
 
         const createdContact: Contact = {
           id: dbContact.id,
@@ -202,10 +230,15 @@ export default function QuickAddModal() {
           notes: dbContact.notes || undefined,
         };
 
+        console.log('[QuickAdd] Dispatching ADD_CONTACT to store...', createdContact.id);
         dispatch({ type: 'ADD_CONTACT', payload: createdContact });
+        console.log('[QuickAdd] Contact added to store successfully');
       } else {
         throw new Error('No company context found. Please try again in a few seconds.');
       }
+
+      console.log('[QuickAdd] Contact creation complete');
+      toast.success(`${formData.firstName} ${formData.lastName} has been added to the CRM.`);
 
       dispatch({
         type: 'ADD_NOTIFICATION',

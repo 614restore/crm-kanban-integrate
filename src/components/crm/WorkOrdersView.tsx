@@ -3,6 +3,7 @@ import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
 import { WorkOrder } from '@/lib/crmData';
+import { exportWorkOrdersToExcel } from '@/lib/exportUtils';
 import {
   Clipboard,
   Plus,
@@ -23,6 +24,7 @@ import {
   Paperclip,
   ListChecks,
   FolderKanban,
+  Download,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -423,6 +425,20 @@ export default function WorkOrdersView() {
     }
   };
 
+  const handleExport = () => {
+    try {
+      if (filteredWorkOrders.length === 0) {
+        toast.error('No work orders to export');
+        return;
+      }
+      exportWorkOrdersToExcel(filteredWorkOrders);
+      toast.success(`Exported ${filteredWorkOrders.length} work orders to Excel`);
+    } catch (error) {
+      console.error('Error exporting work orders:', error);
+      toast.error('Failed to export work orders');
+    }
+  };
+
   // Helper functions
   const getContactName = (contactId: string) => {
     const contact = state.contacts.find(c => c.id === contactId);
@@ -511,13 +527,22 @@ export default function WorkOrdersView() {
             <p className="text-sm text-gray-500">Schedule jobs and assign crews</p>
           </div>
         </div>
-        <button
-          onClick={() => handleOpenModal()}
-          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all"
-        >
-          <Plus size={20} />
-          New Work Order
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleExport}
+            className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <Download size={18} />
+            Export
+          </button>
+          <button
+            onClick={() => handleOpenModal()}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all"
+          >
+            <Plus size={20} />
+            New Work Order
+          </button>
+        </div>
       </div>
 
       {/* Stats */}

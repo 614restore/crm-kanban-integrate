@@ -53,9 +53,12 @@ import {
   Tag,
   Loader2,
   Eye,
+  Package,
+  ClipboardList,
+  Truck,
 } from 'lucide-react';
 
-type TabType = 'overview' | 'timeline' | 'documents' | 'financial' | 'jobs';
+type TabType = 'overview' | 'timeline' | 'documents' | 'financial' | 'projects';
 
 export default function ContactDetail() {
   const { state, dispatch } = useCRM();
@@ -73,6 +76,16 @@ export default function ContactDetail() {
   const [mentionSuggestions, setMentionSuggestions] = useState<ReturnType<typeof getMentionTargets>>([]);
   const [isUploadingDocument, setIsUploadingDocument] = useState(false);
   const [contactDocuments, setContactDocuments] = useState<Document[]>([]);
+  
+  // Project-related data
+  const [contactProjects, setContactProjects] = useState<any[]>([]);
+  const [contactEstimates, setContactEstimates] = useState<any[]>([]);
+  const [contactWorkOrders, setContactWorkOrders] = useState<any[]>([]);
+  const [contactMaterialOrders, setContactMaterialOrders] = useState<any[]>([]);
+  const [showProjectModal, setShowProjectModal] = useState(false);
+  const [showEstimateModal, setShowEstimateModal] = useState(false);
+  const [showWorkOrderModal, setShowWorkOrderModal] = useState(false);
+  
   const noteInputRef = useRef<HTMLInputElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
   const mentionTargets = useMemo(() => getMentionTargets(state.teamMembers), [state.teamMembers]);
@@ -83,6 +96,35 @@ export default function ContactDetail() {
     if (!contactId) return;
     setQuickNote(contactNotes);
   }, [contactId, contactNotes]);
+
+  // Load contact projects, estimates, work orders, and material orders
+  useEffect(() => {
+    const loadContactRelatedData = async () => {
+      if (!contactId || !profile?.company_id) return;
+
+      console.log(`[ContactDetail] Loading related data for contact: ${contactId}`);
+      
+      // Load projects for this contact
+      const projects = state.projects.filter(p => p.contactId === contactId);
+      setContactProjects(projects);
+      
+      // Load estimates for this contact
+      const estimates = state.estimates.filter(e => e.contactId === contactId);
+      setContactEstimates(estimates);
+      
+      // Load work orders for this contact
+      const workOrders = state.workOrders.filter(wo => wo.contactId === contactId);
+      setContactWorkOrders(workOrders);
+      
+      // Load material orders for this contact
+      const materialOrders = state.materialOrders.filter(mo => mo.contactId === contactId);
+      setContactMaterialOrders(materialOrders);
+      
+      console.log(`[ContactDetail] Loaded: ${projects.length} projects, ${estimates.length} estimates, ${workOrders.length} work orders, ${materialOrders.length} material orders`);
+    };
+
+    loadContactRelatedData();
+  }, [contactId, profile?.company_id, state.projects, state.estimates, state.workOrders, state.materialOrders]);
 
   // Load contact documents with signed URLs
   useEffect(() => {
@@ -553,7 +595,7 @@ export default function ContactDetail() {
     { id: 'timeline', label: 'Timeline', icon: <Clock size={16} /> },
     { id: 'documents', label: 'Documents', icon: <FileText size={16} /> },
     { id: 'financial', label: 'Financial', icon: <DollarSign size={16} /> },
-    { id: 'jobs', label: 'Jobs', icon: <Briefcase size={16} /> },
+    { id: 'projects', label: 'Projects', icon: <Briefcase size={16} /> },
   ];
 
   const currentData = isEditing && editedContact ? editedContact : contact;
@@ -1402,61 +1444,865 @@ export default function ContactDetail() {
           </div>
         )}
 
-        {activeTab === 'jobs' && (
+{activeTab === 'projects' && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">Jobs</h3>
-              <button onClick={() => { dispatch({ type: 'SET_VIEW', payload: 'calendar' }); toast.info('Create a new appointment for this customer in Calendar'); }} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                <Plus size={18} />
-                Add Job
-              </button>
+            {/* Projects Section */}
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                  <Briefcase size={20} />
+                  Projects ({contactProjects.length})
+                </h3>
+                <button
+                  onClick={() => setShowProjectModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <Plus size={18} />
+                  New Project
+                </button>
+              </div>
+
+              {contactProjects.length > 0 ? (
+                <div className="grid gap-4">
+                  {contactProjects.map((project) => (
+                    <div key={project.id} className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg transition-shadow">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <h4 className="text-lg font-semibold text-gray-900">{project.name}</h4>
+                          <p className="text-sm text-gray-500 mt-1">#{project.projectNumber}</p>
+                        </div>
+                        <span
+                          className={`px-3 py-1 rounded-full text-sm font-medium ${
+                            project.status === 'completed'
+                              ? 'bg-green-100 text-green-800'
+                              : project.status === 'in_progress'
+                              ? 'bg-blue-100 text-blue-800'
+                              : project.status === 'planning'
+                              ? 'bg-purple-100 text-purple-800'
+                              : project.status === 'on_hold'
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-gray-100 text-gray-800'
+                          }`}
+                        >
+                          {project.status.replace('_', ' ')}
+                        </span>
+                      </div>
+                      
+                      <div className="grid grid-cols-3 gap-4 text-sm">
+                        <div>
+                          <p className="text-gray-500">Budget</p>
+                          <p className="font-semibold text-gray-900">{formatCurrency(project.estimatedBudget || 0)}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500">Start Date</p>
+                          <p className="font-medium text-gray-900">
+                            {project.startDate ? formatDate(project.startDate) : 'Not set'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500">Completion</p>
+                          <p className="font-medium text-gray-900">
+                            {project.endDate ? formatDate(project.endDate) : 'Not set'}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      {project.description && (
+                        <p className="text-sm text-gray-600 mt-3 pt-3 border-t border-gray-100">
+                          {project.description}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+                  <Briefcase size={32} className="mx-auto mb-2 text-gray-400" />
+                  <p className="text-gray-500">No projects yet</p>
+                  <button
+                    onClick={() => setShowProjectModal(true)}
+                    className="mt-4 text-blue-600 hover:text-blue-700 font-medium"
+                  >
+                    Create your first project
+                  </button>
+                </div>
+              )}
             </div>
 
-            {(contact.jobs || []).map((job) => (
-              <div key={job.id} className="bg-white rounded-xl border border-gray-200 p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <h4 className="text-lg font-semibold text-gray-900">{job.title}</h4>
-                    <p className="text-gray-500 mt-1">{job.description}</p>
-                  </div>
-                  <span
-                    className={`px-3 py-1 rounded-full text-sm font-medium ${
-                      job.status === 'complete'
-                        ? 'bg-green-100 text-green-800'
-                        : job.status === 'in_progress'
-                        ? 'bg-blue-100 text-blue-800'
-                        : job.status === 'scheduled'
-                        ? 'bg-purple-100 text-purple-800'
-                        : 'bg-gray-100 text-gray-800'
-                    }`}
-                  >
-                    {job.status.replace('_', ' ')}
-                  </span>
-                </div>
-                <div className="grid grid-cols-3 gap-4 text-sm">
-                  <div>
-                    <p className="text-gray-500">Estimated Value</p>
-                    <p className="font-medium text-gray-900">{formatCurrency(job.estimatedValue)}</p>
-                  </div>
-                  {job.scheduledDate && (
-                    <div>
-                      <p className="text-gray-500">Scheduled</p>
-                      <p className="font-medium text-gray-900">{formatDate(job.scheduledDate)}</p>
-                    </div>
-                  )}
-                </div>
+            {/* Estimates Section */}
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                  <FileText size={20} />
+                  Estimates ({contactEstimates.length})
+                </h3>
+                <button
+                  onClick={() => setShowEstimateModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                >
+                  <Plus size={18} />
+                  New Estimate
+                </button>
               </div>
-            ))}
 
-            {(!contact.jobs || contact.jobs.length === 0) && (
-              <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
-                <Briefcase size={32} className="mx-auto mb-2 text-gray-400" />
-                <p className="text-gray-500">No jobs created yet</p>
+              {contactEstimates.length > 0 ? (
+                <div className="grid gap-4">
+                  {contactEstimates.map((estimate) => (
+                    <div key={estimate.id} className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg transition-shadow">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <h4 className="text-lg font-semibold text-gray-900">Estimate #{estimate.estimateNumber}</h4>
+                          <p className="text-sm text-gray-500 mt-1">
+                            Created {formatDate(estimate.createdAt)}
+                          </p>
+                        </div>
+                        <span
+                          className={`px-3 py-1 rounded-full text-sm font-medium ${
+                            estimate.status === 'accepted'
+                              ? 'bg-green-100 text-green-800'
+                              : estimate.status === 'sent'
+                              ? 'bg-blue-100 text-blue-800'
+                              : estimate.status === 'viewed'
+                              ? 'bg-purple-100 text-purple-800'
+                              : estimate.status === 'declined'
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-gray-100 text-gray-800'
+                          }`}
+                        >
+                          {estimate.status}
+                        </span>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <p className="text-gray-500">Total Amount</p>
+                          <p className="text-xl font-bold text-gray-900">{formatCurrency(estimate.total || 0)}</p>
+                        </div>
+                        {estimate.acceptedAt && (
+                          <div>
+                            <p className="text-gray-500">Accepted On</p>
+                            <p className="font-medium text-green-600">{formatDate(estimate.acceptedAt)}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+                  <FileText size={32} className="mx-auto mb-2 text-gray-400" />
+                  <p className="text-gray-500">No estimates yet</p>
+                  <button
+                    onClick={() => setShowEstimateModal(true)}
+                    className="mt-4 text-green-600 hover:text-green-700 font-medium"
+                  >
+                    Create your first estimate
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Work Orders Section */}
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                  <ClipboardList size={20} />
+                  Work Orders ({contactWorkOrders.length})
+                </h3>
+                <button
+                  onClick={() => setShowWorkOrderModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                >
+                  <Plus size={18} />
+                  New Work Order
+                </button>
               </div>
-            )}
+
+              {contactWorkOrders.length > 0 ? (
+                <div className="grid gap-4">
+                  {contactWorkOrders.map((workOrder) => (
+                    <div key={workOrder.id} className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg transition-shadow">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <h4 className="text-lg font-semibold text-gray-900">WO #{workOrder.workOrderNumber}</h4>
+                          <p className="text-sm text-gray-500 mt-1">{workOrder.title || 'Work Order'}</p>
+                        </div>
+                        <span
+                          className={`px-3 py-1 rounded-full text-sm font-medium ${
+                            workOrder.status === 'completed'
+                              ? 'bg-green-100 text-green-800'
+                              : workOrder.status === 'in_progress'
+                              ? 'bg-blue-100 text-blue-800'
+                              : workOrder.status === 'scheduled'
+                              ? 'bg-purple-100 text-purple-800'
+                              : 'bg-gray-100 text-gray-800'
+                          }`}
+                        >
+                          {workOrder.status.replace('_', ' ')}
+                        </span>
+                      </div>
+                      
+                      <div className="grid grid-cols-3 gap-4 text-sm">
+                        <div>
+                          <p className="text-gray-500">Scheduled</p>
+                          <p className="font-medium text-gray-900">
+                            {workOrder.scheduledDate ? formatDate(workOrder.scheduledDate) : 'Not set'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500">Hours Est.</p>
+                          <p className="font-medium text-gray-900">{workOrder.estimatedHours || 0}h</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500">Total Cost</p>
+                          <p className="font-semibold text-gray-900">{formatCurrency(workOrder.totalCost || 0)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+                  <ClipboardList size={32} className="mx-auto mb-2 text-gray-400" />
+                  <p className="text-gray-500">No work orders yet</p>
+                  <button
+                    onClick={() => setShowWorkOrderModal(true)}
+                    className="mt-4 text-purple-600 hover:text-purple-700 font-medium"
+                  >
+                    Create your first work order
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Material Orders Section */}
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                  <Package size={20} />
+                  Material Orders ({contactMaterialOrders.length})
+                </h3>
+                <button
+                  onClick={() => {
+                    dispatch({ type: 'SET_VIEW', payload: 'materialOrders' });
+                    toast.info('Create a material order and link it to this customer');
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
+                >
+                  <Plus size={18} />
+                  New Material Order
+                </button>
+              </div>
+
+              {contactMaterialOrders.length > 0 ? (
+                <div className="grid gap-4">
+                  {contactMaterialOrders.map((materialOrder) => (
+                    <div key={materialOrder.id} className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg transition-shadow">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <h4 className="text-lg font-semibold text-gray-900">Order #{materialOrder.orderNumber}</h4>
+                          <p className="text-sm text-gray-500 mt-1">
+                            {materialOrder.supplierName || 'Supplier'}
+                          </p>
+                        </div>
+                        <span
+                          className={`px-3 py-1 rounded-full text-sm font-medium ${
+                            materialOrder.status === 'delivered'
+                              ? 'bg-green-100 text-green-800'
+                              : materialOrder.status === 'ordered'
+                              ? 'bg-blue-100 text-blue-800'
+                              : materialOrder.status === 'pending'
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-gray-100 text-gray-800'
+                          }`}
+                        >
+                          {materialOrder.status}
+                        </span>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <p className="text-gray-500">Total Amount</p>
+                          <p className="text-xl font-bold text-gray-900">{formatCurrency(materialOrder.total || 0)}</p>
+                        </div>
+                        {materialOrder.expectedDeliveryDate && (
+                          <div>
+                            <p className="text-gray-500">Expected Delivery</p>
+                            <p className="font-medium text-gray-900">
+                              {formatDate(materialOrder.expectedDeliveryDate)}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+                  <Truck size={32} className="mx-auto mb-2 text-gray-400" />
+                  <p className="text-gray-500">No material orders yet</p>
+                  <button
+                    onClick={() => {
+                      dispatch({ type: 'SET_VIEW', payload: 'materialOrders' });
+                      toast.info('Create a material order and link it to this customer');
+                    }}
+                    className="mt-4 text-orange-600 hover:text-orange-700 font-medium"
+                  >
+                    Create your first material order
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
-    </div>
+
+      {/* Project Modal */}
+      {showProjectModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold text-gray-900">Create Project</h2>
+                <button
+                  onClick={() => setShowProjectModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.currentTarget);
+                const projectData = {
+                  company_id: profile?.company_id,
+                  contact_id: contactId,
+                  project_number: `PRJ-${Date.now()}`,
+                  name: formData.get('name') as string,
+                  description: formData.get('description') as string,
+                  status: formData.get('status') as string || 'planning',
+                  priority: formData.get('priority') as string || 'medium',
+                  start_date: formData.get('start_date') as string,
+                  end_date: formData.get('end_date') as string,
+                  estimated_budget: parseFloat(formData.get('estimated_budget') as string) || 0,
+                  actual_cost: 0,
+                  project_manager_id: profile?.id,
+                  created_by: profile?.id!,
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                };
+
+                const newProject = await db.createProject(projectData);
+                if (newProject) {
+                  toast.success('Project created successfully');
+                  setShowProjectModal(false);
+                  // Reload data
+                  const projects = await db.getProjectsByContact(contactId!);
+                  setContactProjects(projects);
+                } else {
+                  toast.error('Failed to create project');
+                }
+              }}
+              className="p-6 space-y-4"
+            >
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Project Name *
+                </label>
+                <input
+                  type="text"
+                  name="name"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Enter project name"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Description
+                </label>
+                <textarea
+                  name="description"
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Project description"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Status
+                  </label>
+                  <select
+                    name="status"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="planning">Planning</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="on_hold">On Hold</option>
+                    <option value="completed">Completed</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Priority
+                  </label>
+                  <select
+                    name="priority"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="urgent">Urgent</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Start Date
+                  </label>
+                  <input
+                    type="date"
+                    name="start_date"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    End Date
+                  </label>
+                  <input
+                    type="date"
+                    name="end_date"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Estimated Budget
+                </label>
+                <input
+                  type="number"
+                  name="estimated_budget"
+                  step="0.01"
+                  min="0"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="0.00"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-4 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => setShowProjectModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Create Project
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Estimate Modal */}
+      {showEstimateModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold text-gray-900">Create Estimate</h2>
+                <button
+                  onClick={() => setShowEstimateModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.currentTarget);
+                const amount = parseFloat(formData.get('amount') as string) || 0;
+                const taxRate = parseFloat(formData.get('tax_rate') as string) || 0;
+                const tax = amount * (taxRate / 100);
+                const total = amount + tax;
+
+                const estimateData = {
+                  company_id: profile?.company_id,
+                  contact_id: contactId,
+                  estimate_number: `EST-${Date.now()}`,
+                  title: formData.get('title') as string,
+                  description: formData.get('description') as string,
+                  status: 'draft',
+                  amount: amount,
+                  tax: tax,
+                  total: total,
+                  valid_until: formData.get('valid_until') as string,
+                  terms: formData.get('terms') as string,
+                  notes: formData.get('notes') as string,
+                  created_by: profile?.id!,
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                };
+
+                const newEstimate = await db.createEstimate(estimateData);
+                if (newEstimate) {
+                  toast.success('Estimate created successfully');
+                  setShowEstimateModal(false);
+                  // Reload data
+                  const estimates = await db.getEstimatesByContact(contactId!);
+                  setContactEstimates(estimates);
+                } else {
+                  toast.error('Failed to create estimate');
+                }
+              }}
+              className="p-6 space-y-4"
+            >
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Estimate Title *
+                </label>
+                <input
+                  type="text"
+                  name="title"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="Enter estimate title"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Description
+                </label>
+                <textarea
+                  name="description"
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="Estimate description"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Amount *
+                  </label>
+                  <input
+                    type="number"
+                    name="amount"
+                    required
+                    step="0.01"
+                    min="0"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Tax Rate (%)
+                  </label>
+                  <input
+                    type="number"
+                    name="tax_rate"
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    defaultValue="0"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Valid Until
+                </label>
+                <input
+                  type="date"
+                  name="valid_until"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Terms & Conditions
+                </label>
+                <textarea
+                  name="terms"
+                  rows={2}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="Payment terms, conditions, etc."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Notes
+                </label>
+                <textarea
+                  name="notes"
+                  rows={2}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="Internal notes"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-4 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => setShowEstimateModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                >
+                  Create Estimate
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Work Order Modal */}
+      {showWorkOrderModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold text-gray-900">Create Work Order</h2>
+                <button
+                  onClick={() => setShowWorkOrderModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.currentTarget);
+                const laborCost = parseFloat(formData.get('labor_cost') as string) || 0;
+                const materialCost = parseFloat(formData.get('material_cost') as string) || 0;
+                const totalCost = laborCost + materialCost;
+
+                // Get selected project if any
+                const projectId = formData.get('project_id') as string;
+
+                const workOrderData = {
+                  company_id: profile?.company_id,
+                  contact_id: contactId,
+                  project_id: projectId || undefined,
+                  work_order_number: `WO-${Date.now()}`,
+                  title: formData.get('title') as string,
+                  description: formData.get('description') as string,
+                  status: formData.get('status') as string || 'pending',
+                  priority: formData.get('priority') as string || 'medium',
+                  scheduled_date: formData.get('scheduled_date') as string,
+                  estimated_hours: parseFloat(formData.get('estimated_hours') as string) || 0,
+                  assigned_to: [],
+                  labor_cost: laborCost,
+                  material_cost: materialCost,
+                  total_cost: totalCost,
+                  created_by: profile?.id!,
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                };
+
+                const newWorkOrder = await db.createWorkOrder(workOrderData);
+                if (newWorkOrder) {
+                  toast.success('Work order created successfully');
+                  setShowWorkOrderModal(false);
+                  // Reload data
+                  const workOrders = await db.getWorkOrdersByContact(contactId!);
+                  setContactWorkOrders(workOrders);
+                } else {
+                  toast.error('Failed to create work order');
+                }
+              }}
+              className="p-6 space-y-4"
+            >
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Work Order Title *
+                </label>
+                <input
+                  type="text"
+                  name="title"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  placeholder="Enter work order title"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Link to Project (Optional)
+                </label>
+                <select
+                  name="project_id"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                >
+                  <option value="">No project</option>
+                  {contactProjects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.name} (#{project.projectNumber})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Description
+                </label>
+                <textarea
+                  name="description"
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  placeholder="Work order description"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Status
+                  </label>
+                  <select
+                    name="status"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  >
+                    <option value="pending">Pending</option>
+                    <option value="scheduled">Scheduled</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="completed">Completed</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Priority
+                  </label>
+                  <select
+                    name="priority"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="urgent">Urgent</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Scheduled Date
+                  </label>
+                  <input
+                    type="date"
+                    name="scheduled_date"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Estimated Hours
+                  </label>
+                  <input
+                    type="number"
+                    name="estimated_hours"
+                    step="0.5"
+                    min="0"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Labor Cost
+                  </label>
+                  <input
+                    type="number"
+                    name="labor_cost"
+                    step="0.01"
+                    min="0"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Material Cost
+                  </label>
+                  <input
+                    type="number"
+                    name="material_cost"
+                    step="0.01"
+                    min="0"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-4 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => setShowWorkOrderModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                >
+                  Create Work Order
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}    </div>
   );
 }

@@ -262,24 +262,10 @@ function CRMApp() {
   const loadData = useCallback(async (options?: { silent?: boolean }) => {
     const silent = options?.silent ?? false;
     if (!profile?.company_id) {
-      // No company yet - show empty state
-      dispatch({
-        type: 'INITIALIZE_DATA',
-        payload: {
-          contacts: [],
-          appointments: [],
-          invoices: [],
-          boards: defaultBoards,
-          leadSources: defaultLeadSources,
-          automations: [],
-          teamMembers: [],
-          suppliers: [],
-          materialOrders: [],
-          estimates: [],
-          projects: [],
-          workOrders: [],
-        },
-      });
+      // No company yet - just mark as not loading, don't initialize with empty data yet
+      if (!silent) {
+        dispatch({ type: 'SET_LOADING', payload: false });
+      }
       return;
     }
 
@@ -290,6 +276,7 @@ function CRMApp() {
 
     try {
       // Load all data in parallel
+      console.log('[CRM] Loading data from database for company:', profile.company_id);
       const [
         dbContacts,
         dbCommunications,
@@ -311,6 +298,7 @@ function CRMApp() {
       ]);
 
       // Convert DB contacts to app contacts
+      console.log('[CRM] Loaded contacts from database:', dbContacts.length);
       const contacts = dbContacts.map(dbContactToAppContact);
 
       // Attach communications to contacts
@@ -390,6 +378,7 @@ function CRMApp() {
         isActive: tm.is_active,
       }));
 
+      console.log('[CRM] Dispatching INITIALIZE_DATA with', enrichedContacts.length, 'contacts');
       dispatch({
         type: 'INITIALIZE_DATA',
         payload: {

@@ -4,6 +4,7 @@ import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
 import { toast } from 'sonner';
 import { Supplier } from '@/lib/crmData';
+import { exportSuppliersToExcel } from '@/lib/exportUtils';
 import {
   Store,
   Plus,
@@ -19,15 +20,89 @@ import {
   CreditCard,
   FileText,
   Building2,
+  Download,
+  Zap,
+  CheckCircle2,
 } from 'lucide-react';
+
+// Popular roofing material suppliers
+const POPULAR_SUPPLIERS = [
+  {
+    name: 'Roof Hub',
+    website: 'https://www.roofhub.com',
+    phone: '(877) 766-3482',
+    email: 'orders@roofhub.com',
+    paymentTerms: 'Net 30',
+    notes: 'Online roofing materials distributor with nationwide delivery',
+  },
+  {
+    name: 'Roof Link',
+    website: 'https://www.rooflink.com',
+    phone: '(800) 493-8665',
+    email: 'support@rooflink.com',
+    paymentTerms: 'Net 30',
+    notes: 'Roofing materials supplier and distributor',
+  },
+  {
+    name: 'ABC Supply',
+    website: 'https://www.abcsupply.com',
+    phone: '(888) 222-7831',
+    email: 'customerservice@abcsupply.com',
+    paymentTerms: 'Net 30',
+    notes: 'One of the largest wholesale distributors of roofing materials',
+  },
+  {
+    name: 'GAF Materials',
+    website: 'https://www.gaf.com',
+    phone: '(800) 223-1948',
+    email: 'info@gaf.com',
+    paymentTerms: 'Net 30',
+    notes: 'Leading roofing manufacturer - shingles, TPO, and more',
+  },
+  {
+    name: 'Owens Corning',
+    website: 'https://www.owenscorning.com',
+    phone: '(800) 438-7465',
+    email: 'roofing@owenscorning.com',
+    paymentTerms: 'Net 30',
+    notes: 'Premium roofing shingles and materials manufacturer',
+  },
+  {
+    name: 'Beacon Building Products',
+    website: 'https://www.becn.com',
+    phone: '(571) 323-3939',
+    email: 'customercare@becn.com',
+    paymentTerms: 'Net 30',
+    notes: 'Exterior building products distributor',
+  },
+  {
+    name: 'SRS Distribution',
+    website: 'https://www.srs-residential.com',
+    phone: '(888) 400-7663',
+    email: 'info@srs-residential.com',
+    paymentTerms: 'Net 30',
+    notes: 'Residential roofing supply distributor',
+  },
+  {
+    name: 'CertainTeed',
+    website: 'https://www.certainteed.com',
+    phone: '(800) 233-8990',
+    email: 'certainteed@saint-gobain.com',
+    paymentTerms: 'Net 30',
+    notes: 'Building materials manufacturer - roofing, siding, insulation',
+  },
+];
 
 export default function SuppliersView() {
   const { state, dispatch } = useCRM();
   const { profile } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showQuickAddModal, setShowQuickAddModal] = useState(false);
+  const [selectedSuppliers, setSelectedSuppliers] = useState<Set<string>>(new Set());
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isAddingBulk, setIsAddingBulk] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -256,6 +331,118 @@ export default function SuppliersView() {
     }
   };
 
+  const handleExport = () => {
+    try {
+      if (filteredSuppliers.length === 0) {
+        toast.error('No suppliers to export');
+        return;
+      }
+      exportSuppliersToExcel(filteredSuppliers);
+      toast.success(`Exported ${filteredSuppliers.length} suppliers to Excel`);
+    } catch (error) {
+      console.error('Error exporting suppliers:', error);
+      toast.error('Failed to export suppliers');
+    }
+  };
+
+  const handleToggleSupplierSelection = (supplierName: string) => {
+    setSelectedSuppliers(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(supplierName)) {
+        newSet.delete(supplierName);
+      } else {
+        newSet.add(supplierName);
+      }
+      return newSet;
+    });
+  };
+
+  const handleAddPopularSuppliers = async () => {
+    if (selectedSuppliers.size === 0) {
+      toast.error('Please select at least one supplier');
+      return;
+    }
+
+    if (!effectiveCompanyId) {
+      toast.error('No company context');
+      return;
+    }
+
+    setIsAddingBulk(true);
+
+    try {
+      const suppliersToAdd = POPULAR_SUPPLIERS.filter(s => selectedSuppliers.has(s.name));
+      const existingNames = new Set(state.suppliers.map(s => s.name.toLowerCase()));
+      
+      let addedCount = 0;
+      let skippedCount = 0;
+
+      for (const supplierTemplate of suppliersToAdd) {
+        // Skip if supplier already exists
+        if (existingNames.has(supplierTemplate.name.toLowerCase())) {
+          skippedCount++;
+          continue;
+        }
+
+        const created = await db.createSupplier({
+          company_id: effectiveCompanyId,
+          name: supplierTemplate.name,
+          contact_name: null,
+          email: supplierTemplate.email || null,
+          phone: supplierTemplate.phone || null,
+          address: null,
+          city: null,
+          state: null,
+          zip: null,
+          website: supplierTemplate.website || null,
+          account_number: null,
+          payment_terms: supplierTemplate.paymentTerms || null,
+          notes: supplierTemplate.notes || null,
+          is_active: true,
+        });
+
+        if (created) {
+          const appSupplier: Supplier = {
+            id: created.id,
+            name: created.name,
+            contactName: created.contact_name,
+            email: created.email,
+            phone: created.phone,
+            address: created.address,
+            city: created.city,
+            state: created.state,
+            zip: created.zip,
+            website: created.website,
+            accountNumber: created.account_number,
+            paymentTerms: created.payment_terms,
+            notes: created.notes,
+            isActive: created.is_active,
+            createdAt: created.created_at,
+            updatedAt: created.updated_at,
+          };
+
+          dispatch({ type: 'ADD_SUPPLIER', payload: appSupplier });
+          addedCount++;
+        }
+      }
+
+      if (addedCount > 0) {
+        toast.success(`Added ${addedCount} supplier${addedCount > 1 ? 's' : ''}`);
+      }
+      if (skippedCount > 0) {
+        toast.info(`Skipped ${skippedCount} existing supplier${skippedCount > 1 ? 's' : ''}`);
+      }
+
+      setShowQuickAddModal(false);
+      setSelectedSuppliers(new Set());
+    } catch (error) {
+      console.error('Error adding popular suppliers:', error);
+      toast.error('Failed to add suppliers');
+    } finally {
+      setIsAddingBulk(false);
+    }
+  };
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -264,13 +451,29 @@ export default function SuppliersView() {
           <h2 className="text-2xl font-bold text-gray-900">Suppliers</h2>
           <p className="text-gray-500 mt-1">Manage your material suppliers and vendors</p>
         </div>
-        <button
-          onClick={handleAdd}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <Plus size={18} />
-          Add Supplier
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleExport}
+            className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <Download size={18} />
+            Export
+          </button>
+          <button
+            onClick={() => setShowQuickAddModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all shadow-md"
+          >
+            <Zap size={18} />
+            Add Popular Suppliers
+          </button>
+          <button
+            onClick={handleAdd}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus size={18} />
+            Add Supplier
+          </button>
+        </div>
       </div>
 
       {/* Search */}
@@ -591,6 +794,164 @@ export default function SuppliersView() {
                 <Save size={18} />
                 {isSaving ? 'Saving...' : editingSupplier ? 'Update' : 'Create'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Add Popular Suppliers Modal */}
+      {showQuickAddModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white">
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900">Add Popular Roofing Suppliers</h3>
+                <p className="text-sm text-gray-500 mt-1">Select suppliers to add to your account</p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowQuickAddModal(false);
+                  setSelectedSuppliers(new Set());
+                }}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {POPULAR_SUPPLIERS.map((supplier) => {
+                  const isSelected = selectedSuppliers.has(supplier.name);
+                  const existingSupplier = state.suppliers.find(
+                    s => s.name.toLowerCase() === supplier.name.toLowerCase()
+                  );
+
+                  return (
+                    <div
+                      key={supplier.name}
+                      onClick={() => !existingSupplier && handleToggleSupplierSelection(supplier.name)}
+                      className={`relative border-2 rounded-xl p-4 transition-all cursor-pointer ${
+                        existingSupplier
+                          ? 'border-gray-200 bg-gray-50 cursor-not-allowed opacity-60'
+                          : isSelected
+                          ? 'border-blue-500 bg-blue-50 shadow-md'
+                          : 'border-gray-200 hover:border-blue-300 hover:shadow-md'
+                      }`}
+                    >
+                      {/* Selection Indicator */}
+                      <div className="absolute top-3 right-3">
+                        {existingSupplier ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full">
+                            <CheckCircle2 size={12} />
+                            Added
+                          </span>
+                        ) : (
+                          <div
+                            className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                              isSelected
+                                ? 'bg-blue-600 border-blue-600'
+                                : 'border-gray-300 bg-white'
+                            }`}
+                          >
+                            {isSelected && <CheckCircle2 size={14} className="text-white" />}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Supplier Info */}
+                      <div className="pr-10">
+                        <h4 className="font-semibold text-gray-900 mb-2">{supplier.name}</h4>
+                        
+                        <div className="space-y-1.5">
+                          {supplier.phone && (
+                            <div className="flex items-center gap-2 text-xs text-gray-600">
+                              <Phone size={12} />
+                              {supplier.phone}
+                            </div>
+                          )}
+                          {supplier.email && (
+                            <div className="flex items-center gap-2 text-xs text-gray-600">
+                              <Mail size={12} />
+                              {supplier.email}
+                            </div>
+                          )}
+                          {supplier.website && (
+                            <div className="flex items-center gap-2 text-xs text-gray-600">
+                              <Globe size={12} />
+                              <span className="truncate">{supplier.website}</span>
+                            </div>
+                          )}
+                          {supplier.paymentTerms && (
+                            <div className="flex items-center gap-2 text-xs text-gray-600">
+                              <CreditCard size={12} />
+                              {supplier.paymentTerms}
+                            </div>
+                          )}
+                        </div>
+
+                        {supplier.notes && (
+                          <p className="text-xs text-gray-500 mt-2 line-clamp-2">{supplier.notes}</p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Selection Info */}
+              {selectedSuppliers.size > 0 && (
+                <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm text-blue-900">
+                    <strong>{selectedSuppliers.size}</strong> supplier{selectedSuppliers.size > 1 ? 's' : ''} selected
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 border-t border-gray-200 flex items-center justify-between">
+              <button
+                onClick={() => {
+                  const availableSuppliers = POPULAR_SUPPLIERS.filter(
+                    s => !state.suppliers.find(existing => 
+                      existing.name.toLowerCase() === s.name.toLowerCase()
+                    )
+                  );
+                  if (selectedSuppliers.size === availableSuppliers.length) {
+                    setSelectedSuppliers(new Set());
+                  } else {
+                    setSelectedSuppliers(new Set(availableSuppliers.map(s => s.name)));
+                  }
+                }}
+                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+              >
+                {selectedSuppliers.size === POPULAR_SUPPLIERS.filter(
+                  s => !state.suppliers.find(existing => 
+                    existing.name.toLowerCase() === s.name.toLowerCase()
+                  )
+                ).length ? 'Deselect All' : 'Select All Available'}
+              </button>
+              
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => {
+                    setShowQuickAddModal(false);
+                    setSelectedSuppliers(new Set());
+                  }}
+                  className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                  disabled={isAddingBulk}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddPopularSuppliers}
+                  disabled={isAddingBulk || selectedSuppliers.size === 0}
+                  className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
+                >
+                  <Zap size={18} />
+                  {isAddingBulk ? 'Adding...' : `Add ${selectedSuppliers.size} Supplier${selectedSuppliers.size > 1 ? 's' : ''}`}
+                </button>
+              </div>
             </div>
           </div>
         </div>

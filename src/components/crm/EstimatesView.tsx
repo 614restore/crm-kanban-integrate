@@ -3,6 +3,7 @@ import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
 import { Estimate, EstimateItem, Contact } from '@/lib/crmData';
+import { exportEstimatesToExcel } from '@/lib/exportUtils';
 import {
   FileText,
   Plus,
@@ -20,6 +21,7 @@ import {
   User,
   Clock,
   CheckCircle,
+  Download,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -58,7 +60,7 @@ export default function EstimatesView() {
   const [estimateNumber, setEstimateNumber] = useState('');
   const [validityDate, setValidityDate] = useState('');
   const [items, setItems] = useState<EstimateItem[]>([
-    { id: crypto.randomUUID(), description: '', quantity: 1, unit: 'ea', unit_price: 0, total_price: 0, notes: '' }
+    { id: crypto.randomUUID(), description: '', quantity: 1, unit: 'ea', unitPrice: 0, total: 0 }
   ]);
   const [notes, setNotes] = useState('');
   const [terms, setTerms] = useState('');
@@ -73,16 +75,71 @@ export default function EstimatesView() {
     if (!profile?.company_id) return;
     try {
       const estimates = await db.getEstimates(profile.company_id);
-      dispatch({ type: 'SET_ESTIMATES', payload: estimates });
+      // Convert DB format to app format
+      const appEstimates: Estimate[] = estimates.map((e: any) => ({
+        id: e.id,
+        contactId: e.contact_id,
+        contactName: getContactName(e.contact_id),
+        jobId: e.job_id,
+        estimateNumber: e.estimate_number,
+        title: e.title,
+        description: e.description,
+        status: e.status,
+        amount: Number(e.amount),
+        tax: Number(e.tax),
+        total: Number(e.total),
+        validUntil: e.valid_until,
+        createdAt: e.created_at,
+        sentAt: e.sent_at,
+        viewedAt: e.viewed_at,
+        acceptedAt: e.accepted_at,
+        declinedAt: e.declined_at,
+        signedBy: e.signed_by,
+        signatureData: e.signature_data,
+        items: e.items || [],
+        terms: e.terms,
+        notes: e.notes,
+        createdBy: e.created_by,
+        updatedAt: e.updated_at,
+      }));
+      dispatch({ type: 'SET_ESTIMATES', payload: appEstimates });
     } catch (error) {
       console.error('Error loading estimates:', error);
       toast.error('Failed to load estimates');
     }
   };
 
+  // Helper to convert database estimate to app format
+  const mapDbEstimateToApp = (e: any): Estimate => ({
+    id: e.id,
+    contactId: e.contact_id,
+    contactName: getContactName(e.contact_id),
+    jobId: e.job_id,
+    estimateNumber: e.estimate_number,
+    title: e.title,
+    description: e.description,
+    status: e.status,
+    amount: Number(e.amount || e.subtotal || 0),
+    tax: Number(e.tax || 0),
+    total: Number(e.total || 0),
+    validUntil: e.valid_until || e.validity_date,
+    createdAt: e.created_at,
+    sentAt: e.sent_at,
+    viewedAt: e.viewed_at,
+    acceptedAt: e.accepted_at,
+    declinedAt: e.declined_at,
+    signedBy: e.signed_by,
+    signatureData: e.signature_data,
+    items: e.items || [],
+    terms: e.terms || e.terms_and_conditions,
+    notes: e.notes,
+    createdBy: e.created_by,
+    updatedAt: e.updated_at,
+  });
+
   // Calculate totals
   const calculateTotals = () => {
-    const subtotal = items.reduce((sum, item) => sum + item.total_price, 0);
+    const subtotal = items.reduce((sum, item) => sum + item.total, 0);
     const tax = subtotal * (taxRate / 100);
     const total = subtotal + tax;
     return { subtotal, tax, total };
@@ -93,9 +150,9 @@ export default function EstimatesView() {
     const newItems = [...items];
     newItems[index] = { ...newItems[index], [field]: value };
     
-    // Recalculate total_price if quantity or unit_price changed
-    if (field === 'quantity' || field === 'unit_price') {
-      newItems[index].total_price = newItems[index].quantity * newItems[index].unit_price;
+    // Recalculate total if quantity or unitPrice changed
+    if (field === 'quantity' || field === 'unitPrice') {
+      newItems[index].total = newItems[index].quantity * newItems[index].unitPrice;
     }
     
     setItems(newItems);
@@ -104,7 +161,7 @@ export default function EstimatesView() {
   const addItem = () => {
     setItems([
       ...items,
-      { id: crypto.randomUUID(), description: '', quantity: 1, unit: 'ea', unit_price: 0, total_price: 0, notes: '' }
+      { id: crypto.randomUUID(), description: '', quantity: 1, unit: 'ea', unitPrice: 0, total: 0 }
     ]);
   };
 
@@ -117,14 +174,14 @@ export default function EstimatesView() {
   const handleOpenModal = (estimate?: Estimate) => {
     if (estimate) {
       setEditingEstimate(estimate);
-      setSelectedContactId(estimate.contact_id);
+      setSelectedContactId(estimate.contactId);
       setTitle(estimate.title);
-      setEstimateNumber(estimate.estimate_number);
-      setValidityDate(estimate.validity_date);
+      setEstimateNumber(estimate.estimateNumber);
+      setValidityDate(estimate.validUntil || '');
       setItems(estimate.items);
       setNotes(estimate.notes || '');
-      setTerms(estimate.terms_and_conditions || '');
-      setTaxRate(estimate.tax / estimate.subtotal * 100 || 0);
+      setTerms(estimate.terms || '');
+      setTaxRate(estimate.tax / estimate.amount * 100 || 0);
     } else {
       // Generate estimate number
       const nextNumber = `EST-${Date.now().toString().slice(-6)}`;
@@ -146,7 +203,7 @@ export default function EstimatesView() {
     setEstimateNumber('');
     setValidityDate('');
     setItems([
-      { id: crypto.randomUUID(), description: '', quantity: 1, unit: 'ea', unit_price: 0, total_price: 0, notes: '' }
+      { id: crypto.randomUUID(), description: '', quantity: 1, unit: 'ea', unitPrice: 0, total: 0 }
     ]);
     setNotes('');
     setTerms('');
@@ -193,13 +250,13 @@ export default function EstimatesView() {
       if (editingEstimate) {
         const updated = await db.updateEstimate(editingEstimate.id, estimateData);
         if (updated) {
-          dispatch({ type: 'UPDATE_ESTIMATE', payload: updated });
+          dispatch({ type: 'UPDATE_ESTIMATE', payload: mapDbEstimateToApp(updated) });
           toast.success('Estimate updated');
         }
       } else {
         const created = await db.createEstimate(estimateData);
         if (created) {
-          dispatch({ type: 'ADD_ESTIMATE', payload: created });
+          dispatch({ type: 'ADD_ESTIMATE', payload: mapDbEstimateToApp(created) });
           toast.success('Estimate created');
         }
       }
@@ -217,7 +274,7 @@ export default function EstimatesView() {
     try {
       const updated = await db.markEstimateSent(estimateId);
       if (updated) {
-        dispatch({ type: 'UPDATE_ESTIMATE', payload: updated });
+        dispatch({ type: 'UPDATE_ESTIMATE', payload: mapDbEstimateToApp(updated) });
         toast.success('Estimate marked as sent');
       }
     } catch (error) {
@@ -238,15 +295,29 @@ export default function EstimatesView() {
     }
   };
 
+  const handleExport = () => {
+    try {
+      if (filteredEstimates.length === 0) {
+        toast.error('No estimates to export');
+        return;
+      }
+      exportEstimatesToExcel(filteredEstimates);
+      toast.success(`Exported ${filteredEstimates.length} estimates to Excel`);
+    } catch (error) {
+      console.error('Error exporting estimates:', error);
+      toast.error('Failed to export estimates');
+    }
+  };
+
   // Filter estimates
   const filteredEstimates = state.estimates.filter((estimate) => {
-    const contact = state.contacts.find(c => c.id === estimate.contact_id);
-    const contactName = contact ? `${contact.first_name} ${contact.last_name}`.toLowerCase() : '';
+    const contact = state.contacts.find(c => c.id === estimate.contactId);
+    const contactName = contact ? `${contact.firstName} ${contact.lastName}`.toLowerCase() : '';
     const query = searchQuery.toLowerCase();
     
     return (
-      estimate.estimate_number.toLowerCase().includes(query) ||
       estimate.title.toLowerCase().includes(query) ||
+      estimate.estimateNumber.toLowerCase().includes(query) ||
       contactName.includes(query)
     );
   });
@@ -254,7 +325,7 @@ export default function EstimatesView() {
   // Get contact name helper
   const getContactName = (contactId: string) => {
     const contact = state.contacts.find(c => c.id === contactId);
-    return contact ? `${contact.first_name} ${contact.last_name}` : 'Unknown';
+    return contact ? `${contact.firstName} ${contact.lastName}` : 'Unknown';
   };
 
   // Format currency
@@ -287,13 +358,22 @@ export default function EstimatesView() {
             <p className="text-sm text-gray-500">Create and manage customer estimates</p>
           </div>
         </div>
-        <button
-          onClick={() => handleOpenModal()}
-          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all"
-        >
-          <Plus size={20} />
-          New Estimate
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleExport}
+            className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <Download size={18} />
+            Export
+          </button>
+          <button
+            onClick={() => handleOpenModal()}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all"
+          >
+            <Plus size={20} />
+            New Estimate
+          </button>
+        </div>
       </div>
 
       {/* Search */}
@@ -342,14 +422,14 @@ export default function EstimatesView() {
                     <StatusBadge status={estimate.status} />
                   </div>
                   <div className="flex items-center gap-4 text-sm text-gray-600">
-                    <span className="font-mono">{estimate.estimate_number}</span>
+                    <span className="font-mono">{estimate.estimateNumber}</span>
                     <span className="flex items-center gap-1">
                       <User size={14} />
-                      {getContactName(estimate.contact_id)}
+                      {getContactName(estimate.contactId)}
                     </span>
                     <span className="flex items-center gap-1">
                       <Calendar size={14} />
-                      Valid until {formatDate(estimate.validity_date)}
+                      Valid until {formatDate(estimate.validUntil || '')}
                     </span>
                   </div>
                 </div>
@@ -385,7 +465,7 @@ export default function EstimatesView() {
                 <div className="grid grid-cols-3 gap-4 text-sm">
                   <div>
                     <p className="text-gray-500 mb-1">Subtotal</p>
-                    <p className="font-semibold text-gray-900">{formatCurrency(estimate.subtotal)}</p>
+                    <p className="font-semibold text-gray-900">{formatCurrency(estimate.amount)}</p>
                   </div>
                   <div>
                     <p className="text-gray-500 mb-1">Tax</p>
@@ -401,28 +481,28 @@ export default function EstimatesView() {
                 {estimate.status !== 'draft' && (
                   <div className="mt-4 pt-4 border-t border-gray-100">
                     <div className="flex items-center gap-4 text-xs text-gray-500">
-                      {estimate.sent_at && (
+                      {estimate.sentAt && (
                         <span className="flex items-center gap-1">
                           <Clock size={12} />
-                          Sent {formatDate(estimate.sent_at)}
+                          Sent {formatDate(estimate.sentAt)}
                         </span>
                       )}
-                      {estimate.viewed_at && (
+                      {estimate.viewedAt && (
                         <span className="flex items-center gap-1">
                           <Eye size={12} />
-                          Viewed {formatDate(estimate.viewed_at)}
+                          Viewed {formatDate(estimate.viewedAt)}
                         </span>
                       )}
-                      {estimate.accepted_at && (
+                      {estimate.acceptedAt && (
                         <span className="flex items-center gap-1 text-green-600">
                           <Check size={12} />
-                          Accepted {formatDate(estimate.accepted_at)}
+                          Accepted {formatDate(estimate.acceptedAt)}
                         </span>
                       )}
-                      {estimate.declined_at && (
+                      {estimate.declinedAt && (
                         <span className="flex items-center gap-1 text-red-600">
                           <XCircle size={12} />
-                          Declined {formatDate(estimate.declined_at)}
+                          Declined {formatDate(estimate.declinedAt)}
                         </span>
                       )}
                     </div>
@@ -488,7 +568,7 @@ export default function EstimatesView() {
                     <option value="">Select a customer</option>
                     {state.contacts.map((contact) => (
                       <option key={contact.id} value={contact.id}>
-                        {contact.first_name} {contact.last_name}
+                        {contact.firstName} {contact.lastName}
                       </option>
                     ))}
                   </select>
@@ -584,14 +664,14 @@ export default function EstimatesView() {
                             placeholder="Price"
                             min="0"
                             step="0.01"
-                            value={item.unit_price}
-                            onChange={(e) => updateItem(index, 'unit_price', parseFloat(e.target.value) || 0)}
+                            value={item.unitPrice}
+                            onChange={(e) => updateItem(index, 'unitPrice', parseFloat(e.target.value) || 0)}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                           />
                         </div>
                         <div className="col-span-2 flex items-center gap-2">
                           <span className="text-sm font-medium text-gray-900">
-                            {formatCurrency(item.total_price)}
+                            {formatCurrency(item.total)}
                           </span>
                           {items.length > 1 && (
                             <button
@@ -603,13 +683,6 @@ export default function EstimatesView() {
                           )}
                         </div>
                       </div>
-                      <input
-                        type="text"
-                        placeholder="Additional notes for this item (optional)"
-                        value={item.notes}
-                        onChange={(e) => updateItem(index, 'notes', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
                     </div>
                   ))}
                 </div>
