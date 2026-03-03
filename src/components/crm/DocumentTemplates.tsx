@@ -88,78 +88,450 @@ const DocumentTemplates: React.FC = () => {
   const loadTemplates = async () => {
     setLoading(true);
     try {
-      // Mock data for demo
+      // Professional document templates with company branding and customer info
       const mockTemplates: DocumentTemplate[] = [
         {
           id: '1',
-          name: 'Standard Storm Damage Estimate',
-          description: 'Comprehensive estimate template for storm damage restoration projects',
+          name: 'Professional Storm Damage Estimate',
+          description: 'Comprehensive, professional estimate template for storm damage restoration projects',
           category: 'estimate',
-          content: `# Storm Damage Estimate
-          
-**Project:** {{PROJECT_NAME}}
-**Client:** {{CLIENT_NAME}}
-**Address:** {{PROJECT_ADDRESS}}
-**Date:** {{ESTIMATE_DATE}}
+          content: `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Storm Damage Estimate</title>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; }
+    .header { border-bottom: 3px solid #2563eb; padding-bottom: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; }
+    .company-info { flex: 1; }
+    .company-logo { flex: 0 0 120px; text-align: right; }
+    .company-name { font-size: 28px; font-weight: bold; color: #2563eb; margin-bottom: 5px; }
+    .company-tagline { font-size: 14px; color: #666; font-style: italic; margin-bottom: 10px; }
+    .contact-info { font-size: 14px; line-height: 1.4; }
+    .logo-placeholder { width: 100px; height: 60px; background: #f3f4f6; border: 2px dashed #d1d5db; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #6b7280; }
+    .document-title { text-align: center; font-size: 24px; font-weight: bold; color: #1f2937; margin: 30px 0; }
+    .info-section { display: flex; gap: 30px; margin-bottom: 30px; }
+    .customer-info, .project-info { flex: 1; background: #f8fafc; padding: 20px; border-radius: 8px; border-left: 4px solid #2563eb; }
+    .section-title { font-size: 16px; font-weight: bold; color: #1f2937; margin-bottom: 15px; border-bottom: 2px solid #e5e7eb; padding-bottom: 8px; }
+    .info-item { margin-bottom: 8px; display: flex; }
+    .info-label { font-weight: 600; min-width: 120px; color: #4b5563; }
+    .info-value { color: #1f2937; }
+    .scope-section { margin: 30px 0; padding: 20px; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; }
+    .scope-title { font-size: 18px; font-weight: bold; color: #1f2937; margin-bottom: 15px; }
+    .scope-content { line-height: 1.8; color: #374151; }
+    .breakdown-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    .breakdown-table th, .breakdown-table td { padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb; }
+    .breakdown-table th { background: #f3f4f6; font-weight: 600; color: #374151; }
+    .total-section { background: #3b82f6; color: white; padding: 20px; border-radius: 8px; text-align: center; margin: 30px 0; }
+    .total-amount { font-size: 32px; font-weight: bold; margin-bottom: 10px; }
+    .total-label { font-size: 16px; opacity: 0.9; }
+    .terms { background: #fef3c7; padding: 15px; border-radius: 8px; border-left: 4px solid #f59e0b; margin-top: 30px; }
+    .signature-section { margin-top: 40px; display: flex; justify-content: space-between; }
+    .signature-box { text-align: center; flex: 1; margin: 0 20px; }
+    .signature-line { border-bottom: 2px solid #374151; margin-bottom: 10px; height: 40px; }
+    .signature-label { font-size: 14px; color: #6b7280; }
+    .footer { margin-top: 40px; text-align: center; font-size: 12px; color: #9ca3af; border-top: 1px solid #e5e7eb; padding-top: 20px; }
+  </style>
+</head>
+<body>
+  <!-- Company Header -->
+  <div class="header">
+    <div class="company-info">
+      <div class="company-name">{{COMPANY_NAME}}</div>
+      <div class="company-tagline">{{COMPANY_TAGLINE}}</div>
+      <div class="contact-info">
+        <strong>{{REP_NAME}}</strong> - Licensed Contractor<br>
+        {{COMPANY_ADDRESS}}<br>
+        {{COMPANY_CITY}}, {{COMPANY_STATE}} {{COMPANY_ZIP}}<br>
+        Phone: {{COMPANY_PHONE}} | Email: {{COMPANY_EMAIL}}<br>
+        License: {{CONTRACTOR_LICENSE}}
+      </div>
+    </div>
+    <div class="company-logo">
+      <div class="logo-placeholder">{{COMPANY_LOGO}}</div>
+    </div>
+  </div>
 
-## Scope of Work
-{{SCOPE_OF_WORK}}
+  <!-- Document Title -->
+  <div class="document-title">STORM DAMAGE ESTIMATE</div>
 
-## Materials
-{{MATERIALS_LIST}}
+  <!-- Customer & Project Information -->
+  <div class="info-section">
+    <div class="customer-info">
+      <div class="section-title">CUSTOMER INFORMATION</div>
+      <div class="info-item">
+        <span class="info-label">Name:</span>
+        <span class="info-value">{{CUSTOMER_NAME}}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Phone:</span>
+        <span class="info-value">{{CUSTOMER_PHONE}}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Email:</span>
+        <span class="info-value">{{CUSTOMER_EMAIL}}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Property Address:</span>
+        <span class="info-value">{{PROPERTY_ADDRESS}}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label"></span>
+        <span class="info-value">{{PROPERTY_CITY}}, {{PROPERTY_STATE}} {{PROPERTY_ZIP}}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Insurance Company:</span>
+        <span class="info-value">{{INSURANCE_COMPANY}}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Policy Number:</span>
+        <span class="info-value">{{POLICY_NUMBER}}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Claim Number:</span>
+        <span class="info-value">{{CLAIM_NUMBER}}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Adjuster:</span>
+        <span class="info-value">{{ADJUSTER_NAME}} - {{ADJUSTER_PHONE}}</span>
+      </div>
+    </div>
+    <div class="project-info">
+      <div class="section-title">PROJECT DETAILS</div>
+      <div class="info-item">
+        <span class="info-label">Estimate Date:</span>
+        <span class="info-value">{{ESTIMATE_DATE}}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Estimate #:</span>
+        <span class="info-value">{{ESTIMATE_NUMBER}}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Project Type:</span>
+        <span class="info-value">{{PROJECT_TYPE}}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Storm Date:</span>
+        <span class="info-value">{{STORM_DATE}}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Damage Type:</span>
+        <span class="info-value">{{DAMAGE_TYPE}}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Requested Start:</span>
+        <span class="info-value">{{REQUESTED_START}}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Est. Duration:</span>
+        <span class="info-value">{{ESTIMATED_DURATION}}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Deductible:</span>
+        <span class="info-value">{{DEDUCTIBLE_AMOUNT}}</span>
+      </div>
+    </div>
+  </div>
 
-## Labor
-{{LABOR_BREAKDOWN}}
+  <!-- Scope of Work -->
+  <div class="scope-section">
+    <div class="scope-title">SCOPE OF WORK</div>
+    <div class="scope-content">{{SCOPE_OF_WORK}}</div>
+  </div>
 
-## Total: {{TOTAL_AMOUNT}}
+  <!-- Cost Breakdown -->
+  <div class="scope-section">
+    <div class="scope-title">COST BREAKDOWN</div>
+    <table class="breakdown-table">
+      <thead>
+        <tr>
+          <th>Description</th>
+          <th style="width: 100px;">Quantity</th>
+          <th style="width: 120px;">Unit Price</th>
+          <th style="width: 120px;">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{COST_BREAKDOWN_ITEMS}}
+      </tbody>
+    </table>
+    
+    <div style="margin-top: 20px; text-align: right;">
+      <div style="margin-bottom: 8px;"><strong>Subtotal: {{SUBTOTAL}}</strong></div>
+      <div style="margin-bottom: 8px;">Tax ({{TAX_RATE}}%): {{TAX_AMOUNT}}</div>
+      <div style="margin-bottom: 8px;">Insurance Deductible: -{{DEDUCTIBLE_AMOUNT}}</div>
+    </div>
+  </div>
 
-*This estimate is valid for 30 days from the date above.*`,
-          variables: ['PROJECT_NAME', 'CLIENT_NAME', 'PROJECT_ADDRESS', 'ESTIMATE_DATE', 'SCOPE_OF_WORK', 'MATERIALS_LIST', 'LABOR_BREAKDOWN', 'TOTAL_AMOUNT'],
+  <!-- Total Amount -->
+  <div class="total-section">
+    <div class="total-label">TOTAL PROJECT COST</div>
+    <div class="total-amount">{{TOTAL_AMOUNT}}</div>
+    <div style="font-size: 14px; opacity: 0.9;">Amount due after insurance claim settlement</div>
+  </div>
+
+  <!-- Terms and Conditions -->
+  <div class="terms">
+    <p><strong>Terms & Conditions:</strong></p>
+    <p>• This estimate is valid for 30 days from the date above.<br>
+    • Work to be completed according to agreed specifications.<br>
+    • Final payment due upon completion and customer satisfaction.<br>
+    • All materials and workmanship guaranteed for {{WARRANTY_PERIOD}}.<br>
+    • Changes to scope of work require written authorization.</p>
+  </div>
+
+  <!-- Signatures -->
+  <div class="signature-section">
+    <div class="signature-box">
+      <div class="signature-line"></div>
+      <div class="signature-label">Customer Signature / Date</div>
+    </div>
+    <div class="signature-box">
+      <div class="signature-line"></div>
+      <div class="signature-label">Contractor Signature / Date</div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    Thank you for choosing {{COMPANY_NAME}} for your restoration needs!<br>
+    We're committed to quality workmanship and customer satisfaction.
+  </div>
+</body>
+</html>`,
+          variables: ['COMPANY_NAME', 'COMPANY_TAGLINE', 'REP_NAME', 'COMPANY_ADDRESS', 'COMPANY_CITY', 'COMPANY_STATE', 'COMPANY_ZIP', 'COMPANY_PHONE', 'COMPANY_EMAIL', 'CONTRACTOR_LICENSE', 'COMPANY_LOGO', 'CUSTOMER_NAME', 'CUSTOMER_PHONE', 'CUSTOMER_EMAIL', 'PROPERTY_ADDRESS', 'PROPERTY_CITY', 'PROPERTY_STATE', 'PROPERTY_ZIP', 'INSURANCE_COMPANY', 'POLICY_NUMBER', 'CLAIM_NUMBER', 'ADJUSTER_NAME', 'ADJUSTER_PHONE', 'ESTIMATE_DATE', 'ESTIMATE_NUMBER', 'PROJECT_TYPE', 'STORM_DATE', 'DAMAGE_TYPE', 'REQUESTED_START', 'ESTIMATED_DURATION', 'DEDUCTIBLE_AMOUNT', 'SCOPE_OF_WORK', 'COST_BREAKDOWN_ITEMS', 'SUBTOTAL', 'TAX_RATE', 'TAX_AMOUNT', 'TOTAL_AMOUNT', 'WARRANTY_PERIOD'],
           favorite: true,
           isDefault: true,
-          tags: ['storm', 'restoration', 'roofing'],
+          tags: ['storm', 'restoration', 'roofing', 'professional'],
           createdAt: '2026-01-15',
-          lastModified: '2026-02-20',
+          lastModified: '2026-03-03',
           usageCount: 47,
-          fileType: 'pdf'
+          fileType: 'html'
         },
         {
           id: '2',
-          name: 'Roofing Work Order',
-          description: 'Standard work order template for roofing projects',
+          name: 'Professional Work Order',
+          description: 'Comprehensive work order template for roofing and restoration projects',
           category: 'work-order',
-          content: `# Work Order - {{WORK_ORDER_NUMBER}}
+          content: `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Work Order</title>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; }
+    .header { border-bottom: 3px solid #059669; padding-bottom: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; }
+    .company-info { flex: 1; }
+    .company-logo { flex: 0 0 120px; text-align: right; }
+    .company-name { font-size: 28px; font-weight: bold; color: #059669; margin-bottom: 5px; }
+    .company-tagline { font-size: 14px; color: #666; font-style: italic; margin-bottom: 10px; }
+    .contact-info { font-size: 14px; line-height: 1.4; }
+    .logo-placeholder { width: 100px; height: 60px; background: #f3f4f6; border: 2px dashed #d1d5db; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #6b7280; }
+    .document-title { text-align: center; font-size: 24px; font-weight: bold; color: #1f2937; margin: 30px 0; }
+    .info-section { display: flex; gap: 30px; margin-bottom: 30px; }
+    .customer-info, .project-info { flex: 1; background: #f0fdf4; padding: 20px; border-radius: 8px; border-left: 4px solid #059669; }
+    .section-title { font-size: 16px; font-weight: bold; color: #1f2937; margin-bottom: 15px; border-bottom: 2px solid #e5e7eb; padding-bottom: 8px; }
+    .info-item { margin-bottom: 8px; display: flex; }
+    .info-label { font-weight: 600; min-width: 120px; color: #4b5563; }
+    .info-value { color: #1f2937; }
+    .work-section { margin: 30px 0; padding: 20px; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; }
+    .work-title { font-size: 18px; font-weight: bold; color: #1f2937; margin-bottom: 15px; }
+    .work-content { line-height: 1.8; color: #374151; }
+    .crew-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    .crew-table th, .crew-table td { padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb; }
+    .crew-table th { background: #f3f4f6; font-weight: 600; color: #374151; }
+    .safety-section { background: #fef2f2; border: 2px solid #fca5a5; border-radius: 8px; padding: 20px; margin: 30px 0; }
+    .safety-title { color: #dc2626; font-weight: bold; font-size: 18px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; }
+    .safety-item { margin: 10px 0; padding: 8px; background: white; border-radius: 4px; }
+    .priority-high { background: #dc2626; color: white; padding: 20px; border-radius: 8px; text-align: center; margin: 30px 0; }
+    .signature-section { margin-top: 40px; display: flex; justify-content: space-between; gap: 40px; }
+    .signature-box { text-align: center; flex: 1; }
+    .signature-line { border-bottom: 2px solid #374151; margin-bottom: 10px; height: 40px; }
+    .signature-label { font-size: 14px; color: #6b7280; }
+    .footer { margin-top: 40px; text-align: center; font-size: 12px; color: #9ca3af; border-top: 1px solid #e5e7eb; padding-top: 20px; }
+    .checkbox-list { list-style: none; padding: 0; }
+    .checkbox-list li { margin: 10px 0; padding: 8px; background: #f9fafb; border-radius: 4px; }
+    .checkbox-list li:before { content: "☐ "; font-weight: bold; color: #059669; margin-right: 8px; }
+  </style>
+</head>
+<body>
+  <!-- Company Header -->
+  <div class="header">
+    <div class="company-info">
+      <div class="company-name">{{COMPANY_NAME}}</div>
+      <div class="company-tagline">{{COMPANY_TAGLINE}}</div>
+      <div class="contact-info">
+        <strong>{{SUPERVISOR_NAME}}</strong> - Project Supervisor<br>
+        {{COMPANY_ADDRESS}}<br>
+        {{COMPANY_CITY}}, {{COMPANY_STATE}} {{COMPANY_ZIP}}<br>
+        Phone: {{SUPERVISOR_PHONE}} | Email: {{SUPERVISOR_EMAIL}}<br>
+        License: {{CONTRACTOR_LICENSE}}
+      </div>
+    </div>
+    <div class="company-logo">
+      <div class="logo-placeholder">{{COMPANY_LOGO}}</div>
+    </div>
+  </div>
 
-**Client:** {{CLIENT_NAME}}
-**Project Address:** {{PROJECT_ADDRESS}}
-**Start Date:** {{START_DATE}}
-**Estimated Completion:** {{COMPLETION_DATE}}
+  <!-- Document Title -->
+  <div class="document-title">WORK ORDER #{{WORK_ORDER_NUMBER}}</div>
 
-## Work Description
-{{WORK_DESCRIPTION}}
+  <!-- Customer & Project Information -->
+  <div class="info-section">
+    <div class="customer-info">
+      <div class="section-title">CUSTOMER INFORMATION</div>
+      <div class="info-item">
+        <span class="info-label">Name:</span>
+        <span class="info-value">{{CUSTOMER_NAME}}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Phone:</span>
+        <span class="info-value">{{CUSTOMER_PHONE}}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Email:</span>
+        <span class="info-value">{{CUSTOMER_EMAIL}}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Job Site Address:</span>
+        <span class="info-value">{{JOB_SITE_ADDRESS}}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label"></span>
+        <span class="info-value">{{JOB_SITE_CITY}}, {{JOB_SITE_STATE}} {{JOB_SITE_ZIP}}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Access Instructions:</span>
+        <span class="info-value">{{ACCESS_INSTRUCTIONS}}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Emergency Contact:</span>
+        <span class="info-value">{{EMERGENCY_CONTACT}}</span>
+      </div>
+    </div>
+    <div class="project-info">
+      <div class="section-title">PROJECT SCHEDULE</div>
+      <div class="info-item">
+        <span class="info-label">Start Date:</span>
+        <span class="info-value">{{START_DATE}}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Start Time:</span>
+        <span class="info-value">{{START_TIME}}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Estimated Duration:</span>
+        <span class="info-value">{{ESTIMATED_DURATION}}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Expected Completion:</span>
+        <span class="info-value">{{COMPLETION_DATE}}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Weather Backup Date:</span>
+        <span class="info-value">{{BACKUP_DATE}}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Priority Level:</span>
+        <span class="info-value">{{PRIORITY_LEVEL}}</span>
+      </div>
+    </div>
+  </div>
 
-## Materials Needed
-{{MATERIALS_NEEDED}}
+  <!-- Work Description -->
+  <div class="work-section">
+    <div class="work-title">WORK TO BE PERFORMED</div>
+    <div class="work-content">{{WORK_DESCRIPTION}}</div>
+  </div>
 
-## Safety Requirements
-- Hard hats required
-- Safety harnesses for roof work
-- Ladder safety protocols
-{{ADDITIONAL_SAFETY}}
+  <!-- Materials Required -->
+  <div class="work-section">
+    <div class="work-title">MATERIALS REQUIRED</div>
+    <div class="work-content">
+      <ul class="checkbox-list">
+        {{MATERIALS_LIST}}
+      </ul>
+    </div>
+  </div>
 
-## Crew Assignment
-{{CREW_ASSIGNMENT}}
+  <!-- Crew Assignment -->
+  <div class="work-section">
+    <div class="work-title">CREW ASSIGNMENT</div>
+    <table class="crew-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Role</th>
+          <th>Phone</th>
+          <th>Certification</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{CREW_ASSIGNMENTS}}
+      </tbody>
+    </table>
+  </div>
 
-**Supervisor:** {{SUPERVISOR_NAME}}
-**Phone:** {{SUPERVISOR_PHONE}}`,
-          variables: ['WORK_ORDER_NUMBER', 'CLIENT_NAME', 'PROJECT_ADDRESS', 'START_DATE', 'COMPLETION_DATE', 'WORK_DESCRIPTION', 'MATERIALS_NEEDED', 'ADDITIONAL_SAFETY', 'CREW_ASSIGNMENT', 'SUPERVISOR_NAME', 'SUPERVISOR_PHONE'],
+  <!-- Safety Requirements -->
+  <div class="safety-section">
+    <div class="safety-title">
+      ⚠️ SAFETY REQUIREMENTS - MANDATORY COMPLIANCE
+    </div>
+    <ul class="checkbox-list">
+      <li>Hard hats must be worn at all times on site</li>
+      <li>Safety harnesses required for all roof work above 6 feet</li>
+      <li>Safety glasses and steel-toed boots are mandatory</li>
+      <li>High-visibility vests required in traffic areas</li>
+      <li>First aid kit must be accessible on site</li>
+      <li>All power tools inspected before use</li>
+      <li>Ladder safety protocols must be followed</li>
+      <li>No work during severe weather conditions</li>
+      {{ADDITIONAL_SAFETY_REQUIREMENTS}}
+    </ul>
+  </div>
+
+  <!-- Important Notes -->
+  <div class="priority-high">
+    <div style="font-size: 18px; font-weight: bold; margin-bottom: 10px;">IMPORTANT REMINDERS</div>
+    <div style="font-size: 14px;">
+      • Customer must be notified upon arrival and departure<br>
+      • Protect all landscaping and customer property<br>
+      • Clean up work area daily before leaving<br>
+      • Report any issues or changes immediately to supervisor
+    </div>
+  </div>
+
+  <!-- Signatures -->
+  <div class="signature-section">
+    <div class="signature-box">
+      <div class="signature-line"></div>
+      <div class="signature-label">Supervisor Signature / Date</div>
+    </div>
+    <div class="signature-box">
+      <div class="signature-line"></div>
+      <div class="signature-label">Crew Leader Signature / Date</div>
+    </div>
+    <div class="signature-box">
+      <div class="signature-line"></div>
+      <div class="signature-label">Customer Acknowledgment / Date</div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    {{COMPANY_NAME}} - Professional Storm Restoration Services<br>
+    For questions or concerns, contact {{SUPERVISOR_NAME}} at {{SUPERVISOR_PHONE}}
+  </div>
+</body>
+</html>`,
+          variables: ['COMPANY_NAME', 'COMPANY_TAGLINE', 'SUPERVISOR_NAME', 'COMPANY_ADDRESS', 'COMPANY_CITY', 'COMPANY_STATE', 'COMPANY_ZIP', 'SUPERVISOR_PHONE', 'SUPERVISOR_EMAIL', 'CONTRACTOR_LICENSE', 'COMPANY_LOGO', 'WORK_ORDER_NUMBER', 'CUSTOMER_NAME', 'CUSTOMER_PHONE', 'CUSTOMER_EMAIL', 'JOB_SITE_ADDRESS', 'JOB_SITE_CITY', 'JOB_SITE_STATE', 'JOB_SITE_ZIP', 'ACCESS_INSTRUCTIONS', 'EMERGENCY_CONTACT', 'START_DATE', 'START_TIME', 'ESTIMATED_DURATION', 'COMPLETION_DATE', 'BACKUP_DATE', 'PRIORITY_LEVEL', 'WORK_DESCRIPTION', 'MATERIALS_LIST', 'CREW_ASSIGNMENTS', 'ADDITIONAL_SAFETY_REQUIREMENTS'],
           favorite: false,
           isDefault: false,
-          tags: ['roofing', 'work-order', 'crew'],
+          tags: ['roofing', 'work-order', 'crew', 'professional'],
           createdAt: '2026-02-01',
-          lastModified: '2026-03-01',
+          lastModified: '2026-03-03',
           usageCount: 23,
-          fileType: 'docx'
+          fileType: 'html'
         },
         {
           id: '3',
@@ -249,9 +621,329 @@ Temperature: {{TEMPERATURE}}
           lastModified: '2026-02-15',
           usageCount: 156,
           fileType: 'html'
+    },
+    {
+      id: '5',
+      name: 'Job Completion Certificate',
+      description: 'Professional certificate documenting successful project completion with customer satisfaction guarantee',
+      category: 'other',
+      content: `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Job Completion Certificate - {{PROJECT_NAME}}</title>
+    <style>
+        body {
+            font-family: 'Georgia', serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 40px;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            line-height: 1.6;
         }
-      ];
-      
+        .certificate-container {
+            background: white;
+            padding: 60px 40px;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            position: relative;
+            overflow: hidden;
+        }
+        .certificate-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 8px;
+            background: linear-gradient(90deg, #2563eb, #3b82f6, #60a5fa);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            border-bottom: 3px solid #e5e7eb;
+            padding-bottom: 30px;
+        }
+        .company-logo {
+            max-height: 80px;
+            margin-bottom: 20px;
+        }
+        .company-name {
+            font-size: 28px;
+            font-weight: bold;
+            color: #1e40af;
+            margin-bottom: 8px;
+            letter-spacing: 1px;
+        }
+        .company-tagline {
+            font-size: 16px;
+            color: #6b7280;
+            font-style: italic;
+        }
+        .certificate-title {
+            font-size: 36px;
+            font-weight: bold;
+            text-align: center;
+            color: #1e40af;
+            margin: 40px 0;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        .completion-statement {
+            font-size: 18px;
+            text-align: center;
+            margin: 30px 0;
+            color: #374151;
+            font-style: italic;
+        }
+        .project-details {
+            background: #f9fafb;
+            padding: 30px;
+            border-radius: 10px;
+            margin: 30px 0;
+            border-left: 5px solid #3b82f6;
+        }
+        .project-details h3 {
+            color: #1e40af;
+            margin-bottom: 20px;
+            font-size: 20px;
+        }
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 15px 0;
+            padding: 8px 0;
+            border-bottom: 1px dotted #d1d5db;
+        }
+        .detail-label {
+            font-weight: 600;
+            color: #374151;
+            min-width: 150px;
+        }
+        .detail-value {
+            color: #6b7280;
+            flex: 1;
+            text-align: right;
+        }
+        .quality-guarantee {
+            background: #ecfdf5;
+            border: 2px solid #10b981;
+            border-radius: 10px;
+            padding: 25px;
+            margin: 30px 0;
+            text-align: center;
+        }
+        .guarantee-title {
+            color: #059669;
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+        .guarantee-text {
+            color: #065f46;
+            font-size: 16px;
+            line-height: 1.8;
+        }
+        .completion-items {
+            margin: 30px 0;
+        }
+        .completion-items h4 {
+            color: #1e40af;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+        .completion-item {
+            display: flex;
+            align-items: center;
+            margin: 10px 0;
+            padding: 10px;
+            background: #f8fafc;
+            border-radius: 5px;
+        }
+        .checkmark {
+            color: #10b981;
+            font-weight: bold;
+            margin-right: 10px;
+            font-size: 18px;
+        }
+        .signature-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            margin: 50px 0 30px 0;
+        }
+        .signature-box {
+            text-align: center;
+        }
+        .signature-line {
+            border-bottom: 2px solid #374151;
+            height: 40px;
+            margin-bottom: 10px;
+            position: relative;
+        }
+        .signature-label {
+            font-weight: 600;
+            color: #6b7280;
+            font-size: 14px;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 2px solid #e5e7eb;
+            color: #6b7280;
+            font-size: 14px;
+        }
+        .contact-info {
+            margin: 10px 0;
+        }
+        .review-request {
+            background: #fef3c7;
+            border: 2px solid #f59e0b;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 30px 0;
+            text-align: center;
+        }
+        .review-title {
+            color: #92400e;
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .review-text {
+            color: #a16207;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="certificate-container">
+        <!-- Header -->
+        <div class="header">
+            <div class="company-name">{{COMPANY_NAME}}</div>
+            <div class="company-tagline">{{COMPANY_TAGLINE}}</div>
+        </div>
+
+        <!-- Certificate Title -->
+        <h1 class="certificate-title">Certificate of Completion</h1>
+
+        <!-- Completion Statement -->
+        <div class="completion-statement">
+            This certifies that {{CUSTOMER_NAME}} has received professional restoration services
+            and that all contracted work has been completed to the highest industry standards.
+        </div>
+
+        <!-- Project Details -->
+        <div class="project-details">
+            <h3>Project Information</h3>
+            <div class="detail-row">
+                <span class="detail-label">Customer:</span>
+                <span class="detail-value">{{CUSTOMER_NAME}}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Project Address:</span>
+                <span class="detail-value">{{PROJECT_ADDRESS}}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Project Type:</span>
+                <span class="detail-value">{{PROJECT_TYPE}}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Completion Date:</span>
+                <span class="detail-value">{{COMPLETION_DATE}}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Project Manager:</span>
+                <span class="detail-value">{{PROJECT_MANAGER}}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Insurance Claim #:</span>
+                <span class="detail-value">{{CLAIM_NUMBER}}</span>
+            </div>
+        </div>
+
+        <!-- Completion Items -->
+        <div class="completion-items">
+            <h4>Work Completed</h4>
+            <div class="completion-item">
+                <span class="checkmark">✓</span>
+                <span>All contracted work performed according to specifications</span>
+            </div>
+            <div class="completion-item">
+                <span class="checkmark">✓</span>
+                <span>Final inspection completed and passed</span>
+            </div>
+            <div class="completion-item">
+                <span class="checkmark">✓</span>
+                <span>Job site cleaned and debris removed</span>
+            </div>
+            <div class="completion-item">
+                <span class="checkmark">✓</span>
+                <span>All permits and inspections finalized</span>
+            </div>
+            <div class="completion-item">
+                <span class="checkmark">✓</span>
+                <span>Customer walkthrough and approval obtained</span>
+            </div>
+        </div>
+
+        <!-- Quality Guarantee -->
+        <div class="quality-guarantee">
+            <div class="guarantee-title">Our Quality Guarantee</div>
+            <div class="guarantee-text">
+                TrussCTR stands behind our work with a comprehensive warranty. 
+                All materials and workmanship are guaranteed according to manufacturer specifications 
+                and industry standards. We're committed to your complete satisfaction.
+            </div>
+        </div>
+
+        <!-- Review Request -->
+        <div class="review-request">
+            <div class="review-title">Help Others Find Quality Service</div>
+            <div class="review-text">
+                Your experience matters! We'd appreciate a review to help other homeowners 
+                find quality restoration services. A team member will follow up to assist 
+                with this process.
+            </div>
+        </div>
+
+        <!-- Signature Section -->
+        <div class="signature-section">
+            <div class="signature-box">
+                <div class="signature-line"></div>
+                <div class="signature-label">{{PROJECT_MANAGER}}<br>Project Manager / Date</div>
+            </div>
+            <div class="signature-box">
+                <div class="signature-line"></div>
+                <div class="signature-label">{{CUSTOMER_NAME}}<br>Customer Acceptance / Date</div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <div class="contact-info">
+                {{COMPANY_NAME}} | {{COMPANY_PHONE}} | {{COMPANY_EMAIL}}
+            </div>
+            <div class="contact-info">
+                {{COMPANY_ADDRESS}}, {{COMPANY_CITY}}, {{COMPANY_STATE}} {{COMPANY_ZIP}}
+            </div>
+            <div class="contact-info">
+                License #{{CONTRACTOR_LICENSE}} | Fully Insured
+            </div>
+        </div>
+    </div>
+</body>
+</html>`,
+      variables: ['COMPANY_NAME', 'COMPANY_TAGLINE', 'CUSTOMER_NAME', 'PROJECT_ADDRESS', 'PROJECT_TYPE', 'COMPLETION_DATE', 'PROJECT_MANAGER', 'CLAIM_NUMBER', 'COMPANY_PHONE', 'COMPANY_EMAIL', 'COMPANY_ADDRESS', 'COMPANY_CITY', 'COMPANY_STATE', 'COMPANY_ZIP', 'CONTRACTOR_LICENSE'],
+      favorite: false,
+      isDefault: false,
+      tags: ['completion', 'certificate', 'professional', 'customer'],
+      createdAt: '2026-03-03',
+      lastModified: '2026-03-03',
+      usageCount: 0,
+      fileType: 'html'
       setTemplates(mockTemplates);
       setFilteredTemplates(mockTemplates);
     } catch (error) {

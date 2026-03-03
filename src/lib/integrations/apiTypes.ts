@@ -23,7 +23,8 @@ export type IntegrationCategory =
   | 'security'
   | 'project-management'
   | 'insurance'
-  | 'mapping';
+  | 'mapping'
+  | 'ai-assistant';
 
 // EagleView Integration for Aerial Imagery
 export interface EagleViewIntegration extends BaseIntegration {
@@ -124,7 +125,7 @@ export interface QuickBooksIntegration extends BaseIntegration {
 // Email Services
 export interface EmailIntegration extends BaseIntegration {
   category: 'communication';
-  provider: 'sendgrid' | 'mailgun' | 'ses' | 'office365' | 'gmail';
+  provider: 'resend' | 'sendgrid' | 'mailgun' | 'ses' | 'office365' | 'gmail';
   credentials: {
     apiKey?: string;
     smtpHost?: string;

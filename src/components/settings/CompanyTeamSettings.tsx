@@ -17,13 +17,17 @@ import {
   MoreHorizontal,
   CheckCircle,
   XCircle,
-  AlertCircle
+  AlertCircle,
+  Target,
+  Lock
 } from 'lucide-react';
 import { CompanySettings, CompanyAddress, TeamMember, TeamRole } from '../../lib/integrations/apiTypes';
+import LeadSourceManagement from './LeadSourceManagement';
+import PermissionManagement from './PermissionManagement';
 
 // Company & Team Management Main Component
 const CompanyTeamSettings: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'company' | 'offices' | 'team' | 'roles'>('company');
+  const [activeTab, setActiveTab] = useState<'company' | 'offices' | 'team' | 'roles' | 'leadSources' | 'permissions'>('company');
   const [company, setCompany] = useState<CompanySettings | null>(null);
   const [offices, setOffices] = useState<CompanyAddress[]>([]);
   const [team, setTeam] = useState<TeamMember[]>([]);
@@ -117,7 +121,9 @@ const CompanyTeamSettings: React.FC = () => {
     { id: 'company', label: 'Company', icon: Building2 },
     { id: 'offices', label: 'Offices', icon: MapPin },
     { id: 'team', label: 'Team', icon: Users },
-    { id: 'roles', label: 'Roles', icon: Shield }
+    { id: 'roles', label: 'Roles', icon: Shield },
+    { id: 'leadSources', label: 'Lead Sources', icon: Target },
+    { id: 'permissions', label: 'Permissions', icon: Lock }
   ];
 
   return (
@@ -197,6 +203,14 @@ const CompanyTeamSettings: React.FC = () => {
             }}
             onAddRole={() => setShowModal({ type: 'role' })}
           />
+        )}
+
+        {activeTab === 'leadSources' && (
+          <LeadSourceManagement />
+        )}
+
+        {activeTab === 'permissions' && (
+          <PermissionManagement />
         )}
       </div>
 

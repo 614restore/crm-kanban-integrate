@@ -151,52 +151,62 @@ export default function QuickAddModal() {
     setIsSubmitting(true);
 
     try {
+      // Validate required fields
+      if (!formData.firstName || !formData.lastName || !formData.phone1) {
+        throw new Error('Please fill in all required fields (First Name, Last Name, and Phone)');
+      }
+
       // Move company resolution into try block for proper error handling
       const effectiveCompanyId = profile?.company_id || state.companyId;
       console.log('[QuickAdd] Starting contact creation...', {
         hasProfile: !!profile,
         company_id: effectiveCompanyId,
         formData: `${formData.firstName} ${formData.lastName}`,
+        hasUser: !!user,
+        userEmail: user?.email,
       });
       
       const finalCompanyId = effectiveCompanyId || await resolveCompanyId();
       console.log('[QuickAdd] Final company ID:', finalCompanyId);
 
+      if (!finalCompanyId) {
+        throw new Error('Unable to determine company context. Please ensure you are properly logged in and try again.');
+      }
+
       // If user has a company, save to database
-      if (finalCompanyId) {
-        console.log('[QuickAdd] Creating contact in database...');
-        const dbContact = await db.createContact({
-          company_id: finalCompanyId,
-          first_name: formData.firstName,
-          last_name: formData.lastName,
-          email: formData.email || undefined,
-          phone1: formData.phone1 || undefined,
-          phone2: formData.phone2 || undefined,
-          address: formData.address || undefined,
-          city: formData.city || undefined,
-          state: formData.state || undefined,
-          zip: formData.zip || undefined,
-          status: formData.status,
-          lead_source: formData.leadSource,
-          assigned_to: formData.assignedTo || undefined,
-          tags: [],
-          project_type: formData.projectType || undefined,
-          project_value: formData.projectValue ? parseFloat(formData.projectValue) : undefined,
-          is_retail: formData.isRetail,
-          retail_notes: formData.retailNotes || undefined,
-          insurance_company: formData.insuranceCompany || undefined,
-          policy_number: formData.policyNumber || undefined,
-          claim_number: formData.claimNumber || undefined,
-          adjuster_name: formData.adjusterName || undefined,
-          adjuster_phone: formData.adjusterPhone || undefined,
-          deductible: formData.deductible ? parseFloat(formData.deductible) : undefined,
-          notes: formData.notes || undefined,
-        });
-        
-        if (!dbContact) {
-          console.error('[QuickAdd] Database returned null for created contact');
-          throw new Error('Failed to create contact');
-        }
+      console.log('[QuickAdd] Creating contact in database...');
+      const dbContact = await db.createContact({
+        company_id: finalCompanyId,
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        email: formData.email || undefined,
+        phone1: formData.phone1 || undefined,
+        phone2: formData.phone2 || undefined,
+        address: formData.address || undefined,
+        city: formData.city || undefined,
+        state: formData.state || undefined,
+        zip: formData.zip || undefined,
+        status: formData.status,
+        lead_source: formData.leadSource,
+        assigned_to: formData.assignedTo || undefined,
+        tags: [],
+        project_type: formData.projectType || undefined,
+        project_value: formData.projectValue ? parseFloat(formData.projectValue) : undefined,
+        is_retail: formData.isRetail,
+        retail_notes: formData.retailNotes || undefined,
+        insurance_company: formData.insuranceCompany || undefined,
+        policy_number: formData.policyNumber || undefined,
+        claim_number: formData.claimNumber || undefined,
+        adjuster_name: formData.adjusterName || undefined,
+        adjuster_phone: formData.adjusterPhone || undefined,
+        deductible: formData.deductible ? parseFloat(formData.deductible) : undefined,
+        notes: formData.notes || undefined,
+      });
+      
+      if (!dbContact) {
+        console.error('[QuickAdd] Database returned null for created contact');
+        throw new Error('Database operation failed. Please check your connection and try again.');
+      }
 
         console.log('[QuickAdd] Contact created in database:', dbContact.id);
 
@@ -233,9 +243,6 @@ export default function QuickAddModal() {
         console.log('[QuickAdd] Dispatching ADD_CONTACT to store...', createdContact.id);
         dispatch({ type: 'ADD_CONTACT', payload: createdContact });
         console.log('[QuickAdd] Contact added to store successfully');
-      } else {
-        throw new Error('No company context found. Please try again in a few seconds.');
-      }
 
       console.log('[QuickAdd] Contact creation complete');
       toast.success(`${formData.firstName} ${formData.lastName} has been added to the CRM.`);
@@ -255,14 +262,28 @@ export default function QuickAddModal() {
       handleClose();
     } catch (error) {
       console.error('Error creating contact:', error);
-      const message = error instanceof Error ? error.message : 'Failed to create contact. Please try again.';
+      let message = 'Failed to create contact. Please try again.';
+      
+      if (error instanceof Error) {
+        message = error.message;
+      } else if (typeof error === 'string') {
+        message = error;
+      }
+      
+      // Show more specific error messages to help user understand the issue
+      if (message.includes('company')) {
+        message += ' Please ensure you are properly logged in and have a valid company account.';
+      } else if (message.includes('database') || message.includes('connection')) {
+        message += ' Please check your internet connection and try again.';
+      }
+      
       toast.error(message);
       dispatch({
         type: 'ADD_NOTIFICATION',
         payload: {
           id: `notif-${Date.now()}`,
           type: 'error',
-          title: 'Error',
+          title: 'Contact Creation Error',
           message,
           timestamp: new Date().toISOString(),
           read: false,
@@ -335,7 +356,9 @@ export default function QuickAddModal() {
                     type="text"
                     value={formData.firstName}
                     onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none ${
+                      !formData.firstName ? 'border-red-300 bg-red-50' : 'border-gray-200'
+                    }`}
                     placeholder="John"
                   />
                 </div>
@@ -347,7 +370,9 @@ export default function QuickAddModal() {
                     type="text"
                     value={formData.lastName}
                     onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none ${
+                      !formData.lastName ? 'border-red-300 bg-red-50' : 'border-gray-200'
+                    }`}
                     placeholder="Doe"
                   />
                 </div>
@@ -362,7 +387,9 @@ export default function QuickAddModal() {
                     type="tel"
                     value={formData.phone1}
                     onChange={(e) => setFormData({ ...formData, phone1: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none ${
+                      !formData.phone1 ? 'border-red-300 bg-red-50' : 'border-gray-200'
+                    }`}
                     placeholder="(555) 123-4567"
                   />
                 </div>

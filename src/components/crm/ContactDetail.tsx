@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useCRM, useCurrentContact } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
+import JobStatusTimeline from './JobStatusTimeline';
+import CustomerSurvey from './CustomerSurvey';
 import {
   applyMention,
   findActiveMentionQuery,
@@ -56,9 +58,11 @@ import {
   Package,
   ClipboardList,
   Truck,
+  Activity,
+  Star,
 } from 'lucide-react';
 
-type TabType = 'overview' | 'timeline' | 'documents' | 'financial' | 'projects';
+type TabType = 'overview' | 'timeline' | 'documents' | 'financial' | 'projects' | 'jobStatus' | 'survey';
 
 export default function ContactDetail() {
   const { state, dispatch } = useCRM();
@@ -85,6 +89,7 @@ export default function ContactDetail() {
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [showEstimateModal, setShowEstimateModal] = useState(false);
   const [showWorkOrderModal, setShowWorkOrderModal] = useState(false);
+  const [showSurveyModal, setShowSurveyModal] = useState(false);
   
   const noteInputRef = useRef<HTMLInputElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
@@ -592,11 +597,25 @@ export default function ContactDetail() {
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: <User size={16} /> },
+    { id: 'jobStatus', label: 'Job Status', icon: <Activity size={16} /> },
     { id: 'timeline', label: 'Timeline', icon: <Clock size={16} /> },
     { id: 'documents', label: 'Documents', icon: <FileText size={16} /> },
     { id: 'financial', label: 'Financial', icon: <DollarSign size={16} /> },
     { id: 'projects', label: 'Projects', icon: <Briefcase size={16} /> },
   ];
+
+  // Add survey trigger functionality
+  const handleRequestReview = () => {
+    setShowSurveyModal(true);
+  };
+
+  const handleSurveyComplete = (surveyData: any) => {
+    console.log('Survey completed:', surveyData);
+    // Add survey completion note to contact
+    const surveyNote = `Customer survey completed - Overall satisfaction: ${surveyData.overallSatisfaction}/5 stars. ${surveyData.wouldRecommend ? 'Would recommend.' : 'Would not recommend.'}`;
+    handleAddNote();
+    setShowSurveyModal(false);
+  };
 
   const currentData = isEditing && editedContact ? editedContact : contact;
 
@@ -1816,7 +1835,68 @@ export default function ContactDetail() {
             </div>
           </div>
         )}
+
+        {activeTab === 'jobStatus' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-900">Job Status & Progress</h2>
+              {(contact.status === 'completed' || contactWorkOrders.some(wo => wo.status === 'completed')) && (
+                <button
+                  onClick={handleRequestReview}
+                  className="flex items-center gap-2 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors"
+                >
+                  <Star size={18} />
+                  Request Customer Review
+                </button>
+              )}
+            </div>
+            
+            <JobStatusTimeline 
+              contact={contact} 
+              jobs={contactWorkOrders.map(wo => ({
+                id: wo.id,
+                contactId: wo.contactId || contact.id,
+                title: wo.title || `Work Order #${wo.workOrderNumber}`,
+                description: wo.description || '',
+                status: wo.status as 'new' | 'estimating' | 'scheduled' | 'in_progress' | 'complete' | 'invoiced' | 'paid',
+                scheduledDate: wo.scheduledDate,
+                completedDate: wo.completedDate,
+                estimatedValue: wo.totalCost || 0,
+                actualValue: wo.actualCost,
+                assignedTeam: [], // Add team assignment logic if available
+                materials: [], // Add materials logic if available  
+                notes: wo.notes
+              }))}
+            />
+          </div>
+        )}
+
+        {activeTab === 'survey' && (
+          <div className="space-y-6">
+            <CustomerSurvey
+              contact={contact}
+              companyGoogleUrl="https://www.google.com/search?q=TrussCTR+reviews" // Replace with actual Google Business URL
+              onSurveyComplete={handleSurveyComplete}
+              onClose={() => setActiveTab('overview')}
+            />
+          </div>
+        )}
       </div>
+
+      {/* Survey Modal */}
+      {showSurveyModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="max-w-2xl w-full">
+            <CustomerSurvey
+              contact={contact}
+              companyGoogleUrl="https://www.google.com/search?q=TrussCTR+reviews" // Replace with actual Google Business URL
+              onSurveyComplete={handleSurveyComplete}
+              onClose={() => setShowSurveyModal(false)}
+              autoTrigger={true}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Project Modal */}
       {showProjectModal && (

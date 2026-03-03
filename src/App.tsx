@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/components/theme-provider";
 import { useServiceWorker } from "@/lib/serviceWorker";
+import { PermissionProvider } from "@/lib/permissions/PermissionProvider";
 import { useEffect } from "react";
 import Index from "./pages/Index";
 import Photos from "./pages/Photos";
@@ -64,16 +65,18 @@ const App = () => (
   <ThemeProvider defaultTheme="light">
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <PWAUpdateNotification />
-        <Toaster />
-        <Sonner />
-        <BrowserRouter basename={basename}>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/photos" element={<Photos />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
+        <PermissionProvider>
+          <PWAUpdateNotification />
+          <Toaster />
+          <Sonner />
+          <BrowserRouter basename={basename}>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/photos" element={<Photos />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </PermissionProvider>
       </TooltipProvider>
     </QueryClientProvider>
   </ThemeProvider>

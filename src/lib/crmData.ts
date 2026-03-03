@@ -159,8 +159,25 @@ export interface KanbanColumn {
 export interface LeadSource {
   id: string;
   name: string;
+  isActive: boolean;
   isCustom: boolean;
   createdBy?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  contactInfo?: {
+    repName?: string;
+    email?: string;
+    phone?: string;
+    website?: string;
+    address?: string;
+    notes?: string;
+  };
+  performance?: {
+    totalLeads: number;
+    convertedLeads: number;
+    conversionRate: number;
+    lastLeadDate?: string;
+  };
 }
 
 export interface Appointment {
@@ -420,16 +437,16 @@ export const heroImage = 'https://d64gsuwffb70l.cloudfront.net/6999e82c82de1e7a6
 
 // Default Lead Sources
 export const defaultLeadSources: LeadSource[] = [
-  { id: 'ls1', name: 'Door Knock', isCustom: false },
-  { id: 'ls2', name: 'Referral', isCustom: false },
-  { id: 'ls3', name: 'Storm Damage', isCustom: false },
-  { id: 'ls4', name: 'Website', isCustom: false },
-  { id: 'ls5', name: 'Google Ads', isCustom: false },
-  { id: 'ls6', name: 'Facebook', isCustom: false },
-  { id: 'ls7', name: 'Home Show', isCustom: false },
-  { id: 'ls8', name: 'Insurance Referral', isCustom: false },
-  { id: 'ls9', name: 'Yard Sign', isCustom: false },
-  { id: 'ls10', name: 'Repeat Customer', isCustom: false },
+  { id: 'ls1', name: 'Door Knock', isActive: true, isCustom: false },
+  { id: 'ls2', name: 'Referral', isActive: true, isCustom: false },
+  { id: 'ls3', name: 'Storm Damage', isActive: true, isCustom: false },
+  { id: 'ls4', name: 'Website', isActive: true, isCustom: false },
+  { id: 'ls5', name: 'Google Ads', isActive: true, isCustom: false },
+  { id: 'ls6', name: 'Facebook', isActive: true, isCustom: false },
+  { id: 'ls7', name: 'Home Show', isActive: true, isCustom: false },
+  { id: 'ls8', name: 'Insurance Referral', isActive: true, isCustom: false },
+  { id: 'ls9', name: 'Yard Sign', isActive: true, isCustom: false },
+  { id: 'ls10', name: 'Repeat Customer', isActive: true, isCustom: false },
 ];
 
 // Default Kanban Boards
