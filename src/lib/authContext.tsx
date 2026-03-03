@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabase, isDemoMode } from '@/lib/supabase';
 import { setupNewUser } from '@/lib/setupCompany';
 import type { Session, User } from '@supabase/supabase-js';
 
@@ -147,7 +147,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signIn = async (email: string, password: string) => {
     try {
       // Demo mode authentication
-      const isDemoMode = import.meta.env.VITE_DEMO_MODE === 'true';
       if (isDemoMode && email === 'demo@example.com' && password === 'password') {
         // Create mock session for demo mode
         const mockUser = {
