@@ -944,6 +944,9 @@ Temperature: {{TEMPERATURE}}
       lastModified: '2026-03-03',
       usageCount: 0,
       fileType: 'html'
+    }
+  ];
+      
       setTemplates(mockTemplates);
       setFilteredTemplates(mockTemplates);
     } catch (error) {
