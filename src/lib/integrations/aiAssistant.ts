@@ -1,39 +1,51 @@
-// AI Assistant Integration for TrussCTR
-// This can be easily added to the existing integration framework
+// AI Assistant Integration with Multiple Providers
+// Supports OpenAI, Anthropic Claude, and Google Gemini
+// Secure API key storage via Supabase
 
-import { BaseIntegration, IntegrationCategory } from './apiTypes';
+export type AIProvider = 'openai' | 'anthropic' | 'google';
 
-export interface OpenAIIntegration extends BaseIntegration {
-  provider: 'openai';
-  category: 'ai-assistant';
-  credentials: {
-    apiKey: string;
-    organization?: string;
-  };
-  settings: {
-    model: 'gpt-4' | 'gpt-3.5-turbo';
-    maxTokens: number;
-    temperature: number;
-    systemPrompt: string;
-    features: {
-      customerSupport: boolean;
-      emailDrafting: boolean;
-      contractAnalysis: boolean;
-      estimateReview: boolean;
-    };
+export interface AIProviderConfig {
+  provider: AIProvider;
+  apiKey: string;
+  organizationId?: string; // OpenAI
+  region?: string; // Google (e.g., 'us-central1')
+}
+
+export interface AIAssistantSettings {
+  model: string;
+  maxTokens: number;
+  temperature: number;
+  systemPrompt: string;
+  features: {
+    customerSupport: boolean;
+    emailDrafting: boolean;
+    contractAnalysis: boolean;
+    estimateReview: boolean;
+    leadScoring: boolean;
   };
 }
 
+/**
+ * Multi-provider AI Assistant Service
+ * Abstracts differences between OpenAI, Anthropic, and Google APIs
+ */
 export class AIAssistantService {
+  private provider: AIProvider;
   private apiKey: string;
-  private model: string;
-  
-  constructor(config: OpenAIIntegration['credentials'] & { model: string }) {
-    this.apiKey = config.apiKey;
-    this.model = config.model;
+  private config: any;
+
+  constructor(providerConfig: AIProviderConfig, private settings: AIAssistantSettings) {
+    this.provider = providerConfig.provider;
+    this.apiKey = providerConfig.apiKey;
+    this.config = {
+      organizationId: providerConfig.organizationId,
+      region: providerConfig.region,
+    };
   }
 
-  // Generate smart email responses
+  /**
+   * Generate smart email responses
+   */
   async generateEmailResponse(context: {
     customerEmail: string;
     previousConversation: string[];
@@ -46,24 +58,22 @@ export class AIAssistantService {
     nextSteps: string[];
   }> {
     const prompt = `
-      As a professional roofing contractor assistant, generate a response to:
+      As a professional contractor assistant, generate a response to:
       Customer Email: ${context.customerEmail}
       Project Type: ${context.projectType}
       Customer Sentiment: ${context.customerSentiment}
-      Previous Context: ${context.previousConversation.join('\n')}
+      Previous Context: ${context.previousConversation.slice(-3).join('\n---\n')}
       
       Generate a professional, helpful response that addresses their concerns and moves the project forward.
+      Respond in JSON format: { subject, body, tone, nextSteps: [] }
     `;
-    
-    return this.callOpenAI(prompt, {
-      subject: "string",
-      body: "string", 
-      tone: "professional|friendly|urgent",
-      nextSteps: ["array", "of", "actions"]
-    });
+
+    return this.callAI(prompt);
   }
 
-  // Analyze customer inquiries for lead scoring
+  /**
+   * Analyze customer inquiries for lead scoring
+   */
   async analyzeLeadQuality(leadData: {
     email: string;
     phone?: string;
@@ -71,7 +81,7 @@ export class AIAssistantService {
     propertyType: string;
     urgency: string;
   }): Promise<{
-    score: number; // 1-100
+    score: number;
     priority: 'low' | 'medium' | 'high' | 'urgent';
     recommendations: string[];
     estimatedValue: number;
@@ -79,33 +89,32 @@ export class AIAssistantService {
   }> {
     const prompt = `
       Analyze this contractor lead for quality and priority:
-      ${JSON.stringify(leadData)}
+      Email: ${leadData.email}
+      Message: ${leadData.message}
+      Property Type: ${leadData.propertyType}
+      Urgency: ${leadData.urgency}
       
-      Consider factors like:
+      Consider:
       - Urgency indicators in language
       - Property type and potential project value
       - Communication quality
       - Timeline indicators
       
-      Rate the lead quality and provide actionable insights.
+      Respond in JSON: { score (1-100), priority, recommendations: [], estimatedValue, conversionProbability (0-1) }
     `;
-    
-    return this.callOpenAI(prompt, {
-      score: "number 1-100",
-      priority: "low|medium|high|urgent",
-      recommendations: ["array"],
-      estimatedValue: "number", 
-      conversionProbability: "number 0-1"
-    });
+
+    return this.callAI(prompt);
   }
 
-  // Smart estimate analysis and optimization
+  /**
+   * Smart estimate analysis and optimization
+   */
   async optimizeEstimate(estimateData: {
     materials: any[];
     labor: any[];
     projectType: string;
     timeframe: string;
-    competitiveLandscape: string;
+    currentPrice: number;
   }): Promise<{
     optimizedPrice: number;
     competitivePosition: string;
@@ -113,14 +122,27 @@ export class AIAssistantService {
     riskFactors: string[];
     winProbability: number;
   }> {
-    // AI-powered estimate optimization logic
-    return this.callOpenAI('estimate optimization prompt', {});
+    const prompt = `
+      Analyze this contractor estimate for optimization:
+      Project Type: ${estimateData.projectType}
+      Current Price: $${estimateData.currentPrice}
+      Timeframe: ${estimateData.timeframe}
+      Material count: ${estimateData.materials.length} items
+      Labor items: ${estimateData.labor.length}
+      
+      Provide competitive pricing recommendations and risk analysis.
+      Respond in JSON: { optimizedPrice, competitivePosition, adjustmentReasons: [], riskFactors: [], winProbability (0-1) }
+    `;
+
+    return this.callAI(prompt);
   }
 
-  // Real-time customer support chat
+  /**
+   * Real-time customer support chat
+   */
   async handleCustomerQuery(query: {
     message: string;
-    customerHistory: any[];
+    customerHistory: string[];
     currentProject?: any;
     context: string;
   }): Promise<{
@@ -130,59 +152,165 @@ export class AIAssistantService {
     suggestedActions: string[];
   }> {
     const prompt = `
-      Customer Support Query for TrussCTR:
+      Customer Support Query:
       Message: ${query.message}
-      Customer History: ${JSON.stringify(query.customerHistory)}
-      Current Project: ${JSON.stringify(query.currentProject)}
+      Recent History: ${query.customerHistory.slice(-2).join('\n')}
       Context: ${query.context}
       
-      Provide helpful, accurate information about roofing services, scheduling, pricing, and project status.
-      If the query is too complex or sensitive, recommend human handoff.
+      Provide helpful, accurate information. If too complex or sensitive, set needsHuman to true.
+      Respond in JSON: { response, confidence (0-1), needsHuman, suggestedActions: [] }
     `;
-    
-    return this.callOpenAI(prompt, {
-      response: "string",
-      confidence: "number 0-1",
-      needsHuman: "boolean",
-      suggestedActions: ["array"]
-    });
+
+    return this.callAI(prompt);
   }
 
-  private async callOpenAI(prompt: string, expectedFormat: any) {
-    // OpenAI API implementation
+  /**
+   * Generic AI call - abstracts provider differences
+   */
+  private async callAI(prompt: string): Promise<any> {
+    switch (this.provider) {
+      case 'openai':
+        return this.callOpenAI(prompt);
+      case 'anthropic':
+        return this.callAnthropic(prompt);
+      case 'google':
+        return this.callGoogle(prompt);
+      default:
+        throw new Error(`Unsupported provider: ${this.provider}`);
+    }
+  }
+
+  /**
+   * OpenAI API call
+   */
+  private async callOpenAI(prompt: string): Promise<any> {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${this.apiKey}`,
         'Content-Type': 'application/json',
+        ...(this.config.organizationId && { 'OpenAI-Organization': this.config.organizationId }),
       },
       body: JSON.stringify({
-        model: this.model,
+        model: this.settings.model,
         messages: [
           {
             role: 'system',
-            content: 'You are a professional roofing contractor assistant integrated into TrussCTR CRM. Provide helpful, accurate, and professional responses.'
+            content: this.settings.systemPrompt || 'You are a professional contractor assistant. Respond in valid JSON format.',
           },
           {
-            role: 'user', 
-            content: prompt
-          }
+            role: 'user',
+            content: prompt,
+          },
         ],
-        temperature: 0.3,
-        max_tokens: 1000
-      })
+        temperature: this.settings.temperature,
+        max_tokens: this.settings.maxTokens,
+      }),
     });
 
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(`OpenAI API error: ${error.error?.message || 'Unknown error'}`);
+    }
+
     const data = await response.json();
-    return JSON.parse(data.choices[0].message.content);
+    const content = data.choices[0]?.message?.content;
+    return this.parseJSON(content);
+  }
+
+  /**
+   * Anthropic Claude API call
+   */
+  private async callAnthropic(prompt: string): Promise<any> {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': this.apiKey,
+        'Content-Type': 'application/json',
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: this.settings.model,
+        max_tokens: this.settings.maxTokens,
+        system: this.settings.systemPrompt || 'You are a professional contractor assistant. Respond in valid JSON format.',
+        messages: [
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+        temperature: this.settings.temperature,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(`Anthropic API error: ${error.error?.message || 'Unknown error'}`);
+    }
+
+    const data = await response.json();
+    const content = data.content[0]?.text;
+    return this.parseJSON(content);
+  }
+
+  /**
+   * Google Gemini API call
+   */
+  private async callGoogle(prompt: string): Promise<any> {
+    const model = this.settings.model || 'gemini-pro';
+    const url = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${this.apiKey}`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              {
+                text: `${this.settings.systemPrompt || 'You are a professional contractor assistant. Respond in valid JSON format.'}\n\n${prompt}`,
+              },
+            ],
+          },
+        ],
+        generationConfig: {
+          temperature: this.settings.temperature,
+          maxOutputTokens: this.settings.maxTokens,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(`Google API error: ${error.error?.message || 'Unknown error'}`);
+    }
+
+    const data = await response.json();
+    const content = data.candidates[0]?.content?.parts[0]?.text;
+    return this.parseJSON(content);
+  }
+
+  /**
+   * Safely parse JSON response
+   */
+  private parseJSON(content: string): any {
+    if (!content) throw new Error('Empty response from AI provider');
+
+    try {
+      // Try to extract JSON from markdown code blocks
+      const jsonMatch = content.match(/```json\n?([\s\S]*?)\n?```/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[1]);
+      }
+
+      // Try direct JSON parse
+      return JSON.parse(content);
+    } catch {
+      // If JSON parsing fails, return the raw content
+      console.warn('Failed to parse JSON response, returning raw content');
+      return { response: content };
+    }
   }
 }
-
-// Usage in TrussCTR components:
-// const aiAssistant = new AIAssistantService({
-//   apiKey: process.env.OPENAI_API_KEY,
-//   model: 'gpt-4'
-// });
-// 
-// const response = await aiAssistant.generateEmailResponse(emailContext);
-// const leadScore = await aiAssistant.analyzeLeadQuality(leadData);

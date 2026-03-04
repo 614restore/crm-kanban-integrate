@@ -310,6 +310,39 @@ export interface APIError {
   integration: string;
 }
 
+// AI Assistant Integration with Multi-Provider Support
+export interface AIAssistantIntegration extends BaseIntegration {
+  category: 'ai-assistant';
+  credentials: {
+    provider: 'openai' | 'anthropic' | 'google';
+    apiKey: string;
+    organizationId?: string;
+    region?: string;
+    userId: string;
+    companyId: string;
+  };
+  settings: {
+    model: string;
+    maxTokens: number;
+    temperature: number;
+    systemPrompt: string;
+    features: {
+      customerSupport: boolean;
+      emailDrafting: boolean;
+      contractAnalysis: boolean;
+      estimateReview: boolean;
+      leadScoring: boolean;
+    };
+  };
+  metadata?: {
+    providedBy: string;
+    approvedBy?: string;
+    approvalDate?: string;
+    usageCount?: number;
+    lastUsed?: string;
+  };
+}
+
 // Integration Templates
 export const INTEGRATION_TEMPLATES: Record<string, Partial<BaseIntegration>> = {
   eagleview: {
@@ -356,5 +389,10 @@ export const INTEGRATION_TEMPLATES: Record<string, Partial<BaseIntegration>> = {
     name: 'Auth0',
     description: 'Identity and 2FA security',
     category: 'security'
+  },
+  aiassistant: {
+    name: 'AI Assistant',
+    description: 'OpenAI, Claude, or Gemini AI for business automation',
+    category: 'ai-assistant'
   }
 };
