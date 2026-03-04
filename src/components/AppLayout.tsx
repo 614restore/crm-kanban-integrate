@@ -1,4 +1,4 @@
-import React, { useReducer, useEffect, useCallback, useRef } from 'react';
+import React, { useReducer, useEffect, useCallback, useRef, Suspense, lazy } from 'react';
 import { CRMContext, crmReducer, CRMState } from '@/lib/crmStore';
 import { AuthProvider, useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
@@ -16,35 +16,37 @@ import {
   TeamMember,
 } from '@/lib/crmData';
 
-// Import all CRM components
+// Import core components (needed immediately)
 import Sidebar from './crm/Sidebar';
 import TopBar from './crm/TopBar';
-import Dashboard from './crm/Dashboard';
-import PipelineBoard from './crm/PipelineBoard';
-import ContactList from './crm/ContactList';
-import ContactDetail from './crm/ContactDetail';
-import CommunicationHub from './crm/CommunicationHub';
-import CalendarView from './crm/CalendarView';
-import DocumentCenter from './crm/DocumentCenter';
-import FinancialDashboard from './crm/FinancialDashboard';
-import TeamView from './crm/TeamView';
-import AutomationsView from './crm/AutomationsView';
-import SettingsView from './crm/SettingsView';
-import AIAssistant from './crm/AIAssistant';
+import AuthPage from './crm/AuthPage';
 import QuickAddModal from './crm/QuickAddModal';
 import InvoiceModal from './crm/InvoiceModal';
-import AuthPage from './crm/AuthPage';
-import SuppliersView from './crm/SuppliersView';
-import EstimatesView from './crm/EstimatesView';
-import ProjectsView from './crm/ProjectsView';
-import WorkOrdersView from './crm/WorkOrdersView';
-import MaterialOrdersView from './crm/MaterialOrdersView';
-import ExpenseTracker from './crm/ExpenseTracker';
-import DocumentTemplates from './crm/DocumentTemplates';
-import ReportsAnalytics from './crm/ReportsAnalytics';
 import ResponsiveLayout from './mobile/ResponsiveLayout';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { Building2, Loader2 } from 'lucide-react';
+
+// Lazy load all CRM view components for better code splitting
+const Dashboard = lazy(() => import('./crm/Dashboard'));
+const PipelineBoard = lazy(() => import('./crm/PipelineBoard'));
+const ContactList = lazy(() => import('./crm/ContactList'));
+const ContactDetail = lazy(() => import('./crm/ContactDetail'));
+const CommunicationHub = lazy(() => import('./crm/CommunicationHub'));
+const CalendarView = lazy(() => import('./crm/CalendarView'));
+const DocumentCenter = lazy(() => import('./crm/DocumentCenter'));
+const FinancialDashboard = lazy(() => import('./crm/FinancialDashboard'));
+const TeamView = lazy(() => import('./crm/TeamView'));
+const AutomationsView = lazy(() => import('./crm/AutomationsView'));
+const SettingsView = lazy(() => import('./crm/SettingsView'));
+const AIAssistant = lazy(() => import('./crm/AIAssistant'));
+const SuppliersView = lazy(() => import('./crm/SuppliersView'));
+const EstimatesView = lazy(() => import('./crm/EstimatesView'));
+const ProjectsView = lazy(() => import('./crm/ProjectsView'));
+const WorkOrdersView = lazy(() => import('./crm/WorkOrdersView'));
+const MaterialOrdersView = lazy(() => import('./crm/MaterialOrdersView'));
+const ExpenseTracker = lazy(() => import('./crm/ExpenseTracker'));
+const DocumentTemplates = lazy(() => import('./crm/DocumentTemplates'));
+const ReportsAnalytics = lazy(() => import('./crm/ReportsAnalytics'));
 
 // Initial CRM state (completely empty)
 const initialState: CRMState = {
@@ -86,50 +88,71 @@ function buildFallbackAvatar(firstName?: string, lastName?: string, email?: stri
 function ViewRouter() {
   const { state } = React.useContext(CRMContext)!;
 
-  switch (state.currentView) {
-    case 'dashboard':
-      return <Dashboard />;
-    case 'pipeline':
-      return <PipelineBoard />;
-    case 'contacts':
-      return <ContactList />;
-    case 'contact-detail':
-      return <ContactDetail />;
-    case 'communications':
-      return <CommunicationHub />;
-    case 'calendar':
-      return <CalendarView />;
-    case 'documents':
-      return <DocumentCenter />;
-    case 'financial':
-      return <FinancialDashboard />;
-    case 'team':
-      return <TeamView />;
-    case 'automations':
-      return <AutomationsView />;
-    case 'suppliers':
-      return <SuppliersView />;
-    case 'estimates':
-      return <EstimatesView />;
-    case 'projects':
-      return <ProjectsView />;
-    case 'work-orders':
-      return <WorkOrdersView />;
-    case 'material-orders':
-      return <MaterialOrdersView />;
-    case 'expenses':
-      return <ExpenseTracker />;
-    case 'document-templates':
-      return <DocumentTemplates />;
-    case 'reports':
-      return <ReportsAnalytics />;
-    case 'settings':
-      return <SettingsView />;
-    case 'ai-assistant':
-      return <AIAssistant />;
-    default:
-      return <Dashboard />;
-  }
+  // Wrap each view in Suspense for lazy loading
+  const renderView = () => {
+    switch (state.currentView) {
+      case 'dashboard':
+        return <Dashboard />;
+      case 'pipeline':
+        return <PipelineBoard />;
+      case 'contacts':
+        return <ContactList />;
+      case 'contact-detail':
+        return <ContactDetail />;
+      case 'communications':
+        return <CommunicationHub />;
+      case 'calendar':
+        return <CalendarView />;
+      case 'documents':
+        return <DocumentCenter />;
+      case 'financial':
+        return <FinancialDashboard />;
+      case 'team':
+        return <TeamView />;
+      case 'automations':
+        return <AutomationsView />;
+      case 'suppliers':
+        return <SuppliersView />;
+      case 'estimates':
+        return <EstimatesView />;
+      case 'projects':
+        return <ProjectsView />;
+      case 'work-orders':
+        return <WorkOrdersView />;
+      case 'material-orders':
+        return <MaterialOrdersView />;
+      case 'expenses':
+        return <ExpenseTracker />;
+      case 'document-templates':
+        return <DocumentTemplates />;
+      case 'reports':
+        return <ReportsAnalytics />;
+      case 'settings':
+        return <SettingsView />;
+      case 'ai-assistant':
+        return <AIAssistant />;
+      default:
+        return <Dashboard />;
+    }
+  };
+
+  return (
+    <Suspense fallback={<ViewLoadingFallback />}>
+      {renderView()}
+    </Suspense>
+  );
+}
+
+// Loading fallback for lazy-loaded views
+function ViewLoadingFallback() {
+  return (
+    <div className="flex items-center justify-center h-full min-h-[400px]">
+      <div className="text-center">
+        <Loader2 className="animate-spin mx-auto mb-2 text-primary" size={32} />
+        <p className="text-sm text-muted-foreground">Loading view...</p>
+      </div>
+    </div>
+  );
 }
 
 // Loading Screen
