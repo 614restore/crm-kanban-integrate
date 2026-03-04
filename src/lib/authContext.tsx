@@ -39,6 +39,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Fetch user profile
   const fetchProfile = async (userId: string) => {
     try {
+      // In demo mode, try to load from localStorage first
+      if (isDemoMode) {
+        console.log('[Auth] Demo mode - loading profile from localStorage');
+        try {
+          const demoProfileKey = `demo_profile_${userId}`;
+          const stored = localStorage.getItem(demoProfileKey);
+          if (stored) {
+            const profileData = JSON.parse(stored);
+            console.log('[Auth] Demo profile loaded from localStorage');
+            return profileData as Profile;
+          }
+        } catch (localStorageError) {
+          console.warn('[Auth] Failed to load profile from localStorage:', localStorageError);
+        }
+      }
+
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -320,6 +336,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!user) return { error: new Error('No user logged in') };
 
     try {
+      // In demo mode, save profile updates to localStorage
+      if (isDemoMode) {
+        console.log('[Auth] Demo mode - saving profile updates locally');
+        try {
+          const demoProfileKey = `demo_profile_${user.id}`;
+          const existing = localStorage.getItem(demoProfileKey);
+          const profileData = existing ? JSON.parse(existing) : { id: user.id, email: user.email };
+          const updated = { ...profileData, ...updates, updated_at: new Date().toISOString() };
+          localStorage.setItem(demoProfileKey, JSON.stringify(updated));
+          setProfile((prev) => (prev ? { ...prev, ...updates } : null));
+          return { error: null };
+        } catch (localStorageError) {
+          console.warn('[Auth] Failed to save profile to localStorage:', localStorageError);
+          // Even if localStorage fails, update state and return success
+          setProfile((prev) => (prev ? { ...prev, ...updates } : null));
+          return { error: null };
+        }
+      }
+
       const { error } = await supabase
         .from('profiles')
         .update({
