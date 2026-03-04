@@ -53,6 +53,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } catch (localStorageError) {
           console.warn('[Auth] Failed to load profile from localStorage:', localStorageError);
         }
+        // In demo mode, if no stored profile, return null instead of hitting Supabase
+        console.log('[Auth] Demo mode - no stored profile found, returning null');
+        return null;
       }
 
       const { data, error } = await supabase
@@ -204,6 +207,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
         setProfile(demoProfile as any);
         
+        // Save demo profile to localStorage
+        try {
+          const demoProfileKey = `demo_profile_${demoUserId}`;
+          localStorage.setItem(demoProfileKey, JSON.stringify(demoProfile));
+          console.log('[Auth] Demo profile saved to localStorage');
+        } catch (storageError) {
+          console.warn('[Auth] Failed to save demo profile to localStorage:', storageError);
+        }
+        
         console.log('✅ Demo mode sign-in successful:', email);
         return { error: null };
       }
@@ -262,6 +274,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(mockSession as any);
         setUser(mockUser as any);
         setProfile(demoProfile as any);
+
+        // Save demo profile to localStorage
+        try {
+          const demoProfileKey = `demo_profile_${demoUserId}`;
+          localStorage.setItem(demoProfileKey, JSON.stringify(demoProfile));
+          console.log('[Auth] Demo profile saved to localStorage during signup');
+        } catch (storageError) {
+          console.warn('[Auth] Failed to save demo profile to localStorage:', storageError);
+        }
 
         return { error: null };
       }
