@@ -35,6 +35,7 @@ import {
 } from 'lucide-react';
 import { supabase, isDemoMode } from '@/lib/supabase';
 import { ensureDefaultLeadSources } from '@/lib/setupCompany';
+import ImageCropDialog from '@/components/ui/ImageCropDialog';
 
 type SettingsTab = 'company' | 'profile' | 'integrations' | 'notifications' | 'security' | 'billing' | 'api';
 
@@ -112,6 +113,12 @@ export default function SettingsView() {
   const [isStartingFresh, setIsStartingFresh] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  
+  // Image crop dialog state
+  const [avatarCropDialogOpen, setAvatarCropDialogOpen] = useState(false);
+  const [logoCropDialogOpen, setLogoCropDialogOpen] = useState(false);
+  const [imageToCrop, setImageToCrop] = useState<string | null>(null);
+  const [pendingImageFile, setPendingImageFile] = useState<File | null>(null);
   
   // Refs for file inputs
   const companyLogoInputRef = useRef<HTMLInputElement>(null);
@@ -789,21 +796,42 @@ export default function SettingsView() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const previousLogo = companyLogo;
-    let previewUrl: string | null = null;
-    let precomputedFallbackDataUrl: string | null = null;
-    let compatibilitySaved = false;
-
     // Validate file
     const validationError = validateImageFile(file, 5);
     if (validationError) {
       toast.error(validationError);
+      e.target.value = '';
       return;
     }
 
+    // Create preview URL and open crop dialog
+    try {
+      const previewUrl = URL.createObjectURL(file);
+      setImageToCrop(previewUrl);
+      setPendingImageFile(file);
+      setLogoCropDialogOpen(true);
+    } catch (error) {
+      console.error('Failed to create preview:', error);
+      toast.error('Failed to load image for cropping');
+    }
+    
+    e.target.value = '';
+  };
+
+  const handleLogoCropComplete = async (croppedBlob: Blob) => {
+    const previousLogo = companyLogo;
+    let precomputedFallbackDataUrl: string | null = null;
+    let compatibilitySaved = false;
+
+    setLogoCropDialogOpen(false);
     setIsUploadingLogo(true);
 
     try {
+      // Convert blob to file
+      const croppedFile = new File([croppedBlob], pendingImageFile?.name || 'logo.jpg', {
+        type: 'image/jpeg',
+      });
+
       // Show loading toast while resolving company
       const loadingToastId = toast.loading?.('Preparing upload...') || undefined;
       
@@ -813,7 +841,6 @@ export default function SettingsView() {
         toast.error('Unable to find your company. Your account may need to be set up. Please sign out and sign back in.');
         setCompanyLogo(previousLogo);
         setIsUploadingLogo(false);
-        e.target.value = '';
         return;
       }
       
@@ -822,18 +849,10 @@ export default function SettingsView() {
         toast.dismiss(loadingToastId);
       }
 
-      // Non-blocking preview: do not fail upload if preview creation fails.
-      try {
-        previewUrl = URL.createObjectURL(file);
-        setCompanyLogo(previewUrl);
-      } catch (previewError) {
-        console.warn('Logo preview creation failed:', previewError);
-      }
-
       // Precompute a local compatibility fallback before network upload.
       try {
         precomputedFallbackDataUrl = await withTimeout(
-          buildLogoFallbackDataUrl(file, previewUrl, 520, 0.84),
+          resizeImageToDataUrl(croppedFile, 520, 0.84),
           10000,
           'Company logo fallback precompute'
         );
@@ -860,7 +879,7 @@ export default function SettingsView() {
         }
       }
 
-      const uploadFile = await optimizeImageForUpload(file, 900, 0.84, 450 * 1024);
+      const uploadFile = await optimizeImageForUpload(croppedFile, 900, 0.84, 450 * 1024);
 
       // Upload to Supabase if user has company
       if (companyId) {
@@ -870,12 +889,11 @@ export default function SettingsView() {
           if (compatibilitySaved) {
             toast.success('Logo saved using compatibility mode');
             setIsUploadingLogo(false);
-            e.target.value = '';
             return;
           }
 
           try {
-            const fallbackDataUrl = precomputedFallbackDataUrl || await buildLogoFallbackDataUrl(file, previewUrl, 520, 0.84);
+            const fallbackDataUrl = precomputedFallbackDataUrl || await resizeImageToDataUrl(croppedFile, 520, 0.84);
             const fallbackSave = await withTimeout(saveCompanyLogoUrl(companyId, fallbackDataUrl), 12000, 'Company logo fallback save');
             if (!fallbackSave?.logo_url) throw new Error('Fallback save did not persist');
             setCompanyLogo(fallbackSave.logo_url);
@@ -883,7 +901,6 @@ export default function SettingsView() {
             window.dispatchEvent(new Event('crm-company-updated'));
             toast.success('Logo saved using compatibility mode');
             setIsUploadingLogo(false);
-            e.target.value = '';
             return;
           } catch (fallbackError) {
             const fallbackMessage = getReadableError(fallbackError);
@@ -894,7 +911,6 @@ export default function SettingsView() {
             }
             setCompanyLogo(previousLogo);
             setIsUploadingLogo(false);
-            e.target.value = '';
             return;
           }
         } else {
@@ -904,7 +920,6 @@ export default function SettingsView() {
             setCompanyLogo(previousLogo);
             toast.error('Logo uploaded, but failed to persist to company profile');
             setIsUploadingLogo(false);
-            e.target.value = '';
             return;
           }
 
@@ -923,14 +938,14 @@ export default function SettingsView() {
       if (compatibilitySaved) {
         toast.success('Logo saved using compatibility mode');
         setIsUploadingLogo(false);
-        e.target.value = '';
         return;
       }
 
       try {
         const companyId = effectiveCompanyId || await resolveCompanyId();
         if (companyId) {
-          const fallbackDataUrl = precomputedFallbackDataUrl || await withTimeout(buildLogoFallbackDataUrl(file, previewUrl, 520, 0.84), 12000, 'Company logo fallback encode');
+          const croppedFile = new File([croppedBlob], 'logo.jpg', { type: 'image/jpeg' });
+          const fallbackDataUrl = precomputedFallbackDataUrl || await withTimeout(resizeImageToDataUrl(croppedFile, 520, 0.84), 12000, 'Company logo fallback encode');
           const fallbackSave = await withTimeout(saveCompanyLogoUrl(companyId, fallbackDataUrl), 12000, 'Company logo fallback save');
           if (fallbackSave?.logo_url) {
             setCompanyLogo(fallbackSave.logo_url);
@@ -953,15 +968,12 @@ export default function SettingsView() {
         setCompanyLogo(previousLogo);
       }
     } finally {
-      if (previewUrl && previewUrl.startsWith('blob:')) {
-        try {
-          URL.revokeObjectURL(previewUrl);
-        } catch {
-          // ignore blob URL revoke errors
-        }
-      }
-      e.target.value = '';
       setIsUploadingLogo(false);
+      setPendingImageFile(null);
+      if (imageToCrop && imageToCrop.startsWith('blob:')) {
+        URL.revokeObjectURL(imageToCrop);
+      }
+      setImageToCrop(null);
     }
   };
 
@@ -969,28 +981,41 @@ export default function SettingsView() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const previousAvatar = profileAvatar;
-    let previewUrl: string | null = null;
-
     // Validate file
     const validationError = validateImageFile(file, 2);
     if (validationError) {
       toast.error(validationError);
+      e.target.value = '';
       return;
     }
 
+    // Create preview URL and open crop dialog
+    try {
+      const previewUrl = URL.createObjectURL(file);
+      setImageToCrop(previewUrl);
+      setPendingImageFile(file);
+      setAvatarCropDialogOpen(true);
+    } catch (error) {
+      console.error('Failed to create preview:', error);
+      toast.error('Failed to load image for cropping');
+    }
+    
+    e.target.value = '';
+  };
+
+  const handleAvatarCropComplete = async (croppedBlob: Blob) => {
+    const previousAvatar = profileAvatar;
+
+    setAvatarCropDialogOpen(false);
     setIsUploadingAvatar(true);
 
     try {
-      // Create preview immediately (non-blocking)
-      try {
-        previewUrl = URL.createObjectURL(file);
-        setProfileAvatar(previewUrl);
-      } catch (previewError) {
-        console.warn('Avatar preview creation failed:', previewError);
-      }
+      // Convert blob to file
+      const croppedFile = new File([croppedBlob], pendingImageFile?.name || 'avatar.jpg', {
+        type: 'image/jpeg',
+      });
 
-      const uploadFile = await optimizeImageForUpload(file, 640, 0.82, 280 * 1024);
+      const uploadFile = await optimizeImageForUpload(croppedFile, 640, 0.82, 280 * 1024);
 
       // Upload to Supabase if user is authenticated
       if (profile?.id) {
@@ -998,10 +1023,7 @@ export default function SettingsView() {
         
         if (result.error) {
           try {
-            const fallbackDataUrl =
-              previewUrl && previewUrl.startsWith('blob:')
-                ? await resizeImageFromObjectUrlToDataUrl(previewUrl, 400, 0.82)
-                : await resizeImageToDataUrl(file, 400, 0.82);
+            const fallbackDataUrl = await resizeImageToDataUrl(croppedFile, 400, 0.82);
             const { error: fallbackErr } = await withTimeout(updateProfile({ avatar_url: fallbackDataUrl }), 12000, 'Profile avatar fallback save');
             if (fallbackErr) throw fallbackErr;
             setProfileAvatar(fallbackDataUrl);
@@ -1044,9 +1066,7 @@ export default function SettingsView() {
 
       try {
         const fallbackDataUrl = await withTimeout(
-          previewUrl && previewUrl.startsWith('blob:')
-            ? resizeImageFromObjectUrlToDataUrl(previewUrl, 400, 0.82)
-            : resizeImageToDataUrl(file, 400, 0.82),
+          resizeImageToDataUrl(new File([croppedBlob], 'avatar.jpg', { type: 'image/jpeg' }), 400, 0.82),
           12000,
           'Profile avatar fallback encode'
         );
@@ -1065,15 +1085,12 @@ export default function SettingsView() {
         setProfileAvatar(profile?.avatar_url || null);
       }
     } finally {
-      if (previewUrl && previewUrl.startsWith('blob:')) {
-        try {
-          URL.revokeObjectURL(previewUrl);
-        } catch {
-          // ignore blob URL revoke errors
-        }
-      }
-      e.target.value = '';
       setIsUploadingAvatar(false);
+      setPendingImageFile(null);
+      if (imageToCrop && imageToCrop.startsWith('blob:')) {
+        URL.revokeObjectURL(imageToCrop);
+      }
+      setImageToCrop(null);
     }
   };
 
@@ -1898,6 +1915,42 @@ export default function SettingsView() {
           </div>
         )}
       </div>
+
+      {/* Image Crop Dialogs */}
+      {imageToCrop && (
+        <>
+          <ImageCropDialog
+            open={avatarCropDialogOpen}
+            imageUrl={imageToCrop}
+            onClose={() => {
+              setAvatarCropDialogOpen(false);
+              setPendingImageFile(null);
+              if (imageToCrop.startsWith('blob:')) {
+                URL.revokeObjectURL(imageToCrop);
+              }
+              setImageToCrop(null);
+            }}
+            onCropComplete={handleAvatarCropComplete}
+            aspectRatio={1}
+            title="Crop Profile Photo"
+          />
+          <ImageCropDialog
+            open={logoCropDialogOpen}
+            imageUrl={imageToCrop}
+            onClose={() => {
+              setLogoCropDialogOpen(false);
+              setPendingImageFile(null);
+              if (imageToCrop.startsWith('blob:')) {
+                URL.revokeObjectURL(imageToCrop);
+              }
+              setImageToCrop(null);
+            }}
+            onCropComplete={handleLogoCropComplete}
+            aspectRatio={16 / 9}
+            title="Crop Company Logo"
+          />
+        </>
+      )}
     </div>
   );
 }
