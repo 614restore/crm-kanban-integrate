@@ -1790,6 +1790,113 @@ export default function SettingsView() {
         )}
 
         {/* Add other tabs here if needed - api */}
+        {activeTab === 'api' && (
+          <div className="max-w-3xl space-y-6">
+            <div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">API Access</h3>
+              <p className="text-sm text-gray-500">
+                Generate API keys to integrate with external systems and custom applications.
+              </p>
+            </div>
+
+            <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-6">
+              <div>
+                <h4 className="text-base font-semibold text-gray-900 mb-3">API Keys</h4>
+                <p className="text-sm text-gray-500 mb-4">
+                  Use these keys to authenticate API requests. Keep them secure and never share them publicly.
+                </p>
+                
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-semibold text-gray-700">Production Key</span>
+                        <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">Active</span>
+                      </div>
+                      <code className="text-xs text-gray-600 font-mono">
+                        {isDemoMode ? 'demo_••••••••••••••••••••••••••••' : 'prod_••••••••••••••••••••••••••••'}
+                      </code>
+                    </div>
+                    <button className="px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-200 rounded-lg transition-colors">
+                      Copy
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-semibold text-gray-700">Test Key</span>
+                        <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">Test Mode</span>
+                      </div>
+                      <code className="text-xs text-gray-600 font-mono">
+                        test_••••••••••••••••••••••••••••
+                      </code>
+                    </div>
+                    <button className="px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-200 rounded-lg transition-colors">
+                      Copy
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => toast.info('Generate new API key')}
+                  className="mt-4 flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                >
+                  <Plus size={16} />
+                  Generate New Key
+                </button>
+              </div>
+
+              <div className="pt-4 border-t border-gray-200">
+                <h4 className="text-base font-semibold text-gray-900 mb-3">Webhooks</h4>
+                <p className="text-sm text-gray-500 mb-4">
+                  Configure webhook endpoints to receive real-time notifications about events.
+                </p>
+                
+                <div className="space-y-2 mb-4">
+                  {[
+                    { event: 'contact.created', url: 'https://example.com/webhook/contact' },
+                    { event: 'invoice.paid', url: 'https://example.com/webhook/payment' },
+                  ].map((webhook, idx) => (
+                    <div key={idx} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                      <div className="flex-1">
+                        <div className="text-xs font-semibold text-gray-700 mb-1">{webhook.event}</div>
+                        <code className="text-xs text-gray-600 font-mono">{webhook.url}</code>
+                      </div>
+                      <button className="text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors">
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  onClick={() => toast.info('Add new webhook endpoint')}
+                  className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors font-medium"
+                >
+                  <Plus size={16} />
+                  Add Webhook
+                </button>
+              </div>
+
+              <div className="pt-4 border-t border-gray-200">
+                <h4 className="text-base font-semibold text-gray-900 mb-2">API Documentation</h4>
+                <p className="text-sm text-gray-500 mb-3">
+                  Learn how to integrate with our REST API and explore available endpoints.
+                </p>
+                <a
+                  href="https://docs.example.com/api"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors font-medium"
+                >
+                  <ExternalLink size={16} />
+                  View API Docs
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
