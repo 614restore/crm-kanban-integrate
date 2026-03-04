@@ -1,4 +1,4 @@
-import { supabase, supabaseKey, supabaseUrl } from './supabase';
+import { supabase, supabaseKey, supabaseUrl, isDemoMode } from './supabase';
 
 export interface UploadResult {
   url: string;
@@ -176,6 +176,16 @@ export async function uploadFile(
   folder?: string
 ): Promise<UploadResult> {
   try {
+    // In demo mode, return error to trigger fallback to data URL
+    if (isDemoMode) {
+      console.log('[Storage] Demo mode - skipping storage upload, will use data URL fallback');
+      return {
+        url: '',
+        path: '',
+        error: 'Demo mode - use local data URL',
+      };
+    }
+
     const { data: authData } = await supabase.auth.getSession();
     const accessToken = authData?.session?.access_token;
     if (!accessToken) {

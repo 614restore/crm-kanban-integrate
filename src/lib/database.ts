@@ -1,5 +1,5 @@
 // Database service layer for CRM data persistence
-import { supabase } from './supabase';
+import { supabase, isDemoMode } from './supabase';
 
 // Types matching database schema
 export interface DbCompany {
@@ -360,8 +360,16 @@ export interface DbInvite {
 
 // Database service class
 class DatabaseService {
+  // Helper to check if we're in demo mode
+  private inDemoMode(): boolean {
+    return isDemoMode;
+  }
+
   // Company operations
   async getCompany(companyId: string): Promise<DbCompany | null> {
+    if (this.inDemoMode()) {
+      return null;
+    }
     const { data, error } = await supabase
       .from('companies')
       .select('*')
@@ -406,6 +414,9 @@ class DatabaseService {
 
   // Contact operations
   async getContacts(companyId: string): Promise<DbContact[]> {
+    if (this.inDemoMode()) {
+      return [];
+    }
     const { data, error } = await supabase
       .from('contacts')
       .select('*')
@@ -548,6 +559,9 @@ class DatabaseService {
 
   // Appointment operations
   async getAppointments(companyId: string): Promise<DbAppointment[]> {
+    if (this.inDemoMode()) {
+      return [];
+    }
     // Support both legacy schema (date/time/duration) and newer schema (start_time/end_time).
     const tryFetch = async (orderBy: 'date' | 'start_time') =>
       supabase
@@ -697,6 +711,9 @@ class DatabaseService {
 
   // Invoice operations
   async getInvoices(companyId: string): Promise<DbInvoice[]> {
+    if (this.inDemoMode()) {
+      return [];
+    }
     const { data, error } = await supabase
       .from('invoices')
       .select('*')
@@ -782,6 +799,9 @@ class DatabaseService {
 
   // Communication operations
   async getCommunications(companyId: string): Promise<DbCommunication[]> {
+    if (this.inDemoMode()) {
+      return [];
+    }
     const { data, error } = await supabase
       .from('communications')
       .select('*')
@@ -881,6 +901,9 @@ class DatabaseService {
 
   // Kanban board operations
   async getKanbanBoards(companyId: string): Promise<DbKanbanBoard[]> {
+    if (this.inDemoMode()) {
+      return [];
+    }
     const { data, error } = await supabase
       .from('kanban_boards')
       .select('*')
@@ -1016,6 +1039,9 @@ class DatabaseService {
 
   // Lead source operations
   async getLeadSources(companyId: string): Promise<DbLeadSource[]> {
+    if (this.inDemoMode()) {
+      return [];
+    }
     const { data, error } = await supabase
       .from('lead_sources')
       .select('*')
@@ -1058,6 +1084,9 @@ class DatabaseService {
 
   // Automation operations
   async getAutomations(companyId: string): Promise<DbAutomation[]> {
+    if (this.inDemoMode()) {
+      return [];
+    }
     const { data, error } = await supabase
       .from('automations')
       .select('*')
@@ -1115,6 +1144,9 @@ class DatabaseService {
 
   // Team member operations
   async getTeamMembers(companyId: string): Promise<DbProfile[]> {
+    if (this.inDemoMode()) {
+      return [];
+    }
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
