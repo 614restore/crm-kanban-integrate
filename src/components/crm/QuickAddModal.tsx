@@ -156,6 +156,14 @@ export default function QuickAddModal() {
         throw new Error('Please fill in all required fields (First Name, Last Name, and Phone)');
       }
 
+      // Validate email format if provided
+      if (formData.email && formData.email.trim() !== '') {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(formData.email)) {
+          throw new Error('Please enter a valid email address');
+        }
+      }
+
       // Move company resolution into try block for proper error handling
       const effectiveCompanyId = profile?.company_id || state.companyId;
       console.log('[QuickAdd] Starting contact creation...', {
