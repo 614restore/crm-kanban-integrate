@@ -368,6 +368,16 @@ class DatabaseService {
   // Company operations
   async getCompany(companyId: string): Promise<DbCompany | null> {
     if (this.inDemoMode()) {
+      console.log('[Database] Demo mode - retrieving company from localStorage');
+      try {
+        const demoCompanyKey = `demo_company_${companyId}`;
+        const stored = localStorage.getItem(demoCompanyKey);
+        if (stored) {
+          return JSON.parse(stored) as DbCompany;
+        }
+      } catch (error) {
+        console.warn('[Database] Failed to retrieve company from localStorage:', error);
+      }
       return null;
     }
     const { data, error } = await supabase
@@ -384,6 +394,26 @@ class DatabaseService {
   }
 
   async createCompany(company: Partial<DbCompany>): Promise<DbCompany | null> {
+    if (this.inDemoMode()) {
+      console.log('[Database] Demo mode - creating company locally');
+      const newCompany = {
+        id: company.id || `demo-company-${Date.now()}`,
+        name: company.name || 'Demo Company',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        ...company,
+      } as DbCompany;
+      
+      try {
+        const demoCompanyKey = `demo_company_${newCompany.id}`;
+        localStorage.setItem(demoCompanyKey, JSON.stringify(newCompany));
+      } catch (error) {
+        console.warn('[Database] Failed to save company to localStorage:', error);
+      }
+      
+      return newCompany;
+    }
+    
     const { data, error } = await supabase
       .from('companies')
       .insert(company)
@@ -398,6 +428,23 @@ class DatabaseService {
   }
 
   async updateCompany(companyId: string, updates: Partial<DbCompany>): Promise<DbCompany | null> {
+    if (this.inDemoMode()) {
+      console.log('[Database] Demo mode - saving company updates locally');
+      try {
+        // Store in localStorage for persistence
+        const demoCompanyKey = `demo_company_${companyId}`;
+        const existing = localStorage.getItem(demoCompanyKey);
+        const companyData = existing ? JSON.parse(existing) : { id: companyId };
+        const updated = { ...companyData, ...updates, updated_at: new Date().toISOString() };
+        localStorage.setItem(demoCompanyKey, JSON.stringify(updated));
+        return updated as DbCompany;
+      } catch (error) {
+        console.warn('[Database] Failed to save company to localStorage:', error);
+        // Return a mock successful response even if localStorage fails
+        return { id: companyId, ...updates, updated_at: new Date().toISOString() } as DbCompany;
+      }
+    }
+    
     const { data, error } = await supabase
       .from('companies')
       .update({ ...updates, updated_at: new Date().toISOString() })

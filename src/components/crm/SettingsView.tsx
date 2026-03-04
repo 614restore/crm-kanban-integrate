@@ -33,7 +33,7 @@ import {
   AlertTriangle,
   RotateCcw,
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { supabase, isDemoMode } from '@/lib/supabase';
 import { ensureDefaultLeadSources } from '@/lib/setupCompany';
 
 type SettingsTab = 'company' | 'profile' | 'integrations' | 'notifications' | 'security' | 'billing' | 'api';
@@ -503,6 +503,25 @@ export default function SettingsView() {
   };
 
   const saveCompanyLogoUrl = async (companyId: string, logoUrl: string | null): Promise<{ logo_url: string | null }> => {
+    // In demo mode, save logo locally without hitting Supabase
+    if (isDemoMode) {
+      console.log('[Settings] Demo mode - saving logo locally');
+      try {
+        // Store in localStorage for persistence across demo sessions
+        const demoCompanyKey = `demo_company_${companyId}`;
+        const existing = localStorage.getItem(demoCompanyKey);
+        const companyData = existing ? JSON.parse(existing) : {};
+        companyData.logo_url = logoUrl;
+        companyData.updated_at = new Date().toISOString();
+        localStorage.setItem(demoCompanyKey, JSON.stringify(companyData));
+        return { logo_url: logoUrl };
+      } catch (error) {
+        console.warn('[Settings] Failed to save logo to localStorage:', error);
+        // Even if localStorage fails, return success with the URL so UI updates
+        return { logo_url: logoUrl };
+      }
+    }
+
     const tryDirect = async () => {
       const { data, error } = await supabase
         .from('companies')
