@@ -149,7 +149,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Demo mode authentication - accept any credentials
       if (isDemoMode) {
         const now = new Date().toISOString();
-        const demoUserId = `demo-user-${Date.now()}`;
+        // Generate a valid UUID format for demo user
+        const timestamp = Date.now().toString().padStart(12, '0').slice(-12);
+        const demoUserId = `00000000-0000-0000-0000-${timestamp}`;
         
         // Create mock session for demo mode
         const mockUser = {
@@ -181,7 +183,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           first_name: email.split('@')[0] || 'Demo',
           last_name: 'User',
           role: 'admin',
-          company_id: 'demo-company',
+          company_id: '00000000-0000-0000-0000-000000000001',
           is_active: true,
         };
         setProfile(demoProfile as any);
@@ -208,7 +210,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       if (isDemoMode) {
         const now = new Date().toISOString();
-        const demoUserId = `demo-user-${Date.now()}`;
+        // Generate a valid UUID format for demo user
+        const timestamp = Date.now().toString().padStart(12, '0').slice(-12);
+        const demoUserId = `00000000-0000-0000-0000-${timestamp}`;
 
         const mockUser = {
           id: demoUserId,
@@ -235,7 +239,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           first_name: metadata?.first_name || 'Demo',
           last_name: metadata?.last_name || 'User',
           role: metadata?.role || 'admin',
-          company_id: 'demo-company',
+          company_id: '00000000-0000-0000-0000-000000000001',
           is_active: true,
         };
 
