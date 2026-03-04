@@ -1,7 +1,7 @@
 // Basic service worker for StormCraft CRM
 // This provides offline caching and PWA functionality
 
-const CACHE_NAME = 'stormcraft-v2';
+const CACHE_NAME = 'stormcraft-v3';
 const urlsToCache = [
   '/crm-kanban-integrate/',
   '/crm-kanban-integrate/index.html',
@@ -49,6 +49,31 @@ self.addEventListener('fetch', (event) => {
 
   // Only handle requests from our app
   if (!url.pathname.startsWith('/crm-kanban-integrate/')) {
+    return;
+  }
+
+  // Never cache JS bundles - they have content hashes, always fetch fresh
+  if (url.pathname.endsWith('.js')) {
+    event.respondWith(
+      fetch(request, { cache: 'no-store' }).catch(() => {
+        // If offline, try to find in cache as last resort
+        return caches.match(request);
+      })
+    );
+    return;
+  }
+
+  // Never cache HTML - always fetch fresh
+  if (url.pathname.endsWith('.html') || url.pathname === '/crm-kanban-integrate/' || request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request, { cache: 'no-store' }).catch(() => {
+        // If offline, serve cached HTML
+        return caches.match(request).then((cachedPage) => {
+          if (cachedPage) return cachedPage;
+          return caches.match('/crm-kanban-integrate/index.html');
+        });
+      })
+    );
     return;
   }
 
