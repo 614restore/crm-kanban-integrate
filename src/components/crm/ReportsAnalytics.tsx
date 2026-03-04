@@ -91,7 +91,8 @@ const ReportsAnalytics: React.FC = () => {
   const { toast } = useToast();
 
   // Mock data - in real app would come from API
-  const revenueData: RevenueData[] = [
+  // Memoized to prevent unnecessary re-renders
+  const revenueData: RevenueData[] = useMemo(() => [
     { month: 'Jan', revenue: 45000, expenses: 32000, profit: 13000, projects: 8 },
     { month: 'Feb', revenue: 52000, expenses: 35000, profit: 17000, projects: 10 },
     { month: 'Mar', revenue: 48000, expenses: 33000, profit: 15000, projects: 9 },
@@ -104,9 +105,9 @@ const ReportsAnalytics: React.FC = () => {
     { month: 'Oct', revenue: 78000, expenses: 46000, profit: 32000, projects: 16 },
     { month: 'Nov', revenue: 71000, expenses: 43000, profit: 28000, projects: 14 },
     { month: 'Dec', revenue: 83000, expenses: 48000, profit: 35000, projects: 17 }
-  ];
+  ], []);
 
-  const projectData: ProjectData[] = [
+  const projectData: ProjectData[] = useMemo(() => [
     {
       id: '1',
       name: 'Johnson Roof Replacement',
@@ -153,15 +154,15 @@ const ReportsAnalytics: React.FC = () => {
       startDate: '2026-03-15',
       category: 'Commercial'
     }
-  ];
+  ], []);
 
-  const leadSources: LeadData[] = [
+  const leadSources: LeadData[] = useMemo(() => [
     { source: 'Google Ads', leads: 45, conversions: 12, conversionRate: 26.7, revenue: 125000 },
     { source: 'Referrals', leads: 32, conversions: 18, conversionRate: 56.3, revenue: 180000 },
     { source: 'Facebook', leads: 28, conversions: 6, conversionRate: 21.4, revenue: 65000 },
     { source: 'Direct', leads: 15, conversions: 8, conversionRate: 53.3, revenue: 95000 },
     { source: 'Yellow Pages', leads: 12, conversions: 3, conversionRate: 25.0, revenue: 35000 }
-  ];
+  ], []);
 
   const teamPerformance: TeamPerformance[] = [
     { member: 'Mike Johnson', projectsCompleted: 12, revenue: 145000, customerRating: 4.8, efficiency: 95 },

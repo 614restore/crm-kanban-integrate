@@ -397,12 +397,13 @@ const CalendarScheduler: React.FC = () => {
     switch (currentView) {
       case 'month':
         return currentDate.toLocaleDateString('en-US', options);
-      case 'week':
+      case 'week': {
         const startOfWeek = new Date(currentDate);
         startOfWeek.setDate(currentDate.getDate() - currentDate.getDay());
         const endOfWeek = new Date(startOfWeek);
         endOfWeek.setDate(startOfWeek.getDate() + 6);
         return `${startOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+      }
       case 'day':
         return currentDate.toLocaleDateString('en-US', { 
           weekday: 'long', 
