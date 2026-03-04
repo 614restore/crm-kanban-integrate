@@ -166,8 +166,8 @@ const Photos: React.FC = () => {
         const file = new File([blob], photo.fileName, { type: photo.mimeType });
 
         await navigator.share({
-          title: 'StormCraft Photo',
-          text: photo.description || 'Photo from StormCraft CRM',
+          title: 'TrussCTR Photo',
+          text: photo.description || 'Photo from TrussCTR CRM',
           files: [file]
         });
       } catch (error) {

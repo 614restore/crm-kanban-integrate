@@ -1,4 +1,4 @@
-// Service Worker registration and management for StormCraft CRM PWA
+// Service Worker registration and management for TrussCTR CRM PWA
 // Handles SW registration, updates, and offline status
 
 import React from 'react';

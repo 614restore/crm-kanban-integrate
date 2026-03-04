@@ -91,7 +91,7 @@ class OfflineDatabase extends Dexie {
   network_status!: Table<NetworkStatus>;
 
   constructor() {
-    super('StormCraftOfflineDB');
+    super('TrussCTROfflineDB');
     
     this.version(1).stores({
       contacts: 'id, company_id, status, last_synced, is_dirty, created_offline',

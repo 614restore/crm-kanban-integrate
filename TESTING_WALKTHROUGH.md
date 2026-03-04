@@ -1,8 +1,8 @@
-# 🧪 StormCraft CRM – Complete Testing Walkthrough
+# 🧪 TrussCTR CRM – Complete Testing Walkthrough
 
 ## Overview
 
-This guide walks you through testing the StormCraft CRM application to verify that all features work correctly with the **live Supabase backend**.
+This guide walks you through testing the TrussCTR CRM application to verify that all features work correctly with the **live Supabase backend**.
 
 By the end of this walkthrough, you'll have tested:
 - ✅ User authentication
@@ -36,7 +36,7 @@ By the end of this walkthrough, you'll have tested:
 
 2. Navigate to: **https://614restore.github.io/crm-kanban-integrate/**
 
-3. You should see the StormCraft CRM login page
+3. You should see the TrussCTR CRM login page
 
 ✅ **Checkpoint**: Login page loads without errors
 
@@ -171,10 +171,10 @@ By the end of this walkthrough, you'll have tested:
 
    | Field | Example Value |
    |-------|---|
-   | **Company Name** | `StormCraft Testing - [Your Name]` |
+   | **Company Name** | `TrussCTR Testing - [Your Name]` |
    | **Business Phone** | `(555) 987-6543` |
-   | **Business Email** | `test@stormcraft.com` |
-   | **Website** | `https://test-stormcraft.com` |
+   | **Business Email** | `test@trussctr.com` |
+   | **Website** | `https://test-trussctr.com` |
    | **Address** | `456 Test St, Dallas, TX 75201` |
 
 2. Click **Save Changes** (blue button)
@@ -211,7 +211,7 @@ By the end of this walkthrough, you'll have tested:
 1. Find the **"Or paste logo image URL"** field
 
 2. Enter a logo URL:
-   - Example: `https://via.placeholder.com/200?text=StormCraft`
+   - Example: `https://via.placeholder.com/200?text=TrussCTR`
 
 3. Click **Save URL**
 
@@ -306,7 +306,7 @@ Login → Profile name visible
 2. Go to **Console** tab
 
 3. You should see messages like:
-   - `✅ StormCraft CRM Service Worker loaded`
+   - `✅ TrussCTR CRM Service Worker loaded`
    - `✅ Service worker registered successfully`
    - Either:
      - `🚧 Running in DEMO MODE` (offline fallback)

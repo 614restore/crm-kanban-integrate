@@ -3,7 +3,7 @@
 # Deployment Verification Script
 # Checks that production build has correct Supabase credentials
 
-echo "🔍 StormCraft CRM Production Deployment Verification"
+echo "🔍 TrussCTR CRM Production Deployment Verification"
 echo "=================================================="
 echo ""
 

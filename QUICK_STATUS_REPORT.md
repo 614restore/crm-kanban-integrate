@@ -1,4 +1,4 @@
-# 🚀 StormCraft CRM - Quick Status Report
+# 🚀 TrussCTR CRM - Quick Status Report
 
 **Last Updated:** March 6, 2026  
 **Status:** ✅ **LIVE ON PRODUCTION**

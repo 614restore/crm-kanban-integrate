@@ -1,4 +1,4 @@
-# 🚀 StormCraft CRM Production Deployment Checklist
+# 🚀 TrussCTR CRM Production Deployment Checklist
 
 ## ✅ Pre-Deployment Validation
 

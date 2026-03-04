@@ -1,4 +1,4 @@
-# StormCraft CRM - Kanban Integration
+# TrussCTR CRM - Kanban Integration
 
 A comprehensive CRM application with Kanban board integration, built with React, TypeScript, Vite, and Supabase.
 

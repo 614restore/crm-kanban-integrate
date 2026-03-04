@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# 🚀 StormCraft CRM Production Deployment Script
+# 🚀 TrussCTR CRM Production Deployment Script
 # This script performs comprehensive validation and deployment to production
 
 set -e  # Exit on any error
 
-echo "🚀 Starting StormCraft CRM Production Deployment Process"
+echo "🚀 Starting TrussCTR CRM Production Deployment Process"
 echo "============================================================"
 
 # Color codes for output
@@ -227,4 +227,4 @@ echo "   2. Monitor for any errors or issues"
 echo "   3. Update team on successful deployment"
 echo "   4. Document any lessons learned"
 echo ""
-print_success "StormCraft CRM is now live in production! 🚀"
+print_success "TrussCTR CRM is now live in production! 🚀"

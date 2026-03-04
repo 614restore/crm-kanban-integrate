@@ -104,10 +104,10 @@ export default function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
           <div className="flex items-center justify-between px-4 py-3">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">SC</span>
+                <span className="text-white font-bold text-sm">TC</span>
               </div>
               <span className="text-lg font-semibold text-gray-900 dark:text-white">
-                StormCraft
+                TrussCTR
               </span>
             </div>
             

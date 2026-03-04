@@ -1,4 +1,4 @@
-// API Integration Types for StormCraft CRM
+// API Integration Types for TrussCTR CRM
 // Comprehensive integration framework for roofing contractor business APIs
 
 export interface BaseIntegration {

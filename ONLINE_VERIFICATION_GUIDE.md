@@ -1,4 +1,4 @@
-# ✅ Online Verification Guide - StormCraft CRM
+# ✅ Online Verification Guide - TrussCTR CRM
 
 ## Current Status: ✅ LIVE BACKEND ACTIVE
 
@@ -13,7 +13,7 @@ Open: https://614restore.github.io/crm-kanban-integrate/
 
 Open DevTools (F12) → Console tab, you should see:
 ```
-✅ StormCraft CRM Service Worker loaded
+✅ TrussCTR CRM Service Worker loaded
 ✅ Service worker registered successfully
 ✅ Demo mode sign-in successful: [your email]
 ```

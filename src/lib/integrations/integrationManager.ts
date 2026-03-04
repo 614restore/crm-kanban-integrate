@@ -1,4 +1,4 @@
-// Integration Manager for StormCraft CRM
+// Integration Manager for TrussCTR CRM
 // Handles all third-party API integrations
 
 import { 

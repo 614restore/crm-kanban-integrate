@@ -2,7 +2,7 @@
 
 ## Overview
 
-The AI Assistant feature is now fully integrated into StormCraft CRM with multi-provider support (OpenAI, Anthropic Claude, Google Gemini), secure storage, and team-based access control.
+The AI Assistant feature is now fully integrated into TrussCTR CRM with multi-provider support (OpenAI, Anthropic Claude, Google Gemini), secure storage, and team-based access control.
 
 ## Architecture
 
@@ -26,7 +26,7 @@ The AI Assistant feature is now fully integrated into StormCraft CRM with multi-
 - `handleCustomerQuery()` - Customer support responses
 
 #### 2. **Integration Class** (`src/lib/integrations/aiAssistantIntegration.ts`)
-- Follows StormCraft integration pattern
+- Follows TrussCTR integration pattern
 - Feature flag support
 - Settings management
 - Connection testing
