@@ -5,6 +5,8 @@ import { defaultLeadSources } from '@/lib/crmData';
 import { toast } from 'sonner';
 import { db } from '@/lib/database';
 import { uploadCompanyLogo, uploadUserAvatar, validateImageFile } from '@/lib/storage';
+import useIntegrations from '@/hooks/useIntegrations';
+import IntegrationConfigDialog from '@/components/IntegrationConfigDialog';
 import {
   Settings,
   Building2,
@@ -32,6 +34,7 @@ import {
   LogOut,
   AlertTriangle,
   RotateCcw,
+  AlertCircle,
 } from 'lucide-react';
 import { supabase, isDemoMode } from '@/lib/supabase';
 import { ensureDefaultLeadSources } from '@/lib/setupCompany';
@@ -77,6 +80,20 @@ export default function SettingsView() {
   const [showAddLeadSource, setShowAddLeadSource] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
   const [isSavingCompany, setIsSavingCompany] = useState(false);
+
+  // Integration hooks
+  const {
+    integrations,
+    integrationsByCategory,
+    configureIntegration,
+    toggleIntegration,
+    testIntegration,
+    syncIntegration,
+  } = useIntegrations();
+
+  // Integration UI state
+  const [selectedIntegration, setSelectedIntegration] = useState<any | null>(null);
+  const [configDialogOpen, setConfigDialogOpen] = useState(false);
   
   // Company form state
   const [companyForm, setCompanyForm] = useState<CompanyFormData>({
@@ -1139,76 +1156,6 @@ export default function SettingsView() {
     return () => window.removeEventListener('crm-open-settings-tab', onOpenSettingsTab);
   }, []);
 
-  const integrationLinks: Record<string, string> = {
-    QuickBooks: 'https://quickbooks.intuit.com/',
-    Twilio: 'https://www.twilio.com/',
-    'Google Calendar': 'https://calendar.google.com/',
-    EagleView: 'https://www.eagleview.com/',
-    Stripe: 'https://stripe.com/',
-    DocuSign: 'https://www.docusign.com/',
-    ScopeMGR: 'https://crm-kanban-integrate.vercel.app/',
-    Zapier: 'https://zapier.com/',
-  };
-
-  const integrations = [
-    {
-      name: 'QuickBooks',
-      description: 'Sync invoices, payments, and financial data',
-      icon: '💰',
-      connected: false,
-      category: 'Accounting',
-    },
-    {
-      name: 'Twilio',
-      description: 'Send and receive SMS messages',
-      icon: '📱',
-      connected: true,
-      category: 'Communication',
-    },
-    {
-      name: 'Google Calendar',
-      description: 'Sync appointments and scheduling',
-      icon: '📅',
-      connected: true,
-      category: 'Calendar',
-    },
-    {
-      name: 'EagleView',
-      description: 'Aerial roof measurements and reports',
-      icon: '🦅',
-      connected: false,
-      category: 'Measurements',
-    },
-    {
-      name: 'Stripe',
-      description: 'Process payments and subscriptions',
-      icon: '💳',
-      connected: false,
-      category: 'Payments',
-    },
-    {
-      name: 'DocuSign',
-      description: 'Electronic signatures for contracts',
-      icon: '✍️',
-      connected: false,
-      category: 'Documents',
-    },
-    {
-      name: 'ScopeMGR',
-      description: 'Mobile app for photo and customer documentation',
-      icon: '📸',
-      connected: true,
-      category: 'Field Tools',
-    },
-    {
-      name: 'Zapier',
-      description: 'Connect with 5,000+ apps',
-      icon: '⚡',
-      connected: false,
-      category: 'Automation',
-    },
-  ];
-
   return (
     <div className="h-full flex">
       {/* Hidden file inputs */}
@@ -1638,54 +1585,100 @@ export default function SettingsView() {
         )}
 
         {activeTab === 'integrations' && (
-          <div className="max-w-4xl">
-            <h3 className="text-xl font-semibold text-gray-900 mb-6">Integrations</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {integrations.map((integration) => (
-                <div
-                  key={integration.name}
-                  className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-md transition-shadow"
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <span className="text-3xl">{integration.icon}</span>
-                      <div>
-                        <h4 className="font-semibold text-gray-900">{integration.name}</h4>
-                        <span className="text-xs text-gray-400">{integration.category}</span>
-                      </div>
-                    </div>
-                    {integration.connected && (
-                      <span className="flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
-                        <Check size={12} />
-                        Connected
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-gray-500 mb-4">{integration.description}</p>
-                  <button
-                    onClick={() => {
-                      const url = integrationLinks[integration.name];
-                      if (url) {
-                        window.open(url, '_blank', 'noopener,noreferrer');
-                        return;
-                      }
+          <div className="max-w-4xl space-y-8">
+            <div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Integrations</h3>
+              <p className="text-sm text-gray-500">Connect third-party services to enhance your CRM workflow.</p>
+            </div>
 
-                      toast.info(
-                        integration.connected
-                          ? `Manage ${integration.name} integration`
-                          : `Connect ${integration.name} integration`
-                      );
-                    }}
-                    className={`w-full py-2 rounded-lg font-medium transition-colors ${
-                      integration.connected
-                        ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        : 'bg-blue-600 text-white hover:bg-blue-700'
-                    }`}
-                  >
-                    {integration.connected ? 'Manage' : 'Connect'}
-                  </button>
+            {Object.entries(integrationsByCategory).map(([category, items]) => (
+              <div key={category}>
+                <h4 className="text-lg font-semibold text-gray-800 mb-4 capitalize">{category}</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {items.map((integration) => (
+                    <div
+                      key={integration.id}
+                      className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-md transition-shadow"
+                    >
+                      <div className="flex items-start justify-between mb-4">
+                        <div>
+                          <h4 className="font-semibold text-gray-900">{integration.name}</h4>
+                          <p className="text-sm text-gray-500 mt-1">{integration.description}</p>
+                        </div>
+                        {integration.status === 'connected' && (
+                          <span className="flex items-center gap-1 px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium whitespace-nowrap ml-2">
+                            <Check size={12} />
+                            Connected
+                          </span>
+                        )}
+                      </div>
+
+                      {integration.status === 'error' && (
+                        <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded-lg flex gap-2">
+                          <AlertCircle size={14} className="text-red-600 flex-shrink-0 mt-0.5" />
+                          <p className="text-xs text-red-700">Connection error</p>
+                        </div>
+                      )}
+
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            setSelectedIntegration(integration);
+                            setConfigDialogOpen(true);
+                          }}
+                          className={`flex-1 py-2 px-3 rounded-lg font-medium transition-colors text-sm ${
+                            integration.isConfigured
+                              ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                              : 'bg-blue-600 text-white hover:bg-blue-700'
+                          }`}
+                        >
+                          {integration.isConfigured ? 'Manage' : 'Configure'}
+                        </button>
+                        <button
+                          onClick={async () => {
+                            try {
+                              const result = await testIntegration(integration.id);
+                              if (result.success) {
+                                toast.success(`${integration.name} is working!`);
+                              } else {
+                                toast.error(result.message);
+                              }
+                            } catch (error) {
+                              toast.error(`Failed to test ${integration.name}`);
+                            }
+                          }}
+                          disabled={!integration.isConfigured}
+                          className="py-2 px-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Test
+                        </button>
+                      </div>
+
+                      {integration.lastSync && (
+                        <p className="text-xs text-gray-400 mt-2">
+                          Last synced: {new Date(integration.lastSync).toLocaleDateString()}
+                        </p>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </div>
+            ))}
+
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-6">
+              <h4 className="font-semibold text-blue-900 mb-2">Need help?</h4>
+              <p className="text-sm text-blue-800 mb-4">
+                Check out our integration documentation to learn how to connect and configure each service.
+              </p>
+              <a
+                href="https://docs.example.com/integrations"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              >
+                View Documentation
+                <ExternalLink size={14} />
+              </a>
             </div>
           </div>
         )}
@@ -1950,6 +1943,27 @@ export default function SettingsView() {
             title="Crop Company Logo"
           />
         </>
+      )}
+
+      {/* Integration Configuration Dialog */}
+      {selectedIntegration && (
+        <IntegrationConfigDialog
+          integration={selectedIntegration}
+          isOpen={configDialogOpen}
+          onClose={() => {
+            setConfigDialogOpen(false);
+            setSelectedIntegration(null);
+          }}
+          onConfigure={async (credentials, settings) => {
+            await configureIntegration(selectedIntegration.id, credentials, settings);
+            toast.success(`${selectedIntegration.name} configured successfully`);
+            setConfigDialogOpen(false);
+            setSelectedIntegration(null);
+          }}
+          onTest={async (credentials) => {
+            return testIntegration(selectedIntegration.id, credentials);
+          }}
+        />
       )}
     </div>
   );
