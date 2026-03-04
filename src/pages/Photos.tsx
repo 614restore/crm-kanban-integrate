@@ -96,6 +96,7 @@ const Photos: React.FC = () => {
 
   useEffect(() => {
     loadPhotos();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toast]);
 
   // Get all unique tags

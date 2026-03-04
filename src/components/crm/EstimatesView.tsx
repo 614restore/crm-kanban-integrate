@@ -69,6 +69,7 @@ export default function EstimatesView() {
   // Load estimates on mount
   useEffect(() => {
     loadEstimates();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadEstimates = async () => {

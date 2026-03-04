@@ -168,6 +168,7 @@ const ExpenseTracker: React.FC = () => {
 
   useEffect(() => {
     loadExpenses();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Apply filters and search

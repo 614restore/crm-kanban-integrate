@@ -72,6 +72,7 @@ export default function MaterialOrdersView() {
   // Load material orders on mount
   useEffect(() => {
     loadMaterialOrders();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadMaterialOrders = async () => {

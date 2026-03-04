@@ -97,6 +97,7 @@ export default function ProjectsView() {
   // Load projects on mount
   useEffect(() => {
     loadProjects();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadProjects = async () => {

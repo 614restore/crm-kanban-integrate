@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -29,17 +29,7 @@ export default function AIApprovalPanel({ companyId }: AIApprovalPanelProps) {
   // Check if user is admin
   const isAdmin = state.currentUser?.role === 'admin' || state.currentUser?.role === 'owner';
 
-  useEffect(() => {
-    loadConfigurations();
-  }, [companyId]);
-
-  useEffect(() => {
-    if (selectedConfigId) {
-      loadAccessors(selectedConfigId);
-    }
-  }, [selectedConfigId]);
-
-  const loadConfigurations = async () => {
+  const loadConfigurations = useCallback(async () => {
     setIsLoading(true);
     try {
       const configs = await aiConfigurationManager.getConfigurationsForCompany(companyId);
@@ -52,16 +42,26 @@ export default function AIApprovalPanel({ companyId }: AIApprovalPanelProps) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [companyId, selectedConfigId]);
 
-  const loadAccessors = async (configId: string) => {
+  const loadAccessors = useCallback(async (configId: string) => {
     try {
       const access = await aiConfigurationManager.getConfigurationAccessors(configId);
       setAccessors(access);
     } catch (error) {
       toast.error('Failed to load access permissions');
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadConfigurations();
+  }, [loadConfigurations]);
+
+  useEffect(() => {
+    if (selectedConfigId) {
+      loadAccessors(selectedConfigId);
+    }
+  }, [selectedConfigId, loadAccessors]);
 
   const handleApproveConfig = async (configId: string) => {
     if (!profile?.email) return;

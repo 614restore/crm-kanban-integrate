@@ -97,6 +97,7 @@ export default function WorkOrdersView() {
   // Load work orders on mount
   useEffect(() => {
     loadWorkOrders();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadWorkOrders = async () => {

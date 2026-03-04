@@ -962,6 +962,7 @@ Temperature: {{TEMPERATURE}}
 
   useEffect(() => {
     loadTemplates();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Apply filters and search
