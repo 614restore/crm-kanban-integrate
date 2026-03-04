@@ -163,14 +163,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => window.clearTimeout(timer);
   }, [loading]);
 
+  // Generate consistent demo user ID from email for data persistence across sessions
+  const generateDemoUserId = (email: string): string => {
+    // Create a deterministic hash from email to generate consistent UUID
+    // This ensures the same email always gets the same user ID
+    let hash = 0;
+    for (let i = 0; i < email.length; i++) {
+      const char = email.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    // Convert hash to hex and pad to 12 chars
+    const hex = Math.abs(hash).toString(16).padStart(12, '0').slice(-12);
+    return `00000000-0000-0000-0000-${hex}`;
+  };
+
   const signIn = async (email: string, password: string) => {
     try {
       // Demo mode authentication - accept any credentials
       if (isDemoMode) {
         const now = new Date().toISOString();
-        // Generate a valid UUID format for demo user
-        const timestamp = Date.now().toString().padStart(12, '0').slice(-12);
-        const demoUserId = `00000000-0000-0000-0000-${timestamp}`;
+        // Generate consistent demo user ID based on email so data persists across sessions
+        const demoUserId = generateDemoUserId(email);
         
         // Create mock session for demo mode
         const mockUser = {
@@ -195,27 +209,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(mockSession as any);
         setUser(mockUser as any);
         
-        // Create demo profile
-        const demoProfile = {
-          id: demoUserId,
-          email: email,
-          first_name: email.split('@')[0] || 'Demo',
-          last_name: 'User',
-          role: 'admin',
-          company_id: '00000000-0000-0000-0000-000000000001',
-          is_active: true,
-        };
-        setProfile(demoProfile as any);
-        
-        // Save demo profile to localStorage
+        // Try to load existing profile from localStorage first
+        let demoProfile: Profile | null = null;
         try {
           const demoProfileKey = `demo_profile_${demoUserId}`;
-          localStorage.setItem(demoProfileKey, JSON.stringify(demoProfile));
-          console.log('[Auth] Demo profile saved to localStorage');
-        } catch (storageError) {
-          console.warn('[Auth] Failed to save demo profile to localStorage:', storageError);
+          const stored = localStorage.getItem(demoProfileKey);
+          if (stored) {
+            demoProfile = JSON.parse(stored);
+            console.log('[Auth] Loaded existing demo profile from localStorage');
+          }
+        } catch (loadError) {
+          console.warn('[Auth] Failed to load demo profile from localStorage:', loadError);
         }
-        
+
+        // If no existing profile, create a new one
+        if (!demoProfile) {
+          demoProfile = {
+            id: demoUserId,
+            email: email,
+            first_name: email.split('@')[0] || 'Demo',
+            last_name: 'User',
+            role: 'admin',
+            company_id: '00000000-0000-0000-0000-000000000001',
+            is_active: true,
+          };
+          
+          // Save new demo profile to localStorage
+          try {
+            const demoProfileKey = `demo_profile_${demoUserId}`;
+            localStorage.setItem(demoProfileKey, JSON.stringify(demoProfile));
+            console.log('[Auth] New demo profile saved to localStorage');
+          } catch (storageError) {
+            console.warn('[Auth] Failed to save demo profile to localStorage:', storageError);
+          }
+        }
+
+        setProfile(demoProfile as any);
         console.log('✅ Demo mode sign-in successful:', email);
         return { error: null };
       }
@@ -238,9 +267,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       if (isDemoMode) {
         const now = new Date().toISOString();
-        // Generate a valid UUID format for demo user
-        const timestamp = Date.now().toString().padStart(12, '0').slice(-12);
-        const demoUserId = `00000000-0000-0000-0000-${timestamp}`;
+        // Generate consistent demo user ID based on email
+        const demoUserId = generateDemoUserId(email);
 
         const mockUser = {
           id: demoUserId,
@@ -264,7 +292,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const demoProfile = {
           id: demoUserId,
           email,
-          first_name: metadata?.first_name || 'Demo',
+          first_name: metadata?.first_name || email.split('@')[0] || 'Demo',
           last_name: metadata?.last_name || 'User',
           role: metadata?.role || 'admin',
           company_id: '00000000-0000-0000-0000-000000000001',
