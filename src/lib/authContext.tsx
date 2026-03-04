@@ -146,25 +146,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
-      // Demo mode authentication
-      if (isDemoMode && email === 'demo@example.com' && password === 'password') {
+      // Demo mode authentication - accept any credentials
+      if (isDemoMode) {
+        const now = new Date().toISOString();
+        const demoUserId = `demo-user-${Date.now()}`;
+        
         // Create mock session for demo mode
         const mockUser = {
-          id: 'demo-user-id',
-          email: 'demo@example.com',
+          id: demoUserId,
+          email: email,
           app_metadata: {},
           user_metadata: {},
           aud: 'authenticated',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+          created_at: now,
+          updated_at: now,
         };
         
         const mockSession = {
-          access_token: 'demo-access-token',
+          access_token: `demo-access-token-${Date.now()}`,
           token_type: 'bearer',
           expires_in: 3600,
           expires_at: Math.floor(Date.now() / 1000) + 3600,
-          refresh_token: 'demo-refresh-token',
+          refresh_token: `demo-refresh-token-${Date.now()}`,
           user: mockUser,
         };
 
@@ -173,9 +176,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         // Create demo profile
         const demoProfile = {
-          id: 'demo-user-id',
-          email: 'demo@example.com',
-          first_name: 'Demo',
+          id: demoUserId,
+          email: email,
+          first_name: email.split('@')[0] || 'Demo',
           last_name: 'User',
           role: 'admin',
           company_id: 'demo-company',
@@ -183,6 +186,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
         setProfile(demoProfile as any);
         
+        console.log('✅ Demo mode sign-in successful:', email);
         return { error: null };
       }
 
