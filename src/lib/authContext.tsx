@@ -356,18 +356,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw error;
       }
       console.log('[Auth] Sign out successful');
+      
+      // Clear all state
       setSession(null);
       setUser(null);
       setProfile(null);
-      // Clear any cached data
-      window.location.href = '/';
+      
+      // Clear localStorage
+      try {
+        localStorage.clear();
+        sessionStorage.clear();
+        console.log('[Auth] Cleared all browser storage');
+      } catch (storageError) {
+        console.warn('[Auth] Failed to clear storage:', storageError);
+      }
+      
+      // Use correct base path for GitHub Pages or local dev
+      const basePath = import.meta.env.BASE_URL || '/';
+      window.location.href = basePath;
     } catch (err) {
       console.error('[Auth] Sign out failed:', err);
       // Force logout by clearing state even if API call fails
       setSession(null);
       setUser(null);
       setProfile(null);
-      window.location.href = '/';
+      
+      // Clear storage on error too
+      try {
+        localStorage.clear();
+        sessionStorage.clear();
+      } catch (storageError) {
+        console.warn('[Auth] Failed to clear storage on error:', storageError);
+      }
+      
+      // Use correct base path for GitHub Pages or local dev
+      const basePath = import.meta.env.BASE_URL || '/';
+      window.location.href = basePath;
     }
   };
 
