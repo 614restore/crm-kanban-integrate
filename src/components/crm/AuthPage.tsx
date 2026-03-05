@@ -49,18 +49,32 @@ export default function AuthPage() {
       // Fetch invite details
       supabase
         .from('invitations')
-        .select('email, role')
+        .select('email, role, accepted, expires_at')
         .eq('token', token)
         .eq('company_id', companyId)
-        .eq('accepted', false)
         .single()
         .then(({ data, error }) => {
-          if (data && !error) {
-            setEmail(data.email);
-            setRole(data.role as UserRole);
-          } else {
-            setError('Invalid or expired invite link');
+          if (error || !data) {
+            setError('Invalid invite link');
+            return;
           }
+
+          // Check if already accepted
+          if (data.accepted) {
+            setError('This invitation has already been used');
+            return;
+          }
+
+          // Check if expired
+          const expiresAt = new Date(data.expires_at);
+          if (expiresAt < new Date()) {
+            setError('This invitation has expired. Please request a new one.');
+            return;
+          }
+
+          // Valid invitation
+          setEmail(data.email);
+          setRole(data.role as UserRole);
         });
     }
   }, []);

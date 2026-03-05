@@ -51,7 +51,7 @@ serve(async (req) => {
         'Authorization': `Bearer ${RESEND_API_KEY}`,
       },
       body: JSON.stringify({
-        from: 'TrussCTR CRM <onboarding@resend.dev>',
+        from: 'TrussCTR CRM <scopemgr@614restore.com>',
         to: [email],
         subject: 'You\'ve been invited to join TrussCTR CRM',
         html: `
