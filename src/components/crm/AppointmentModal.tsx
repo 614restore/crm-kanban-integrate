@@ -308,6 +308,15 @@ export default function AppointmentModal({
 
         dispatch({ type: 'ADD_APPOINTMENT', payload: newAppointment });
 
+        // If this is an inspection, persist the contact status update to the DB
+        if (type === 'inspection' && contact) {
+          const shouldAdvanceStatus =
+            contact.status === 'prospect' || contact.status === 'lead';
+          db.updateContact(contactId, {
+            status: shouldAdvanceStatus ? 'appt_set' : contact.status,
+          }).catch((err) => console.error('Failed to update contact status:', err));
+        }
+
         // If no assignee, create unassigned notification
         if (!assignedTo) {
           const notification = await db.createNotification({

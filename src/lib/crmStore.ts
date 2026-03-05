@@ -273,8 +273,35 @@ export function crmReducer(state: CRMState, action: CRMAction): CRMState {
     case 'SET_LEAD_SOURCES':
       return { ...state, leadSources: action.payload };
     
-    case 'ADD_APPOINTMENT':
-      return { ...state, appointments: [...state.appointments, action.payload] };
+    case 'ADD_APPOINTMENT': {
+      const newAppt = action.payload;
+      let contactsAfterAdd = state.contacts;
+
+      // When an inspection is scheduled, update the contact's inspection fields and status
+      if (newAppt.type === 'inspection') {
+        contactsAfterAdd = state.contacts.map((contact) => {
+          if (contact.id === newAppt.contactId) {
+            // Only advance status if the contact is still prospect/lead
+            const shouldAdvanceStatus =
+              contact.status === 'prospect' || contact.status === 'lead';
+            return {
+              ...contact,
+              inspectionScheduled: true,
+              inspectionDate: newAppt.date,
+              ...(shouldAdvanceStatus ? { status: 'appt_set' as CustomerStatus } : {}),
+              updatedAt: new Date().toISOString(),
+            };
+          }
+          return contact;
+        });
+      }
+
+      return {
+        ...state,
+        appointments: [...state.appointments, newAppt],
+        contacts: contactsAfterAdd,
+      };
+    }
     
     case 'UPDATE_APPOINTMENT': {
       // Handle inspection completion automation

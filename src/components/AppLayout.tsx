@@ -346,9 +346,33 @@ function CRMApp() {
 
       const enrichedContacts = contacts.map((contact) => {
         const comms = communicationsByContact[contact.id] || [];
+
+        // Derive inspection state from the appointments for this contact
+        const contactInspections = (dbAppointments || []).filter(
+          (a) => a.contact_id === contact.id && a.type === 'inspection'
+        );
+        const hasScheduledInspection = contactInspections.some(
+          (a) => a.status === 'scheduled' || a.status === 'confirmed'
+        );
+        const hasCompletedInspection = contactInspections.some(
+          (a) => a.status === 'completed'
+        );
+        // Pick the most relevant inspection (completed first, then earliest scheduled)
+        const scheduledInspection = contactInspections.find(
+          (a) => a.status === 'scheduled' || a.status === 'confirmed'
+        );
+        const completedInspection = contactInspections.find(
+          (a) => a.status === 'completed'
+        );
+
         return {
           ...contact,
           communications: comms.map((comm) => dbCommunicationToAppCommunication(comm, 'Team Member')),
+          inspectionScheduled: hasScheduledInspection || hasCompletedInspection,
+          inspectionDate: scheduledInspection?.date || completedInspection?.date || undefined,
+          inspectionCompleted: hasCompletedInspection,
+          inspectionCompletedDate: completedInspection?.date || undefined,
+          inspectionNotes: (completedInspection?.notes || scheduledInspection?.notes) || undefined,
         };
       });
 
