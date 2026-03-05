@@ -82,14 +82,14 @@ export default function Sidebar() {
   const { state, dispatch } = useCRM();
   const { profile, signOut } = useAuth();
   const { currentView, sidebarCollapsed, currentUser } = state;
-  const [companyName, setCompanyName] = useState('StormCraft');
+  const [companyName, setCompanyName] = useState('TrussCTR');
   const [companyLogoUrl, setCompanyLogoUrl] = useState<string | null>(null);
 
   const userRole = (currentUser?.role || profile?.role || 'sales') as any;
 
   const loadCompanyBrand = useCallback(async () => {
     if (!profile?.company_id) {
-      setCompanyName('StormCraft');
+      setCompanyName('TrussCTR');
       setCompanyLogoUrl(null);
       return;
     }
