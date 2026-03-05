@@ -4,6 +4,7 @@ import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
 import JobStatusTimeline from './JobStatusTimeline';
 import CustomerSurvey from './CustomerSurvey';
+import AppointmentModal from './AppointmentModal';
 import {
   applyMention,
   findActiveMentionQuery,
@@ -90,6 +91,7 @@ export default function ContactDetail() {
   const [showEstimateModal, setShowEstimateModal] = useState(false);
   const [showWorkOrderModal, setShowWorkOrderModal] = useState(false);
   const [showSurveyModal, setShowSurveyModal] = useState(false);
+  const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   
   const noteInputRef = useRef<HTMLInputElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
@@ -558,8 +560,7 @@ export default function ContactDetail() {
   };
 
   const handleScheduleAppointment = () => {
-    dispatch({ type: 'SET_VIEW', payload: 'calendar' });
-    toast.info('Use New Appointment in Calendar to schedule this customer');
+    setShowAppointmentModal(true);
   };
 
   const handleReassignContact = async (newAssigneeId: string) => {
@@ -2444,6 +2445,14 @@ export default function ContactDetail() {
             </form>
           </div>
         </div>
-      )}    </div>
+      )}
+
+      {/* Appointment Modal */}
+      <AppointmentModal
+        isOpen={showAppointmentModal}
+        onClose={() => setShowAppointmentModal(false)}
+        preselectedContactId={contact.id}
+      />
+    </div>
   );
 }

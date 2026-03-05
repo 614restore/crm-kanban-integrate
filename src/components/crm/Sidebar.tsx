@@ -19,6 +19,7 @@ import {
   Building2,
   LogOut,
   Store,
+  Bell,
   FolderKanban,
   Clipboard,
   Package,
@@ -190,6 +191,32 @@ export default function Sidebar() {
           ))}
         </ul>
       </nav>
+
+      {/* Notifications */}
+      <div className="px-3 mb-2">
+        <button
+          onClick={() => handleNavClick('calendar')}
+          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 text-slate-300 hover:bg-slate-800 hover:text-white relative`}
+          title={sidebarCollapsed ? 'Notifications' : undefined}
+        >
+          <span className="flex-shrink-0 relative">
+            <Bell size={20} />
+            {state.notifications.filter(n => !n.read).length > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[10px] font-bold flex items-center justify-center text-white">
+                {state.notifications.filter(n => !n.read).length > 9 ? '9+' : state.notifications.filter(n => !n.read).length}
+              </span>
+            )}
+          </span>
+          {!sidebarCollapsed && (
+            <span className="font-medium">Notifications</span>
+          )}
+          {!sidebarCollapsed && state.notifications.filter(n => !n.read).length > 0 && (
+            <span className="ml-auto bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+              {state.notifications.filter(n => !n.read).length}
+            </span>
+          )}
+        </button>
+      </div>
 
       {/* User Profile */}
       <div className="border-t border-slate-700 p-3">

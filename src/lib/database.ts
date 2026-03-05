@@ -201,6 +201,20 @@ export interface DbProfile {
   updated_at: string;
 }
 
+export interface DbNotification {
+  id: string;
+  company_id: string;
+  user_id?: string;
+  type: string;
+  title: string;
+  message: string;
+  related_id?: string;
+  related_type?: string;
+  read: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface DbSupplier {
   id: string;
   company_id: string;
@@ -1860,6 +1874,100 @@ class DatabaseService {
       completed_at: new Date().toISOString(),
       ...(actualHours !== undefined && { actual_hours: actualHours }),
     });
+  }
+
+  // ── Notification operations ──────────────────────────────────────
+
+  async getNotifications(companyId: string): Promise<DbNotification[]> {
+    if (this.inDemoMode()) return [];
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('company_id', companyId)
+      .order('created_at', { ascending: false })
+      .limit(100);
+    if (error) {
+      console.error('Error fetching notifications:', error);
+      return [];
+    }
+    return (data || []) as DbNotification[];
+  }
+
+  async getUnreadNotifications(companyId: string, userId?: string): Promise<DbNotification[]> {
+    if (this.inDemoMode()) return [];
+    let query = supabase
+      .from('notifications')
+      .select('*')
+      .eq('company_id', companyId)
+      .eq('read', false)
+      .order('created_at', { ascending: false });
+    if (userId) {
+      query = query.or(`user_id.eq.${userId},user_id.is.null`);
+    }
+    const { data, error } = await query;
+    if (error) {
+      console.error('Error fetching unread notifications:', error);
+      return [];
+    }
+    return (data || []) as DbNotification[];
+  }
+
+  async createNotification(notification: Partial<DbNotification>): Promise<DbNotification | null> {
+    if (this.inDemoMode()) return null;
+    const { data, error } = await supabase
+      .from('notifications')
+      .insert(notification)
+      .select()
+      .single();
+    if (error) {
+      console.error('Error creating notification:', error);
+      return null;
+    }
+    return data as DbNotification;
+  }
+
+  async markNotificationRead(notificationId: string): Promise<boolean> {
+    if (this.inDemoMode()) return true;
+    const { error } = await supabase
+      .from('notifications')
+      .update({ read: true, updated_at: new Date().toISOString() })
+      .eq('id', notificationId);
+    if (error) {
+      console.error('Error marking notification read:', error);
+      return false;
+    }
+    return true;
+  }
+
+  async markAllNotificationsRead(companyId: string, userId?: string): Promise<boolean> {
+    if (this.inDemoMode()) return true;
+    let query = supabase
+      .from('notifications')
+      .update({ read: true, updated_at: new Date().toISOString() })
+      .eq('company_id', companyId)
+      .eq('read', false);
+    if (userId) {
+      query = query.or(`user_id.eq.${userId},user_id.is.null`);
+    }
+    const { error } = await query;
+    if (error) {
+      console.error('Error marking all notifications read:', error);
+      return false;
+    }
+    return true;
+  }
+
+  async deleteNotification(notificationId: string): Promise<boolean> {
+    if (this.inDemoMode()) return true;
+    const { error } = await supabase
+      .from('notifications')
+      .delete()
+      .eq('id', notificationId);
+    if (error) {
+      console.error('Error deleting notification:', error);
+      return false;
+    }
+    return true;
   }
 }
 
