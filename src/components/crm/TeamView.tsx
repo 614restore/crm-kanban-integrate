@@ -125,6 +125,15 @@ export default function TeamView() {
 
       // Send email via Supabase Edge Function
       console.log('Sending email via Supabase Edge Function...');
+      
+      // Get current session to ensure we have auth
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        clearTimeout(timeoutId);
+        toast.error('Not authenticated. Please log in again.');
+        return;
+      }
+      
       const { data: emailData, error: emailError } = await supabase.functions.invoke('send-invite-email', {
         body: {
           email: inviteEmail.trim().toLowerCase(),
