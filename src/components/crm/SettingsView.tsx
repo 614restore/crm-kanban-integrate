@@ -239,7 +239,8 @@ export default function SettingsView() {
         }
 
         console.log('[Settings] ✅ Loading company data for:', companyId);
-        const company = await withTimeout(db.getCompany(companyId), 10000, 'Load company profile');
+        // getCompany already has internal 5-s timeouts per path + cache fallback
+        const company = await withTimeout(db.getCompany(companyId), 15000, 'Load company profile');
         
         console.log('[Settings] Company data received:', company);
         

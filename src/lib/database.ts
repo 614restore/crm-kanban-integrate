@@ -381,6 +381,42 @@ class DatabaseService {
   }
 
   // Company operations
+
+  /** Read company from localStorage cache (instant). */
+  private getCachedCompany(companyId: string): DbCompany | null {
+    try {
+      const raw = localStorage.getItem(`company_cache_${companyId}`);
+      if (!raw) return null;
+      const { data, ts } = JSON.parse(raw) as { data: DbCompany; ts: number };
+      // Cache valid for 5 minutes
+      if (Date.now() - ts > 5 * 60 * 1000) return null;
+      return data;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Write company to localStorage cache. */
+  private setCachedCompany(companyId: string, company: DbCompany): void {
+    try {
+      localStorage.setItem(
+        `company_cache_${companyId}`,
+        JSON.stringify({ data: company, ts: Date.now() }),
+      );
+    } catch { /* quota exceeded — ignore */ }
+  }
+
+  /** Race a promise against a timeout (ms). Rejects with a clear message. */
+  private raceTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+      promise.then(
+        (v) => { clearTimeout(timer); resolve(v); },
+        (e) => { clearTimeout(timer); reject(e); },
+      );
+    });
+  }
+
   async getCompany(companyId: string): Promise<DbCompany | null> {
     if (this.inDemoMode()) {
       console.log('[Database] Demo mode - retrieving company from localStorage');
@@ -396,34 +432,60 @@ class DatabaseService {
       return null;
     }
 
-    // Try RPC first (SECURITY DEFINER, bypasses RLS)
+    // 1. Return from cache instantly while we refresh in the background
+    const cached = this.getCachedCompany(companyId);
+
+    // 2. Try RPC first (SECURITY DEFINER, bypasses RLS) — 5 s cap
     try {
-      const { data: rpcData, error: rpcError } = await supabase
-        .rpc('get_my_company');
-      
+      const { data: rpcData, error: rpcError } = await this.raceTimeout(
+        supabase.rpc('get_my_company'),
+        5000,
+        'get_my_company RPC',
+      );
+
       if (!rpcError && rpcData && rpcData.length > 0) {
         console.log('[Database] Company loaded via RPC');
-        return rpcData[0] as DbCompany;
+        const company = rpcData[0] as DbCompany;
+        this.setCachedCompany(companyId, company);
+        return company;
       }
       if (rpcError) {
-        console.warn('[Database] get_my_company RPC failed, falling back to direct query:', rpcError.message);
+        console.warn('[Database] get_my_company RPC failed, falling back:', rpcError.message);
       }
     } catch (rpcErr) {
-      console.warn('[Database] RPC not available, using direct query');
+      console.warn('[Database] RPC unavailable/timed-out, trying direct query');
     }
 
-    // Fallback: direct table query
-    const { data, error } = await supabase
-      .from('companies')
-      .select('*')
-      .eq('id', companyId)
-      .single();
-    
-    if (error) {
-      console.error('Error fetching company:', error);
-      return null;
+    // 3. Fallback: direct table query — 5 s cap
+    try {
+      const { data, error } = await this.raceTimeout(
+        supabase
+          .from('companies')
+          .select('*')
+          .eq('id', companyId)
+          .single(),
+        5000,
+        'companies direct query',
+      );
+
+      if (error) {
+        console.error('Error fetching company:', error);
+      } else if (data) {
+        console.log('[Database] Company loaded via direct query');
+        this.setCachedCompany(companyId, data);
+        return data;
+      }
+    } catch (directErr) {
+      console.warn('[Database] Direct query timed-out:', directErr);
     }
-    return data;
+
+    // 4. If both network paths failed, return whatever we had in cache
+    if (cached) {
+      console.log('[Database] Returning cached company data (network unavailable)');
+      return cached;
+    }
+
+    return null;
   }
 
   async createCompany(company: Partial<DbCompany>): Promise<DbCompany | null> {
