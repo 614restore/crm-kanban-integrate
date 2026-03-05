@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useCRM, canManageTeam, getAssignableRoles, canModifyMember, canAssignRole } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
-import { sendEmail } from '@/lib/emailApi';
+import { supabase } from '@/lib/supabase';
 import { TeamMember, formatCurrency, roleLabels, UserRole } from '@/lib/crmData';
 import { toast } from 'sonner';
 import {
@@ -114,30 +114,29 @@ export default function TeamView() {
         return;
       }
 
-      await sendEmail({
-        to: inviteEmail.trim().toLowerCase(),
-        subject: 'You were invited to join the CRM team',
-        html: `
-          <p>You were invited to join the CRM team as <strong>${inviteRole}</strong>.</p>
-          <p>Company ID: <strong>${state.companyId}</strong></p>
-          <p>Use this link to join:</p>
-          <p><a href="${inviteLink}">${inviteLink}</a></p>
-        `,
-      });
+      // Copy invite link to clipboard for manual sharing
+      const inviteUrl = `${window.location.origin}${import.meta.env.BASE_URL}?invite=${encodeURIComponent(token)}&company=${encodeURIComponent(state.companyId)}`;
+      
+      try {
+        await navigator.clipboard.writeText(inviteUrl);
+        toast.success(`Invite created! Link copied to clipboard. Share it with ${inviteEmail}`);
+      } catch (clipboardError) {
+        // Fallback if clipboard fails
+        toast.success(`Invite created! Link: ${inviteUrl}`);
+      }
 
       dispatch({
         type: 'ADD_NOTIFICATION',
         payload: {
           id: `notif-${Date.now()}`,
           type: 'success',
-          title: 'Invitation Sent',
-          message: `An invitation email was sent to ${inviteEmail}`,
+          title: 'Invitation Created',
+          message: `Invitation link created for ${inviteEmail}. Link copied to clipboard.`,
           timestamp: new Date().toISOString(),
           read: false,
         },
       });
 
-      toast.success('Invitation sent');
       setShowInviteModal(false);
       setInviteEmail('');
       setInviteRole('sales');
