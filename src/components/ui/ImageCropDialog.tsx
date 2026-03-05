@@ -33,7 +33,7 @@ export default function ImageCropDialog({
   imageUrl,
   onClose,
   onCropComplete,
-  aspectRatio = 1,
+  aspectRatio,
   title = 'Crop Image',
 }: ImageCropDialogProps) {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
@@ -134,7 +134,7 @@ export default function ImageCropDialog({
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            Adjust the zoom, rotation, and position to crop your image perfectly
+            {aspectRatio ? 'Adjust the zoom, rotation, and position to crop your image perfectly' : 'Crop to any size - drag the corners to adjust the area, then zoom and rotate as needed'}
           </DialogDescription>
         </DialogHeader>
 
@@ -146,7 +146,7 @@ export default function ImageCropDialog({
               crop={crop}
               zoom={zoom}
               rotation={rotation}
-              aspect={aspectRatio}
+              {...(aspectRatio !== undefined && { aspect: aspectRatio })}
               onCropChange={onCropChange}
               onZoomChange={onZoomChange}
               onCropComplete={onCropCompleteInternal}

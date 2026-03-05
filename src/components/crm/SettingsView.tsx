@@ -2040,7 +2040,6 @@ export default function SettingsView() {
               setImageToCrop(null);
             }}
             onCropComplete={handleLogoCropComplete}
-            aspectRatio={16 / 9}
             title="Crop Company Logo"
           />
         </>
