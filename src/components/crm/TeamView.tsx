@@ -100,12 +100,6 @@ export default function TeamView() {
 
     console.log('=== VALIDATION PASSED ===');
     setIsSendingInvite(true);
-    
-    // Add timeout to prevent infinite loading
-    const timeoutId = setTimeout(() => {
-      setIsSendingInvite(false);
-      toast.error('Request timed out. Please check your email - the invite may have been sent anyway.');
-    }, 30000); // 30 second timeout
 
     try {
       const token = globalThis.crypto?.randomUUID?.() || `invite-${Date.now()}`;
@@ -122,12 +116,18 @@ export default function TeamView() {
       });
 
       if (!inviteRecord) {
-        clearTimeout(timeoutId);
+        setIsSendingInvite(false);
         toast.error('Failed to create invite record in database');
         return;
       }
 
       console.log('Invite record created:', inviteRecord);
+      
+      // Add timeout AFTER database record is saved
+      const timeoutId = setTimeout(() => {
+        setIsSendingInvite(false);
+        toast.error('Email taking too long. The invite link was saved and may still be sent.');
+      }, 30000); // 30 second timeout
 
       // Send email via Supabase Edge Function
       console.log('Sending email via Supabase Edge Function...');
