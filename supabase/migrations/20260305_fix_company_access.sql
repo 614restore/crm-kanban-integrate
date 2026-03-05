@@ -96,3 +96,79 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW
   EXECUTE FUNCTION public.handle_new_user();
+
+-- 4) RPC to update a team member's profile (bypasses RLS for managers)
+--    Only allows updates to members in the same company.
+--    Only owner/admin/sales_manager/production_manager can update others.
+CREATE OR REPLACE FUNCTION public.update_team_member_profile(
+  p_profile_id uuid,
+  p_first_name text DEFAULT NULL,
+  p_last_name text DEFAULT NULL,
+  p_email text DEFAULT NULL,
+  p_role text DEFAULT NULL,
+  p_department text DEFAULT NULL,
+  p_phone text DEFAULT NULL,
+  p_is_active boolean DEFAULT NULL
+)
+RETURNS public.profiles
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_caller_company_id uuid;
+  v_caller_role text;
+  v_target_company_id uuid;
+  v_result public.profiles;
+BEGIN
+  -- Get caller's company and role
+  SELECT company_id, role INTO v_caller_company_id, v_caller_role
+  FROM public.profiles WHERE id = auth.uid();
+
+  -- Get target's company
+  SELECT company_id INTO v_target_company_id
+  FROM public.profiles WHERE id = p_profile_id;
+
+  -- Self-update is always allowed
+  IF p_profile_id = auth.uid() THEN
+    UPDATE public.profiles SET
+      first_name  = COALESCE(p_first_name, first_name),
+      last_name   = COALESCE(p_last_name, last_name),
+      email       = COALESCE(p_email, email),
+      role        = COALESCE(p_role, role),
+      department  = COALESCE(p_department, department),
+      phone       = COALESCE(p_phone, phone),
+      is_active   = COALESCE(p_is_active, is_active),
+      updated_at  = now()
+    WHERE id = p_profile_id
+    RETURNING * INTO v_result;
+    RETURN v_result;
+  END IF;
+
+  -- For updating others: must be same company and have manager+ role
+  IF v_caller_company_id IS NULL OR v_caller_company_id != v_target_company_id THEN
+    RAISE EXCEPTION 'Cannot update profiles outside your company';
+  END IF;
+
+  IF v_caller_role NOT IN ('owner', 'admin', 'sales_manager', 'production_manager') THEN
+    RAISE EXCEPTION 'Insufficient permissions to update team members';
+  END IF;
+
+  UPDATE public.profiles SET
+    first_name  = COALESCE(p_first_name, first_name),
+    last_name   = COALESCE(p_last_name, last_name),
+    email       = COALESCE(p_email, email),
+    role        = COALESCE(p_role, role),
+    department  = COALESCE(p_department, department),
+    phone       = COALESCE(p_phone, phone),
+    is_active   = COALESCE(p_is_active, is_active),
+    updated_at  = now()
+  WHERE id = p_profile_id
+  RETURNING * INTO v_result;
+
+  RETURN v_result;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.update_team_member_profile(uuid,text,text,text,text,text,text,boolean) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.update_team_member_profile(uuid,text,text,text,text,text,text,boolean) TO authenticated;

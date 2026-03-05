@@ -1257,6 +1257,32 @@ class DatabaseService {
   }
 
   async updateProfile(profileId: string, updates: Partial<DbProfile>): Promise<DbProfile | null> {
+    // Try RPC first (SECURITY DEFINER, bypasses RLS)
+    try {
+      const { data: rpcData, error: rpcError } = await supabase
+        .rpc('update_team_member_profile', {
+          p_profile_id: profileId,
+          p_first_name: updates.first_name ?? null,
+          p_last_name: updates.last_name ?? null,
+          p_email: updates.email ?? null,
+          p_role: updates.role ?? null,
+          p_department: updates.department ?? null,
+          p_phone: updates.phone ?? null,
+          p_is_active: updates.is_active ?? null,
+        });
+      
+      if (!rpcError && rpcData) {
+        console.log('[Database] Profile updated via RPC');
+        return rpcData as DbProfile;
+      }
+      if (rpcError) {
+        console.warn('[Database] update_team_member_profile RPC failed, falling back:', rpcError.message);
+      }
+    } catch (rpcErr) {
+      console.warn('[Database] Profile update RPC not available, using direct query');
+    }
+
+    // Fallback: direct table update
     const { data, error } = await supabase
       .from('profiles')
       .update({ ...updates, updated_at: new Date().toISOString() })
