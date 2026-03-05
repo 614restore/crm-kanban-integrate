@@ -195,8 +195,8 @@ export default function AuthPage() {
               <Building2 size={28} className="text-white" />
             </div>
             <div>
-              <span className="text-2xl font-bold text-white">TrussCTR</span>
-              <p className="text-blue-200 text-sm italic">The CRM you can truss</p>
+              <span className="text-2xl font-bold text-white">614 Restore</span>
+              <p className="text-blue-200 text-sm italic">Restoration Management Simplified</p>
             </div>
           </div>
         </div>
@@ -244,9 +244,9 @@ export default function AuthPage() {
               <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
                 <Building2 size={24} className="text-white" />
               </div>
-              <span className="text-xl font-bold text-white">TrussCTR</span>
+              <span className="text-xl font-bold text-white">614 Restore</span>
             </div>
-            <p className="text-blue-200 text-sm italic">The CRM you can truss</p>
+            <p className="text-blue-200 text-sm italic">Restoration Management Simplified</p>
           </div>
 
           <div className="bg-white rounded-2xl shadow-2xl p-8">
