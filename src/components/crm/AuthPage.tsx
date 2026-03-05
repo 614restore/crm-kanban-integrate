@@ -32,14 +32,46 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const [inviteCompanyId, setInviteCompanyId] = useState<string | null>(null);
+
+  // Check for invite parameters in URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('invite');
+    const companyId = params.get('company');
+
+    if (token && companyId) {
+      setInviteToken(token);
+      setInviteCompanyId(companyId);
+      setMode('signup');
+
+      // Fetch invite details
+      supabase
+        .from('invitations')
+        .select('email, role')
+        .eq('token', token)
+        .eq('company_id', companyId)
+        .eq('accepted', false)
+        .single()
+        .then(({ data, error }) => {
+          if (data && !error) {
+            setEmail(data.email);
+            setRole(data.role as UserRole);
+          } else {
+            setError('Invalid or expired invite link');
+          }
+        });
+    }
+  }, []);
 
   // Demo mode auto-fill
   useEffect(() => {
-    if (isDemoMode) {
+    if (isDemoMode && !inviteToken) {
       setEmail('demo@example.com');
       setPassword('password');
     }
-  }, []);
+  }, [inviteToken]);
 
   const isAlreadyRegisteredError = (message?: string | null) => {
     if (!message) return false;
@@ -98,7 +130,35 @@ export default function AuthPage() {
             setError(error.message || 'Failed to create account. Please try again.');
           }
         } else {
-          setSuccess('Account created! Please check your email to verify your account.');
+          // If signing up via invite, process the invitation
+          if (inviteToken && inviteCompanyId) {
+            try {
+              // Get the newly created user
+              const { data: { user: newUser } } = await supabase.auth.getUser();
+              
+              if (newUser) {
+                // Update invitation to accepted
+                await supabase
+                  .from('invitations')
+                  .update({ accepted: true })
+                  .eq('token', inviteToken)
+                  .eq('company_id', inviteCompanyId);
+
+                // Update profile with company_id from invite
+                await supabase
+                  .from('profiles')
+                  .update({ company_id: inviteCompanyId })
+                  .eq('id', newUser.id);
+
+                setSuccess('Account created! You have been added to the team.');
+              }
+            } catch (inviteError) {
+              console.error('Error processing invite:', inviteError);
+              // Don't show error to user - account was still created successfully
+            }
+          } else {
+            setSuccess('Account created! Please check your email to verify your account.');
+          }
           setMode('login');
         }
       } else if (mode === 'reset') {
@@ -228,6 +288,17 @@ export default function AuthPage() {
               </div>
             )}
 
+            {inviteToken && mode === 'signup' && (
+              <div className="mb-6 p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <Mail className="text-indigo-500 flex-shrink-0" size={20} />
+                  <p className="text-indigo-800 font-medium text-sm">
+                    You've been invited to join a team! Complete signup to accept.
+                  </p>
+                </div>
+              </div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-5">
               {mode === 'signup' && (
                 <div className="grid grid-cols-2 gap-4">
@@ -277,9 +348,10 @@ export default function AuthPage() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                    className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none disabled:bg-gray-50 disabled:text-gray-500"
                     placeholder="you@company.com"
                     required
+                    disabled={!!inviteToken}
                   />
                 </div>
               </div>
@@ -338,7 +410,8 @@ export default function AuthPage() {
                     <select
                       value={role}
                       onChange={(e) => setRole(e.target.value as UserRole)}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                      className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none disabled:bg-gray-50 disabled:text-gray-500"
+                      disabled={!!inviteToken}
                     >
                       {Object.entries(roleLabels).map(([value, label]) => (
                         <option key={value} value={value}>
