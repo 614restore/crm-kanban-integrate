@@ -132,13 +132,17 @@ export default function AuthPage() {
           return;
         }
         
-        // If signing up via invite, include company_id in metadata
-        const signupMetadata = {
+        // For invite signups, include company_id and role from invitation
+        // For new company signups, omit role so authContext assigns 'owner'
+        const signupMetadata: any = {
           first_name: firstName,
           last_name: lastName,
-          role,
-          ...(inviteCompanyId && { company_id: inviteCompanyId }),
         };
+        
+        if (inviteCompanyId) {
+          signupMetadata.company_id = inviteCompanyId;
+          signupMetadata.role = role;
+        }
         
         const { error } = await signUp(email, password, signupMetadata);
         
@@ -195,7 +199,7 @@ export default function AuthPage() {
               <Building2 size={28} className="text-white" />
             </div>
             <div>
-              <span className="text-2xl font-bold text-white">614 Restore</span>
+              <span className="text-2xl font-bold text-white">TrussCTR</span>
               <p className="text-blue-200 text-sm italic">Restoration Management Simplified</p>
             </div>
           </div>
@@ -244,7 +248,7 @@ export default function AuthPage() {
               <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
                 <Building2 size={24} className="text-white" />
               </div>
-              <span className="text-xl font-bold text-white">614 Restore</span>
+              <span className="text-xl font-bold text-white">TrussCTR</span>
             </div>
             <p className="text-blue-200 text-sm italic">Restoration Management Simplified</p>
           </div>
@@ -414,21 +418,23 @@ export default function AuthPage() {
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-                    <select
-                      value={role}
-                      onChange={(e) => setRole(e.target.value as UserRole)}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none disabled:bg-gray-50 disabled:text-gray-500"
-                      disabled={!!inviteToken}
-                    >
-                      {Object.entries(roleLabels).map(([value, label]) => (
-                        <option key={value} value={value}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  {inviteToken && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                      <select
+                        value={role}
+                        onChange={(e) => setRole(e.target.value as UserRole)}
+                        className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none disabled:bg-gray-50 disabled:text-gray-500"
+                        disabled={!!inviteToken}
+                      >
+                        {Object.entries(roleLabels).map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </>
               )}
 

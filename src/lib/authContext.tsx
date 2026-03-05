@@ -332,21 +332,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           ? (metadata.role || 'sales')  // Invite signup: use provided role or default to sales
           : 'owner';                     // New company signup: always owner
         
-        // Update profile with additional info
-        await supabase
-          .from('profiles')
-          .update({
-            first_name: metadata?.first_name,
-            last_name: metadata?.last_name,
-            role: userRole,
-            company_id: metadata?.company_id, // Set company_id if provided (invite signup)
-          })
-          .eq('id', data.user.id);
+        console.log('[Auth] Setting up new user with role:', userRole);
+        console.log('[Auth] Invite mode:', !!metadata?.company_id);
+        
+        // Wait briefly for the database trigger to create the profile row
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Update profile with additional info (retry up to 3 times)
+        let profileUpdateSuccess = false;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          const { error: profileError, count } = await supabase
+            .from('profiles')
+            .update({
+              first_name: metadata?.first_name,
+              last_name: metadata?.last_name,
+              role: userRole,
+              company_id: metadata?.company_id, // Set company_id if provided (invite signup)
+            })
+            .eq('id', data.user.id);
+          
+          if (profileError) {
+            console.error(`[Auth] Failed to update profile (attempt ${attempt}):`, profileError);
+            if (attempt < 3) await new Promise(resolve => setTimeout(resolve, 500));
+          } else {
+            console.log(`[Auth] Profile updated successfully with role: ${userRole} (attempt ${attempt})`);
+            profileUpdateSuccess = true;
+            break;
+          }
+        }
+        
+        if (!profileUpdateSuccess) {
+          console.error('[Auth] Failed to update profile role after all attempts');
+        }
         
         // Only run first-time setup if NOT signing up via invite
         // (invite signup means they're joining an existing company)
         if (!metadata?.company_id) {
+          console.log('[Auth] Running setupNewUser for new company owner...');
           await setupNewUser(data.user.id, data.user.email || email);
+        }
+        
+        // Re-fetch and set profile so the UI immediately reflects the correct role
+        const freshProfile = await fetchProfile(data.user.id);
+        if (freshProfile) {
+          console.log('[Auth] Fresh profile after signup:', freshProfile.role, freshProfile.company_id);
+          setProfile(freshProfile);
         }
       }
 

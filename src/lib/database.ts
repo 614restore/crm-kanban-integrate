@@ -381,6 +381,24 @@ class DatabaseService {
       }
       return null;
     }
+
+    // Try RPC first (SECURITY DEFINER, bypasses RLS)
+    try {
+      const { data: rpcData, error: rpcError } = await supabase
+        .rpc('get_my_company');
+      
+      if (!rpcError && rpcData && rpcData.length > 0) {
+        console.log('[Database] Company loaded via RPC');
+        return rpcData[0] as DbCompany;
+      }
+      if (rpcError) {
+        console.warn('[Database] get_my_company RPC failed, falling back to direct query:', rpcError.message);
+      }
+    } catch (rpcErr) {
+      console.warn('[Database] RPC not available, using direct query');
+    }
+
+    // Fallback: direct table query
     const { data, error } = await supabase
       .from('companies')
       .select('*')
@@ -446,6 +464,33 @@ class DatabaseService {
       }
     }
     
+    // Try RPC first (SECURITY DEFINER, bypasses RLS)
+    try {
+      const { data: rpcData, error: rpcError } = await supabase
+        .rpc('update_my_company', {
+          p_name: updates.name ?? null,
+          p_phone: updates.phone ?? null,
+          p_email: updates.email ?? null,
+          p_website: updates.website ?? null,
+          p_address: updates.address ?? null,
+          p_city: updates.city ?? null,
+          p_state: updates.state ?? null,
+          p_zip: updates.zip ?? null,
+          p_logo_url: updates.logo_url ?? null,
+        });
+      
+      if (!rpcError && rpcData) {
+        console.log('[Database] Company updated via RPC');
+        return rpcData as DbCompany;
+      }
+      if (rpcError) {
+        console.warn('[Database] update_my_company RPC failed, falling back:', rpcError.message);
+      }
+    } catch (rpcErr) {
+      console.warn('[Database] update RPC not available, using direct query');
+    }
+
+    // Fallback: direct table update
     const { data, error } = await supabase
       .from('companies')
       .update({ ...updates, updated_at: new Date().toISOString() })

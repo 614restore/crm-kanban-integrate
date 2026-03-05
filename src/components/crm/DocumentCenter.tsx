@@ -272,6 +272,14 @@ export default function DocumentCenter() {
 
   const resolveDocumentUrl = async (url?: string): Promise<string | null> => {
     if (!url) return null;
+    
+    // If it's already a signed URL (contains token), return it directly
+    if (isHttpUrl(url) && (url.includes('token=') || url.includes('/sign/'))) {
+      console.log('[DocumentCenter] URL is already signed, using directly');
+      return url;
+    }
+    
+    // If it's an external HTTP URL (not from our storage), return it directly
     if (isHttpUrl(url) && !url.includes('/projectceo-documents/')) return url;
     
     console.log(`[DocumentCenter] Resolving document URL for path: ${url}`);

@@ -103,13 +103,13 @@ export default function SettingsView() {
   // AI Assistant state
   const [aiConfigDialogOpen, setAiConfigDialogOpen] = useState(false);
   
-  // Company form state
+  // Company form state - will be populated from database
   const [companyForm, setCompanyForm] = useState<CompanyFormData>({
-    name: 'StormCraft Roofing',
-    phone: '(555) 123-4567',
-    email: 'info@stormcraft.com',
-    website: 'https://stormcraft.com',
-    address: '123 Business Park Drive, Dallas, TX 75201',
+    name: 'Loading...',
+    phone: '',
+    email: '',
+    website: '',
+    address: '',
   });
   
   const [profileForm, setProfileForm] = useState({
@@ -219,12 +219,32 @@ export default function SettingsView() {
 
     const loadCompanyData = async () => {
       setIsLoadingCompany(true);
+      
+      // Force a visible log
+      console.log('========== SETTINGS VIEW MOUNTED ==========');
+      console.log('[Settings] effectiveCompanyId:', effectiveCompanyId);
+      console.log('[Settings] profile:', profile);
+      console.log('[Settings] state.companyId:', state.companyId);
+      
       try {
         const companyId = effectiveCompanyId || await resolveCompanyId();
-        if (!companyId) return;
+        
+        console.log('[Settings] Resolved company ID:', companyId);
+        
+        if (!companyId) {
+          console.warn('[Settings] ❌ No company ID available, cannot load company data');
+          // Show toast so user knows there's a problem
+          toast.error('No company ID found. Try logging out and back in.');
+          return;
+        }
 
+        console.log('[Settings] ✅ Loading company data for:', companyId);
         const company = await withTimeout(db.getCompany(companyId), 10000, 'Load company profile');
+        
+        console.log('[Settings] Company data received:', company);
+        
         if (company && !cancelled) {
+          console.log('[Settings] ✅ Company data loaded successfully:', company);
           const companyName = normalizeCompanyName(company.name, company.email);
           setCompanyForm({
             name: companyName,
@@ -240,9 +260,14 @@ export default function SettingsView() {
             setCompanyLogo(null);
             setCompanyLogoUrlInput('');
           }
+          toast.success('Company data loaded');
+        } else if (!company) {
+          console.warn('[Settings] ❌ No company found in database for ID:', companyId);
+          toast.error('Company not found in database');
         }
       } catch (error) {
-        console.error('Error loading company data:', error);
+        console.error('[Settings] ❌ Error loading company data:', error);
+        toast.error('Failed to load company data: ' + (error instanceof Error ? error.message : 'Unknown error'));
       } finally {
         if (!cancelled) {
           setIsLoadingCompany(false);
@@ -560,6 +585,19 @@ export default function SettingsView() {
     }
 
     const tryDirect = async () => {
+      // Try RPC first (bypasses RLS)
+      try {
+        const { data: rpcData, error: rpcError } = await supabase.rpc('update_my_company', {
+          p_logo_url: logoUrl,
+        });
+        if (!rpcError && rpcData) {
+          return { logo_url: (rpcData as any).logo_url || logoUrl };
+        }
+      } catch (e) {
+        console.warn('[Settings] update_my_company RPC for logo failed, trying direct:', e);
+      }
+
+      // Fallback: direct table update
       const { data, error } = await supabase
         .from('companies')
         .update({ logo_url: logoUrl, updated_at: new Date().toISOString() })

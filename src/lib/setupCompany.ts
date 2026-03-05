@@ -62,7 +62,7 @@ export async function ensureUserHasCompany(userId: string, userEmail: string): P
       
       const { error: updateError } = await supabase
         .from('profiles')
-        .update({ company_id: newCompany.id })
+        .update({ company_id: newCompany.id, role: 'owner' })
         .eq('id', userId);
 
       if (!updateError) {
