@@ -137,27 +137,21 @@ export default function TeamView() {
 
       if (emailError) {
         console.error('Email sending failed:', emailError);
-        // Try clipboard fallback, but don't fail if permission denied
-        const inviteUrl = `${window.location.origin}${import.meta.env.BASE_URL}?invite=${encodeURIComponent(token)}&company=${encodeURIComponent(state.companyId)}`;
-        try {
-          await navigator.clipboard.writeText(inviteUrl);
-          toast.warning(`Invite created but email failed to send. Link copied to clipboard - please send manually.`);
-        } catch (clipboardError) {
-          console.error('Clipboard access denied:', clipboardError);
-          toast.error(`Invite created but email failed to send. Error: ${emailError.message || 'Unknown error'}`);
-        }
-      } else {
-        console.log('Email sent successfully:', emailData);
-        toast.success(`Invitation email sent to ${inviteEmail}!`);
+        clearTimeout(timeoutId);
+        toast.error(`Failed to send invitation email. Check console for details.`);
+        return;
       }
+      
+      console.log('Email sent successfully:', emailData);
+      toast.success(`Invitation email sent to ${inviteEmail}!`);
 
       dispatch({
         type: 'ADD_NOTIFICATION',
         payload: {
           id: `notif-${Date.now()}`,
           type: 'success',
-          title: 'Invitation Created',
-          message: `Invitation link created for ${inviteEmail}. Link copied to clipboard.`,
+          title: 'Invitation Sent',
+          message: `Invitation email sent to ${inviteEmail}.`,
           timestamp: new Date().toISOString(),
           read: false,
         },
