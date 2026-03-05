@@ -5,6 +5,8 @@ import { db } from '@/lib/database';
 import { supabase } from '@/lib/supabase';
 import { TeamMember, formatCurrency, roleLabels, UserRole } from '@/lib/crmData';
 import { toast } from 'sonner';
+import PermissionsEditor from '../settings/PermissionsEditor';
+import type { PermissionCategory, PermissionLevel } from '@/lib/permissions';
 import {
   Users,
   Plus,
@@ -24,6 +26,7 @@ import {
   Target,
   DollarSign,
   Loader2,
+  Settings,
 } from 'lucide-react';
 
 export default function TeamView() {
@@ -32,9 +35,10 @@ export default function TeamView() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showPermissionsModal, setShowPermissionsModal] = useState(false);
   const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<UserRole>('sales');
+  const [inviteRole, setInviteRole] = useState<UserRole>('sales_rep');
   const [copied, setCopied] = useState(false);
   const [isSendingInvite, setIsSendingInvite] = useState(false);
   const [isSavingMember, setIsSavingMember] = useState(false);
@@ -239,6 +243,45 @@ export default function TeamView() {
     }
   };
 
+  const handleManagePermissions = (member: TeamMember) => {
+    if (!canModifyMember(userRole, member.role)) {
+      toast.error('You do not have permission to modify this team member');
+      return;
+    }
+    setSelectedMember(member);
+    setShowPermissionsModal(true);
+  };
+
+  const handleSavePermissions = async (permissions: Partial<Record<PermissionCategory, PermissionLevel>>) => {
+    if (!selectedMember) return;
+
+    try {
+      // Store custom permissions in the database
+      // For now, we'll store it as JSON in a custom_permissions column
+      // You may need to add this column to your profiles table
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          custom_permissions: permissions,
+        })
+        .eq('id', selectedMember.id);
+
+      if (error) {
+        console.error('Failed to save permissions:', error);
+        toast.error('Failed to save permissions');
+        return;
+      }
+
+      toast.success('Permissions updated successfully');
+      setShowPermissionsModal(false);
+      setSelectedMember(null);
+    } catch (error) {
+      console.error('Failed to save permissions:', error);
+      toast.error('Failed to save permissions');
+      throw error;
+    }
+  };
+
   // Calculate team stats
   const totalLeads = state.teamMembers.reduce(
     (sum, tm) => sum + (tm.performance?.leadsGenerated || 0),
@@ -384,12 +427,22 @@ export default function TeamView() {
                     </div>
                   </div>
                   {canManage && (
-                    <button
-                      onClick={() => handleEditMember(member)}
-                      className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                    >
-                      <Edit2 size={16} className="text-gray-500" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleManagePermissions(member)}
+                        className="p-2 hover:bg-blue-50 rounded-lg transition-colors group"
+                        title="Manage Permissions"
+                      >
+                        <Shield size={16} className="text-gray-500 group-hover:text-blue-600" />
+                      </button>
+                      <button
+                        onClick={() => handleEditMember(member)}
+                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                        title="Edit Member"
+                      >
+                        <Edit2 size={16} className="text-gray-500" />
+                      </button>
+                    </div>
                   )}
                 </div>
 
@@ -633,6 +686,21 @@ export default function TeamView() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Permissions Modal */}
+      {showPermissionsModal && selectedMember && (
+        <PermissionsEditor
+          userId={selectedMember.id}
+          userName={selectedMember.name}
+          role={selectedMember.role}
+          customPermissions={undefined} // TODO: Load from database
+          onSave={handleSavePermissions}
+          onClose={() => {
+            setShowPermissionsModal(false);
+            setSelectedMember(null);
+          }}
+        />
       )}
     </div>
   );

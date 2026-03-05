@@ -17,7 +17,22 @@ export type CustomerStatus =
   | 'completed' 
   | 'lost';
 
-export type UserRole = 'owner' | 'manager' | 'admin' | 'sales' | 'production' | 'billing' | 'canvas';
+export type UserRole = 
+  | 'owner' 
+  | 'admin'
+  | 'sales_manager' 
+  | 'sales_rep' 
+  | 'production_manager'
+  | 'project_manager'
+  | 'field_tech'
+  | 'office_staff'
+  | 'subcontractor'
+  // Legacy roles for backward compatibility
+  | 'manager'
+  | 'sales'
+  | 'production'
+  | 'billing'
+  | 'canvas';
 
 export type BoardType = 'sales' | 'production' | 'billing' | 'custom';
 
@@ -1411,12 +1426,20 @@ export const statusColors: Record<CustomerStatus, string> = {
 
 export const roleLabels: Record<UserRole, string> = {
   owner: 'Owner',
-  manager: 'Manager',
   admin: 'Admin',
-  sales: 'Sales Rep',
-  production: 'Production',
-  billing: 'Billing',
-  canvas: 'Canvas Team',
+  sales_manager: 'Sales Manager',
+  sales_rep: 'Sales Rep',
+  production_manager: 'Production Manager',
+  project_manager: 'Project Manager',
+  field_tech: 'Field Tech/Crew',
+  office_staff: 'Office Staff',
+  subcontractor: 'Subcontractor',
+  // Legacy roles
+  manager: 'Manager (Legacy)',
+  sales: 'Sales (Legacy)',
+  production: 'Production (Legacy)',
+  billing: 'Billing (Legacy)',
+  canvas: 'Canvas (Legacy)',
 };
 
 // Helper functions

@@ -675,55 +675,81 @@ export function useFinancialStats() {
 
 // Permission helpers
 export function canCreateBoard(role: UserRole): boolean {
-  return ['owner', 'admin'].includes(role);
+  return ['owner', 'admin', 'sales_manager', 'production_manager'].includes(role);
 }
 
 export function canEditBoard(role: UserRole): boolean {
-  return ['owner', 'admin'].includes(role);
+  return ['owner', 'admin', 'sales_manager', 'production_manager'].includes(role);
 }
 
 export function canManageTeam(role: UserRole): boolean {
-  return ['owner', 'admin'].includes(role);
+  return ['owner', 'admin', 'sales_manager', 'production_manager'].includes(role);
 }
 
 export function canManageLeadSources(role: UserRole): boolean {
-  return ['owner', 'admin'].includes(role);
+  return ['owner', 'admin', 'sales_manager'].includes(role);
 }
 
 export function canViewFinancials(role: UserRole): boolean {
-  return ['owner', 'admin'].includes(role);
+  return ['owner', 'admin', 'sales_manager', 'office_staff'].includes(role);
 }
 
 export function canCreateInvoice(role: UserRole): boolean {
-  return ['owner', 'admin'].includes(role);
+  return ['owner', 'admin', 'sales_manager', 'sales_rep', 'office_staff'].includes(role);
 }
 
 const roleHierarchy: Record<UserRole, number> = {
-  owner: 5,
-  manager: 4, // Legacy support - treated as admin level
-  admin: 4,
-  billing: 3, // Legacy support
-  production: 2,
-  sales: 1,
-  canvas: 1,
+  owner: 10,
+  admin: 9,
+  sales_manager: 8,
+  production_manager: 8,
+  project_manager: 6,
+  office_staff: 5,
+  sales_rep: 4,
+  field_tech: 3,
+  subcontractor: 2,
+  // Legacy roles
+  manager: 8,
+  sales: 4,
+  production: 8,
+  billing: 5,
+  canvas: 3,
 };
 
 export function canAssignRole(actorRole: UserRole, targetRole: UserRole): boolean {
   if (actorRole === 'owner') return true;
   // Admin can assign any role except owner
-  if (actorRole === 'admin' || actorRole === 'manager') return targetRole !== 'owner';
+  if (actorRole === 'admin') return targetRole !== 'owner';
+  // Managers can assign roles below them
+  if (actorRole === 'sales_manager' || actorRole === 'production_manager' || actorRole === 'manager') {
+    return roleHierarchy[targetRole] < roleHierarchy[actorRole];
+  }
   return false;
 }
 
 export function getAssignableRoles(actorRole: UserRole): UserRole[] {
-  // Only show roles that are actively used in the company
-  const activeRoles: UserRole[] = ['owner', 'admin', 'sales', 'production', 'canvas'];
+  // All active roles (excluding legacy)
+  const activeRoles: UserRole[] = [
+    'owner',
+    'admin',
+    'sales_manager',
+    'sales_rep',
+    'production_manager',
+    'project_manager',
+    'field_tech',
+    'office_staff',
+    'subcontractor',
+  ];
   return activeRoles.filter((role) => canAssignRole(actorRole, role));
 }
 
 export function canModifyMember(actorRole: UserRole, memberRole: UserRole): boolean {
   if (actorRole === 'owner') return true;
-  // Admin can modify any user except owner
-  if (actorRole === 'admin' || actorRole === 'manager') return memberRole !== 'owner';
+  // Admin can modify anyone except owner
+  if (actorRole === 'admin') return memberRole !== 'owner';
+  // Managers can modify users below them in hierarchy
+  if (actorRole === 'sales_manager' || actorRole === 'production_manager' || actorRole === 'manager') {
+    return roleHierarchy[memberRole] < roleHierarchy[actorRole];
+  }
   return false;
 }
