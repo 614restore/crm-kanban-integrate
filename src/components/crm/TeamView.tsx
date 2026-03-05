@@ -94,11 +94,17 @@ export default function TeamView() {
     }
 
     setIsSendingInvite(true);
+    
+    // Add timeout to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+      setIsSendingInvite(false);
+      toast.error('Request timed out. Please try again.');
+    }, 10000); // 10 second timeout
+
     try {
       const token = globalThis.crypto?.randomUUID?.() || `invite-${Date.now()}`;
-      const appUrl = import.meta.env.VITE_APP_URL || window.location.origin;
-      const inviteLink = `${appUrl}?invite=${encodeURIComponent(token)}&company=${encodeURIComponent(state.companyId)}`;
-
+      
+      console.log('Creating invite record...');
       const inviteRecord = await db.createInvite({
         company_id: state.companyId,
         email: inviteEmail.trim().toLowerCase(),
@@ -110,9 +116,12 @@ export default function TeamView() {
       });
 
       if (!inviteRecord) {
+        clearTimeout(timeoutId);
         toast.error('Failed to create invite record in database');
         return;
       }
+
+      console.log('Invite record created:', inviteRecord);
 
       // Copy invite link to clipboard for manual sharing
       const inviteUrl = `${window.location.origin}${import.meta.env.BASE_URL}?invite=${encodeURIComponent(token)}&company=${encodeURIComponent(state.companyId)}`;
@@ -121,6 +130,7 @@ export default function TeamView() {
         await navigator.clipboard.writeText(inviteUrl);
         toast.success(`Invite created! Link copied to clipboard. Share it with ${inviteEmail}`);
       } catch (clipboardError) {
+        console.warn('Clipboard failed:', clipboardError);
         // Fallback if clipboard fails
         toast.success(`Invite created! Link: ${inviteUrl}`);
       }
@@ -140,7 +150,9 @@ export default function TeamView() {
       setShowInviteModal(false);
       setInviteEmail('');
       setInviteRole('sales');
+      clearTimeout(timeoutId);
     } catch (error: unknown) {
+      clearTimeout(timeoutId);
       console.error('Failed to send invitation:', error);
       const message = error instanceof Error ? error.message : 'Failed to send invitation';
       toast.error(message);
