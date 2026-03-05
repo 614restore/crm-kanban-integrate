@@ -15,7 +15,8 @@
     "doctor": "node scripts/doctor.mjs",
     "ci:quality": "npm run doctor && npm run test && npm run build",
     "preview": "vite preview",
-    "deploy": "npm run build && gh-pages -d dist"
+    "deploy": "npm run build && gh-pages -d dist",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",

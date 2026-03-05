@@ -9,7 +9,7 @@ import { OpenWeatherIntegration, HailTraceIntegration } from './weather';
 export class IntegrationManager {
   private integrations: Map<string, BaseIntegration> = new Map();
   private activeConnections: Map<string, any> = new Map();
-  private webhookHandlers: Map<string, Function> = new Map();
+  private webhookHandlers: Map<string, (...args: unknown[]) => void> = new Map();
   private syncIntervals: Map<string, NodeJS.Timeout> = new Map();
 
   constructor() {
@@ -453,7 +453,7 @@ export class IntegrationManager {
   /**
    * Register webhook handler
    */
-  registerWebhookHandler(integration: string, handler: Function): void {
+  registerWebhookHandler(integration: string, handler: (...args: unknown[]) => void): void {
     this.webhookHandlers.set(integration, handler);
   }
 

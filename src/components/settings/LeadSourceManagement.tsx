@@ -26,9 +26,8 @@ import {
 import { LeadSource } from '../../lib/crmData';
 import { usePermissions, withPermission } from '../../lib/permissions/PermissionProvider';
 
-interface LeadSourceManagementProps {
-  // Remove userRole prop since we'll get it from permission context
-}
+// Remove userRole prop since we'll get it from permission context
+type LeadSourceManagementProps = Record<string, never>;
 
 const LeadSourceManagement: React.FC<LeadSourceManagementProps> = () => {
   const { user, hasPermission, canManageResource, isManagerOrHigher } = usePermissions();

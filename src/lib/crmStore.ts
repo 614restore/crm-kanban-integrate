@@ -276,7 +276,7 @@ export function crmReducer(state: CRMState, action: CRMAction): CRMState {
     case 'ADD_APPOINTMENT':
       return { ...state, appointments: [...state.appointments, action.payload] };
     
-    case 'UPDATE_APPOINTMENT':
+    case 'UPDATE_APPOINTMENT': {
       // Handle inspection completion automation
       const updatedAppointment = action.payload;
       const isInspection = updatedAppointment.type === 'inspection';
@@ -307,6 +307,7 @@ export function crmReducer(state: CRMState, action: CRMAction): CRMState {
         ),
         contacts: updatedContacts,
       };
+    }
     
     case 'DELETE_APPOINTMENT':
       return {

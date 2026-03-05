@@ -12,7 +12,7 @@ import {
 class IntegrationManager {
   private integrations: Map<string, BaseIntegration> = new Map();
   private activeConnections: Map<string, any> = new Map();
-  private webhookHandlers: Map<string, Function> = new Map();
+  private webhookHandlers: Map<string, (...args: unknown[]) => void> = new Map();
 
   // Initialize all available integrations
   async initializeIntegrations(): Promise<void> {
@@ -448,7 +448,7 @@ class IntegrationManager {
   }
 
   // Register webhook handler
-  registerWebhookHandler(integration: string, handler: Function): void {
+  registerWebhookHandler(integration: string, handler: (...args: unknown[]) => void): void {
     this.webhookHandlers.set(integration, handler);
   }
 
