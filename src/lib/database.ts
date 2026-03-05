@@ -1787,21 +1787,6 @@ class DatabaseService {
       ...(actualHours !== undefined && { actual_hours: actualHours }),
     });
   }
-
-  // Invitation operations
-  async createInvite(invite: Partial<DbInvite>): Promise<DbInvite | null> {
-    const { data, error } = await supabase
-      .from('invitations')
-      .insert([invite])
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error creating invitation:', error);
-      return null;
-    }
-    return data;
-  }
 }
 
 export const db = new DatabaseService();
