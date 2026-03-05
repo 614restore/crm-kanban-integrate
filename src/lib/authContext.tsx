@@ -22,7 +22,7 @@ interface AuthContextType {
   profile: Profile | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
-  signUp: (email: string, password: string, metadata?: { first_name?: string; last_name?: string; role?: string }) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, metadata?: { first_name?: string; last_name?: string; role?: string; company_id?: string }) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: Error | null }>;
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: Error | null }>;
@@ -263,7 +263,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signUp = async (
     email: string,
     password: string,
-    metadata?: { first_name?: string; last_name?: string; role?: string }
+    metadata?: { first_name?: string; last_name?: string; role?: string; company_id?: string }
   ) => {
     try {
       if (isDemoMode) {
@@ -296,7 +296,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           first_name: metadata?.first_name || email.split('@')[0] || 'Demo',
           last_name: metadata?.last_name || 'User',
           role: metadata?.role || 'admin',
-          company_id: '00000000-0000-0000-0000-000000000001',
+          company_id: metadata?.company_id || '00000000-0000-0000-0000-000000000001',
           is_active: true,
         };
 
@@ -333,12 +333,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               first_name: metadata.first_name,
               last_name: metadata.last_name,
               role: metadata.role || 'sales',
+              company_id: metadata.company_id, // Set company_id if provided (invite signup)
             })
             .eq('id', data.user.id);
         }
         
-        // Run first-time setup
-        await setupNewUser(data.user.id, data.user.email || email);
+        // Only run first-time setup if NOT signing up via invite
+        // (invite signup means they're joining an existing company)
+        if (!metadata?.company_id) {
+          await setupNewUser(data.user.id, data.user.email || email);
+        }
       }
 
       return { error };

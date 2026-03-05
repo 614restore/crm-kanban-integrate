@@ -131,11 +131,17 @@ export default function AuthPage() {
           setLoading(false);
           return;
         }
-        const { error } = await signUp(email, password, {
+        
+        // If signing up via invite, include company_id in metadata
+        const signupMetadata = {
           first_name: firstName,
           last_name: lastName,
           role,
-        });
+          ...(inviteCompanyId && { company_id: inviteCompanyId }),
+        };
+        
+        const { error } = await signUp(email, password, signupMetadata);
+        
         if (error) {
           if (isAlreadyRegisteredError(error.message)) {
             setMode('login');
@@ -144,31 +150,20 @@ export default function AuthPage() {
             setError(error.message || 'Failed to create account. Please try again.');
           }
         } else {
-          // If signing up via invite, process the invitation
+          // If signing up via invite, mark invitation as accepted
           if (inviteToken && inviteCompanyId) {
             try {
-              // Get the newly created user
-              const { data: { user: newUser } } = await supabase.auth.getUser();
-              
-              if (newUser) {
-                // Update invitation to accepted
-                await supabase
-                  .from('invitations')
-                  .update({ accepted: true })
-                  .eq('token', inviteToken)
-                  .eq('company_id', inviteCompanyId);
+              await supabase
+                .from('invitations')
+                .update({ accepted: true })
+                .eq('token', inviteToken)
+                .eq('company_id', inviteCompanyId);
 
-                // Update profile with company_id from invite
-                await supabase
-                  .from('profiles')
-                  .update({ company_id: inviteCompanyId })
-                  .eq('id', newUser.id);
-
-                setSuccess('Account created! You have been added to the team.');
-              }
+              setSuccess('Account created! You have been added to the team.');
             } catch (inviteError) {
-              console.error('Error processing invite:', inviteError);
-              // Don't show error to user - account was still created successfully
+              console.error('Error updating invite:', inviteError);
+              // Account was still created successfully
+              setSuccess('Account created! You have been added to the team.');
             }
           } else {
             setSuccess('Account created! Please check your email to verify your account.');
