@@ -257,8 +257,6 @@ export default function TeamView() {
 
     try {
       // Store custom permissions in the database
-      // For now, we'll store it as JSON in a custom_permissions column
-      // You may need to add this column to your profiles table
       const { error } = await supabase
         .from('profiles')
         .update({
@@ -268,17 +266,34 @@ export default function TeamView() {
 
       if (error) {
         console.error('Failed to save permissions:', error);
-        toast.error('Failed to save permissions');
+        
+        // Provide more specific error messages
+        if (error.message?.includes('column') && error.message?.includes('custom_permissions')) {
+          toast.error('Database not set up yet. Please run the custom_permissions migration in Supabase.');
+          console.error('Missing column: Run the SQL migration in supabase/migrations/001_add_custom_permissions.sql');
+        } else if (error.message?.includes('permission') || error.message?.includes('policy')) {
+          toast.error('Permission denied. Only owners and admins can modify permissions.');
+        } else {
+          toast.error(`Failed to save permissions: ${error.message || 'Unknown error'}`);
+        }
         return;
       }
+
+      // Update local state to reflect the change
+      dispatch({
+        type: 'UPDATE_TEAM_MEMBER',
+        payload: {
+          ...selectedMember,
+          customPermissions: permissions,
+        },
+      });
 
       toast.success('Permissions updated successfully');
       setShowPermissionsModal(false);
       setSelectedMember(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to save permissions:', error);
-      toast.error('Failed to save permissions');
-      throw error;
+      toast.error(`Failed to save permissions: ${error?.message || 'Unknown error'}`);
     }
   };
 

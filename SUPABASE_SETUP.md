@@ -497,6 +497,118 @@ Test your setup:
 
 ---
 
+---
+
+## 🔐 Custom Permissions Setup (REQUIRED)
+
+### Problem
+When trying to save custom permissions for team members, you get: **"Failed to save permissions"**
+
+### Root Cause
+The `custom_permissions` column doesn't exist in the `profiles` table yet.
+
+### Solution
+
+#### Step 1: Open SQL Editor
+
+1. Go to your Supabase dashboard
+2. Click **SQL Editor** in the left sidebar
+3. Click **New Query**
+
+#### Step 2: Run the Migration
+
+Copy and paste this SQL and click **Run**:
+
+```sql
+-- Add custom_permissions column to profiles table
+ALTER TABLE profiles 
+ADD COLUMN IF NOT EXISTS custom_permissions JSONB;
+
+-- Add a comment describing the column
+COMMENT ON COLUMN profiles.custom_permissions IS 'Stores custom permission overrides. Format: {"category": "level"}';
+
+-- Create an index for better performance
+CREATE INDEX IF NOT EXISTS idx_profiles_custom_permissions 
+ON profiles USING GIN (custom_permissions);
+
+-- Drop existing policies if they conflict
+DROP POLICY IF EXISTS "Users can view all profiles in their company" ON profiles;
+DROP POLICY IF EXISTS "Owners and admins can update team member permissions" ON profiles;
+
+-- Users can view all profiles in their company
+CREATE POLICY "Users can view all profiles in their company"
+ON profiles FOR SELECT
+USING (
+  auth.uid() IN (
+    SELECT id FROM profiles WHERE company_id = profiles.company_id
+  )
+);
+
+-- Owners and admins can update team member info and permissions
+CREATE POLICY "Owners and admins can update team member permissions"
+ON profiles FOR UPDATE
+USING (
+  auth.uid() = id  -- Can update self
+  OR
+  auth.uid() IN (  -- Or is owner/admin/manager
+    SELECT id FROM profiles 
+    WHERE company_id = profiles.company_id 
+    AND role IN ('owner', 'admin', 'sales_manager', 'production_manager', 'manager')
+  )
+);
+```
+
+#### Step 3: Verify the Column
+
+Run this to verify:
+
+```sql
+SELECT column_name, data_type 
+FROM information_schema.columns 
+WHERE table_name = 'profiles' 
+AND column_name = 'custom_permissions';
+```
+
+Expected result:
+```
+column_name          | data_type
+---------------------|----------
+custom_permissions   | jsonb
+```
+
+#### Step 4: Test It
+
+1. Log in as an owner or admin
+2. Go to **Team** section
+3. Click the **shield icon** next to a team member
+4. Toggle some permissions
+5. Click **Save Permissions**
+6. Should see: ✅ "Permissions updated successfully"
+
+### Permission Storage Format
+
+```json
+{
+  "contacts_leads": "full",
+  "jobs_workflows": "team",
+  "invoicing": "create",
+  "users_roles": "none"
+}
+```
+
+### Troubleshooting
+
+**Error: "Permission denied"**
+- Make sure you're logged in as owner or admin
+- Only these roles can modify other users' permissions
+
+**Still not working?**
+- Check browser console (F12) for detailed errors
+- Verify you ran the migration SQL
+- Confirm RLS policies were created
+
+---
+
 ## 📚 Resources
 
 - [Supabase Documentation](https://supabase.com/docs)
