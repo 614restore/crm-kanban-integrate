@@ -350,19 +350,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     try {
       console.log('[Auth] Signing out...');
-      const { error } = await supabase.auth.signOut();
-      if (error) {
-        console.error('[Auth] Sign out error:', error);
-        throw error;
-      }
-      console.log('[Auth] Sign out successful');
       
-      // Clear all state
+      // Clear all state immediately to provide instant feedback
       setSession(null);
       setUser(null);
       setProfile(null);
       
-      // Clear localStorage
+      // Clear localStorage and sessionStorage
       try {
         localStorage.clear();
         sessionStorage.clear();
@@ -371,27 +365,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.warn('[Auth] Failed to clear storage:', storageError);
       }
       
-      // Use correct base path for GitHub Pages or local dev
-      const basePath = import.meta.env.BASE_URL || '/';
-      window.location.href = basePath;
+      // Call Supabase signOut (don't wait for it if it fails)
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('[Auth] Sign out error:', error);
+      } else {
+        console.log('[Auth] Sign out successful');
+      }
     } catch (err) {
       console.error('[Auth] Sign out failed:', err);
-      // Force logout by clearing state even if API call fails
-      setSession(null);
-      setUser(null);
-      setProfile(null);
-      
-      // Clear storage on error too
-      try {
-        localStorage.clear();
-        sessionStorage.clear();
-      } catch (storageError) {
-        console.warn('[Auth] Failed to clear storage on error:', storageError);
-      }
-      
-      // Use correct base path for GitHub Pages or local dev
+    } finally {
+      // Always redirect and reload, regardless of success/failure
+      // Use correct base path for GitHub Pages
       const basePath = import.meta.env.BASE_URL || '/';
-      window.location.href = basePath;
+      
+      // Force a hard reload to the base path to ensure clean state
+      window.location.replace(basePath);
     }
   };
 

@@ -686,11 +686,18 @@ export default function SettingsView() {
 
   const handleLogout = async () => {
     try {
-      await signOut();
-      toast.success('Logged out successfully');
+      // Add timeout to prevent hanging
+      const logoutPromise = signOut();
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Logout timeout')), 5000)
+      );
+      
+      await Promise.race([logoutPromise, timeoutPromise]);
     } catch (error) {
       console.error('Logout error:', error);
-      toast.error('Failed to log out');
+      // Even if there's an error, force logout by redirecting
+      const basePath = import.meta.env.BASE_URL || '/';
+      window.location.replace(basePath);
     }
   };
 
