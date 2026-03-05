@@ -98,8 +98,8 @@ export default function TeamView() {
     // Add timeout to prevent infinite loading
     const timeoutId = setTimeout(() => {
       setIsSendingInvite(false);
-      toast.error('Request timed out. Please try again.');
-    }, 10000); // 10 second timeout
+      toast.error('Request timed out. Please check your email - the invite may have been sent anyway.');
+    }, 30000); // 30 second timeout
 
     try {
       const token = globalThis.crypto?.randomUUID?.() || `invite-${Date.now()}`;
