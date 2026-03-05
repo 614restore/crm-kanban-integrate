@@ -123,16 +123,27 @@ export default function TeamView() {
 
       console.log('Invite record created:', inviteRecord);
 
-      // Copy invite link to clipboard for manual sharing
-      const inviteUrl = `${window.location.origin}${import.meta.env.BASE_URL}?invite=${encodeURIComponent(token)}&company=${encodeURIComponent(state.companyId)}`;
-      
-      try {
+      // Send email via Supabase Edge Function
+      console.log('Sending email via Supabase Edge Function...');
+      const { data: emailData, error: emailError } = await supabase.functions.invoke('send-invite-email', {
+        body: {
+          email: inviteEmail.trim().toLowerCase(),
+          token,
+          companyId: state.companyId,
+          role: inviteRole,
+          invitedBy: profile?.id,
+        },
+      });
+
+      if (emailError) {
+        console.error('Email sending failed:', emailError);
+        // Still show success with clipboard fallback
+        const inviteUrl = `${window.location.origin}${import.meta.env.BASE_URL}?invite=${encodeURIComponent(token)}&company=${encodeURIComponent(state.companyId)}`;
         await navigator.clipboard.writeText(inviteUrl);
-        toast.success(`Invite created! Link copied to clipboard. Share it with ${inviteEmail}`);
-      } catch (clipboardError) {
-        console.warn('Clipboard failed:', clipboardError);
-        // Fallback if clipboard fails
-        toast.success(`Invite created! Link: ${inviteUrl}`);
+        toast.warning(`Invite created but email failed to send. Link copied to clipboard - please send manually.`);
+      } else {
+        console.log('Email sent successfully:', emailData);
+        toast.success(`Invitation email sent to ${inviteEmail}!`);
       }
 
       dispatch({
