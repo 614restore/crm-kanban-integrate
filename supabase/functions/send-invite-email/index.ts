@@ -13,31 +13,14 @@ serve(async (req) => {
   }
 
   try {
-    // Verify authentication using Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')
-    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')
+    // Log for debugging
+    console.log('Request received, checking auth...')
+    const authHeader = req.headers.get('Authorization')
+    console.log('Auth header present:', !!authHeader)
     
-    if (!supabaseUrl || !supabaseKey) {
-      return new Response(
-        JSON.stringify({ error: 'Supabase configuration missing' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    const supabaseClient = createClient(supabaseUrl, supabaseKey, {
-      global: { headers: { Authorization: req.headers.get('Authorization')! } }
-    })
-
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
-    
-    if (authError || !user) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized', details: authError?.message }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
+    // Parse request body
     const { email, token, companyId, role, invitedBy } = await req.json()
+    console.log('Request data:', { email, companyId, role })
 
     // Validate required fields
     if (!email || !token || !companyId) {

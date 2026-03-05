@@ -128,6 +128,9 @@ export default function TeamView() {
       
       // Get current session to ensure we have auth
       const { data: { session } } = await supabase.auth.getSession();
+      console.log('Session exists:', !!session);
+      console.log('Access token exists:', !!session?.access_token);
+      
       if (!session) {
         clearTimeout(timeoutId);
         toast.error('Not authenticated. Please log in again.');
@@ -143,6 +146,8 @@ export default function TeamView() {
           invitedBy: profile?.id,
         },
       });
+      
+      console.log('Function response:', { emailData, emailError });
 
       if (emailError) {
         console.error('Email sending failed:', emailError);
