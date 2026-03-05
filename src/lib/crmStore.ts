@@ -675,34 +675,34 @@ export function useFinancialStats() {
 
 // Permission helpers
 export function canCreateBoard(role: UserRole): boolean {
-  return ['owner', 'manager', 'admin'].includes(role);
+  return ['owner', 'admin'].includes(role);
 }
 
 export function canEditBoard(role: UserRole): boolean {
-  return ['owner', 'manager', 'admin'].includes(role);
+  return ['owner', 'admin'].includes(role);
 }
 
 export function canManageTeam(role: UserRole): boolean {
-  return ['owner', 'manager', 'admin'].includes(role);
+  return ['owner', 'admin'].includes(role);
 }
 
 export function canManageLeadSources(role: UserRole): boolean {
-  return ['owner', 'manager'].includes(role);
+  return ['owner', 'admin'].includes(role);
 }
 
 export function canViewFinancials(role: UserRole): boolean {
-  return ['owner', 'manager', 'admin', 'billing'].includes(role);
+  return ['owner', 'admin'].includes(role);
 }
 
 export function canCreateInvoice(role: UserRole): boolean {
-  return ['owner', 'manager', 'admin', 'billing'].includes(role);
+  return ['owner', 'admin'].includes(role);
 }
 
 const roleHierarchy: Record<UserRole, number> = {
-  owner: 6,
-  manager: 5,
+  owner: 5,
+  manager: 4, // Legacy support - treated as admin level
   admin: 4,
-  billing: 3,
+  billing: 3, // Legacy support
   production: 2,
   sales: 1,
   canvas: 1,
@@ -710,19 +710,20 @@ const roleHierarchy: Record<UserRole, number> = {
 
 export function canAssignRole(actorRole: UserRole, targetRole: UserRole): boolean {
   if (actorRole === 'owner') return true;
-  if (actorRole === 'manager') return targetRole !== 'owner';
-  if (actorRole === 'admin') return !['owner', 'manager', 'admin'].includes(targetRole);
+  // Admin can assign any role except owner
+  if (actorRole === 'admin' || actorRole === 'manager') return targetRole !== 'owner';
   return false;
 }
 
 export function getAssignableRoles(actorRole: UserRole): UserRole[] {
-  const roles: UserRole[] = ['owner', 'manager', 'admin', 'sales', 'production', 'billing', 'canvas'];
-  return roles.filter((role) => canAssignRole(actorRole, role));
+  // Only show roles that are actively used in the company
+  const activeRoles: UserRole[] = ['owner', 'admin', 'sales', 'production', 'canvas'];
+  return activeRoles.filter((role) => canAssignRole(actorRole, role));
 }
 
 export function canModifyMember(actorRole: UserRole, memberRole: UserRole): boolean {
   if (actorRole === 'owner') return true;
-  if (actorRole === 'manager') return memberRole !== 'owner';
-  if (actorRole === 'admin') return roleHierarchy[memberRole] < roleHierarchy.admin;
+  // Admin can modify any user except owner
+  if (actorRole === 'admin' || actorRole === 'manager') return memberRole !== 'owner';
   return false;
 }
