@@ -310,13 +310,17 @@ export default function SettingsView() {
     setIsSavingCompany(true);
 
     try {
-      const result = await db.updateCompany(companyId, {
-        name: companyForm.name,
-        phone: companyForm.phone,
-        email: companyForm.email,
-        website: companyForm.website,
-        address: companyForm.address,
-      });
+      const result = await withTimeout(
+        db.updateCompany(companyId, {
+          name: companyForm.name,
+          phone: companyForm.phone,
+          email: companyForm.email,
+          website: companyForm.website,
+          address: companyForm.address,
+        }),
+        15000,
+        'Save company profile'
+      );
 
       if (result) {
         window.dispatchEvent(new Event('crm-company-updated'));
@@ -326,7 +330,8 @@ export default function SettingsView() {
       }
     } catch (error) {
       console.error('Save company error:', error);
-      toast.error('Failed to save company profile');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save company profile';
+      toast.error(errorMessage);
     } finally {
       setIsSavingCompany(false);
     }
