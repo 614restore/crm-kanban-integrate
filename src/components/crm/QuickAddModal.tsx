@@ -41,6 +41,23 @@ export default function QuickAddModal() {
     notes: '',
   });
 
+  // Timeout helper for database operations
+  const withTimeout = async <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+    const timeoutPromise = new Promise<T>((_, reject) => {
+      timeoutId = setTimeout(() => {
+        reject(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`));
+      }, ms);
+    });
+
+    try {
+      return await Promise.race([promise, timeoutPromise]);
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+    }
+  };
+
   const resolveCompanyId = async (): Promise<string | null> => {
     // Timeout wrapper to prevent indefinite hanging
     const timeout = new Promise<string | null>((_, reject) =>
@@ -183,33 +200,37 @@ export default function QuickAddModal() {
 
       // If user has a company, save to database
       console.log('[QuickAdd] Creating contact in database...');
-      const dbContact = await db.createContact({
-        company_id: finalCompanyId,
-        first_name: formData.firstName,
-        last_name: formData.lastName,
-        email: formData.email || undefined,
-        phone1: formData.phone1 || undefined,
-        phone2: formData.phone2 || undefined,
-        address: formData.address || undefined,
-        city: formData.city || undefined,
-        state: formData.state || undefined,
-        zip: formData.zip || undefined,
-        status: formData.status,
-        lead_source: formData.leadSource,
-        assigned_to: formData.assignedTo || undefined,
-        tags: [],
-        project_type: formData.projectType || undefined,
-        project_value: formData.projectValue ? parseFloat(formData.projectValue) : undefined,
-        is_retail: formData.isRetail,
-        retail_notes: formData.retailNotes || undefined,
-        insurance_company: formData.insuranceCompany || undefined,
-        policy_number: formData.policyNumber || undefined,
-        claim_number: formData.claimNumber || undefined,
-        adjuster_name: formData.adjusterName || undefined,
-        adjuster_phone: formData.adjusterPhone || undefined,
-        deductible: formData.deductible ? parseFloat(formData.deductible) : undefined,
-        notes: formData.notes || undefined,
-      });
+      const dbContact = await withTimeout(
+        db.createContact({
+          company_id: finalCompanyId,
+          first_name: formData.firstName,
+          last_name: formData.lastName,
+          email: formData.email || undefined,
+          phone1: formData.phone1 || undefined,
+          phone2: formData.phone2 || undefined,
+          address: formData.address || undefined,
+          city: formData.city || undefined,
+          state: formData.state || undefined,
+          zip: formData.zip || undefined,
+          status: formData.status,
+          lead_source: formData.leadSource,
+          assigned_to: formData.assignedTo || undefined,
+          tags: [],
+          project_type: formData.projectType || undefined,
+          project_value: formData.projectValue ? parseFloat(formData.projectValue) : undefined,
+          is_retail: formData.isRetail,
+          retail_notes: formData.retailNotes || undefined,
+          insurance_company: formData.insuranceCompany || undefined,
+          policy_number: formData.policyNumber || undefined,
+          claim_number: formData.claimNumber || undefined,
+          adjuster_name: formData.adjusterName || undefined,
+          adjuster_phone: formData.adjusterPhone || undefined,
+          deductible: formData.deductible ? parseFloat(formData.deductible) : undefined,
+          notes: formData.notes || undefined,
+        }),
+        15000,
+        'Create contact'
+      );
       
       if (!dbContact) {
         console.error('[QuickAdd] Database returned null for created contact');
