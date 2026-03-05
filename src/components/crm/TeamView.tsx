@@ -137,10 +137,15 @@ export default function TeamView() {
 
       if (emailError) {
         console.error('Email sending failed:', emailError);
-        // Still show success with clipboard fallback
+        // Try clipboard fallback, but don't fail if permission denied
         const inviteUrl = `${window.location.origin}${import.meta.env.BASE_URL}?invite=${encodeURIComponent(token)}&company=${encodeURIComponent(state.companyId)}`;
-        await navigator.clipboard.writeText(inviteUrl);
-        toast.warning(`Invite created but email failed to send. Link copied to clipboard - please send manually.`);
+        try {
+          await navigator.clipboard.writeText(inviteUrl);
+          toast.warning(`Invite created but email failed to send. Link copied to clipboard - please send manually.`);
+        } catch (clipboardError) {
+          console.error('Clipboard access denied:', clipboardError);
+          toast.error(`Invite created but email failed to send. Error: ${emailError.message || 'Unknown error'}`);
+        }
       } else {
         console.log('Email sent successfully:', emailData);
         toast.success(`Invitation email sent to ${inviteEmail}!`);
