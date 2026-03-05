@@ -78,6 +78,11 @@ export default function TeamView() {
   };
 
   const handleInvite = async () => {
+    console.log('=== INVITE START ===');
+    console.log('Assignable roles:', assignableRoles.length);
+    console.log('Company ID:', state.companyId);
+    console.log('Email:', inviteEmail);
+    
     if (assignableRoles.length === 0) {
       toast.error('You do not have permission to invite team members');
       return;
@@ -93,6 +98,7 @@ export default function TeamView() {
       return;
     }
 
+    console.log('=== VALIDATION PASSED ===');
     setIsSendingInvite(true);
     
     // Add timeout to prevent infinite loading
