@@ -1195,6 +1195,7 @@ class DatabaseService {
     if (this.inDemoMode()) {
       return [];
     }
+    console.log('[Database] Fetching team members for company:', companyId);
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
@@ -1202,9 +1203,11 @@ class DatabaseService {
       .order('first_name', { ascending: true });
     
     if (error) {
-      console.error('Error fetching team members:', error);
+      console.error('[Database] Error fetching team members:', error);
+      console.error('[Database] Error details:', JSON.stringify(error, null, 2));
       return [];
     }
+    console.log('[Database] Team members fetched successfully:', data?.length || 0, data);
     return data || [];
   }
 

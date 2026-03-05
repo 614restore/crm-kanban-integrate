@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useCRM, canManageTeam, getAssignableRoles, canModifyMember, canAssignRole } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
@@ -46,6 +46,13 @@ export default function TeamView() {
   const userRole = state.currentUser?.role || 'sales';
   const canManage = canManageTeam(userRole);
   const assignableRoles = getAssignableRoles(userRole);
+
+  // Debug logging for team members
+  useEffect(() => {
+    console.log('[TeamView] state.teamMembers:', state.teamMembers.length, state.teamMembers);
+    console.log('[TeamView] state.companyId:', state.companyId);
+    console.log('[TeamView] profile:', profile);
+  }, [state.teamMembers, state.companyId, profile]);
 
   // Filter team members
   const filteredMembers = state.teamMembers.filter((tm) => {

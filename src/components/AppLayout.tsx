@@ -401,6 +401,7 @@ function CRMApp() {
       }));
 
       // Convert DB team members to app team members
+      console.log('[CRM] Raw dbTeamMembers from database:', dbTeamMembers.length, dbTeamMembers);
       const teamMembers: TeamMember[] = dbTeamMembers.map(tm => ({
         id: tm.id,
         name: `${tm.first_name || ''} ${tm.last_name || ''}`.trim() || tm.email,
@@ -411,6 +412,7 @@ function CRMApp() {
         department: tm.department || 'General',
         isActive: tm.is_active,
       }));
+      console.log('[CRM] Converted teamMembers:', teamMembers.length, teamMembers);
 
       console.log('[CRM] Dispatching INITIALIZE_DATA with', enrichedContacts.length, 'contacts');
       dispatch({
