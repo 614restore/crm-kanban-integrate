@@ -150,7 +150,7 @@ export default function Sidebar() {
               <img
                 src={companyLogoUrl}
                 alt="Company logo"
-                className="w-8 h-8 rounded-lg object-cover"
+                className="w-8 h-8 rounded-lg object-contain"
                 onError={() => setCompanyLogoUrl(null)}
               />
             ) : (

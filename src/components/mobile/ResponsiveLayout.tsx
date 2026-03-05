@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import Sidebar from '@/components/crm/Sidebar';
 import MobileNav from './MobileNav';
 import { offlineDB, initializeOfflineDB } from '@/lib/offlineDB';
 import { RefreshCw } from 'lucide-react';
+import { useAuth } from '@/lib/authContext';
+import { db } from '@/lib/database';
 
 interface ResponsiveLayoutProps {
   children: React.ReactNode;
@@ -11,10 +13,42 @@ interface ResponsiveLayoutProps {
 
 export default function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
   const isMobile = useIsMobile();
+  const { profile } = useAuth();
   const [isOfflineReady, setIsOfflineReady] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [pullDistance, setPullDistance] = useState(0);
   const [startY, setStartY] = useState(0);
+  const [companyLogoUrl, setCompanyLogoUrl] = useState<string | null>(null);
+
+  // Load company logo
+  const loadCompanyBrand = useCallback(async () => {
+    if (!profile?.company_id) {
+      setCompanyLogoUrl(null);
+      return;
+    }
+
+    try {
+      const company = await db.getCompany(profile.company_id);
+      if (company?.logo_url) {
+        setCompanyLogoUrl(company.logo_url);
+      }
+    } catch (error) {
+      console.error('Failed to load company logo:', error);
+    }
+  }, [profile?.company_id]);
+
+  useEffect(() => {
+    loadCompanyBrand();
+  }, [loadCompanyBrand]);
+
+  useEffect(() => {
+    const onCompanyUpdated = () => {
+      loadCompanyBrand();
+    };
+
+    window.addEventListener('crm-company-updated', onCompanyUpdated);
+    return () => window.removeEventListener('crm-company-updated', onCompanyUpdated);
+  }, [loadCompanyBrand]);
 
   // Initialize offline database on mount
   useEffect(() => {
@@ -103,9 +137,18 @@ export default function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
         <header className={`bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 sticky top-0 z-30 ${isRefreshing ? 'mt-10' : ''}`}>
           <div className="flex items-center justify-between px-4 py-3">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">TC</span>
-              </div>
+              {companyLogoUrl ? (
+                <img
+                  src={companyLogoUrl}
+                  alt="Company logo"
+                  className="w-8 h-8 rounded-lg object-contain"
+                  onError={() => setCompanyLogoUrl(null)}
+                />
+              ) : (
+                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                  <span className="text-white font-bold text-sm">TC</span>
+                </div>
+              )}
               <span className="text-lg font-semibold text-gray-900 dark:text-white">
                 TrussCTR
               </span>
