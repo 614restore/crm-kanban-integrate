@@ -325,18 +325,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (!error && data.user) {
+        // Determine the role:
+        // - If signing up via invite (has company_id), use provided role
+        // - If creating new company (no company_id), assign 'owner' role
+        const userRole = metadata?.company_id 
+          ? (metadata.role || 'sales')  // Invite signup: use provided role or default to sales
+          : 'owner';                     // New company signup: always owner
+        
         // Update profile with additional info
-        if (metadata) {
-          await supabase
-            .from('profiles')
-            .update({
-              first_name: metadata.first_name,
-              last_name: metadata.last_name,
-              role: metadata.role || 'sales',
-              company_id: metadata.company_id, // Set company_id if provided (invite signup)
-            })
-            .eq('id', data.user.id);
-        }
+        await supabase
+          .from('profiles')
+          .update({
+            first_name: metadata?.first_name,
+            last_name: metadata?.last_name,
+            role: userRole,
+            company_id: metadata?.company_id, // Set company_id if provided (invite signup)
+          })
+          .eq('id', data.user.id);
         
         // Only run first-time setup if NOT signing up via invite
         // (invite signup means they're joining an existing company)

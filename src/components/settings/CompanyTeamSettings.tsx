@@ -24,9 +24,11 @@ import {
 import { CompanySettings, CompanyAddress, TeamMember, TeamRole } from '../../lib/integrations/apiTypes';
 import LeadSourceManagement from './LeadSourceManagement';
 import PermissionManagement from './PermissionManagement';
+import { useAuth } from '../../lib/authContext';
 
 // Company & Team Management Main Component
 const CompanyTeamSettings: React.FC = () => {
+  const { profile } = useAuth();
   const [activeTab, setActiveTab] = useState<'company' | 'offices' | 'team' | 'roles' | 'leadSources' | 'permissions'>('company');
   const [company, setCompany] = useState<CompanySettings | null>(null);
   const [offices, setOffices] = useState<CompanyAddress[]>([]);
@@ -167,6 +169,7 @@ const CompanyTeamSettings: React.FC = () => {
               setCompany(data);
               saveCompanyData(data, 'companySettings');
             }}
+            userRole={profile?.role}
           />
         )}
 
@@ -289,7 +292,10 @@ const CompanyTeamSettings: React.FC = () => {
 const CompanyTab: React.FC<{ 
   company: CompanySettings | null; 
   setCompany: (company: CompanySettings) => void;
-}> = ({ company, setCompany }) => {
+  userRole?: string;
+}> = ({ company, setCompany, userRole }) => {
+  const isOwner = userRole === 'owner';
+  
   const [formData, setFormData] = useState(company || {
     id: crypto.randomUUID(),
     name: '',
@@ -319,6 +325,18 @@ const CompanyTab: React.FC<{
 
   return (
     <div className="p-6 space-y-6">
+      {!isOwner && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
+          <Lock className="text-amber-600 mt-0.5" size={20} />
+          <div>
+            <h4 className="font-medium text-amber-900">Owner Access Only</h4>
+            <p className="text-sm text-amber-700 mt-1">
+              Only company owners can edit company information. Contact your administrator to make changes.
+            </p>
+          </div>
+        </div>
+      )}
+      
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -328,7 +346,8 @@ const CompanyTab: React.FC<{
             type="text"
             value={formData.name}
             onChange={(e) => setFormData({...formData, name: e.target.value})}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            disabled={!isOwner}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
             placeholder="TrussCTR Roofing"
           />
         </div>
@@ -340,7 +359,8 @@ const CompanyTab: React.FC<{
           <select
             value={formData.timezone}
             onChange={(e) => setFormData({...formData, timezone: e.target.value})}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            disabled={!isOwner}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
           >
             <option value="America/New_York">Eastern Time</option>
             <option value="America/Chicago">Central Time</option>
@@ -369,7 +389,8 @@ const CompanyTab: React.FC<{
                     [day]: { ...hours, isOpen: e.target.checked }
                   }
                 })}
-                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                disabled={!isOwner}
+                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
               />
               {hours.isOpen && (
                 <>
@@ -383,7 +404,8 @@ const CompanyTab: React.FC<{
                         [day]: { ...hours, openTime: e.target.value }
                       }
                     })}
-                    className="px-3 py-1 border border-gray-300 rounded text-sm"
+                    disabled={!isOwner}
+                    className="px-3 py-1 border border-gray-300 rounded text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
                   />
                   <span className="text-gray-500">to</span>
                   <input
@@ -396,7 +418,8 @@ const CompanyTab: React.FC<{
                         [day]: { ...hours, closeTime: e.target.value }
                       }
                     })}
-                    className="px-3 py-1 border border-gray-300 rounded text-sm"
+                    disabled={!isOwner}
+                    className="px-3 py-1 border border-gray-300 rounded text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
                   />
                 </>
               )}
@@ -422,7 +445,8 @@ const CompanyTab: React.FC<{
                   ...formData,
                   settings: { ...formData.settings, maxEstimateAmount: Number(e.target.value) }
                 })}
-                className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                disabled={!isOwner}
+                className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
               />
             </div>
           </div>
@@ -439,7 +463,8 @@ const CompanyTab: React.FC<{
                 ...formData,
                 settings: { ...formData.settings, defaultMarkup: Number(e.target.value) }
               })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              disabled={!isOwner}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
             />
           </div>
 
@@ -455,7 +480,8 @@ const CompanyTab: React.FC<{
                 ...formData,
                 settings: { ...formData.settings, taxRate: Number(e.target.value) }
               })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              disabled={!isOwner}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
             />
           </div>
         </div>
@@ -464,7 +490,8 @@ const CompanyTab: React.FC<{
       <div className="flex justify-end">
         <button
           onClick={handleSave}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          disabled={!isOwner}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:hover:bg-gray-400"
         >
           <CheckCircle className="w-4 h-4" />
           Save Company Settings
