@@ -272,7 +272,7 @@ export default function AuthPage() {
               </div>
             )}
 
-            {isDemoMode && mode === 'login' && (
+            {isDemoMode && mode === 'login' && !inviteToken && (
               <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                 <div className="flex items-center gap-3 mb-2">
                   <CheckCircle className="text-blue-500 flex-shrink-0" size={20} />
