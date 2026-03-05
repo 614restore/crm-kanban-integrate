@@ -90,8 +90,8 @@ export default function Sidebar() {
 
   const loadCompanyBrand = useCallback(async () => {
     if (!profile?.company_id) {
-      setCompanyName('614 Restore');
-      setCompanyLogoUrl(null);
+      // Don't reset to defaults — keep whatever branding is already loaded.
+      // This prevents flicker during token refresh when profile is momentarily stale.
       return;
     }
 

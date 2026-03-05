@@ -233,8 +233,8 @@ export default function SettingsView() {
         
         if (!companyId) {
           console.warn('[Settings] ❌ No company ID available, cannot load company data');
-          // Show toast so user knows there's a problem
-          toast.error('No company ID found. Try logging out and back in.');
+          // Don't show an error toast on initial mount — the profile may still be loading.
+          // Only warn if we've been waiting a while.
           return;
         }
 

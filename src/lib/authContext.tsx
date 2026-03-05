@@ -135,6 +135,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('[Auth] onAuthStateChange event:', event);
+
+      // For token refreshes, just update the session/user objects.
+      // The profile (including company_id) hasn't changed, so avoid an
+      // expensive re-fetch that can momentarily null-out company context.
+      if (event === 'TOKEN_REFRESHED') {
+        setSession(session);
+        setUser(session?.user ?? null);
+        // Keep the existing profile — no need to re-fetch
+        return;
+      }
+
+      // On explicit sign-out, clear everything
+      if (event === 'SIGNED_OUT') {
+        setSession(null);
+        setUser(null);
+        setProfile(null);
+        setLoading(false);
+        return;
+      }
+
+      // For SIGNED_IN, INITIAL_SESSION, USER_UPDATED, etc. — full refresh
       setSession(session);
       setUser(session?.user ?? null);
       

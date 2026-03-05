@@ -23,7 +23,7 @@ export default function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
   // Load company logo
   const loadCompanyBrand = useCallback(async () => {
     if (!profile?.company_id) {
-      setCompanyLogoUrl(null);
+      // Don't reset — keep existing logo during token refresh flicker
       return;
     }
 
