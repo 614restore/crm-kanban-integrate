@@ -1826,6 +1826,23 @@ class DatabaseService {
     return data;
   }
 
+  async createProjectFromEstimate(estimate: DbEstimate, userId: string): Promise<DbProject | null> {
+    return this.createProject({
+      company_id: estimate.company_id,
+      contact_id: estimate.contact_id,
+      estimate_id: estimate.id,
+      project_number: `PRJ-${Date.now()}`,
+      name: estimate.title,
+      description: estimate.description,
+      status: 'planning',
+      priority: 'medium',
+      estimated_budget: estimate.total,
+      actual_cost: 0,
+      notes: estimate.notes,
+      created_by: userId,
+    });
+  }
+
   async updateProject(projectId: string, updates: Partial<DbProject>): Promise<DbProject | null> {
     const { data, error } = await supabase
       .from('projects')

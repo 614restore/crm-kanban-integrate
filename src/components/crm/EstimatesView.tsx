@@ -23,6 +23,7 @@ import {
   CheckCircle,
   Download,
   Printer,
+  FolderPlus,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -287,6 +288,65 @@ export default function EstimatesView() {
     } catch (error) {
       console.error('Error sending estimate:', error);
       toast.error('Failed to send estimate');
+    }
+  };
+
+  const handleConvertToProject = async (estimate: Estimate) => {
+    if (!profile?.company_id || !profile?.id) {
+      toast.error('Profile not loaded. Please try again.');
+      return;
+    }
+    // Need the DB estimate to pass to createProjectFromEstimate
+    const dbEstimate = {
+      id: estimate.id,
+      company_id: profile.company_id,
+      contact_id: estimate.contactId,
+      estimate_number: estimate.estimateNumber,
+      title: estimate.title,
+      description: estimate.description,
+      status: estimate.status,
+      total: estimate.total,
+      subtotal: estimate.amount,
+      tax: estimate.tax,
+      notes: estimate.notes,
+      items: estimate.items,
+      created_at: estimate.createdAt,
+      updated_at: estimate.updatedAt || estimate.createdAt,
+    } as any;
+    try {
+      const project = await db.createProjectFromEstimate(dbEstimate, profile.id);
+      if (project) {
+        toast.success(`Project "${project.name}" created from estimate`);
+        setViewingEstimate(null);
+      } else {
+        toast.error('Failed to create project');
+      }
+    } catch (err: any) {
+      toast.error(`Failed to create project: ${err.message}`);
+    }
+  };
+
+  const handleAcceptEstimate = async (estimate: Estimate) => {
+    if (!profile?.company_id || !profile?.id) {
+      toast.error('Profile not loaded. Please try again.');
+      return;
+    }
+    try {
+      const updated = await db.markEstimateAccepted(estimate.id, profile.id);
+      if (updated) {
+        dispatch({ type: 'UPDATE_ESTIMATE', payload: mapDbEstimateToApp(updated) });
+        // Auto-create project on acceptance
+        const dbEstimate = { ...updated, company_id: profile.company_id } as any;
+        const project = await db.createProjectFromEstimate(dbEstimate, profile.id);
+        if (project) {
+          toast.success('Estimate accepted — project created automatically');
+        } else {
+          toast.success('Estimate marked as accepted');
+        }
+        setViewingEstimate(null);
+      }
+    } catch (err: any) {
+      toast.error(`Failed to accept estimate: ${err.message}`);
     }
   };
 
@@ -1008,16 +1068,34 @@ export default function EstimatesView() {
                   <FileText size={16} />
                   Convert to Invoice
                 </button>
-              </div>
-              {viewingEstimate.status === 'draft' && (
                 <button
-                  onClick={() => { handleSendEstimate(viewingEstimate.id); setViewingEstimate(null); }}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                  onClick={() => handleConvertToProject(viewingEstimate)}
+                  className="flex items-center gap-2 px-4 py-2 text-green-700 border border-green-300 rounded-lg hover:bg-green-50 transition-colors text-sm"
                 >
-                  <Send size={16} />
-                  Send Estimate
+                  <FolderPlus size={16} />
+                  Convert to Project
                 </button>
-              )}
+              </div>
+              <div className="flex items-center gap-2">
+                {viewingEstimate.status === 'draft' && (
+                  <button
+                    onClick={() => { handleSendEstimate(viewingEstimate.id); setViewingEstimate(null); }}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                  >
+                    <Send size={16} />
+                    Send Estimate
+                  </button>
+                )}
+                {(viewingEstimate.status === 'sent' || viewingEstimate.status === 'viewed') && (
+                  <button
+                    onClick={() => handleAcceptEstimate(viewingEstimate)}
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
+                  >
+                    <CheckCircle size={16} />
+                    Mark Accepted → Create Project
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
