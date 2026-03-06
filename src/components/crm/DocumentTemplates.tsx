@@ -1666,7 +1666,7 @@ const DocumentTemplates: React.FC = () => {
     // Replace variables with sample data
     const sampleData: Record<string, string> = {
       // Company info — use real profile data when available, fallback to sample
-      'COMPANY_NAME': companyProfile?.name || '614 Restore',
+      'COMPANY_NAME': companyProfile?.name || 'TrussCTR',
       'COMPANY_TAGLINE': companyProfile?.tagline || 'Professional Storm Damage Restoration',
       'COMPANY_ADDRESS': companyProfile?.address || '1234 Commerce Blvd',
       'COMPANY_CITY': companyProfile?.city || 'Columbus',
@@ -1677,7 +1677,7 @@ const DocumentTemplates: React.FC = () => {
       'CONTRACTOR_LICENSE': companyProfile?.contractor_license || 'OH-RC-2024-8812',
       'COMPANY_LOGO': companyProfile?.logo_url
         ? `<img src="${companyProfile.logo_url}" alt="${companyProfile.name || 'Company'} Logo" style="max-height:60px;max-width:180px;object-fit:contain;" />`
-        : (companyProfile?.name || '614 Restore'),
+        : (companyProfile?.name || 'TrussCTR'),
       'TAX_ID': companyProfile?.tax_id || '31-1234567',
       'REP_NAME': (profile?.first_name && profile?.last_name) ? `${profile.first_name} ${profile.last_name}` : 'David Mitchell',
       // Customer info
