@@ -91,6 +91,7 @@ export default function SettingsView() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('company');
   const [newLeadSource, setNewLeadSource] = useState('');
   const [showAddLeadSource, setShowAddLeadSource] = useState(false);
+  const [isSavingLeadSource, setIsSavingLeadSource] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
   const [isSavingCompany, setIsSavingCompany] = useState(false);
 
@@ -302,6 +303,7 @@ export default function SettingsView() {
     const sourceName = newLeadSource.trim();
     if (!sourceName) return;
 
+    setIsSavingLeadSource(true);
     try {
       const companyId = effectiveCompanyId || await resolveCompanyId();
       if (!companyId) {
@@ -337,6 +339,8 @@ export default function SettingsView() {
     } catch (error) {
       console.error('Error adding lead source:', error);
       toast.error('Failed to add lead source');
+    } finally {
+      setIsSavingLeadSource(false);
     }
   };
 
@@ -1624,9 +1628,10 @@ export default function SettingsView() {
                     />
                     <button
                       onClick={handleAddLeadSource}
-                      className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                      disabled={isSavingLeadSource}
+                      className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                      <Check size={18} />
+                      {isSavingLeadSource ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
                     </button>
                     <button
                       onClick={() => {

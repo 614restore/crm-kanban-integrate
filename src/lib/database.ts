@@ -1264,11 +1264,15 @@ class DatabaseService {
   }
 
   async createLeadSource(leadSource: Partial<DbLeadSource>): Promise<DbLeadSource | null> {
-    const { data, error } = await supabase
-      .from('lead_sources')
-      .insert(leadSource)
-      .select()
-      .single();
+    const { data, error } = await this.raceTimeout(
+      supabase
+        .from('lead_sources')
+        .insert(leadSource)
+        .select()
+        .single(),
+      10000,
+      'createLeadSource'
+    );
     
     if (error) {
       console.error('Error creating lead source:', error);
