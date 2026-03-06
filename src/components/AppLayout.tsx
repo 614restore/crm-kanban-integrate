@@ -49,10 +49,18 @@ const DocumentTemplates = lazy(() => import('./crm/DocumentTemplates'));
 const ReportsAnalytics = lazy(() => import('./crm/ReportsAnalytics'));
 
 // Initial CRM state (completely empty)
+const getInitialView = (): ViewType => {
+  try {
+    const saved = sessionStorage.getItem('crm_current_view');
+    if (saved) return saved as ViewType;
+  } catch (_) { /* ignore */ }
+  return 'dashboard';
+};
+
 const initialState: CRMState = {
   currentUser: null,
   companyId: null,
-  currentView: 'dashboard',
+  currentView: getInitialView(),
   selectedContactId: null,
   selectedBoardId: 'board-sales',
   contacts: [],
@@ -288,6 +296,9 @@ function dbInvoiceToAppInvoice(dbInvoice: any, contacts: Contact[]): Invoice {
 function CRMApp() {
   const { profile, user } = useAuth();
   const [state, dispatch] = useReducer(crmReducer, initialState);
+  useEffect(() => {
+    try { sessionStorage.setItem('crm_current_view', state.currentView); } catch (_) { /* ignore */ }
+  }, [state.currentView]);
   const realtimeFailedRef = useRef(false);
   const isReloadingRef = useRef(false);
   const queuedReloadRef = useRef(false);
@@ -309,7 +320,7 @@ function CRMApp() {
     dispatch({ type: 'SET_COMPANY_ID', payload: profile.company_id });
 
     try {
-      // Load all data in parallel
+      // Load all data in parallel (including company to pre-warm cache for Sidebar)
       const [
         dbContacts,
         dbCommunications,
@@ -328,6 +339,7 @@ function CRMApp() {
         db.getLeadSources(profile.company_id),
         db.getAutomations(profile.company_id),
         db.getTeamMembers(profile.company_id),
+        db.getCompany(profile.company_id), // pre-warm company cache for Sidebar
       ]);
 
       // Convert DB contacts to app contacts
