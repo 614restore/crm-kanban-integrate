@@ -22,7 +22,7 @@ interface AuthContextType {
   profile: Profile | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
-  signUp: (email: string, password: string, metadata?: { first_name?: string; last_name?: string; role?: string; company_id?: string }) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, metadata?: { first_name?: string; last_name?: string; role?: string; company_id?: string; company_name?: string }) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: Error | null }>;
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: Error | null }>;
@@ -282,7 +282,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signUp = async (
     email: string,
     password: string,
-    metadata?: { first_name?: string; last_name?: string; role?: string; company_id?: string }
+    metadata?: { first_name?: string; last_name?: string; role?: string; company_id?: string; company_name?: string }
   ) => {
     try {
       if (isDemoMode) {
@@ -387,7 +387,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Only run first-time setup if NOT signing up via invite
         // (invite signup means they're joining an existing company)
         if (!metadata?.company_id) {
-          await setupNewUser(data.user.id, data.user.email || email);
+          await setupNewUser(data.user.id, data.user.email || email, metadata?.company_name);
         }
         
         // Re-fetch and set profile so the UI immediately reflects the correct role
