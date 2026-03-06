@@ -2184,12 +2184,17 @@ export default function ContactDetail() {
                 const tax = amount * (taxRate / 100);
                 const total = amount + tax;
 
+                if (!profile?.company_id) {
+                  toast.error('Profile not loaded. Please try again.');
+                  return;
+                }
+
                 const estimateData = {
-                  company_id: profile?.company_id,
+                  company_id: profile.company_id,
                   contact_id: contactId,
                   estimate_number: `EST-${Date.now()}`,
                   title: formData.get('title') as string,
-                  description: formData.get('description') as string,
+                  description: (formData.get('description') as string) || undefined,
                   status: 'draft',
                   subtotal: amount,
                   tax: tax,
@@ -2197,7 +2202,7 @@ export default function ContactDetail() {
                   valid_until: (formData.get('valid_until') as string) || undefined,
                   terms: (formData.get('terms') as string) || undefined,
                   notes: (formData.get('notes') as string) || undefined,
-                  created_by: profile?.id || undefined,
+                  created_by: profile.id || undefined,
                 };
 
                 let newEstimate = null;
