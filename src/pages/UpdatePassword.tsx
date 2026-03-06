@@ -22,10 +22,10 @@ export default function UpdatePassword() {
     const [success, setSuccess] = useState<string | null>(null);
 
     useEffect(() => {
-        // Listen for the hash fragment containing the access_token
+        // Supabase sends tokens in the URL hash as #access_token=...&refresh_token=...
         const hash = window.location.hash;
         if (hash && hash.includes('access_token')) {
-            const params = new URLSearchParams(hash.replace('#/update-password#', '?'));
+            const params = new URLSearchParams(hash.substring(1));
             const accessToken = params.get('access_token');
             const refreshToken = params.get('refresh_token');
 
@@ -82,7 +82,7 @@ export default function UpdatePassword() {
                     <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
                         <Building2 size={28} className="text-white" />
                     </div>
-                    <span className="text-2xl font-bold text-white tracking-tight">StormCraft CRM</span>
+                    <span className="text-2xl font-bold text-white tracking-tight">TrussCTR</span>
                 </div>
 
                 <div className="bg-white rounded-2xl shadow-2xl p-8">
