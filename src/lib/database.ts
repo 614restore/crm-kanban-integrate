@@ -871,56 +871,51 @@ class DatabaseService {
       status: appointment.status,
     });
 
-    const firstAttempt = await supabase
-      .from('appointments')
-      .insert(toStartAndEnd())
-      .select()
-      .single();
+    const firstAttempt = await this.raceTimeout(
+      supabase.from('appointments').insert(toStartAndEnd()).select().single(),
+      10000, 'createAppointment-v1'
+    ).catch(() => ({ data: null, error: new Error('timeout') }));
 
-    if (!firstAttempt.error) {
+    if (firstAttempt.data && !(firstAttempt as any).error) {
       return firstAttempt.data as DbAppointment;
     }
 
-    const secondAttempt = await supabase
-      .from('appointments')
-      .insert(toDateTime())
-      .select()
-      .single();
-
-    if (secondAttempt.error) {
-      console.error('Error creating appointment:', secondAttempt.error);
+    try {
+      const secondAttempt = await this.raceTimeout(
+        supabase.from('appointments').insert(toDateTime()).select().single(),
+        10000, 'createAppointment-v2'
+      );
+      if ((secondAttempt as any).error) {
+        console.error('Error creating appointment:', (secondAttempt as any).error);
+        return null;
+      }
+      return secondAttempt.data as DbAppointment;
+    } catch (err) {
+      console.error('createAppointment timed out or failed:', err);
       return null;
     }
-
-    return secondAttempt.data as DbAppointment;
   }
 
   async updateAppointment(appointmentId: string, updates: Partial<DbAppointment>): Promise<DbAppointment | null> {
-    const { data, error } = await supabase
-      .from('appointments')
-      .update({ ...updates, updated_at: new Date().toISOString() })
-      .eq('id', appointmentId)
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error updating appointment:', error);
-      return null;
-    }
-    return data;
+    try {
+      const { data, error } = await this.raceTimeout(
+        supabase.from('appointments').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', appointmentId).select().single(),
+        10000, 'updateAppointment'
+      );
+      if (error) { console.error('Error updating appointment:', error); return null; }
+      return data;
+    } catch (err) { console.error('updateAppointment timed out or failed:', err); return null; }
   }
 
   async deleteAppointment(appointmentId: string): Promise<boolean> {
-    const { error } = await supabase
-      .from('appointments')
-      .delete()
-      .eq('id', appointmentId);
-    
-    if (error) {
-      console.error('Error deleting appointment:', error);
-      return false;
-    }
-    return true;
+    try {
+      const { error } = await this.raceTimeout(
+        supabase.from('appointments').delete().eq('id', appointmentId),
+        10000, 'deleteAppointment'
+      );
+      if (error) { console.error('Error deleting appointment:', error); return false; }
+      return true;
+    } catch (err) { console.error('deleteAppointment timed out or failed:', err); return false; }
   }
 
   // Invoice operations
