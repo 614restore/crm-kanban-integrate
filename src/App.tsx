@@ -11,6 +11,7 @@ import { useEffect } from "react";
 import Index from "./pages/Index";
 import Photos from "./pages/Photos";
 import NotFound from "./pages/NotFound";
+import UpdatePassword from "./pages/UpdatePassword";
 
 const queryClient = new QueryClient();
 
@@ -72,6 +73,7 @@ const App = () => (
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/photos" element={<Photos />} />
+              <Route path="/reset-password" element={<UpdatePassword />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
