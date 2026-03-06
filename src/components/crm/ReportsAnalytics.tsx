@@ -1,7 +1,7 @@
 // Reports & Analytics Dashboard for Contractors
 // Comprehensive business intelligence and performance metrics
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   BarChart,
   Bar,
@@ -44,6 +44,8 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
+import { useCRM, useFinancialStats } from '@/lib/crmStore';
+import { formatCurrency, getContactFullName } from '@/lib/crmData';
 
 interface RevenueData {
   month: string;
@@ -89,87 +91,120 @@ const ReportsAnalytics: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   
   const { toast } = useToast();
+  const { state } = useCRM();
+  const financialStats = useFinancialStats();
 
-  // Mock data - in real app would come from API
-  // Memoized to prevent unnecessary re-renders
-  const revenueData: RevenueData[] = useMemo(() => [
-    { month: 'Jan', revenue: 45000, expenses: 32000, profit: 13000, projects: 8 },
-    { month: 'Feb', revenue: 52000, expenses: 35000, profit: 17000, projects: 10 },
-    { month: 'Mar', revenue: 48000, expenses: 33000, profit: 15000, projects: 9 },
-    { month: 'Apr', revenue: 61000, expenses: 39000, profit: 22000, projects: 12 },
-    { month: 'May', revenue: 58000, expenses: 37000, profit: 21000, projects: 11 },
-    { month: 'Jun', revenue: 67000, expenses: 41000, profit: 26000, projects: 13 },
-    { month: 'Jul', revenue: 72000, expenses: 43000, profit: 29000, projects: 14 },
-    { month: 'Aug', revenue: 69000, expenses: 42000, profit: 27000, projects: 13 },
-    { month: 'Sep', revenue: 74000, expenses: 44000, profit: 30000, projects: 15 },
-    { month: 'Oct', revenue: 78000, expenses: 46000, profit: 32000, projects: 16 },
-    { month: 'Nov', revenue: 71000, expenses: 43000, profit: 28000, projects: 14 },
-    { month: 'Dec', revenue: 83000, expenses: 48000, profit: 35000, projects: 17 }
-  ], []);
-
-  const projectData: ProjectData[] = useMemo(() => [
-    {
-      id: '1',
-      name: 'Johnson Roof Replacement',
-      client: 'John Johnson',
-      value: 15000,
-      profit: 4500,
-      profitMargin: 30,
-      status: 'completed',
-      startDate: '2026-01-15',
-      completionDate: '2026-02-10',
-      category: 'Roofing'
-    },
-    {
-      id: '2',
-      name: 'Smith Storm Damage',
-      client: 'Mary Smith',
-      value: 22000,
-      profit: 7700,
-      profitMargin: 35,
-      status: 'active',
-      startDate: '2026-02-01',
-      category: 'Storm Restoration'
-    },
-    {
-      id: '3',
-      name: 'Wilson Siding Repair',
-      client: 'Bob Wilson',
-      value: 8500,
-      profit: 2550,
-      profitMargin: 30,
-      status: 'completed',
-      startDate: '2026-02-15',
-      completionDate: '2026-03-01',
-      category: 'Siding'
-    },
-    {
-      id: '4',
-      name: 'Downtown Office Complex',
-      client: 'ABC Corp',
-      value: 45000,
-      profit: 13500,
-      profitMargin: 30,
-      status: 'planning',
-      startDate: '2026-03-15',
-      category: 'Commercial'
+  // Build revenue data from real invoices grouped by month
+  const revenueData: RevenueData[] = useMemo(() => {
+    const months: Record<string, { revenue: number; expenses: number; projects: Set<string> }> = {};
+    const now = new Date();
+    // Seed last 12 months
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = d.toLocaleString('default', { month: 'short' });
+      months[key] = { revenue: 0, expenses: 0, projects: new Set() };
     }
-  ], []);
+    // Sum invoices by month
+    state.invoices.forEach((inv) => {
+      const d = new Date(inv.createdAt || inv.dueDate || '');
+      if (isNaN(d.getTime())) return;
+      const key = d.toLocaleString('default', { month: 'short' });
+      if (months[key]) {
+        if (inv.status === 'paid') months[key].revenue += inv.amount;
+        if (inv.contactId) months[key].projects.add(inv.contactId);
+      }
+    });
+    // Sum deposits & final payments from contacts by completed month
+    state.contacts.forEach((c) => {
+      if (c.status === 'completed' && c.finalPaymentPaid && c.finalPaymentAmount) {
+        const d = new Date(c.updatedAt);
+        const key = d.toLocaleString('default', { month: 'short' });
+        if (months[key]) months[key].revenue += c.finalPaymentAmount;
+      }
+    });
+    // Estimate expenses as 65% of revenue (industry avg) when we don't have real expense data
+    return Object.entries(months).map(([month, data]) => {
+      const estimatedExpenses = Math.round(data.revenue * 0.65);
+      return {
+        month,
+        revenue: data.revenue,
+        expenses: estimatedExpenses,
+        profit: data.revenue - estimatedExpenses,
+        projects: data.projects.size,
+      };
+    });
+  }, [state.invoices, state.contacts]);
 
-  const leadSources: LeadData[] = useMemo(() => [
-    { source: 'Google Ads', leads: 45, conversions: 12, conversionRate: 26.7, revenue: 125000 },
-    { source: 'Referrals', leads: 32, conversions: 18, conversionRate: 56.3, revenue: 180000 },
-    { source: 'Facebook', leads: 28, conversions: 6, conversionRate: 21.4, revenue: 65000 },
-    { source: 'Direct', leads: 15, conversions: 8, conversionRate: 53.3, revenue: 95000 },
-    { source: 'Yellow Pages', leads: 12, conversions: 3, conversionRate: 25.0, revenue: 35000 }
-  ], []);
+  // Build project data from real projects or contacts in project stages
+  const projectData: ProjectData[] = useMemo(() => {
+    if (state.projects.length > 0) {
+      return state.projects.map((p) => ({
+        id: p.id,
+        name: p.name || 'Unnamed Project',
+        client: p.contactName || '',
+        value: p.estimatedBudget || 0,
+        profit: Math.round((p.estimatedBudget || 0) - (p.actualCost || 0)) || Math.round((p.estimatedBudget || 0) * 0.30),
+        profitMargin: p.estimatedBudget ? Math.round(((p.estimatedBudget - (p.actualCost || 0)) / p.estimatedBudget) * 100) : 30,
+        status: (p.status === 'in_progress' ? 'active' : p.status === 'scheduled' ? 'planning' : p.status) as ProjectData['status'],
+        startDate: p.startDate || p.createdAt,
+        completionDate: p.completedDate || p.endDate,
+        category: p.tags?.[0] || 'General',
+      }));
+    }
+    // Fallback: derive from contacts
+    return state.contacts
+      .filter((c) => ['in_progress', 'build_phase', 'completed', 'contingency'].includes(c.status))
+      .map((c) => ({
+        id: c.id,
+        name: `${getContactFullName(c)} Project`,
+        client: getContactFullName(c),
+        value: c.projectValue || 0,
+        profit: Math.round((c.projectValue || 0) * 0.30),
+        profitMargin: 30,
+        status: (c.status === 'completed' ? 'completed' : 'active') as ProjectData['status'],
+        startDate: c.createdAt,
+        completionDate: c.status === 'completed' ? c.updatedAt : undefined,
+        category: c.insuranceCompany ? 'Insurance' : 'Retail',
+      }));
+  }, [state.projects, state.contacts]);
 
-  const teamPerformance: TeamPerformance[] = [
-    { member: 'Mike Johnson', projectsCompleted: 12, revenue: 145000, customerRating: 4.8, efficiency: 95 },
-    { member: 'Sarah Wilson', projectsCompleted: 10, revenue: 125000, customerRating: 4.9, efficiency: 92 },
-    { member: 'Tom Brown', projectsCompleted: 8, revenue: 98000, customerRating: 4.6, efficiency: 88 },
-    { member: 'Lisa Davis', projectsCompleted: 15, revenue: 180000, customerRating: 4.7, efficiency: 90 }
-  ];
+  // Build lead source data from contacts
+  const leadSources: LeadData[] = useMemo(() => {
+    const sources: Record<string, { leads: number; conversions: number; revenue: number }> = {};
+    state.contacts.forEach((c) => {
+      const src = c.leadSource || 'Direct';
+      if (!sources[src]) sources[src] = { leads: 0, conversions: 0, revenue: 0 };
+      sources[src].leads += 1;
+      if (c.status === 'completed' || c.status === 'in_progress' || c.status === 'build_phase') {
+        sources[src].conversions += 1;
+        sources[src].revenue += c.projectValue || 0;
+      }
+    });
+    return Object.entries(sources)
+      .map(([source, data]) => ({
+        source,
+        leads: data.leads,
+        conversions: data.conversions,
+        conversionRate: data.leads > 0 ? (data.conversions / data.leads) * 100 : 0,
+        revenue: data.revenue,
+      }))
+      .sort((a, b) => b.revenue - a.revenue);
+  }, [state.contacts]);
+
+  // Build team performance from real team members
+  const teamPerformance: TeamPerformance[] = useMemo(() => {
+    return state.teamMembers
+      .filter((tm) => tm.isActive)
+      .map((tm) => ({
+        member: tm.name || tm.email,
+        projectsCompleted: tm.performance?.dealsClosed || 0,
+        revenue: tm.performance?.revenue || 0,
+        customerRating: 0,
+        efficiency: tm.performance?.leadsGenerated ? Math.round((tm.performance.dealsClosed / tm.performance.leadsGenerated) * 100) : 0,
+      }))
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 8);
+  }, [state.teamMembers]);
 
   // Calculate key metrics
   const metrics = useMemo(() => {
@@ -206,22 +241,32 @@ const ReportsAnalytics: React.FC = () => {
   // Refresh data
   const handleRefresh = async () => {
     setRefreshing(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    // Data is live from CRM state; brief delay for UX feedback
+    await new Promise(resolve => setTimeout(resolve, 500));
     setRefreshing(false);
     
     toast({
       title: "Data Refreshed",
-      description: "Analytics data has been updated with latest information",
+      description: "Analytics data reflects the latest CRM information",
       variant: "default"
     });
   };
 
-  // Export report
+  // Export report as CSV
   const handleExport = () => {
+    const headers = ['Month', 'Revenue', 'Expenses', 'Profit', 'Projects'];
+    const rows = revenueData.map(r => [r.month, r.revenue, r.expenses, r.profit, r.projects].join(','));
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `analytics_report_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
     toast({
-      title: "Export Started",
-      description: "Your analytics report is being generated",
+      title: "Export Complete",
+      description: "Analytics report has been downloaded as CSV",
       variant: "default"
     });
   };
@@ -283,7 +328,7 @@ const ReportsAnalytics: React.FC = () => {
                 <p className="text-2xl font-bold">${metrics.totalRevenue.toLocaleString()}</p>
                 <div className="flex items-center gap-1 text-green-600 text-sm">
                   <TrendingUp className="w-3 h-3" />
-                  <span>+12.5% from last period</span>
+                  <span>{revenueData.length} months tracked</span>
                 </div>
               </div>
               <DollarSign className="w-8 h-8 text-green-600" />
@@ -764,26 +809,35 @@ const ReportsAnalytics: React.FC = () => {
               <CardContent className="p-4 text-center">
                 <TrendingUp className="w-8 h-8 text-green-600 mx-auto mb-2" />
                 <h3 className="font-semibold">Revenue Growth</h3>
-                <p className="text-2xl font-bold text-green-600">+84%</p>
-                <p className="text-sm text-gray-600">Year over year</p>
+                <p className="text-2xl font-bold text-green-600">
+                  {revenueData.length >= 2
+                    ? (() => {
+                        const last = revenueData[revenueData.length - 1]?.revenue || 0;
+                        const first = revenueData[0]?.revenue || 1;
+                        const pct = first > 0 ? Math.round(((last - first) / first) * 100) : 0;
+                        return `${pct >= 0 ? '+' : ''}${pct}%`;
+                      })()
+                    : 'N/A'}
+                </p>
+                <p className="text-sm text-gray-600">First to last month</p>
               </CardContent>
             </Card>
 
             <Card>
               <CardContent className="p-4 text-center">
                 <Target className="w-8 h-8 text-blue-600 mx-auto mb-2" />
-                <h3 className="font-semibold">Efficiency Improvement</h3>
-                <p className="text-2xl font-bold text-blue-600">+23%</p>
-                <p className="text-sm text-gray-600">Project completion time</p>
+                <h3 className="font-semibold">Total Projects</h3>
+                <p className="text-2xl font-bold text-blue-600">{projectData.length}</p>
+                <p className="text-sm text-gray-600">{projectData.filter(p => p.status === 'completed').length} completed</p>
               </CardContent>
             </Card>
 
             <Card>
               <CardContent className="p-4 text-center">
                 <Star className="w-8 h-8 text-yellow-600 mx-auto mb-2" />
-                <h3 className="font-semibold">Customer Satisfaction</h3>
-                <p className="text-2xl font-bold text-yellow-600">4.8/5</p>
-                <p className="text-sm text-gray-600">Average rating</p>
+                <h3 className="font-semibold">Lead Conversion</h3>
+                <p className="text-2xl font-bold text-yellow-600">{metrics.overallConversionRate.toFixed(1)}%</p>
+                <p className="text-sm text-gray-600">{metrics.totalConversions} of {metrics.totalLeads} leads</p>
               </CardContent>
             </Card>
           </div>

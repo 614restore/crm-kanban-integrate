@@ -183,23 +183,14 @@ export default function QuickAddModal() {
 
       // Move company resolution into try block for proper error handling
       const effectiveCompanyId = profile?.company_id || state.companyId;
-      console.log('[QuickAdd] Starting contact creation...', {
-        hasProfile: !!profile,
-        company_id: effectiveCompanyId,
-        formData: `${formData.firstName} ${formData.lastName}`,
-        hasUser: !!user,
-        userEmail: user?.email,
-      });
       
       const finalCompanyId = effectiveCompanyId || await resolveCompanyId();
-      console.log('[QuickAdd] Final company ID:', finalCompanyId);
 
       if (!finalCompanyId) {
         throw new Error('Unable to determine company context. Please ensure you are properly logged in and try again.');
       }
 
       // If user has a company, save to database
-      console.log('[QuickAdd] Creating contact in database...');
       const dbContact = await withTimeout(
         db.createContact({
           company_id: finalCompanyId,
@@ -237,7 +228,6 @@ export default function QuickAddModal() {
         throw new Error('Database operation failed. Please check your connection and try again.');
       }
 
-        console.log('[QuickAdd] Contact created in database:', dbContact.id);
 
         const createdContact: Contact = {
           id: dbContact.id,
@@ -269,11 +259,8 @@ export default function QuickAddModal() {
           notes: dbContact.notes || undefined,
         };
 
-        console.log('[QuickAdd] Dispatching ADD_CONTACT to store...', createdContact.id);
         dispatch({ type: 'ADD_CONTACT', payload: createdContact });
-        console.log('[QuickAdd] Contact added to store successfully');
 
-      console.log('[QuickAdd] Contact creation complete');
       toast.success(`${formData.firstName} ${formData.lastName} has been added to the CRM.`);
 
       dispatch({

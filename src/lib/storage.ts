@@ -31,10 +31,6 @@ export async function getDocumentSignedUrl(pathOrUrl: string, expiresInSeconds: 
     return isHttpUrl(pathOrUrl) ? pathOrUrl : null;
   }
 
-  console.log(`[Storage] Creating signed URL for document...`);
-  console.log(`[Storage] - Original input: ${pathOrUrl}`);
-  console.log(`[Storage] - Extracted path: ${path}`);
-  console.log(`[Storage] - Bucket: projectceo-documents`);
 
   // First, check if the file exists
   try {
@@ -51,7 +47,6 @@ export async function getDocumentSignedUrl(pathOrUrl: string, expiresInSeconds: 
       console.error('[Storage] File not found in bucket at path:', path);
       console.error('[Storage] Make sure the file was uploaded successfully and the path is correct');
     } else {
-      console.log('[Storage] File exists in bucket:', fileData[0]);
     }
   } catch (checkError) {
     console.warn('[Storage] Could not verify file existence:', checkError);
@@ -77,8 +72,6 @@ export async function getDocumentSignedUrl(pathOrUrl: string, expiresInSeconds: 
     return null;
   }
 
-  console.log(`[Storage] ✓ Signed URL created successfully`);
-  console.log(`[Storage] URL will expire in ${expiresInSeconds} seconds`);
   return data.signedUrl;
 }
 
@@ -99,7 +92,6 @@ async function uploadBinaryViaRest(
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
-  console.log(`[Storage] REST upload attempt to ${bucket}/${path}`);
   
   try {
     const response = await fetch(
@@ -123,7 +115,6 @@ async function uploadBinaryViaRest(
       return { ok: false, message: text || `HTTP ${response.status}` };
     }
 
-    console.log(`[Storage] ✓ REST upload successful`);
     return { ok: true };
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
@@ -146,7 +137,6 @@ async function uploadViaSdk(
   path: string,
   file: File
 ): Promise<{ ok: true } | { ok: false; message: string }> {
-  console.log(`[Storage] SDK upload attempt to ${bucket}/${path}`);
   
   const { error } = await supabase.storage.from(bucket).upload(path, file, {
     upsert: false,
@@ -159,7 +149,6 @@ async function uploadViaSdk(
     return { ok: false, message: error.message || "Storage upload failed" };
   }
 
-  console.log(`[Storage] ✓ SDK upload successful`);
   return { ok: true };
 }
 
@@ -178,7 +167,6 @@ export async function uploadFile(
   try {
     // In demo mode, return error to trigger fallback to data URL
     if (isDemoMode) {
-      console.log('[Storage] Demo mode - skipping storage upload, will use data URL fallback');
       return {
         url: '',
         path: '',
@@ -197,7 +185,6 @@ export async function uploadFile(
       };
     }
 
-    console.log(`[Storage] Uploading file to bucket: ${bucket}, folder: ${folder || 'root'}`);
 
     // Generate unique filename
     const fileExt = file.name.split('.').pop();
@@ -220,13 +207,11 @@ export async function uploadFile(
         : new File([file.slice(0, file.size, mimeType)], file.name, { type: mimeType });
 
     // First attempt: SDK upload with a fresh payload object (avoids exhausted body streams).
-    console.log('[Storage] --- Upload Method 1: Supabase SDK ---');
     let result = await uploadViaSdk(bucket, filePath, makeFilePayload());
 
     // Fallback path: direct REST upload with fresh blob payload.
     if (!result.ok) {
       console.warn('[Storage] SDK upload failed, trying REST fallback:', result.message);
-      console.log('[Storage] --- Upload Method 2: REST API ---');
       result = await uploadBinaryViaRest(bucket, filePath, makeBlobPayload(), accessToken, 20000);
     }
 
@@ -270,7 +255,6 @@ export async function uploadFile(
       return { url: '', path: '', error: message };
     }
 
-    console.log(`[Storage] Upload successful to ${bucket}/${filePath}`);
 
     // Public URL is used for logos/avatars; documents store path and are later resolved to signed URLs.
     const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(filePath);

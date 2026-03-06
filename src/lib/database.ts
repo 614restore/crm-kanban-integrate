@@ -378,6 +378,35 @@ export interface DbInvite {
   accepted_at?: string;
 }
 
+export interface DbExpense {
+  id: string;
+  company_id: string;
+  amount: number;
+  description: string;
+  category: string;
+  date: string;
+  job_id?: string;
+  job_name?: string;
+  contact_id?: string;
+  contact_name?: string;
+  receipt_url?: string;
+  status: string;
+  submitted_by?: string;
+  submitted_by_name?: string;
+  submitted_at: string;
+  approved_by?: string;
+  approved_by_name?: string;
+  approved_at?: string;
+  notes?: string;
+  mileage?: number;
+  location?: string;
+  vendor?: string;
+  payment_method: string;
+  reimbursable: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 // Database service class
 class DatabaseService {
   // Helper to check if we're in demo mode
@@ -424,7 +453,6 @@ class DatabaseService {
 
   async getCompany(companyId: string): Promise<DbCompany | null> {
     if (this.inDemoMode()) {
-      console.log('[Database] Demo mode - retrieving company from localStorage');
       try {
         const demoCompanyKey = `demo_company_${companyId}`;
         const stored = localStorage.getItem(demoCompanyKey);
@@ -449,7 +477,6 @@ class DatabaseService {
       );
 
       if (!rpcError && rpcData && rpcData.length > 0) {
-        console.log('[Database] Company loaded via RPC');
         const company = rpcData[0] as DbCompany;
         this.setCachedCompany(companyId, company);
         return company;
@@ -476,7 +503,6 @@ class DatabaseService {
       if (error) {
         console.error('Error fetching company:', error);
       } else if (data) {
-        console.log('[Database] Company loaded via direct query');
         this.setCachedCompany(companyId, data);
         return data;
       }
@@ -486,7 +512,6 @@ class DatabaseService {
 
     // 4. If both network paths failed, return whatever we had in cache
     if (cached) {
-      console.log('[Database] Returning cached company data (network unavailable)');
       return cached;
     }
 
@@ -495,7 +520,6 @@ class DatabaseService {
 
   async createCompany(company: Partial<DbCompany>): Promise<DbCompany | null> {
     if (this.inDemoMode()) {
-      console.log('[Database] Demo mode - creating company locally');
       const newCompany = {
         id: company.id || `demo-company-${Date.now()}`,
         name: company.name || 'Demo Company',
@@ -529,7 +553,6 @@ class DatabaseService {
 
   async updateCompany(companyId: string, updates: Partial<DbCompany>): Promise<DbCompany | null> {
     if (this.inDemoMode()) {
-      console.log('[Database] Demo mode - saving company updates locally');
       try {
         // Store in localStorage for persistence
         const demoCompanyKey = `demo_company_${companyId}`;
@@ -566,7 +589,6 @@ class DatabaseService {
         });
       
       if (!rpcError && rpcData) {
-        console.log('[Database] Company updated via RPC');
         return rpcData as DbCompany;
       }
       if (rpcError) {
@@ -1326,7 +1348,6 @@ class DatabaseService {
     if (this.inDemoMode()) {
       return [];
     }
-    console.log('[Database] Fetching team members for company:', companyId);
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
@@ -1338,7 +1359,6 @@ class DatabaseService {
       console.error('[Database] Error details:', JSON.stringify(error, null, 2));
       return [];
     }
-    console.log('[Database] Team members fetched successfully:', data?.length || 0, data);
     return data || [];
   }
 
@@ -1358,7 +1378,6 @@ class DatabaseService {
         });
       
       if (!rpcError && rpcData) {
-        console.log('[Database] Profile updated via RPC');
         return rpcData as DbProfile;
       }
       if (rpcError) {
@@ -2040,6 +2059,65 @@ class DatabaseService {
       return false;
     }
     return true;
+  }
+
+  // ─── Expenses ─────────────────────────────────────────────────────────
+
+  async getExpenses(companyId: string): Promise<DbExpense[]> {
+    if (this.inDemoMode()) return [];
+    const { data, error } = await supabase
+      .from('expenses')
+      .select('*')
+      .eq('company_id', companyId)
+      .order('date', { ascending: false });
+    if (error) { console.error('Error loading expenses:', error); return []; }
+    return (data || []) as DbExpense[];
+  }
+
+  async createExpense(expense: Partial<DbExpense>): Promise<DbExpense | null> {
+    if (this.inDemoMode()) return null;
+    const { data, error } = await supabase
+      .from('expenses')
+      .insert(expense)
+      .select()
+      .single();
+    if (error) { console.error('Error creating expense:', error); return null; }
+    return data as DbExpense;
+  }
+
+  async updateExpense(expenseId: string, updates: Partial<DbExpense>): Promise<DbExpense | null> {
+    if (this.inDemoMode()) return null;
+    const { data, error } = await supabase
+      .from('expenses')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', expenseId)
+      .select()
+      .single();
+    if (error) { console.error('Error updating expense:', error); return null; }
+    return data as DbExpense;
+  }
+
+  async deleteExpense(expenseId: string): Promise<boolean> {
+    if (this.inDemoMode()) return true;
+    const { error } = await supabase
+      .from('expenses')
+      .delete()
+      .eq('id', expenseId);
+    if (error) { console.error('Error deleting expense:', error); return false; }
+    return true;
+  }
+
+  async uploadExpenseReceipt(companyId: string, expenseId: string, file: File): Promise<string | null> {
+    if (this.inDemoMode()) return null;
+    const path = `${companyId}/${expenseId}/${file.name}`;
+    const { error } = await supabase.storage
+      .from('expense-receipts')
+      .upload(path, file, { upsert: true });
+    if (error) { console.error('Error uploading receipt:', error); return null; }
+    const { data: urlData } = supabase.storage
+      .from('expense-receipts')
+      .getPublicUrl(path);
+    return urlData.publicUrl;
   }
 }
 

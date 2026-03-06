@@ -197,7 +197,6 @@ export default function SettingsView() {
       }
 
       // If no company_id found, try to create one automatically
-      console.log('No company_id found, attempting to create default company...');
       const userEmail = user?.email || profile?.email || '';
       
       if (userEmail) {
@@ -237,15 +236,10 @@ export default function SettingsView() {
       setIsLoadingCompany(true);
       
       // Force a visible log
-      console.log('========== SETTINGS VIEW MOUNTED ==========');
-      console.log('[Settings] effectiveCompanyId:', effectiveCompanyId);
-      console.log('[Settings] profile:', profile);
-      console.log('[Settings] state.companyId:', state.companyId);
       
       try {
         const companyId = effectiveCompanyId || await resolveCompanyId();
         
-        console.log('[Settings] Resolved company ID:', companyId);
         
         if (!companyId) {
           console.warn('[Settings] ❌ No company ID available, cannot load company data');
@@ -254,14 +248,11 @@ export default function SettingsView() {
           return;
         }
 
-        console.log('[Settings] ✅ Loading company data for:', companyId);
         // getCompany already has internal 5-s timeouts per path + cache fallback
         const company = await withTimeout(db.getCompany(companyId), 15000, 'Load company profile');
         
-        console.log('[Settings] Company data received:', company);
         
         if (company && !cancelled) {
-          console.log('[Settings] ✅ Company data loaded successfully:', company);
           const companyName = normalizeCompanyName(company.name, company.email);
           setCompanyForm({
             name: companyName,
@@ -600,7 +591,6 @@ export default function SettingsView() {
   const saveCompanyLogoUrl = async (companyId: string, logoUrl: string | null): Promise<{ logo_url: string | null }> => {
     // In demo mode, save logo locally without hitting Supabase
     if (isDemoMode) {
-      console.log('[Settings] Demo mode - saving logo locally');
       try {
         // Store in localStorage for persistence across demo sessions
         const demoCompanyKey = `demo_company_${companyId}`;

@@ -49,9 +49,6 @@ export default function TeamView() {
 
   // Debug logging for team members
   useEffect(() => {
-    console.log('[TeamView] state.teamMembers:', state.teamMembers.length, state.teamMembers);
-    console.log('[TeamView] state.companyId:', state.companyId);
-    console.log('[TeamView] profile:', profile);
   }, [state.teamMembers, state.companyId, profile]);
 
   // Filter team members
@@ -89,10 +86,6 @@ export default function TeamView() {
   };
 
   const handleInvite = async () => {
-    console.log('=== INVITE START ===');
-    console.log('Assignable roles:', assignableRoles.length);
-    console.log('Company ID:', state.companyId);
-    console.log('Email:', inviteEmail);
     
     if (assignableRoles.length === 0) {
       toast.error('You do not have permission to invite team members');
@@ -109,7 +102,6 @@ export default function TeamView() {
       return;
     }
 
-    console.log('=== VALIDATION PASSED ===');
     setIsSendingInvite(true);
 
     // Set timeout to cover entire operation (DB save + email send)
@@ -121,7 +113,6 @@ export default function TeamView() {
     try {
       const token = globalThis.crypto?.randomUUID?.() || `invite-${Date.now()}`;
       
-      console.log('Creating invite record...');
       const inviteRecord = await db.createInvite({
         company_id: state.companyId,
         email: inviteEmail.trim().toLowerCase(),
@@ -139,15 +130,11 @@ export default function TeamView() {
         return;
       }
 
-      console.log('Invite record created:', inviteRecord);
 
       // Send email via Supabase Edge Function
-      console.log('Sending email via Supabase Edge Function...');
       
       // Get current session to ensure we have auth
       const { data: { session } } = await supabase.auth.getSession();
-      console.log('Session exists:', !!session);
-      console.log('Access token exists:', !!session?.access_token);
       
       if (!session) {
         clearTimeout(timeoutId);
@@ -165,7 +152,6 @@ export default function TeamView() {
         },
       });
       
-      console.log('Function response:', { emailData, emailError });
 
       if (emailError) {
         console.error('Email sending failed:', emailError);
@@ -174,7 +160,6 @@ export default function TeamView() {
         return;
       }
       
-      console.log('Email sent successfully:', emailData);
       toast.success(`Invitation email sent to ${inviteEmail}!`);
 
       dispatch({

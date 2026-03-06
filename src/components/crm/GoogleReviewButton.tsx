@@ -30,7 +30,6 @@ const GoogleReviewButton: React.FC<GoogleReviewButtonProps> = ({
     window.open(generateGoogleReviewUrl(), '_blank', 'noopener,noreferrer');
     
     // Track the review request (could be saved to analytics/database)
-    console.log('Google review requested for contact:', contact.id);
   };
 
   return (

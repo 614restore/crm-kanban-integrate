@@ -207,7 +207,6 @@ export class IntegrationManager {
           );
           break;
         default:
-          console.log(`Connection handler not implemented for ${id}`);
           return;
       }
 

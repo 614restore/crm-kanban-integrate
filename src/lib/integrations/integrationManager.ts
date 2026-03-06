@@ -167,7 +167,6 @@ class IntegrationManager {
           break;
         // Add other integrations...
         default:
-          console.log(`Connection handler not implemented for ${id}`);
           return;
       }
 

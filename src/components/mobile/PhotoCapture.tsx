@@ -97,7 +97,6 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({
       setLocation({ latitude, longitude, accuracy: accuracy || 0 });
       setGpsStatus('success');
       
-      console.log(`📍 GPS acquired: ${latitude.toFixed(6)}, ${longitude.toFixed(6)} (±${accuracy}m)`);
     } catch (error) {
       console.error('❌ GPS error:', error);
       setGpsStatus('error');
@@ -250,7 +249,6 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({
         queuedAt: new Date()
       });
 
-      console.log('📸 Photo saved offline:', photoMetadata.fileName);
 
       toast({
         title: isOnline ? "Photo uploaded!" : "Photo saved offline",

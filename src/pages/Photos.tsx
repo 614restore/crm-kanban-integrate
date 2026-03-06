@@ -81,7 +81,6 @@ const Photos: React.FC = () => {
       );
       
       setPhotos(sortedPhotos);
-      console.log(`📸 Loaded ${sortedPhotos.length} photos`);
     } catch (error) {
       console.error('❌ Error loading photos:', error);
       toast({

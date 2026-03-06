@@ -327,7 +327,6 @@ const DocumentManager: React.FC = () => {
           onView={(document) => setSelectedDocument(document)}
           onSend={(document) => {
             // Implement send functionality
-            console.log('Send document:', document);
           }}
         />
       )}

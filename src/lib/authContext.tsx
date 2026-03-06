@@ -41,20 +41,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       // In demo mode, try to load from localStorage first
       if (isDemoMode) {
-        console.log('[Auth] Demo mode - loading profile from localStorage');
         try {
           const demoProfileKey = `demo_profile_${userId}`;
           const stored = localStorage.getItem(demoProfileKey);
           if (stored) {
             const profileData = JSON.parse(stored);
-            console.log('[Auth] Demo profile loaded from localStorage');
             return profileData as Profile;
           }
         } catch (localStorageError) {
           console.warn('[Auth] Failed to load profile from localStorage:', localStorageError);
         }
         // In demo mode, if no stored profile, return null instead of hitting Supabase
-        console.log('[Auth] Demo mode - no stored profile found, returning null');
         return null;
       }
 
@@ -84,21 +81,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       // If user doesn't have a company, set one up automatically
       if (profileData && !profileData.company_id) {
-        console.log('User has no company, running automatic setup...');
         const setupSuccess = await setupNewUser(userId, userEmail);
         
         if (setupSuccess) {
           // Fetch profile again to get the new company_id
           const updatedProfile = await fetchProfile(userId);
           if (updatedProfile?.company_id) {
-            console.log('✅ Company setup successful, company_id:', updatedProfile.company_id);
           } else {
             console.warn('⚠️ Setup reported success but no company_id found, retrying...');
             // Retry once after a brief delay
             await new Promise(resolve => setTimeout(resolve, 1000));
             const retryProfile = await fetchProfile(userId);
             if (retryProfile?.company_id) {
-              console.log('✅ Company setup successful on retry, company_id:', retryProfile.company_id);
             } else {
               console.error('❌ Company setup failed even after retry');
             }
@@ -109,7 +103,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.error('❌ Company setup failed');
         }
       } else if (profileData?.company_id) {
-        console.log('✓ User already has company_id:', profileData.company_id);
       }
       
       return profileData;
@@ -135,7 +128,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('[Auth] onAuthStateChange event:', event);
 
       // For token refreshes, just update the session/user objects.
       // The profile (including company_id) hasn't changed, so avoid an
@@ -239,7 +231,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const stored = localStorage.getItem(demoProfileKey);
           if (stored) {
             demoProfile = JSON.parse(stored);
-            console.log('[Auth] Loaded existing demo profile from localStorage');
           }
         } catch (loadError) {
           console.warn('[Auth] Failed to load demo profile from localStorage:', loadError);
@@ -261,14 +252,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           try {
             const demoProfileKey = `demo_profile_${demoUserId}`;
             localStorage.setItem(demoProfileKey, JSON.stringify(demoProfile));
-            console.log('[Auth] New demo profile saved to localStorage');
           } catch (storageError) {
             console.warn('[Auth] Failed to save demo profile to localStorage:', storageError);
           }
         }
 
         setProfile(demoProfile as any);
-        console.log('✅ Demo mode sign-in successful:', email);
         return { error: null };
       }
 
@@ -330,7 +319,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
           const demoProfileKey = `demo_profile_${demoUserId}`;
           localStorage.setItem(demoProfileKey, JSON.stringify(demoProfile));
-          console.log('[Auth] Demo profile saved to localStorage during signup');
         } catch (storageError) {
           console.warn('[Auth] Failed to save demo profile to localStorage:', storageError);
         }
@@ -354,8 +342,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           ? (metadata.role || 'sales')  // Invite signup: use provided role or default to sales
           : 'owner';                     // New company signup: always owner
         
-        console.log('[Auth] Setting up new user with role:', userRole);
-        console.log('[Auth] Invite mode:', !!metadata?.company_id);
         
         // Wait briefly for the database trigger to create the profile row
         await new Promise(resolve => setTimeout(resolve, 500));
@@ -377,7 +363,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             console.error(`[Auth] Failed to update profile (attempt ${attempt}):`, profileError);
             if (attempt < 3) await new Promise(resolve => setTimeout(resolve, 500));
           } else {
-            console.log(`[Auth] Profile updated successfully with role: ${userRole} (attempt ${attempt})`);
             profileUpdateSuccess = true;
             break;
           }
@@ -390,14 +375,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Only run first-time setup if NOT signing up via invite
         // (invite signup means they're joining an existing company)
         if (!metadata?.company_id) {
-          console.log('[Auth] Running setupNewUser for new company owner...');
           await setupNewUser(data.user.id, data.user.email || email);
         }
         
         // Re-fetch and set profile so the UI immediately reflects the correct role
         const freshProfile = await fetchProfile(data.user.id);
         if (freshProfile) {
-          console.log('[Auth] Fresh profile after signup:', freshProfile.role, freshProfile.company_id);
           setProfile(freshProfile);
         }
       }
@@ -410,7 +393,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     try {
-      console.log('[Auth] Signing out...');
       
       // Clear all state immediately to provide instant feedback
       setSession(null);
@@ -421,7 +403,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         localStorage.clear();
         sessionStorage.clear();
-        console.log('[Auth] Cleared all browser storage');
       } catch (storageError) {
         console.warn('[Auth] Failed to clear storage:', storageError);
       }
@@ -431,7 +412,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) {
         console.error('[Auth] Sign out error:', error);
       } else {
-        console.log('[Auth] Sign out successful');
       }
     } catch (err) {
       console.error('[Auth] Sign out failed:', err);
@@ -462,7 +442,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       // In demo mode, save profile updates to localStorage
       if (isDemoMode) {
-        console.log('[Auth] Demo mode - saving profile updates locally');
         try {
           const demoProfileKey = `demo_profile_${user.id}`;
           const existing = localStorage.getItem(demoProfileKey);

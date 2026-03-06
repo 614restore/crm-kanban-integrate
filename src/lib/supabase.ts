@@ -22,7 +22,6 @@ if (demoMode) {
       '🚧 Running in DEMO MODE: placeholder Supabase config detected. Configure real credentials to enable live backend.'
     );
   } else {
-    console.log('🚧 Running in DEMO MODE - using mock data instead of Supabase');
   }
 }
 

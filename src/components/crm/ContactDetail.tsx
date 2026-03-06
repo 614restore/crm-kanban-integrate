@@ -109,7 +109,6 @@ export default function ContactDetail() {
     const loadContactRelatedData = async () => {
       if (!contactId || !profile?.company_id) return;
 
-      console.log(`[ContactDetail] Loading related data for contact: ${contactId}`);
       
       // Load projects for this contact
       const projects = state.projects.filter(p => p.contactId === contactId);
@@ -127,7 +126,6 @@ export default function ContactDetail() {
       const materialOrders = state.materialOrders.filter(mo => mo.contactId === contactId);
       setContactMaterialOrders(materialOrders);
       
-      console.log(`[ContactDetail] Loaded: ${projects.length} projects, ${estimates.length} estimates, ${workOrders.length} work orders, ${materialOrders.length} material orders`);
     };
 
     loadContactRelatedData();
@@ -141,9 +139,7 @@ export default function ContactDetail() {
         return;
       }
 
-      console.log(`[ContactDetail] Loading documents for contact: ${contactId}`);
       const docs = await db.getDocumentsByContact(contactId);
-      console.log(`[ContactDetail] Found ${docs.length} document(s) for this contact`);
 
       const docsWithSignedUrls = await Promise.all(
         docs.map(async (doc) => {
@@ -184,7 +180,6 @@ export default function ContactDetail() {
       return;
     }
 
-    console.log(`[ContactDetail] Uploading document: ${file.name} for contact ${contactId}`);
     setIsUploadingDocument(true);
 
     try {
@@ -198,7 +193,6 @@ export default function ContactDetail() {
         return;
       }
 
-      console.log(`[ContactDetail] Upload successful, path: ${uploadResult.path}`);
 
       // Verify the file exists
       const verifyUrl = await getDocumentSignedUrl(uploadResult.path, 60);
@@ -240,7 +234,6 @@ export default function ContactDetail() {
         return;
       }
 
-      console.log(`[ContactDetail] Document record saved with ID: ${created.id}`);
 
       const newDoc: Document = {
         id: created.id,
@@ -285,19 +278,15 @@ export default function ContactDetail() {
       return;
     }
 
-    console.log(`[ContactDetail] Opening document: ${docName || 'unknown'}`);
-    console.log(`[ContactDetail] URL type: ${isHttpUrl(url) ? 'HTTP URL' : 'Storage path'}`);
 
     try {
       // If it's already a full HTTP URL, open it directly
       if (isHttpUrl(url) && !url.includes('/projectceo-documents/')) {
-        console.log('[ContactDetail] Opening direct HTTP URL');
         window.open(url, '_blank', 'noopener,noreferrer');
         return;
       }
 
       // If it's a storage path or Supabase URL, try to get/refresh the signed URL
-      console.log('[ContactDetail] Attempting to create/refresh signed URL...');
       const signedUrl = await getDocumentSignedUrl(url, 3600);
       
       if (!signedUrl) {
@@ -313,7 +302,6 @@ export default function ContactDetail() {
         return;
       }
 
-      console.log('[ContactDetail] ✓ Signed URL created, opening document');
       window.open(signedUrl, '_blank', 'noopener,noreferrer');
     } catch (error) {
       console.error('[ContactDetail] Error opening document:', error);
@@ -611,7 +599,6 @@ export default function ContactDetail() {
   };
 
   const handleSurveyComplete = (surveyData: any) => {
-    console.log('Survey completed:', surveyData);
     // Add survey completion note to contact
     const surveyNote = `Customer survey completed - Overall satisfaction: ${surveyData.overallSatisfaction}/5 stars. ${surveyData.wouldRecommend ? 'Would recommend.' : 'Would not recommend.'}`;
     handleAddNote();

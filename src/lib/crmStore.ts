@@ -27,7 +27,9 @@ export type ViewType =
   | 'communications'
   | 'calendar'
   | 'documents'
+  | 'document-templates'
   | 'financial'
+  | 'expenses'
   | 'team'
   | 'automations'
   | 'settings'
@@ -36,6 +38,7 @@ export type ViewType =
   | 'projects'
   | 'work-orders'
   | 'material-orders'
+  | 'reports'
   | 'ai-assistant';
 
 export interface CRMState {

@@ -23,7 +23,6 @@ const PWAUpdateNotification = () => {
 
   useEffect(() => {
     if (updateAvailable) {
-      console.log('🔄 PWA update available');
     }
   }, [updateAvailable]);
 

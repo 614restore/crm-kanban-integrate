@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useCRM, usePipelineStats, useFinancialStats, useUpcomingAppointments } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import {
@@ -32,6 +32,29 @@ export default function Dashboard() {
   const pipelineStats = usePipelineStats();
   const financialStats = useFinancialStats();
   const upcomingAppointments = useUpcomingAppointments(7);
+
+  // Calculate real trends by comparing contacts from last 30 days vs previous 30 days
+  const trends = useMemo(() => {
+    const now = Date.now();
+    const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+    const recent = state.contacts.filter(c => now - new Date(c.createdAt).getTime() < thirtyDays);
+    const previous = state.contacts.filter(c => {
+      const age = now - new Date(c.createdAt).getTime();
+      return age >= thirtyDays && age < thirtyDays * 2;
+    });
+
+    const contactGrowth = previous.length > 0
+      ? Math.round(((recent.length - previous.length) / previous.length) * 100)
+      : recent.length > 0 ? 100 : 0;
+
+    const recentValue = recent.reduce((s, c) => s + (c.projectValue || 0), 0);
+    const prevValue = previous.reduce((s, c) => s + (c.projectValue || 0), 0);
+    const valueGrowth = prevValue > 0
+      ? Math.round(((recentValue - prevValue) / prevValue) * 100)
+      : recentValue > 0 ? 100 : 0;
+
+    return { contactGrowth, valueGrowth };
+  }, [state.contacts]);
 
   // Get recent activity (last 5 updated contacts)
   const recentActivity = [...state.contacts]
@@ -87,10 +110,12 @@ export default function Dashboard() {
             <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
               <Users className="text-blue-600" size={24} />
             </div>
-            <span className="flex items-center gap-1 text-green-600 text-sm font-medium">
-              <ArrowUpRight size={16} />
-              12%
-            </span>
+            {trends.contactGrowth !== 0 && (
+              <span className={`flex items-center gap-1 ${trends.contactGrowth >= 0 ? 'text-green-600' : 'text-red-600'} text-sm font-medium`}>
+                {trends.contactGrowth >= 0 ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
+                {Math.abs(trends.contactGrowth)}%
+              </span>
+            )}
           </div>
           <p className="text-3xl font-bold text-gray-900 mt-4">{pipelineStats.totalContacts}</p>
           <p className="text-gray-500 text-sm mt-1">Total Contacts</p>
@@ -101,10 +126,12 @@ export default function Dashboard() {
             <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
               <DollarSign className="text-green-600" size={24} />
             </div>
-            <span className="flex items-center gap-1 text-green-600 text-sm font-medium">
-              <ArrowUpRight size={16} />
-              8%
-            </span>
+            {trends.valueGrowth !== 0 && (
+              <span className={`flex items-center gap-1 ${trends.valueGrowth >= 0 ? 'text-green-600' : 'text-red-600'} text-sm font-medium`}>
+                {trends.valueGrowth >= 0 ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
+                {Math.abs(trends.valueGrowth)}%
+              </span>
+            )}
           </div>
           <p className="text-3xl font-bold text-gray-900 mt-4">
             {formatCurrency(pipelineStats.totalValue)}
@@ -117,10 +144,6 @@ export default function Dashboard() {
             <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
               <Target className="text-purple-600" size={24} />
             </div>
-            <span className="flex items-center gap-1 text-green-600 text-sm font-medium">
-              <ArrowUpRight size={16} />
-              5%
-            </span>
           </div>
           <p className="text-3xl font-bold text-gray-900 mt-4">
             {pipelineStats.conversionRate.toFixed(1)}%
@@ -133,10 +156,6 @@ export default function Dashboard() {
             <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center">
               <TrendingUp className="text-amber-600" size={24} />
             </div>
-            <span className="flex items-center gap-1 text-red-600 text-sm font-medium">
-              <ArrowDownRight size={16} />
-              3%
-            </span>
           </div>
           <p className="text-3xl font-bold text-gray-900 mt-4">
             {formatCurrency(pipelineStats.avgDealSize)}

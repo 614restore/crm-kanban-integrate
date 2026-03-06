@@ -182,7 +182,6 @@ export const offlineDB = new OfflineDatabase();
 export const initializeOfflineDB = async () => {
   try {
     await offlineDB.open();
-    console.log('✅ Offline database initialized successfully');
     
     // Initialize network status if not exists
     const status = await offlineDB.network_status.get(1);

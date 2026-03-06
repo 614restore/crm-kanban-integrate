@@ -109,11 +109,9 @@ export default function DocumentCenter() {
       return;
     }
 
-    console.log(`[DocumentCenter] Starting upload for file: ${file.name} (${formatFileSize(file.size)})`);
     setIsUploading(true);
     
     try {
-      console.log(`[DocumentCenter] Uploading to company: ${state.companyId}`);
       const uploadResult = await uploadDocument(file, state.companyId);
       
       if (uploadResult.error) {
@@ -124,10 +122,8 @@ export default function DocumentCenter() {
         return;
       }
 
-      console.log(`[DocumentCenter] Upload successful, path: ${uploadResult.path}`);
       
       // Verify the file actually exists in the bucket
-      console.log('[DocumentCenter] Verifying file exists in bucket...');
       const verifyUrl = await getDocumentSignedUrl(uploadResult.path, 60);
       if (!verifyUrl) {
         console.error('[DocumentCenter] CRITICAL: File upload succeeded but file is not in bucket!');
@@ -137,7 +133,6 @@ export default function DocumentCenter() {
         event.target.value = '';
         return;
       }
-      console.log('[DocumentCenter] ✓ File verified in bucket');
 
       const category = inferCategory(file);
       const created = await db.createDocument({
@@ -163,7 +158,6 @@ export default function DocumentCenter() {
             : (await getDocumentSignedUrl(created.url)) || undefined)
         : undefined;
 
-      console.log(`[DocumentCenter] Document saved with ID: ${created.id}`);
 
       setUploadedDocuments((prev) => [
         {
@@ -275,28 +269,23 @@ export default function DocumentCenter() {
     
     // If it's already a signed URL (contains token), return it directly
     if (isHttpUrl(url) && (url.includes('token=') || url.includes('/sign/'))) {
-      console.log('[DocumentCenter] URL is already signed, using directly');
       return url;
     }
     
     // If it's an external HTTP URL (not from our storage), return it directly
     if (isHttpUrl(url) && !url.includes('/projectceo-documents/')) return url;
     
-    console.log(`[DocumentCenter] Resolving document URL for path: ${url}`);
     const signedUrl = await getDocumentSignedUrl(url);
     
     if (!signedUrl) {
       console.error('[DocumentCenter] Failed to create signed URL');
     } else {
-      console.log('[DocumentCenter] Signed URL created successfully');
     }
     
     return signedUrl;
   };
 
   const handleOpenDocument = async (url?: string) => {
-    console.log('[DocumentCenter] Opening document...');
-    console.log('[DocumentCenter] Stored URL/path:', url);
     const resolved = await resolveDocumentUrl(url);
     if (!resolved) {
       console.error('[DocumentCenter] Failed to resolve document URL');
@@ -304,7 +293,6 @@ export default function DocumentCenter() {
       toast.error('Unable to open document. Check console for details or verify Supabase bucket setup.');
       return;
     }
-    console.log('[DocumentCenter] Opening document in new window');
     window.open(resolved, '_blank', 'noopener,noreferrer');
   };
 

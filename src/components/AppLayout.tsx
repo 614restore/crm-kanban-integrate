@@ -310,7 +310,6 @@ function CRMApp() {
 
     try {
       // Load all data in parallel
-      console.log('[CRM] Loading data from database for company:', profile.company_id);
       const [
         dbContacts,
         dbCommunications,
@@ -332,7 +331,6 @@ function CRMApp() {
       ]);
 
       // Convert DB contacts to app contacts
-      console.log('[CRM] Loaded contacts from database:', dbContacts.length);
       const contacts = dbContacts.map(dbContactToAppContact);
 
       // Attach communications to contacts
@@ -425,7 +423,6 @@ function CRMApp() {
       }));
 
       // Convert DB team members to app team members
-      console.log('[CRM] Raw dbTeamMembers from database:', dbTeamMembers.length, dbTeamMembers);
       const teamMembers: TeamMember[] = dbTeamMembers.map(tm => ({
         id: tm.id,
         name: `${tm.first_name || ''} ${tm.last_name || ''}`.trim() || tm.email,
@@ -436,9 +433,7 @@ function CRMApp() {
         department: tm.department || 'General',
         isActive: tm.is_active,
       }));
-      console.log('[CRM] Converted teamMembers:', teamMembers.length, teamMembers);
 
-      console.log('[CRM] Dispatching INITIALIZE_DATA with', enrichedContacts.length, 'contacts');
       dispatch({
         type: 'INITIALIZE_DATA',
         payload: {
@@ -509,7 +504,6 @@ function CRMApp() {
 
     const channel = db.subscribeToAll(profile.company_id, {
       onContactChange: (payload) => {
-        console.log('Contact change:', payload);
         if (payload.eventType === 'INSERT') {
           const newContact = dbContactToAppContact(payload.new);
           dispatch({ type: 'ADD_CONTACT', payload: newContact });
@@ -532,17 +526,14 @@ function CRMApp() {
         }
       },
       onAppointmentChange: (payload) => {
-        console.log('Appointment change:', payload);
         // Reload appointments to get contact names
         requestSoftReload();
       },
       onInvoiceChange: (payload) => {
-        console.log('Invoice change:', payload);
         // Reload invoices to get contact names
         requestSoftReload();
       },
       onCommunicationChange: (payload) => {
-        console.log('Communication change:', payload);
         requestSoftReload();
       },
       onLeadSourceChange: () => {

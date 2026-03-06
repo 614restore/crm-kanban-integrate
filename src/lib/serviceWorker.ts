@@ -48,7 +48,6 @@ class ServiceWorkerManager {
     }
 
     try {
-      console.log('🔧 Registering service worker...');
       
       const registration = await navigator.serviceWorker.register('/crm-kanban-integrate/sw.js', {
         scope: '/crm-kanban-integrate/'
@@ -61,12 +60,10 @@ class ServiceWorkerManager {
         const newWorker = registration.installing;
         if (!newWorker) return;
 
-        console.log('🔄 New service worker installing...');
 
         newWorker.addEventListener('statechange', () => {
           if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
             // New worker is installed and ready
-            console.log('✅ New service worker ready');
             this.notifyUpdate(registration);
           }
         });
@@ -74,7 +71,6 @@ class ServiceWorkerManager {
 
       // Handle controller change (after user accepts update)
       navigator.serviceWorker.addEventListener('controllerchange', () => {
-        console.log('🔄 Service worker controller changed, reloading...');
         window.location.reload();
       });
 
@@ -86,7 +82,6 @@ class ServiceWorkerManager {
         registration
       });
 
-      console.log('✅ Service worker registered successfully');
       return registration;
 
     } catch (error) {
@@ -112,7 +107,6 @@ class ServiceWorkerManager {
     }
 
     try {
-      console.log('🔄 Checking for service worker updates...');
       await this.registration.update();
     } catch (error) {
       console.error('❌ Service worker update check failed:', error);
@@ -129,7 +123,6 @@ class ServiceWorkerManager {
     }
 
     try {
-      console.log('⚡ Activating new service worker...');
       
       // Send skip waiting message to the waiting service worker
       this.registration.waiting.postMessage({ type: 'SKIP_WAITING' });
@@ -154,7 +147,6 @@ class ServiceWorkerManager {
 
     try {
       await this.registration.sync.register(tag);
-      console.log(`✅ Background sync registered: ${tag}`);
       return true;
     } catch (error) {
       console.error(`❌ Background sync registration failed for ${tag}:`, error);
@@ -189,7 +181,6 @@ class ServiceWorkerManager {
   }
 
   private handleOnline(): void {
-    console.log('🌐 Connection restored');
     this.isOffline = false;
     this.notifyState(this.getState());
 
@@ -201,7 +192,6 @@ class ServiceWorkerManager {
   }
 
   private handleOffline(): void {
-    console.log('📱 Connection lost - entering offline mode');
     this.isOffline = true;
     this.notifyState(this.getState());
   }

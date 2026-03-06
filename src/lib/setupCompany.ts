@@ -22,11 +22,9 @@ export async function ensureUserHasCompany(userId: string, userEmail: string): P
 
     // If user already has a company, we're done
     if (profile?.company_id) {
-      console.log('User already has a company:', profile.company_id);
       return true;
     }
 
-    console.log('Creating default company for new user...');
 
     // Create a new company
     const companyName = userEmail.split('@')[0] || 'My Company';
@@ -50,7 +48,6 @@ export async function ensureUserHasCompany(userId: string, userEmail: string): P
       return false;
     }
 
-    console.log('Company created with ID:', newCompany.id);
 
     // Link the company to the user profile with retry logic
     let updateAttempts = 0;
@@ -58,7 +55,6 @@ export async function ensureUserHasCompany(userId: string, userEmail: string): P
     
     while (updateAttempts < 3 && !updateSuccess) {
       updateAttempts++;
-      console.log(`Attempting to link company to profile (attempt ${updateAttempts}/3)...`);
       
       const { error: updateError } = await supabase
         .from('profiles')
@@ -67,7 +63,6 @@ export async function ensureUserHasCompany(userId: string, userEmail: string): P
 
       if (!updateError) {
         updateSuccess = true;
-        console.log('✅ Company linked to profile successfully');
       } else {
         console.error(`Error linking company to profile (attempt ${updateAttempts}):`, updateError);
         if (updateAttempts < 3) {
@@ -89,7 +84,6 @@ export async function ensureUserHasCompany(userId: string, userEmail: string): P
       .single();
 
     if (verifyProfile?.company_id === newCompany.id) {
-      console.log('✅ Company setup complete and verified!');
       return true;
     } else {
       console.error('❌ Company update verification failed');
@@ -123,7 +117,6 @@ export async function ensureDefaultLeadSources(companyId: string): Promise<boole
       return true;
     }
 
-    console.log('Creating default lead sources...');
 
     // Create default lead sources
     const defaultSources = [
@@ -148,7 +141,6 @@ export async function ensureDefaultLeadSources(companyId: string): Promise<boole
       return false;
     }
 
-    console.log('✅ Default lead sources created!');
     return true;
   } catch (error) {
     console.error('Error in ensureDefaultLeadSources:', error);
@@ -160,7 +152,6 @@ export async function ensureDefaultLeadSources(companyId: string): Promise<boole
  * Complete first-time setup for a new user
  */
 export async function setupNewUser(userId: string, userEmail: string): Promise<boolean> {
-  console.log('🚀 Running first-time setup for user...');
 
   // Step 1: Ensure user has a company
   const companySetup = await ensureUserHasCompany(userId, userEmail);
@@ -184,6 +175,5 @@ export async function setupNewUser(userId: string, userEmail: string): Promise<b
   // Step 3: Set up default lead sources
   await ensureDefaultLeadSources(profile.company_id);
 
-  console.log('✅ First-time setup complete!');
   return true;
 }

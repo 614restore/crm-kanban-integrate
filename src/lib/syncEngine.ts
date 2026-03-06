@@ -46,7 +46,6 @@ class SyncEngine {
         return true;
       }
 
-      console.log(`📤 Starting sync of ${queueItems.length} items`);
 
       let processedCount = 0;
       const errors: SyncError[] = [];
@@ -274,7 +273,6 @@ class SyncEngine {
         }
       }
 
-      console.log(`📥 Pulled ${(contacts?.length || 0) + (jobs?.length || 0)} updates from server`);
 
     } catch (error) {
       console.error('Failed to pull updates from server:', error);

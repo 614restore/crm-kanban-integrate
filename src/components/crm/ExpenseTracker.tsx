@@ -30,6 +30,8 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/lib/authContext';
+import { db, DbExpense } from '@/lib/database';
 
 interface Expense {
   id: string;
@@ -80,6 +82,8 @@ const ExpenseTracker: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   const { toast } = useToast();
+  const { profile } = useAuth();
+  const companyId = profile?.company_id;
 
   // Expense categories for contractors
   const expenseCategories = [
@@ -98,62 +102,40 @@ const ExpenseTracker: React.FC = () => {
     'Other'
   ];
 
-  // Load expenses from storage/API
+  // Convert DB record to local Expense shape
+  const dbToExpense = (row: DbExpense): Expense => ({
+    id: row.id,
+    amount: Number(row.amount),
+    description: row.description,
+    category: row.category,
+    date: row.date,
+    jobId: row.job_id || undefined,
+    jobName: row.job_name || undefined,
+    contactId: row.contact_id || undefined,
+    contactName: row.contact_name || undefined,
+    receipt: row.receipt_url || undefined,
+    status: row.status as Expense['status'],
+    submittedBy: row.submitted_by_name || '',
+    submittedAt: row.submitted_at,
+    approvedBy: row.approved_by_name || undefined,
+    approvedAt: row.approved_at || undefined,
+    notes: row.notes || undefined,
+    mileage: row.mileage ? Number(row.mileage) : undefined,
+    location: row.location || undefined,
+    vendor: row.vendor || undefined,
+    paymentMethod: row.payment_method as Expense['paymentMethod'],
+    reimbursable: row.reimbursable,
+  });
+
+  // Load expenses from Supabase
   const loadExpenses = async () => {
+    if (!companyId) return;
     setLoading(true);
     try {
-      // Mock data for demo
-      const mockExpenses: Expense[] = [
-        {
-          id: '1',
-          amount: 156.78,
-          description: 'Lumber for deck framing',
-          category: 'Materials',
-          date: '2026-03-01',
-          jobId: 'job-123',
-          jobName: 'Johnson Deck Rebuild',
-          status: 'approved',
-          submittedBy: 'Mike Johnson',
-          submittedAt: '2026-03-01T14:30:00Z',
-          paymentMethod: 'company_card',
-          reimbursable: false,
-          vendor: 'Home Depot',
-          location: 'Store #1234'
-        },
-        {
-          id: '2',
-          amount: 45.50,
-          description: 'Fuel for work truck',
-          category: 'Fuel',
-          date: '2026-03-02',
-          status: 'pending',
-          submittedBy: 'Sarah Wilson',
-          submittedAt: '2026-03-02T08:15:00Z',
-          paymentMethod: 'cash',
-          reimbursable: true,
-          vendor: 'Shell Station',
-          mileage: 120
-        },
-        {
-          id: '3',
-          amount: 89.99,
-          description: 'Safety equipment and hard hats',
-          category: 'Tools & Equipment',
-          date: '2026-03-03',
-          jobId: 'job-456',
-          jobName: 'Smith Roof Repair',
-          status: 'reimbursed',
-          submittedBy: 'Mike Johnson',
-          submittedAt: '2026-03-03T11:20:00Z',
-          approvedBy: 'Manager',
-          approvedAt: '2026-03-03T16:45:00Z',
-          paymentMethod: 'card',
-          reimbursable: true
-        }
-      ];
-      
-      setExpenses(mockExpenses);
-      setFilteredExpenses(mockExpenses);
+      const rows = await db.getExpenses(companyId);
+      const mapped = rows.map(dbToExpense);
+      setExpenses(mapped);
+      setFilteredExpenses(mapped);
     } catch (error) {
       console.error('Error loading expenses:', error);
       toast({
@@ -211,21 +193,42 @@ const ExpenseTracker: React.FC = () => {
   };
 
   // Add new expense
-  const handleAddExpense = (expense: Omit<Expense, 'id' | 'submittedAt'>) => {
-    const newExpense: Expense = {
-      ...expense,
-      id: Date.now().toString(),
-      submittedAt: new Date().toISOString()
-    };
-    
-    setExpenses(prev => [newExpense, ...prev]);
-    setShowAddExpense(false);
-    
-    toast({
-      title: "Expense Added",
-      description: `$${expense.amount.toFixed(2)} expense has been submitted`,
-      variant: "default"
+  const handleAddExpense = async (expense: Omit<Expense, 'id' | 'submittedAt'>) => {
+    if (!companyId) return;
+
+    const row = await db.createExpense({
+      company_id: companyId,
+      amount: expense.amount,
+      description: expense.description,
+      category: expense.category,
+      date: expense.date,
+      job_id: expense.jobId || undefined,
+      job_name: expense.jobName || undefined,
+      contact_id: expense.contactId || undefined,
+      contact_name: expense.contactName || undefined,
+      receipt_url: expense.receipt || undefined,
+      status: expense.status,
+      submitted_by: profile?.id,
+      submitted_by_name: [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || 'Unknown',
+      notes: expense.notes || undefined,
+      mileage: expense.mileage,
+      location: expense.location || undefined,
+      vendor: expense.vendor || undefined,
+      payment_method: expense.paymentMethod,
+      reimbursable: expense.reimbursable,
     });
+
+    if (row) {
+      setExpenses(prev => [dbToExpense(row), ...prev]);
+      setShowAddExpense(false);
+      toast({
+        title: "Expense Added",
+        description: `$${expense.amount.toFixed(2)} expense has been submitted`,
+        variant: "default"
+      });
+    } else {
+      toast({ title: "Error", description: "Failed to save expense", variant: "destructive" });
+    }
   };
 
   // Export expenses to CSV
@@ -263,23 +266,24 @@ const ExpenseTracker: React.FC = () => {
   };
 
   // Update expense status
-  const updateExpenseStatus = (expenseId: string, status: Expense['status']) => {
-    setExpenses(prev => prev.map(exp => 
-      exp.id === expenseId 
-        ? { 
-            ...exp, 
-            status,
-            approvedAt: status === 'approved' ? new Date().toISOString() : exp.approvedAt,
-            approvedBy: status === 'approved' ? 'Manager' : exp.approvedBy
-          }
-        : exp
-    ));
-    
-    toast({
-      title: "Status Updated",
-      description: `Expense has been ${status}`,
-      variant: "default"
-    });
+  const updateExpenseStatus = async (expenseId: string, status: Expense['status']) => {
+    const approverName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || 'Manager';
+    const updates: Partial<DbExpense> = { status };
+    if (status === 'approved') {
+      updates.approved_at = new Date().toISOString();
+      updates.approved_by = profile?.id;
+      updates.approved_by_name = approverName;
+    }
+
+    const row = await db.updateExpense(expenseId, updates);
+    if (row) {
+      setExpenses(prev => prev.map(exp =>
+        exp.id === expenseId ? dbToExpense(row) : exp
+      ));
+      toast({ title: "Status Updated", description: `Expense has been ${status}` });
+    } else {
+      toast({ title: "Error", description: "Failed to update expense", variant: "destructive" });
+    }
   };
 
   // Format currency
@@ -655,7 +659,7 @@ const AddExpenseModal: React.FC<{
       notes: formData.notes || undefined,
       receipt: formData.receipt || undefined,
       status: 'pending',
-      submittedBy: 'Current User' // Would come from auth context
+      submittedBy: 'Current User' // name resolved in handleAddExpense via profile
     };
 
     onSubmit(expense);
