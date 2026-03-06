@@ -253,16 +253,20 @@ export default function EstimatesView() {
         if (updated) {
           dispatch({ type: 'UPDATE_ESTIMATE', payload: mapDbEstimateToApp(updated) });
           toast.success('Estimate updated');
+          handleCloseModal();
+        } else {
+          toast.error('Failed to save estimate. Please try again.');
         }
       } else {
         const created = await db.createEstimate(estimateData);
         if (created) {
           dispatch({ type: 'ADD_ESTIMATE', payload: mapDbEstimateToApp(created) });
           toast.success('Estimate created');
+          handleCloseModal();
+        } else {
+          toast.error('Failed to create estimate. Please try again.');
         }
       }
-
-      handleCloseModal();
     } catch (error) {
       console.error('Error saving estimate:', error);
       toast.error('Failed to save estimate');

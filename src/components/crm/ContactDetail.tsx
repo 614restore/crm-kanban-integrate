@@ -2085,15 +2085,13 @@ export default function ContactDetail() {
                   title: formData.get('title') as string,
                   description: formData.get('description') as string,
                   status: 'draft',
-                  amount: amount,
+                  subtotal: amount,
                   tax: tax,
                   total: total,
                   valid_until: formData.get('valid_until') as string,
                   terms: formData.get('terms') as string,
                   notes: formData.get('notes') as string,
                   created_by: profile?.id || '',
-                  created_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString(),
                 };
 
                 const newEstimate = await db.createEstimate(estimateData);

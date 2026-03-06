@@ -280,20 +280,23 @@ export interface DbEstimate {
   title: string;
   description?: string;
   status: string;
-  amount: number;
+  items?: any[];
+  subtotal: number;
   tax: number;
   total: number;
+  validity_date?: string;
   valid_until?: string;
-  created_at: string;
+  notes?: string;
+  terms?: string;
+  terms_and_conditions?: string;
   sent_at?: string;
   viewed_at?: string;
   accepted_at?: string;
   declined_at?: string;
   signed_by?: string;
   signature_data?: string;
-  terms?: string;
-  notes?: string;
-  created_by: string;
+  created_by?: string;
+  created_at: string;
   updated_at: string;
 }
 
