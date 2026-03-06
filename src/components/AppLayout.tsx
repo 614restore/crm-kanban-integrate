@@ -336,6 +336,8 @@ function CRMApp() {
         dbTeamMembers,
         , // getCompany result — pre-warm only, not used directly
         dbEstimates,
+        dbProjects,
+        dbWorkOrders,
       ] = await Promise.all([
         db.getContacts(profile.company_id),
         db.getCommunications(profile.company_id),
@@ -347,6 +349,8 @@ function CRMApp() {
         db.getTeamMembers(profile.company_id),
         db.getCompany(profile.company_id), // pre-warm company cache for Sidebar
         db.getEstimates(profile.company_id),
+        db.getProjects(profile.company_id),
+        db.getWorkOrders(profile.company_id),
       ]);
 
       // Convert DB contacts to app contacts
@@ -480,6 +484,75 @@ function CRMApp() {
         updatedAt: e.updated_at,
       }));
 
+      const projects = (dbProjects || []).map((p: any) => ({
+        id: p.id,
+        projectNumber: p.project_number,
+        name: p.name,
+        contactId: p.contact_id,
+        contactName: enrichedContacts.find(c => c.id === p.contact_id)?.name || '',
+        estimateId: p.estimate_id,
+        description: p.description,
+        status: p.status,
+        priority: p.priority,
+        startDate: p.start_date,
+        endDate: p.end_date,
+        completedDate: p.completed_date,
+        estimatedBudget: Number(p.estimated_budget || 0),
+        actualCost: Number(p.actual_cost || 0),
+        materialCostGoal: Number(p.material_cost_goal || 0),
+        subcontractorCostGoal: Number(p.subcontractor_cost_goal || 0),
+        salesRepPayGoal: Number(p.labor_cost_goal || 0),
+        otherExpensesGoal: Number(p.other_cost_goal || 0),
+        actualMaterialCost: Number(p.material_cost || 0),
+        actualSubcontractorCost: Number(p.subcontractor_cost || 0),
+        actualSalesRepPay: Number(p.labor_cost || 0),
+        actualOtherExpenses: Number(p.other_cost || 0),
+        address: p.address,
+        city: p.city,
+        state: p.state,
+        zip: p.zip,
+        projectManagerId: p.project_manager_id,
+        projectManagerName: '',
+        notes: p.notes,
+        tags: p.tags || [],
+        createdBy: p.created_by,
+        createdAt: p.created_at,
+        updatedAt: p.updated_at,
+      }));
+
+      const workOrders = (dbWorkOrders || []).map((wo: any) => ({
+        id: wo.id,
+        workOrderNumber: wo.work_order_number,
+        projectId: wo.project_id,
+        projectName: projects.find((p: any) => p.id === wo.project_id)?.name || '',
+        contactId: wo.contact_id,
+        contactName: enrichedContacts.find(c => c.id === wo.contact_id)?.name || '',
+        title: wo.title,
+        description: wo.description,
+        status: wo.status,
+        priority: wo.priority,
+        scheduledDate: wo.scheduled_date,
+        startedAt: wo.started_at,
+        completedAt: wo.completed_at,
+        assignedTo: wo.assigned_to || [],
+        assignedToNames: [],
+        estimatedHours: wo.estimated_hours ? Number(wo.estimated_hours) : undefined,
+        actualHours: wo.actual_hours ? Number(wo.actual_hours) : undefined,
+        laborCost: Number(wo.labor_cost || 0),
+        materialCost: Number(wo.material_cost || 0),
+        totalCost: Number(wo.total_cost || 0),
+        address: wo.address,
+        city: wo.city,
+        state: wo.state,
+        zip: wo.zip,
+        notes: wo.notes,
+        attachments: wo.attachments || [],
+        checklistItems: wo.checklist_items || [],
+        createdBy: wo.created_by,
+        createdAt: wo.created_at,
+        updatedAt: wo.updated_at,
+      }));
+
       dispatch({
         type: 'INITIALIZE_DATA',
         payload: {
@@ -493,8 +566,8 @@ function CRMApp() {
           suppliers: [],
           materialOrders: [],
           estimates,
-          projects: [],
-          workOrders: [],
+          projects,
+          workOrders,
         },
       });
 

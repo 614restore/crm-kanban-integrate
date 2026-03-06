@@ -1706,19 +1706,28 @@ export default function ContactDetail() {
                           <h4 className="text-lg font-semibold text-gray-900">WO #{workOrder.workOrderNumber}</h4>
                           <p className="text-sm text-gray-500 mt-1">{workOrder.title || 'Work Order'}</p>
                         </div>
-                        <span
-                          className={`px-3 py-1 rounded-full text-sm font-medium ${
-                            workOrder.status === 'completed'
-                              ? 'bg-green-100 text-green-800'
-                              : workOrder.status === 'in_progress'
-                              ? 'bg-blue-100 text-blue-800'
-                              : workOrder.status === 'scheduled'
-                              ? 'bg-purple-100 text-purple-800'
-                              : 'bg-gray-100 text-gray-800'
-                          }`}
-                        >
-                          {workOrder.status.replace('_', ' ')}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`px-3 py-1 rounded-full text-sm font-medium ${
+                              workOrder.status === 'completed'
+                                ? 'bg-green-100 text-green-800'
+                                : workOrder.status === 'in_progress'
+                                ? 'bg-blue-100 text-blue-800'
+                                : workOrder.status === 'scheduled'
+                                ? 'bg-purple-100 text-purple-800'
+                                : 'bg-gray-100 text-gray-800'
+                            }`}
+                          >
+                            {workOrder.status.replace('_', ' ')}
+                          </span>
+                          <button
+                            onClick={() => dispatch({ type: 'SET_VIEW', payload: 'workOrders' })}
+                            className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                            title="Open in Work Orders"
+                          >
+                            <ExternalLink size={16} />
+                          </button>
+                        </div>
                       </div>
                       
                       <div className="grid grid-cols-3 gap-4 text-sm">
@@ -1730,13 +1739,16 @@ export default function ContactDetail() {
                         </div>
                         <div>
                           <p className="text-gray-500">Hours Est.</p>
-                          <p className="font-medium text-gray-900">{workOrder.estimatedHours || 0}h</p>
+                          <p className="font-medium text-gray-900">{workOrder.estimatedHours ? `${workOrder.estimatedHours}h` : 'N/A'}</p>
                         </div>
                         <div>
                           <p className="text-gray-500">Total Cost</p>
                           <p className="font-semibold text-gray-900">{formatCurrency(workOrder.totalCost || 0)}</p>
                         </div>
                       </div>
+                      {workOrder.notes && (
+                        <p className="mt-3 text-sm text-gray-500 border-t border-gray-100 pt-3">{workOrder.notes}</p>
+                      )}
                     </div>
                   ))}
                 </div>
