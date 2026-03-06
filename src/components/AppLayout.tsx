@@ -333,7 +333,10 @@ function CRMApp() {
         dbLeadSources,
         dbAutomations,
         dbTeamMembers,
+<<<<<<< HEAD
         , // getCompany result — pre-warm only, not used directly
+=======
+>>>>>>> origin/main
         dbEstimates,
       ] = await Promise.all([
         db.getContacts(profile.company_id),
