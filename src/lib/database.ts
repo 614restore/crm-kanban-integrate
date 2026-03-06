@@ -467,8 +467,32 @@ class DatabaseService {
 
     // 1. Return from cache instantly while we refresh in the background
     const cached = this.getCachedCompany(companyId);
+    if (cached) return cached;
 
-    // 2. Try RPC first (SECURITY DEFINER, bypasses RLS) — 5 s cap
+    // 2. Try direct table query first (fast path) — 5 s cap
+    try {
+      const { data, error } = await this.raceTimeout(
+        supabase
+          .from('companies')
+          .select('*')
+          .eq('id', companyId)
+          .single(),
+        5000,
+        'companies direct query',
+      );
+
+      if (!error && data) {
+        this.setCachedCompany(companyId, data);
+        return data;
+      }
+      if (error) {
+        console.warn('[Database] Direct company query failed, trying RPC:', error.message);
+      }
+    } catch (directErr) {
+      console.warn('[Database] Direct query timed-out, trying RPC');
+    }
+
+    // 3. Fallback: RPC (SECURITY DEFINER, bypasses RLS) — 5 s cap
     try {
       const { data: rpcData, error: rpcError } = await this.raceTimeout(
         supabase.rpc('get_my_company'),
@@ -482,39 +506,13 @@ class DatabaseService {
         return company;
       }
       if (rpcError) {
-        console.warn('[Database] get_my_company RPC failed, falling back:', rpcError.message);
+        console.warn('[Database] get_my_company RPC also failed:', rpcError.message);
       }
     } catch (rpcErr) {
-      console.warn('[Database] RPC unavailable/timed-out, trying direct query');
+      console.warn('[Database] RPC unavailable/timed-out');
     }
 
-    // 3. Fallback: direct table query — 5 s cap
-    try {
-      const { data, error } = await this.raceTimeout(
-        supabase
-          .from('companies')
-          .select('*')
-          .eq('id', companyId)
-          .single(),
-        5000,
-        'companies direct query',
-      );
-
-      if (error) {
-        console.error('Error fetching company:', error);
-      } else if (data) {
-        this.setCachedCompany(companyId, data);
-        return data;
-      }
-    } catch (directErr) {
-      console.warn('[Database] Direct query timed-out:', directErr);
-    }
-
-    // 4. If both network paths failed, return whatever we had in cache
-    if (cached) {
-      return cached;
-    }
-
+    // 4. Both paths failed
     return null;
   }
 

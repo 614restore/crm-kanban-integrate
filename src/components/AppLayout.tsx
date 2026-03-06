@@ -309,7 +309,7 @@ function CRMApp() {
     dispatch({ type: 'SET_COMPANY_ID', payload: profile.company_id });
 
     try {
-      // Load all data in parallel
+      // Load all data in parallel (including company to pre-warm cache for Sidebar)
       const [
         dbContacts,
         dbCommunications,
@@ -328,6 +328,7 @@ function CRMApp() {
         db.getLeadSources(profile.company_id),
         db.getAutomations(profile.company_id),
         db.getTeamMembers(profile.company_id),
+        db.getCompany(profile.company_id), // pre-warm company cache for Sidebar
       ]);
 
       // Convert DB contacts to app contacts
