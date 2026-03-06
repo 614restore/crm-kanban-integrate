@@ -1,6 +1,7 @@
 import React, { useReducer, useEffect, useCallback, useRef, Suspense, lazy } from 'react';
 import { CRMContext, crmReducer, CRMState } from '@/lib/crmStore';
 import { AuthProvider, useAuth } from '@/lib/authContext';
+import { PermissionProvider } from '@/lib/permissions/PermissionProvider';
 import { db } from '@/lib/database';
 import { supabase } from '@/lib/supabase';
 import {
@@ -682,7 +683,9 @@ function AuthGate() {
 export default function AppLayout() {
   return (
     <AuthProvider>
-      <AuthGate />
+      <PermissionProvider>
+        <AuthGate />
+      </PermissionProvider>
     </AuthProvider>
   );
 }

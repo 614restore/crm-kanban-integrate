@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { useAuth } from '@/lib/authContext';
 
 // Enhanced Permission System for TrussCTR CRM
 export interface Permission {
@@ -185,32 +186,30 @@ export const DEFAULT_ROLES: UserRole[] = [
 
 // Permission Provider Component
 export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { profile } = useAuth();
   const [user, setUser] = useState<User | null>(null);
   const [permissions, setPermissions] = useState<Permission[]>([]);
 
+  // Sync permissions from the real authenticated profile
   useEffect(() => {
-    // Load user from localStorage or initialize with owner role for demo
-    const savedUser = localStorage.getItem('currentUser');
-    if (savedUser) {
-      const parsedUser = JSON.parse(savedUser);
-      setUser(parsedUser);
-      setPermissions([...parsedUser.role.permissions, ...(parsedUser.permissions || [])]);
-    } else {
-      // Default to owner role for initial setup
-      const ownerRole = DEFAULT_ROLES.find(role => role.id === 'owner')!;
-      const defaultUser: User = {
-        id: 'user_owner',
-        email: 'owner@trusscrm.com',
-        firstName: 'System',
-        lastName: 'Owner',
-        role: ownerRole,
-        isActive: true
+    if (profile) {
+      const roleId = profile.role || 'owner';
+      const matchedRole = DEFAULT_ROLES.find(r => r.id === roleId) ?? DEFAULT_ROLES.find(r => r.id === 'owner')!;
+      const syncedUser: User = {
+        id: profile.id,
+        email: profile.email,
+        firstName: profile.first_name || '',
+        lastName: profile.last_name || '',
+        role: matchedRole,
+        isActive: profile.is_active !== false,
       };
-      setUser(defaultUser);
-      setPermissions(ownerRole.permissions);
-      localStorage.setItem('currentUser', JSON.stringify(defaultUser));
+      setUser(syncedUser);
+      setPermissions(matchedRole.permissions);
+    } else {
+      setUser(null);
+      setPermissions([]);
     }
-  }, []);
+  }, [profile?.id, profile?.role, profile?.is_active]);
 
   const hasPermission = (resource: ResourceType, action: ActionType): boolean => {
     if (!user || !user.isActive) return false;
@@ -256,15 +255,12 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const updatedUser = { ...user, role: newRole };
     setUser(updatedUser);
     setPermissions([...newRole.permissions, ...(updatedUser.permissions || [])]);
-    localStorage.setItem('currentUser', JSON.stringify(updatedUser));
   };
 
   const updatePermissions = (newPermissions: Permission[]): void => {
     setPermissions(newPermissions);
     if (user) {
-      const updatedUser = { ...user, permissions: newPermissions };
-      setUser(updatedUser);
-      localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+      setUser({ ...user, permissions: newPermissions });
     }
   };
 
