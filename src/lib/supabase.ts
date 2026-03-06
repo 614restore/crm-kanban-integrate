@@ -1,5 +1,15 @@
 import { createClient } from '@supabase/supabase-js';
 
+// Capture recovery token from hash BEFORE Supabase clears it at client init time
+if (typeof window !== 'undefined') {
+  try {
+    const hash = window.location.hash;
+    if (hash.includes('type=recovery')) {
+      sessionStorage.setItem('pending_password_reset', 'true');
+    }
+  } catch (_) { /* ignore */ }
+}
+
 // Environment variable configuration - REQUIRED FOR SECURITY
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
