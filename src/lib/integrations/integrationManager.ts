@@ -8,6 +8,7 @@ import {
   APIError,
   INTEGRATION_TEMPLATES
 } from './apiTypes';
+import { supabase } from '@/lib/supabase';
 
 class IntegrationManager {
   private integrations: Map<string, BaseIntegration> = new Map();
@@ -451,16 +452,62 @@ class IntegrationManager {
     this.webhookHandlers.set(integration, handler);
   }
 
-  // Save integrations to storage
+  // Save integrations to Supabase (falls back to localStorage if not authenticated)
   private async saveIntegrations(): Promise<void> {
-    const integrations = Array.from(this.integrations.values());
-    localStorage.setItem('integrations', JSON.stringify(integrations));
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      // Fallback: save non-sensitive settings only (no credentials) to localStorage
+      const safe = Array.from(this.integrations.values()).map(i => ({
+        id: i.id, enabled: i.enabled, settings: i.settings
+      }));
+      localStorage.setItem('integrations_meta', JSON.stringify(safe));
+      return;
+    }
+
+    // Get company_id from profile
+    const { data: profile } = await supabase.from('profiles').select('company_id').eq('id', user.id).single();
+    if (!profile?.company_id) return;
+
+    for (const integration of this.integrations.values()) {
+      await supabase.from('company_integrations').upsert({
+        company_id: profile.company_id,
+        integration_id: integration.id,
+        credentials: integration.credentials || {},
+        settings: integration.settings || {},
+        enabled: integration.enabled,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'company_id,integration_id' });
+    }
+    // Remove old plaintext localStorage data if present
+    localStorage.removeItem('integrations');
   }
 
-  // Load integrations from storage
+  // Load integrations from Supabase (falls back to localStorage)
   private loadSavedIntegrations(): BaseIntegration[] {
-    const saved = localStorage.getItem('integrations');
+    // Supabase load is async — handled separately via loadSavedIntegrationsAsync()
+    const saved = localStorage.getItem('integrations_meta');
     return saved ? JSON.parse(saved) : [];
+  }
+
+  // Async load from Supabase — call this after auth is ready
+  async loadSavedIntegrationsAsync(): Promise<void> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data } = await supabase
+      .from('company_integrations')
+      .select('*');
+
+    if (data) {
+      for (const row of data) {
+        const existing = this.integrations.get(row.integration_id);
+        if (existing) {
+          existing.credentials = row.credentials || {};
+          existing.settings = row.settings || {};
+          existing.enabled = row.enabled;
+        }
+      }
+    }
   }
 
   // API Methods for specific integrations
