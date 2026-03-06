@@ -991,6 +991,23 @@ export default function EstimatesView() {
                   <Printer size={16} />
                   Print / PDF
                 </button>
+                <button
+                  onClick={() => {
+                    dispatch({
+                      type: 'TOGGLE_INVOICE_MODAL',
+                      prefill: {
+                        contactId: viewingEstimate.contactId,
+                        items: viewingEstimate.items,
+                        notes: viewingEstimate.notes,
+                      },
+                    });
+                    setViewingEstimate(null);
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 text-purple-700 border border-purple-300 rounded-lg hover:bg-purple-50 transition-colors text-sm"
+                >
+                  <FileText size={16} />
+                  Convert to Invoice
+                </button>
               </div>
               {viewingEstimate.status === 'draft' && (
                 <button

@@ -85,6 +85,7 @@ const initialState: CRMState = {
   showQuickAdd: false,
   showInvoiceModal: false,
   selectedInvoiceId: null,
+  invoiceModalPrefill: null,
   isLoading: true,
   isInitialized: false,
   notifications: [],

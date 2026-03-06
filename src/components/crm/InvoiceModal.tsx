@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
@@ -9,12 +9,36 @@ import { X, Plus, Trash2, Save, Send, DollarSign } from 'lucide-react';
 export default function InvoiceModal() {
   const { state, dispatch } = useCRM();
   const { profile } = useAuth();
-  const [selectedContactId, setSelectedContactId] = useState('');
+  const prefill = state.invoiceModalPrefill;
+  const [selectedContactId, setSelectedContactId] = useState(prefill?.contactId || '');
   const [dueDate, setDueDate] = useState('');
-  const [items, setItems] = useState<InvoiceItem[]>([
-    { description: '', quantity: 1, unitPrice: 0, total: 0 },
-  ]);
-  const [notes, setNotes] = useState('');
+  const [items, setItems] = useState<InvoiceItem[]>(
+    prefill?.items?.length
+      ? prefill.items.map((i: any) => ({
+          description: i.description || '',
+          quantity: Number(i.quantity) || 1,
+          unitPrice: Number(i.unitPrice || i.unit_price || 0),
+          total: Number(i.total || 0),
+        }))
+      : [{ description: '', quantity: 1, unitPrice: 0, total: 0 }]
+  );
+  const [notes, setNotes] = useState(prefill?.notes || '');
+
+  // Re-initialize if prefill changes (new conversion)
+  useEffect(() => {
+    if (prefill) {
+      if (prefill.contactId) setSelectedContactId(prefill.contactId);
+      if (prefill.items?.length) {
+        setItems(prefill.items.map((i: any) => ({
+          description: i.description || '',
+          quantity: Number(i.quantity) || 1,
+          unitPrice: Number(i.unitPrice || i.unit_price || 0),
+          total: Number(i.total || 0),
+        })));
+      }
+      if (prefill.notes) setNotes(prefill.notes);
+    }
+  }, [state.invoiceModalPrefill]);
 
   if (!state.showInvoiceModal) return null;
 
