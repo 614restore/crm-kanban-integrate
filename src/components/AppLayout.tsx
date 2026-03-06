@@ -163,7 +163,7 @@ function LoadingScreen() {
         <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
           <Building2 size={32} className="text-white" />
         </div>
-        <h1 className="text-2xl font-bold text-white mb-2">614 Restore CRM</h1>
+        <h1 className="text-2xl font-bold text-white mb-2">TrussCTR</h1>
         <div className="flex items-center justify-center gap-2 text-slate-400">
           <Loader2 className="animate-spin" size={20} />
           <span>Loading your data...</span>
