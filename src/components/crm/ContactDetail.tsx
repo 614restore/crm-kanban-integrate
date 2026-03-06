@@ -2401,6 +2401,54 @@ export default function ContactDetail() {
                   <p className="text-sm text-gray-600 bg-gray-50 rounded-lg p-3">{viewingProject.notes}</p>
                 </div>
               )}
+
+              {/* Linked Work Orders */}
+              {(() => {
+                const linkedWOs = state.workOrders.filter(wo => wo.projectId === viewingProject.id);
+                return linkedWOs.length > 0 ? (
+                  <div>
+                    <p className="text-sm font-semibold text-gray-700 mb-2">Work Orders ({linkedWOs.length})</p>
+                    <div className="space-y-2">
+                      {linkedWOs.map(wo => (
+                        <div key={wo.id} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 text-sm">
+                          <div>
+                            <span className="font-medium text-gray-900">#{wo.workOrderNumber}</span>
+                            <span className="text-gray-500 ml-2">{wo.title}</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${wo.status === 'completed' ? 'bg-green-100 text-green-700' : wo.status === 'in_progress' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>{wo.status.replace('_', ' ')}</span>
+                            <span className="font-semibold text-gray-700">{formatCurrency(wo.totalCost || 0)}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null;
+              })()}
+
+              {/* Linked Material Orders */}
+              {(() => {
+                const linkedMOs = state.materialOrders.filter(mo => (mo as any).projectId === viewingProject.id || mo.jobId === viewingProject.id);
+                return linkedMOs.length > 0 ? (
+                  <div>
+                    <p className="text-sm font-semibold text-gray-700 mb-2">Material Orders ({linkedMOs.length})</p>
+                    <div className="space-y-2">
+                      {linkedMOs.map(mo => (
+                        <div key={mo.id} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 text-sm">
+                          <div>
+                            <span className="font-medium text-gray-900">#{mo.orderNumber}</span>
+                            <span className="text-gray-500 ml-2">{mo.supplierName}</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${mo.status === 'delivered' ? 'bg-green-100 text-green-700' : mo.status === 'ordered' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>{mo.status}</span>
+                            <span className="font-semibold text-gray-700">{formatCurrency(mo.total || 0)}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null;
+              })()}
             </div>
 
             <div className="p-6 border-t border-gray-200 flex justify-between">

@@ -245,6 +245,7 @@ export interface DbMaterialOrder {
   company_id: string;
   supplier_id: string;
   contact_id?: string;
+  project_id?: string;
   job_id?: string;
   order_number?: string;
   order_date: string;

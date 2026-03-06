@@ -840,7 +840,7 @@ export default function WorkOrdersView() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Link to Project (Optional)
+                    Link to Project (costs auto-roll up)
                   </label>
                   <select
                     value={selectedProjectId}
@@ -849,7 +849,7 @@ export default function WorkOrdersView() {
                   >
                     <option value="">No project</option>
                     {state.projects
-                      .filter(p => p.contactId === selectedContactId)
+                      .filter(p => !selectedContactId || p.contactId === selectedContactId)
                       .map((project) => (
                         <option key={project.id} value={project.id}>
                           {project.projectNumber} - {project.name}
