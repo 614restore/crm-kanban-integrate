@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
+import { sendEmail } from '@/lib/emailApi';
 import { Estimate, EstimateItem, Contact } from '@/lib/crmData';
 import { exportEstimatesToExcel } from '@/lib/exportUtils';
 import {
@@ -22,6 +23,8 @@ import {
   Clock,
   CheckCircle,
   Download,
+  Printer,
+  FolderPlus,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -53,6 +56,7 @@ export default function EstimatesView() {
   const [editingEstimate, setEditingEstimate] = useState<Estimate | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const [viewingEstimate, setViewingEstimate] = useState<Estimate | null>(null);
 
   // Form state
   const [selectedContactId, setSelectedContactId] = useState('');
@@ -242,10 +246,10 @@ export default function EstimatesView() {
         subtotal,
         tax,
         total,
-        validity_date: validityDate,
+        validity_date: validityDate || undefined,
         status: 'draft' as const,
-        notes,
-        terms_and_conditions: terms,
+        notes: notes || undefined,
+        terms_and_conditions: terms || undefined,
       };
 
       if (editingEstimate) {
@@ -253,19 +257,23 @@ export default function EstimatesView() {
         if (updated) {
           dispatch({ type: 'UPDATE_ESTIMATE', payload: mapDbEstimateToApp(updated) });
           toast.success('Estimate updated');
+          handleCloseModal();
+        } else {
+          toast.error('Failed to save estimate. Please try again.');
         }
       } else {
         const created = await db.createEstimate(estimateData);
         if (created) {
           dispatch({ type: 'ADD_ESTIMATE', payload: mapDbEstimateToApp(created) });
           toast.success('Estimate created');
+          handleCloseModal();
+        } else {
+          toast.error('Failed to create estimate. Please try again.');
         }
       }
-
-      handleCloseModal();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving estimate:', error);
-      toast.error('Failed to save estimate');
+      toast.error(`Failed to save estimate: ${error?.message || 'Unknown error'}`);
     } finally {
       setIsSaving(false);
     }
@@ -273,14 +281,136 @@ export default function EstimatesView() {
 
   const handleSendEstimate = async (estimateId: string) => {
     try {
+      const estimate = state.estimates.find((e) => e.id === estimateId);
+      if (!estimate) { toast.error('Estimate not found'); return; }
+
+      const contact = state.contacts.find((c) => c.id === estimate.contactId);
+      if (!contact?.email) {
+        // Still mark as sent even without email
+        const updated = await db.markEstimateSent(estimateId);
+        if (updated) {
+          dispatch({ type: 'UPDATE_ESTIMATE', payload: mapDbEstimateToApp(updated) });
+          toast.success('Estimate marked as sent (no email on file for this customer)');
+        }
+        return;
+      }
+
+      const companyProfile = await db.getCompany(profile?.company_id || '').catch(() => null);
+      const fromEmail = (companyProfile as any)?.from_email || undefined;
+
+      // Build estimate items HTML
+      const itemsHtml = (estimate.items || []).map((item: EstimateItem) =>
+        `<tr style="border-bottom:1px solid #e5e7eb">
+          <td style="padding:8px 12px">${item.description}</td>
+          <td style="padding:8px 12px;text-align:center">${item.quantity} ${item.unit || ''}</td>
+          <td style="padding:8px 12px;text-align:right">$${Number(item.unitPrice).toFixed(2)}</td>
+          <td style="padding:8px 12px;text-align:right;font-weight:600">$${Number(item.total).toFixed(2)}</td>
+        </tr>`
+      ).join('');
+
+      const companyName = (companyProfile as any)?.name || '614 Restore';
+
+      await sendEmail({
+        to: contact.email,
+        from: fromEmail,
+        subject: `Estimate ${estimate.estimateNumber} from ${companyName}`,
+        html: `
+          <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
+            <h2 style="color:#1e40af">Estimate from ${companyName}</h2>
+            <p>Hi ${contact.firstName},</p>
+            <p>Please find your estimate below. It is valid until ${estimate.validUntil ? new Date(estimate.validUntil).toLocaleDateString() : 'further notice'}.</p>
+            <h3 style="margin-bottom:4px">${estimate.title}</h3>
+            <table style="width:100%;border-collapse:collapse;margin:16px 0">
+              <thead style="background:#f3f4f6">
+                <tr>
+                  <th style="padding:8px 12px;text-align:left">Description</th>
+                  <th style="padding:8px 12px;text-align:center">Qty</th>
+                  <th style="padding:8px 12px;text-align:right">Unit Price</th>
+                  <th style="padding:8px 12px;text-align:right">Total</th>
+                </tr>
+              </thead>
+              <tbody>${itemsHtml}</tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="3" style="padding:12px;text-align:right;font-weight:bold">Total</td>
+                  <td style="padding:12px;text-align:right;font-weight:bold;font-size:1.1em">$${Number(estimate.total).toFixed(2)}</td>
+                </tr>
+              </tfoot>
+            </table>
+            ${estimate.notes ? `<p><strong>Notes:</strong> ${estimate.notes}</p>` : ''}
+            ${estimate.terms ? `<p style="font-size:0.85em;color:#6b7280"><strong>Terms:</strong> ${estimate.terms}</p>` : ''}
+            <p>Please reply to this email or call us if you have any questions.</p>
+            <p>Thank you,<br/>${companyName}</p>
+          </div>`,
+      });
+
       const updated = await db.markEstimateSent(estimateId);
       if (updated) {
         dispatch({ type: 'UPDATE_ESTIMATE', payload: mapDbEstimateToApp(updated) });
-        toast.success('Estimate marked as sent');
       }
+      toast.success(`Estimate emailed to ${contact.email}`);
     } catch (error) {
       console.error('Error sending estimate:', error);
-      toast.error('Failed to send estimate');
+      toast.error(error instanceof Error ? error.message : 'Failed to send estimate');
+    }
+  };
+
+  const handleConvertToProject = async (estimate: Estimate) => {
+    if (!profile?.company_id || !profile?.id) {
+      toast.error('Profile not loaded. Please try again.');
+      return;
+    }
+    // Need the DB estimate to pass to createProjectFromEstimate
+    const dbEstimate = {
+      id: estimate.id,
+      company_id: profile.company_id,
+      contact_id: estimate.contactId,
+      estimate_number: estimate.estimateNumber,
+      title: estimate.title,
+      description: estimate.description,
+      status: estimate.status,
+      total: estimate.total,
+      subtotal: estimate.amount,
+      tax: estimate.tax,
+      notes: estimate.notes,
+      items: estimate.items,
+      created_at: estimate.createdAt,
+      updated_at: estimate.updatedAt || estimate.createdAt,
+    } as any;
+    try {
+      const project = await db.createProjectFromEstimate(dbEstimate, profile.id);
+      if (project) {
+        toast.success(`Project "${project.name}" created from estimate`);
+        setViewingEstimate(null);
+      } else {
+        toast.error('Failed to create project');
+      }
+    } catch (err: any) {
+      toast.error(`Failed to create project: ${err.message}`);
+    }
+  };
+
+  const handleAcceptEstimate = async (estimate: Estimate) => {
+    if (!profile?.company_id || !profile?.id) {
+      toast.error('Profile not loaded. Please try again.');
+      return;
+    }
+    try {
+      const updated = await db.markEstimateAccepted(estimate.id, profile.id);
+      if (updated) {
+        dispatch({ type: 'UPDATE_ESTIMATE', payload: mapDbEstimateToApp(updated) });
+        // Auto-create project on acceptance
+        const dbEstimate = { ...updated, company_id: profile.company_id } as any;
+        const project = await db.createProjectFromEstimate(dbEstimate, profile.id);
+        if (project) {
+          toast.success('Estimate accepted — project created automatically');
+        } else {
+          toast.success('Estimate marked as accepted');
+        }
+        setViewingEstimate(null);
+      }
+    } catch (err: any) {
+      toast.error(`Failed to accept estimate: ${err.message}`);
     }
   };
 
@@ -344,6 +474,101 @@ export default function EstimatesView() {
       month: 'short',
       day: 'numeric'
     });
+  };
+
+  const printEstimate = (estimate: Estimate) => {
+    const contactName = getContactName(estimate.contactId);
+    const itemsHtml = estimate.items && estimate.items.length > 0
+      ? `<table style="width:100%;border-collapse:collapse;margin-bottom:24px">
+          <thead>
+            <tr style="background:#f3f4f6">
+              <th style="text-align:left;padding:10px 12px;border-bottom:2px solid #e5e7eb;font-size:13px">Description</th>
+              <th style="text-align:right;padding:10px 12px;border-bottom:2px solid #e5e7eb;font-size:13px">Qty</th>
+              <th style="text-align:right;padding:10px 12px;border-bottom:2px solid #e5e7eb;font-size:13px">Unit Price</th>
+              <th style="text-align:right;padding:10px 12px;border-bottom:2px solid #e5e7eb;font-size:13px">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${estimate.items.map((item: any) => `
+              <tr>
+                <td style="padding:10px 12px;border-bottom:1px solid #f3f4f6">${item.description || ''}</td>
+                <td style="text-align:right;padding:10px 12px;border-bottom:1px solid #f3f4f6">${item.quantity || 0}</td>
+                <td style="text-align:right;padding:10px 12px;border-bottom:1px solid #f3f4f6">$${(item.unitPrice || item.unit_price || 0).toFixed(2)}</td>
+                <td style="text-align:right;padding:10px 12px;border-bottom:1px solid #f3f4f6">$${(item.total || 0).toFixed(2)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>`
+      : '';
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Estimate ${estimate.estimateNumber}</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111; margin: 0; padding: 40px; }
+    @media print { body { padding: 20px; } }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; padding-bottom: 24px; border-bottom: 2px solid #e5e7eb; }
+    .company-name { font-size: 24px; font-weight: 700; color: #1d4ed8; }
+    .estimate-meta { text-align: right; }
+    .estimate-number { font-size: 20px; font-weight: 700; color: #111; }
+    .badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; text-transform: uppercase; background: #dbeafe; color: #1d4ed8; margin-top: 6px; }
+    .section-title { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: #6b7280; margin-bottom: 8px; }
+    .bill-to { margin-bottom: 32px; }
+    .bill-to p { margin: 2px 0; font-size: 15px; }
+    .totals { display: flex; justify-content: flex-end; margin-bottom: 32px; }
+    .totals-box { width: 280px; }
+    .totals-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; color: #374151; }
+    .totals-row.grand { font-size: 16px; font-weight: 700; border-top: 2px solid #e5e7eb; padding-top: 10px; color: #111; }
+    .totals-row.grand span:last-child { color: #1d4ed8; }
+    .notes-section { background: #f9fafb; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+    .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #9ca3af; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <div class="company-name">${profile?.company_id ? 'TrussCTR' : 'Your Company'}</div>
+    </div>
+    <div class="estimate-meta">
+      <div class="estimate-number">Estimate ${estimate.estimateNumber}</div>
+      ${estimate.validUntil ? `<div style="font-size:13px;color:#6b7280;margin-top:4px">Valid until ${new Date(estimate.validUntil).toLocaleDateString()}</div>` : ''}
+      <div class="badge">${estimate.status.toUpperCase()}</div>
+    </div>
+  </div>
+
+  <div class="bill-to">
+    <div class="section-title">Prepared For</div>
+    <p><strong>${contactName}</strong></p>
+    ${estimate.title ? `<p style="color:#6b7280">${estimate.title}</p>` : ''}
+  </div>
+
+  ${estimate.description ? `<p style="color:#374151;margin-bottom:24px">${estimate.description}</p>` : ''}
+
+  ${itemsHtml}
+
+  <div class="totals">
+    <div class="totals-box">
+      <div class="totals-row"><span>Subtotal</span><span>$${(estimate.amount || 0).toFixed(2)}</span></div>
+      <div class="totals-row"><span>Tax</span><span>$${(estimate.tax || 0).toFixed(2)}</span></div>
+      <div class="totals-row grand"><span>Total</span><span>$${(estimate.total || 0).toFixed(2)}</span></div>
+    </div>
+  </div>
+
+  ${estimate.notes ? `<div class="notes-section"><div class="section-title">Notes</div><p style="margin:0;font-size:14px;color:#374151">${estimate.notes}</p></div>` : ''}
+  ${estimate.terms ? `<div class="notes-section"><div class="section-title">Terms &amp; Conditions</div><p style="margin:0;font-size:14px;color:#374151">${estimate.terms}</p></div>` : ''}
+
+  <div class="footer">Generated ${new Date().toLocaleDateString()} · ${estimate.estimateNumber}</div>
+</body>
+</html>`;
+
+    const win = window.open('', '_blank');
+    if (win) {
+      win.document.write(html);
+      win.document.close();
+      win.onload = () => win.print();
+    }
   };
 
   return (
@@ -444,6 +669,13 @@ export default function EstimatesView() {
                       <Send size={18} />
                     </button>
                   )}
+                  <button
+                    onClick={() => setViewingEstimate(estimate)}
+                    className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                    title="View estimate"
+                  >
+                    <Eye size={18} />
+                  </button>
                   <button
                     onClick={() => handleOpenModal(estimate)}
                     className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
@@ -763,6 +995,171 @@ export default function EstimatesView() {
                 <Save size={18} />
                 {isSaving ? 'Saving...' : 'Save Estimate'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View Estimate Detail Modal */}
+      {viewingEstimate && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">{viewingEstimate.title}</h2>
+                <p className="text-sm text-gray-500 mt-1">{viewingEstimate.estimateNumber} · {getContactName(viewingEstimate.contactId)}</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <StatusBadge status={viewingEstimate.status} />
+                <button onClick={() => setViewingEstimate(null)} className="text-gray-400 hover:text-gray-600">
+                  <X size={24} />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Description */}
+              {viewingEstimate.description && (
+                <p className="text-gray-600">{viewingEstimate.description}</p>
+              )}
+
+              {/* Line Items */}
+              {viewingEstimate.items && viewingEstimate.items.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">Line Items</h3>
+                  <div className="border border-gray-200 rounded-lg overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="text-left px-4 py-3 font-medium text-gray-600">Description</th>
+                          <th className="text-right px-4 py-3 font-medium text-gray-600">Qty</th>
+                          <th className="text-right px-4 py-3 font-medium text-gray-600">Unit Price</th>
+                          <th className="text-right px-4 py-3 font-medium text-gray-600">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {viewingEstimate.items.map((item: any, i: number) => (
+                          <tr key={i} className="hover:bg-gray-50">
+                            <td className="px-4 py-3 text-gray-900">{item.description}</td>
+                            <td className="px-4 py-3 text-right text-gray-600">{item.quantity}</td>
+                            <td className="px-4 py-3 text-right text-gray-600">{formatCurrency(item.unitPrice || item.unit_price || 0)}</td>
+                            <td className="px-4 py-3 text-right font-medium text-gray-900">{formatCurrency(item.total || 0)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Totals */}
+              <div className="flex justify-end">
+                <div className="w-64 space-y-2 text-sm">
+                  <div className="flex justify-between text-gray-600">
+                    <span>Subtotal</span>
+                    <span>{formatCurrency(viewingEstimate.amount)}</span>
+                  </div>
+                  <div className="flex justify-between text-gray-600">
+                    <span>Tax</span>
+                    <span>{formatCurrency(viewingEstimate.tax)}</span>
+                  </div>
+                  <div className="flex justify-between font-bold text-gray-900 text-base border-t border-gray-200 pt-2">
+                    <span>Total</span>
+                    <span className="text-blue-600">{formatCurrency(viewingEstimate.total)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Notes & Terms */}
+              {(viewingEstimate.notes || viewingEstimate.terms) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {viewingEstimate.notes && (
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Notes</h4>
+                      <p className="text-sm text-gray-700 whitespace-pre-wrap">{viewingEstimate.notes}</p>
+                    </div>
+                  )}
+                  {viewingEstimate.terms && (
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Terms & Conditions</h4>
+                      <p className="text-sm text-gray-700 whitespace-pre-wrap">{viewingEstimate.terms}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Valid Until */}
+              {viewingEstimate.validUntil && (
+                <p className="text-sm text-gray-500 flex items-center gap-2">
+                  <Calendar size={14} />
+                  Valid until {formatDate(viewingEstimate.validUntil)}
+                </p>
+              )}
+            </div>
+
+            {/* Footer Actions */}
+            <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50 rounded-b-xl">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { setViewingEstimate(null); handleOpenModal(viewingEstimate); }}
+                  className="flex items-center gap-2 px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-white transition-colors text-sm"
+                >
+                  <Edit2 size={16} />
+                  Edit
+                </button>
+                <button
+                  onClick={() => printEstimate(viewingEstimate)}
+                  className="flex items-center gap-2 px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-white transition-colors text-sm"
+                >
+                  <Printer size={16} />
+                  Print / PDF
+                </button>
+                <button
+                  onClick={() => {
+                    dispatch({
+                      type: 'TOGGLE_INVOICE_MODAL',
+                      prefill: {
+                        contactId: viewingEstimate.contactId,
+                        items: viewingEstimate.items,
+                        notes: viewingEstimate.notes,
+                      },
+                    });
+                    setViewingEstimate(null);
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 text-purple-700 border border-purple-300 rounded-lg hover:bg-purple-50 transition-colors text-sm"
+                >
+                  <FileText size={16} />
+                  Convert to Invoice
+                </button>
+                <button
+                  onClick={() => handleConvertToProject(viewingEstimate)}
+                  className="flex items-center gap-2 px-4 py-2 text-green-700 border border-green-300 rounded-lg hover:bg-green-50 transition-colors text-sm"
+                >
+                  <FolderPlus size={16} />
+                  Convert to Project
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                {viewingEstimate.status === 'draft' && (
+                  <button
+                    onClick={() => { handleSendEstimate(viewingEstimate.id); setViewingEstimate(null); }}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                  >
+                    <Send size={16} />
+                    Send Estimate
+                  </button>
+                )}
+                {(viewingEstimate.status === 'sent' || viewingEstimate.status === 'viewed') && (
+                  <button
+                    onClick={() => handleAcceptEstimate(viewingEstimate)}
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
+                  >
+                    <CheckCircle size={16} />
+                    Mark Accepted → Create Project
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useCRM } from '@/lib/crmStore';
+import { useAuth } from '@/lib/authContext';
 import { Appointment, Contact } from '@/lib/crmData';
 import { db } from '@/lib/database';
 import {
@@ -74,6 +75,8 @@ export default function AppointmentModal({
   editingAppointment,
 }: AppointmentModalProps) {
   const { state, dispatch } = useCRM();
+  const { profile } = useAuth();
+  const effectiveCompanyId = state.companyId || profile?.company_id;
   const mentionTargets = useMemo(
     () => getMentionTargets(state.teamMembers),
     [state.teamMembers]
@@ -221,7 +224,7 @@ export default function AppointmentModal({
       return;
     }
 
-    if (!state.companyId) {
+    if (!effectiveCompanyId) {
       toast.error('No company selected. Please refresh and sign in again.');
       return;
     }
@@ -273,7 +276,7 @@ export default function AppointmentModal({
       } else {
         // Create new
         const created = await db.createAppointment({
-          company_id: state.companyId,
+          company_id: effectiveCompanyId,
           contact_id: contactId,
           title: title.trim(),
           type,
@@ -320,7 +323,7 @@ export default function AppointmentModal({
         // If no assignee, create unassigned notification
         if (!assignedTo) {
           const notification = await db.createNotification({
-            company_id: state.companyId,
+            company_id: effectiveCompanyId,
             type: 'unassigned_appointment',
             title: 'Unassigned Appointment',
             message: `"${title.trim()}" with ${contactName} on ${date} at ${formatTimeLabel(time)} has no team member assigned.`,
@@ -352,7 +355,7 @@ export default function AppointmentModal({
             );
             if (target) {
               await db.createNotification({
-                company_id: state.companyId,
+                company_id: effectiveCompanyId,
                 user_id: target.id,
                 type: 'mention',
                 title: 'You were tagged in an appointment',

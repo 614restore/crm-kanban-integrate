@@ -100,6 +100,20 @@ export default function WorkOrdersView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Auto-fill location from selected contact (only when creating, not editing)
+  useEffect(() => {
+    if (!editingWorkOrder && selectedContactId) {
+      const contact = state.contacts.find(c => c.id === selectedContactId);
+      if (contact) {
+        if (contact.address) setAddress(contact.address);
+        if (contact.city) setCity(contact.city);
+        if (contact.state) setWorkOrderState(contact.state);
+        if (contact.zip) setZip(contact.zip);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedContactId]);
+
   const loadWorkOrders = async () => {
     if (!profile?.company_id) return;
     try {
@@ -318,7 +332,7 @@ export default function WorkOrdersView() {
       handleCloseModal();
     } catch (error) {
       console.error('Error saving work order:', error);
-      toast.error('Failed to save work order');
+      toast.error(error instanceof Error ? error.message : 'Failed to save work order');
     } finally {
       setIsSaving(false);
     }
@@ -840,7 +854,7 @@ export default function WorkOrdersView() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Link to Project (Optional)
+                    Link to Project (costs auto-roll up)
                   </label>
                   <select
                     value={selectedProjectId}
@@ -849,7 +863,7 @@ export default function WorkOrdersView() {
                   >
                     <option value="">No project</option>
                     {state.projects
-                      .filter(p => p.contactId === selectedContactId)
+                      .filter(p => !selectedContactId || p.contactId === selectedContactId)
                       .map((project) => (
                         <option key={project.id} value={project.id}>
                           {project.projectNumber} - {project.name}

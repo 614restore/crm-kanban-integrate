@@ -21,8 +21,9 @@ interface AuthContextType {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
+  isPasswordReset: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
-  signUp: (email: string, password: string, metadata?: { first_name?: string; last_name?: string; role?: string; company_id?: string }) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, metadata?: { first_name?: string; last_name?: string; role?: string; company_id?: string; company_name?: string }) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: Error | null }>;
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: Error | null }>;
@@ -35,6 +36,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  // Detect recovery token — captured in supabase.ts before Supabase clears the hash
+  const [isPasswordReset, setIsPasswordReset] = useState(() => {
+    try {
+      return sessionStorage.getItem('pending_password_reset') === 'true';
+    } catch (_) { return false; }
+  });
 
   // Fetch user profile
   const fetchProfile = async (userId: string) => {
@@ -84,16 +91,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const setupSuccess = await setupNewUser(userId, userEmail);
         
         if (setupSuccess) {
-          // Fetch profile again to get the new company_id
           const updatedProfile = await fetchProfile(userId);
-          if (updatedProfile?.company_id) {
-          } else {
+          if (!updatedProfile?.company_id) {
             console.warn('⚠️ Setup reported success but no company_id found, retrying...');
-            // Retry once after a brief delay
             await new Promise(resolve => setTimeout(resolve, 1000));
             const retryProfile = await fetchProfile(userId);
-            if (retryProfile?.company_id) {
-            } else {
+            if (!retryProfile?.company_id) {
               console.error('❌ Company setup failed even after retry');
             }
             return retryProfile;
@@ -103,6 +106,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.error('❌ Company setup failed');
         }
       } else if (profileData?.company_id) {
+        // company_id already set, nothing to do
       }
       
       return profileData;
@@ -113,29 +117,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        const profileData = await ensureUserSetup(session.user.id, session.user.email || '');
-        setProfile(profileData);
-      }
-      
-      setLoading(false);
-    });
+    let profileFetchInProgress = false;
+    let recoveryEventFired = false;
+    const pendingReset = (() => { try { return sessionStorage.getItem('pending_password_reset') === 'true'; } catch(_) { return false; } })();
 
-    // Listen for auth changes
+    const loadProfile = async (userId: string, email: string) => {
+      if (profileFetchInProgress) return;
+      profileFetchInProgress = true;
+      try {
+        const profileData = await ensureUserSetup(userId, email);
+        setProfile(profileData);
+      } finally {
+        profileFetchInProgress = false;
+      }
+    };
+
+    // Set up onAuthStateChange FIRST so PASSWORD_RECOVERY fires before getSession resolves
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
 
+      // Handle password recovery — show reset form instead of app
+      if (event === 'PASSWORD_RECOVERY') {
+        recoveryEventFired = true;
+        setSession(session);
+        setUser(session?.user ?? null);
+        setIsPasswordReset(true);
+        setLoading(false);
+        try { sessionStorage.removeItem('pending_password_reset'); } catch (_) { /* ignore */ }
+        return;
+      }
+
       // For token refreshes, just update the session/user objects.
-      // The profile (including company_id) hasn't changed, so avoid an
-      // expensive re-fetch that can momentarily null-out company context.
       if (event === 'TOKEN_REFRESHED') {
         setSession(session);
         setUser(session?.user ?? null);
-        // Keep the existing profile — no need to re-fetch
         return;
       }
 
@@ -148,15 +162,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      // For SIGNED_IN, INITIAL_SESSION, USER_UPDATED, etc. — full refresh
+      // For SIGNED_IN, INITIAL_SESSION, USER_UPDATED, etc.
+      // Don't override if we're in a recovery flow
+      if (recoveryEventFired || pendingReset) return;
       setSession(session);
       setUser(session?.user ?? null);
       
       if (session?.user) {
-        const profileData = await ensureUserSetup(session.user.id, session.user.email || '');
-        setProfile(profileData);
+        await loadProfile(session.user.id, session.user.email || '');
       } else {
         setProfile(null);
+      }
+      
+      setLoading(false);
+    });
+
+    // Get initial session — skip everything if this is a password reset
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      // If pending reset or recovery already fired, don't interfere — wait for PASSWORD_RECOVERY event
+      if (recoveryEventFired || pendingReset) return;
+
+      setSession(session);
+      setUser(session?.user ?? null);
+      
+      if (session?.user) {
+        await loadProfile(session.user.id, session.user.email || '');
       }
       
       setLoading(false);
@@ -274,7 +304,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signUp = async (
     email: string,
     password: string,
-    metadata?: { first_name?: string; last_name?: string; role?: string; company_id?: string }
+    metadata?: { first_name?: string; last_name?: string; role?: string; company_id?: string; company_name?: string }
   ) => {
     try {
       if (isDemoMode) {
@@ -349,14 +379,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Update profile with additional info (retry up to 3 times)
         let profileUpdateSuccess = false;
         for (let attempt = 1; attempt <= 3; attempt++) {
-          const { error: profileError, count } = await supabase
-            .from('profiles')
-            .update({
+          const profileUpdates: Record<string, unknown> = {
               first_name: metadata?.first_name,
               last_name: metadata?.last_name,
               role: userRole,
-              company_id: metadata?.company_id, // Set company_id if provided (invite signup)
-            })
+            };
+          // Only set company_id if provided (invite signup) — don't overwrite trigger-created company_id
+          if (metadata?.company_id) {
+            profileUpdates.company_id = metadata.company_id;
+          }
+          const { error: profileError, count } = await supabase
+            .from('profiles')
+            .update(profileUpdates)
             .eq('id', data.user.id);
           
           if (profileError) {
@@ -375,7 +409,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Only run first-time setup if NOT signing up via invite
         // (invite signup means they're joining an existing company)
         if (!metadata?.company_id) {
-          await setupNewUser(data.user.id, data.user.email || email);
+          await setupNewUser(data.user.id, data.user.email || email, metadata?.company_name);
         }
         
         // Re-fetch and set profile so the UI immediately reflects the correct role
@@ -411,7 +445,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { error } = await supabase.auth.signOut();
       if (error) {
         console.error('[Auth] Sign out error:', error);
-      } else {
       }
     } catch (err) {
       console.error('[Auth] Sign out failed:', err);
@@ -428,7 +461,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const resetPassword = async (email: string) => {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: `${window.location.origin}${import.meta.env.BASE_URL}reset-password`,
       });
       return { error };
     } catch (err) {
@@ -483,6 +516,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         profile,
         loading,
+        isPasswordReset,
         signIn,
         signUp,
         signOut,

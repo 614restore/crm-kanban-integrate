@@ -5,13 +5,17 @@ CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 DECLARE
   v_company_id UUID;
+  v_company_name TEXT;
 BEGIN
+  -- Use provided company_name from metadata, or fall back to email-derived name
+  v_company_name := COALESCE(
+    NULLIF(TRIM(NEW.raw_user_meta_data->>'company_name'), ''),
+    SPLIT_PART(NEW.email, '@', 1) || '''s Company'
+  );
+
   -- Create a company for the new user
   INSERT INTO public.companies (name, email)
-  VALUES (
-    COALESCE(NEW.email, 'New User') || '''s Company',
-    NEW.email
-  )
+  VALUES (v_company_name, NEW.email)
   RETURNING id INTO v_company_id;
 
   -- Create the profile with the new company
@@ -22,7 +26,7 @@ BEGIN
     v_company_id,
     COALESCE(NEW.raw_user_meta_data->>'first_name', ''),
     COALESCE(NEW.raw_user_meta_data->>'last_name', ''),
-    COALESCE(NEW.raw_user_meta_data->>'role', 'admin')
+    COALESCE(NEW.raw_user_meta_data->>'role', 'owner')
   );
 
   RETURN NEW;

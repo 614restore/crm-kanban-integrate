@@ -27,6 +27,7 @@ export default function AuthPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [companyName, setCompanyName] = useState('');
   const [role, setRole] = useState<UserRole>('sales');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -142,6 +143,8 @@ export default function AuthPage() {
         if (inviteCompanyId) {
           signupMetadata.company_id = inviteCompanyId;
           signupMetadata.role = role;
+        } else if (companyName.trim()) {
+          signupMetadata.company_name = companyName.trim();
         }
         
         const { error } = await signUp(email, password, signupMetadata);
@@ -350,8 +353,29 @@ export default function AuthPage() {
                 </div>
               )}
 
+              {mode === 'signup' && !inviteToken && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Company Name
+                  </label>
+                  <div className="relative">
+                    <Building2
+                      size={18}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                    />
+                    <input
+                      type="text"
+                      value={companyName}
+                      onChange={(e) => setCompanyName(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                      placeholder="Acme Roofing Co."
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                 <div className="relative">
                   <Mail
                     size={18}

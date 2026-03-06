@@ -6,11 +6,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/components/theme-provider";
 import { useServiceWorker } from "@/lib/serviceWorker";
-import { PermissionProvider } from "@/lib/permissions/PermissionProvider";
 import { useEffect } from "react";
 import Index from "./pages/Index";
 import Photos from "./pages/Photos";
 import NotFound from "./pages/NotFound";
+import UpdatePassword from "./pages/UpdatePassword";
 
 const queryClient = new QueryClient();
 
@@ -22,8 +22,7 @@ const PWAUpdateNotification = () => {
   const { updateAvailable, activateUpdate, isOffline } = useServiceWorker();
 
   useEffect(() => {
-    if (updateAvailable) {
-    }
+    // updateAvailable is handled by the banner below
   }, [updateAvailable]);
 
   if (updateAvailable) {
@@ -64,18 +63,17 @@ const App = () => (
   <ThemeProvider defaultTheme="light">
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <PermissionProvider>
-          <PWAUpdateNotification />
-          <Toaster />
-          <Sonner />
-          <BrowserRouter basename={basename}>
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/photos" element={<Photos />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
-        </PermissionProvider>
+        <PWAUpdateNotification />
+        <Toaster />
+        <Sonner />
+        <BrowserRouter basename={basename}>
+          <Routes>
+            <Route path="/" element={<Index />} />
+            <Route path="/photos" element={<Photos />} />
+            <Route path="/reset-password" element={<UpdatePassword />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
       </TooltipProvider>
     </QueryClientProvider>
   </ThemeProvider>

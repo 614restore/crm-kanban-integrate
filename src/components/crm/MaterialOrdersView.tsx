@@ -58,6 +58,7 @@ export default function MaterialOrdersView() {
   const [selectedSupplierId, setSelectedSupplierId] = useState('');
   const [selectedContactId, setSelectedContactId] = useState('');
   const [selectedJobId, setSelectedJobId] = useState('');
+  const [selectedProjectId, setSelectedProjectId] = useState('');
   const [status, setStatus] = useState<MaterialOrder['status']>('pending');
   const [orderDate, setOrderDate] = useState('');
   const [expectedDeliveryDate, setExpectedDeliveryDate] = useState('');
@@ -115,6 +116,7 @@ export default function MaterialOrdersView() {
       setSelectedSupplierId(order.supplierId);
       setSelectedContactId(order.contactId || '');
       setSelectedJobId(order.jobId || '');
+      setSelectedProjectId((order as any).projectId || order.jobId || '');
       setStatus(order.status);
       setOrderDate(order.orderDate || '');
       setExpectedDeliveryDate(order.expectedDeliveryDate || '');
@@ -141,6 +143,7 @@ export default function MaterialOrdersView() {
     setSelectedSupplierId('');
     setSelectedContactId('');
     setSelectedJobId('');
+    setSelectedProjectId('');
     setStatus('pending');
     setOrderDate('');
     setExpectedDeliveryDate('');
@@ -169,7 +172,8 @@ export default function MaterialOrdersView() {
         order_number: orderNumber,
         supplier_id: selectedSupplierId,
         contact_id: selectedContactId || undefined,
-        job_id: selectedJobId || undefined,
+        job_id: selectedJobId || selectedProjectId || undefined,
+        project_id: selectedProjectId || selectedJobId || undefined,
         status,
         order_date: orderDate || undefined,
         expected_delivery_date: expectedDeliveryDate || undefined,
@@ -653,14 +657,14 @@ export default function MaterialOrdersView() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Link to Job (Optional)
+                    Link to Project (costs auto-roll up)
                   </label>
                   <select
-                    value={selectedJobId}
-                    onChange={(e) => setSelectedJobId(e.target.value)}
+                    value={selectedProjectId}
+                    onChange={(e) => { setSelectedProjectId(e.target.value); setSelectedJobId(e.target.value); }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                   >
-                    <option value="">No job</option>
+                    <option value="">No project linked</option>
                     {state.projects.map((project) => (
                       <option key={project.id} value={project.id}>
                         {project.projectNumber} - {project.name}

@@ -46,7 +46,6 @@ export async function getDocumentSignedUrl(pathOrUrl: string, expiresInSeconds: 
     } else if (!fileData || fileData.length === 0) {
       console.error('[Storage] File not found in bucket at path:', path);
       console.error('[Storage] Make sure the file was uploaded successfully and the path is correct');
-    } else {
     }
   } catch (checkError) {
     console.warn('[Storage] Could not verify file existence:', checkError);

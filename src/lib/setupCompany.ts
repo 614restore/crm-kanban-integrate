@@ -6,7 +6,7 @@ import { db } from './database';
  * Sets up a default company for the user if they don't have one
  * This runs automatically on first login
  */
-export async function ensureUserHasCompany(userId: string, userEmail: string): Promise<boolean> {
+export async function ensureUserHasCompany(userId: string, userEmail: string, companyName?: string): Promise<boolean> {
   try {
     // Check if user already has a company
     const { data: profile, error: profileError } = await supabase
@@ -27,11 +27,12 @@ export async function ensureUserHasCompany(userId: string, userEmail: string): P
 
 
     // Create a new company
-    const companyName = userEmail.split('@')[0] || 'My Company';
+    const derivedName = userEmail.split('@')[0] || 'My Company';
+    const finalCompanyName = companyName || `${derivedName}'s Company`;
     const { data: newCompany, error: companyError } = await supabase
       .from('companies')
       .insert({
-        name: `${companyName}'s Company`,
+        name: finalCompanyName,
         email: userEmail,
         phone: '',
         address: '',
@@ -151,10 +152,10 @@ export async function ensureDefaultLeadSources(companyId: string): Promise<boole
 /**
  * Complete first-time setup for a new user
  */
-export async function setupNewUser(userId: string, userEmail: string): Promise<boolean> {
+export async function setupNewUser(userId: string, userEmail: string, companyName?: string): Promise<boolean> {
 
   // Step 1: Ensure user has a company
-  const companySetup = await ensureUserHasCompany(userId, userEmail);
+  const companySetup = await ensureUserHasCompany(userId, userEmail, companyName);
   if (!companySetup) {
     console.error('❌ Failed to set up company');
     return false;

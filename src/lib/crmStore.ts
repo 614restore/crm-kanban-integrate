@@ -75,6 +75,7 @@ export interface CRMState {
   showQuickAdd: boolean;
   showInvoiceModal: boolean;
   selectedInvoiceId: string | null;
+  invoiceModalPrefill: { contactId?: string; items?: any[]; notes?: string } | null;
   
   // Loading states
   isLoading: boolean;
@@ -102,7 +103,7 @@ export type CRMAction =
   | { type: 'SET_FILTER_STATUS'; payload: CustomerStatus | 'all' }
   | { type: 'SET_FILTER_ASSIGNEE'; payload: string | 'all' }
   | { type: 'TOGGLE_QUICK_ADD' }
-  | { type: 'TOGGLE_INVOICE_MODAL'; payload?: string | null }
+  | { type: 'TOGGLE_INVOICE_MODAL'; payload?: string | null; prefill?: { contactId?: string; items?: any[]; notes?: string } | null }
   | { type: 'ADD_CONTACT'; payload: Contact }
   | { type: 'UPDATE_CONTACT'; payload: Contact }
   | { type: 'DELETE_CONTACT'; payload: string }
@@ -212,7 +213,8 @@ export function crmReducer(state: CRMState, action: CRMAction): CRMState {
       return { 
         ...state, 
         showInvoiceModal: !state.showInvoiceModal,
-        selectedInvoiceId: action.payload ?? null 
+        selectedInvoiceId: action.payload ?? null,
+        invoiceModalPrefill: action.prefill ?? null,
       };
     
     case 'ADD_CONTACT':

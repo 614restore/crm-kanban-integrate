@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
@@ -9,12 +9,36 @@ import { X, Plus, Trash2, Save, Send, DollarSign } from 'lucide-react';
 export default function InvoiceModal() {
   const { state, dispatch } = useCRM();
   const { profile } = useAuth();
-  const [selectedContactId, setSelectedContactId] = useState('');
-  const [dueDate, setDueDate] = useState('');
-  const [items, setItems] = useState<InvoiceItem[]>([
-    { description: '', quantity: 1, unitPrice: 0, total: 0 },
-  ]);
-  const [notes, setNotes] = useState('');
+  const prefill = state.invoiceModalPrefill;
+  const [selectedContactId, setSelectedContactId] = useState(prefill?.contactId || '');
+  const [dueDate, setDueDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [items, setItems] = useState<InvoiceItem[]>(
+    prefill?.items?.length
+      ? prefill.items.map((i: any) => ({
+          description: i.description || '',
+          quantity: Number(i.quantity) || 1,
+          unitPrice: Number(i.unitPrice || i.unit_price || 0),
+          total: Number(i.total || 0),
+        }))
+      : [{ description: '', quantity: 1, unitPrice: 0, total: 0 }]
+  );
+  const [notes, setNotes] = useState(prefill?.notes || '');
+
+  // Re-initialize if prefill changes (new conversion)
+  useEffect(() => {
+    if (prefill) {
+      if (prefill.contactId) setSelectedContactId(prefill.contactId);
+      if (prefill.items?.length) {
+        setItems(prefill.items.map((i: any) => ({
+          description: i.description || '',
+          quantity: Number(i.quantity) || 1,
+          unitPrice: Number(i.unitPrice || i.unit_price || 0),
+          total: Number(i.total || 0),
+        })));
+      }
+      if (prefill.notes) setNotes(prefill.notes);
+    }
+  }, [state.invoiceModalPrefill]);
 
   if (!state.showInvoiceModal) return null;
 
@@ -275,7 +299,7 @@ export default function InvoiceModal() {
           </button>
           <button
             onClick={() => handleSave('draft')}
-            disabled={!selectedContactId || !dueDate}
+            disabled={!selectedContactId}
             className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Save size={18} />
@@ -283,7 +307,7 @@ export default function InvoiceModal() {
           </button>
           <button
             onClick={() => handleSave('sent')}
-            disabled={!selectedContactId || !dueDate}
+            disabled={!selectedContactId}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Send size={18} />

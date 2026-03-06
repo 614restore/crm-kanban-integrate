@@ -1,6 +1,7 @@
 import React, { useReducer, useEffect, useCallback, useRef, Suspense, lazy } from 'react';
 import { CRMContext, crmReducer, CRMState } from '@/lib/crmStore';
 import { AuthProvider, useAuth } from '@/lib/authContext';
+import { PermissionProvider } from '@/lib/permissions/PermissionProvider';
 import { db } from '@/lib/database';
 import { supabase } from '@/lib/supabase';
 import {
@@ -14,12 +15,14 @@ import {
   LeadSource,
   Automation,
   TeamMember,
+  Estimate,
 } from '@/lib/crmData';
 
 // Import core components (needed immediately)
 import Sidebar from './crm/Sidebar';
 import TopBar from './crm/TopBar';
 import AuthPage from './crm/AuthPage';
+import UpdatePassword from '@/pages/UpdatePassword';
 import QuickAddModal from './crm/QuickAddModal';
 import InvoiceModal from './crm/InvoiceModal';
 import ResponsiveLayout from './mobile/ResponsiveLayout';
@@ -49,10 +52,18 @@ const DocumentTemplates = lazy(() => import('./crm/DocumentTemplates'));
 const ReportsAnalytics = lazy(() => import('./crm/ReportsAnalytics'));
 
 // Initial CRM state (completely empty)
+const getInitialView = (): ViewType => {
+  try {
+    const saved = sessionStorage.getItem('crm_current_view');
+    if (saved) return saved as ViewType;
+  } catch (_) { /* ignore */ }
+  return 'dashboard';
+};
+
 const initialState: CRMState = {
   currentUser: null,
   companyId: null,
-  currentView: 'dashboard',
+  currentView: getInitialView(),
   selectedContactId: null,
   selectedBoardId: 'board-sales',
   contacts: [],
@@ -74,6 +85,7 @@ const initialState: CRMState = {
   showQuickAdd: false,
   showInvoiceModal: false,
   selectedInvoiceId: null,
+  invoiceModalPrefill: null,
   isLoading: true,
   isInitialized: false,
   notifications: [],
@@ -163,7 +175,7 @@ function LoadingScreen() {
         <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
           <Building2 size={32} className="text-white" />
         </div>
-        <h1 className="text-2xl font-bold text-white mb-2">614 Restore CRM</h1>
+        <h1 className="text-2xl font-bold text-white mb-2">TrussCTR</h1>
         <div className="flex items-center justify-center gap-2 text-slate-400">
           <Loader2 className="animate-spin" size={20} />
           <span>Loading your data...</span>
@@ -288,6 +300,9 @@ function dbInvoiceToAppInvoice(dbInvoice: any, contacts: Contact[]): Invoice {
 function CRMApp() {
   const { profile, user } = useAuth();
   const [state, dispatch] = useReducer(crmReducer, initialState);
+  useEffect(() => {
+    try { sessionStorage.setItem('crm_current_view', state.currentView); } catch (_) { /* ignore */ }
+  }, [state.currentView]);
   const realtimeFailedRef = useRef(false);
   const isReloadingRef = useRef(false);
   const queuedReloadRef = useRef(false);
@@ -309,7 +324,7 @@ function CRMApp() {
     dispatch({ type: 'SET_COMPANY_ID', payload: profile.company_id });
 
     try {
-      // Load all data in parallel
+      // Load all data in parallel (including company to pre-warm cache for Sidebar)
       const [
         dbContacts,
         dbCommunications,
@@ -319,6 +334,12 @@ function CRMApp() {
         dbLeadSources,
         dbAutomations,
         dbTeamMembers,
+        , // getCompany result — pre-warm only, not used directly
+        dbEstimates,
+        dbProjects,
+        dbWorkOrders,
+        dbSuppliers,
+        dbMaterialOrders,
       ] = await Promise.all([
         db.getContacts(profile.company_id),
         db.getCommunications(profile.company_id),
@@ -328,6 +349,12 @@ function CRMApp() {
         db.getLeadSources(profile.company_id),
         db.getAutomations(profile.company_id),
         db.getTeamMembers(profile.company_id),
+        db.getCompany(profile.company_id), // pre-warm company cache for Sidebar
+        db.getEstimates(profile.company_id),
+        db.getProjects(profile.company_id),
+        db.getWorkOrders(profile.company_id),
+        db.getSuppliers(profile.company_id),
+        db.getMaterialOrders(profile.company_id),
       ]);
 
       // Convert DB contacts to app contacts
@@ -434,6 +461,144 @@ function CRMApp() {
         isActive: tm.is_active,
       }));
 
+      const estimates: Estimate[] = (dbEstimates || []).map((e: any) => ({
+        id: e.id,
+        contactId: e.contact_id,
+        contactName: enrichedContacts.find(c => c.id === e.contact_id)?.name || '',
+        jobId: e.job_id,
+        estimateNumber: e.estimate_number,
+        title: e.title,
+        description: e.description,
+        status: e.status,
+        amount: Number(e.subtotal || e.amount || 0),
+        tax: Number(e.tax || 0),
+        total: Number(e.total || 0),
+        validUntil: e.valid_until || e.validity_date,
+        createdAt: e.created_at,
+        sentAt: e.sent_at,
+        viewedAt: e.viewed_at,
+        acceptedAt: e.accepted_at,
+        declinedAt: e.declined_at,
+        signedBy: e.signed_by,
+        signatureData: e.signature_data,
+        items: e.items || [],
+        terms: e.terms || e.terms_and_conditions,
+        notes: e.notes,
+        createdBy: e.created_by,
+        updatedAt: e.updated_at,
+      }));
+
+      const projects = (dbProjects || []).map((p: any) => ({
+        id: p.id,
+        projectNumber: p.project_number,
+        name: p.name,
+        contactId: p.contact_id,
+        contactName: enrichedContacts.find(c => c.id === p.contact_id)?.name || '',
+        estimateId: p.estimate_id,
+        description: p.description,
+        status: p.status,
+        priority: p.priority,
+        startDate: p.start_date,
+        endDate: p.end_date,
+        completedDate: p.completed_date,
+        estimatedBudget: Number(p.estimated_budget || 0),
+        actualCost: Number(p.actual_cost || 0),
+        materialCostGoal: Number(p.material_cost_goal || 0),
+        subcontractorCostGoal: Number(p.subcontractor_cost_goal || 0),
+        salesRepPayGoal: Number(p.labor_cost_goal || 0),
+        otherExpensesGoal: Number(p.other_cost_goal || 0),
+        actualMaterialCost: Number(p.material_cost || 0),
+        actualSubcontractorCost: Number(p.subcontractor_cost || 0),
+        actualSalesRepPay: Number(p.labor_cost || 0),
+        actualOtherExpenses: Number(p.other_cost || 0),
+        address: p.address,
+        city: p.city,
+        state: p.state,
+        zip: p.zip,
+        projectManagerId: p.project_manager_id,
+        projectManagerName: '',
+        notes: p.notes,
+        tags: p.tags || [],
+        createdBy: p.created_by,
+        createdAt: p.created_at,
+        updatedAt: p.updated_at,
+      }));
+
+      const workOrders = (dbWorkOrders || []).map((wo: any) => ({
+        id: wo.id,
+        workOrderNumber: wo.work_order_number,
+        projectId: wo.project_id,
+        projectName: projects.find((p: any) => p.id === wo.project_id)?.name || '',
+        contactId: wo.contact_id,
+        contactName: enrichedContacts.find(c => c.id === wo.contact_id)?.name || '',
+        title: wo.title,
+        description: wo.description,
+        status: wo.status,
+        priority: wo.priority,
+        scheduledDate: wo.scheduled_date,
+        startedAt: wo.started_at,
+        completedAt: wo.completed_at,
+        assignedTo: wo.assigned_to || [],
+        assignedToNames: [],
+        estimatedHours: wo.estimated_hours ? Number(wo.estimated_hours) : undefined,
+        actualHours: wo.actual_hours ? Number(wo.actual_hours) : undefined,
+        laborCost: Number(wo.labor_cost || 0),
+        materialCost: Number(wo.material_cost || 0),
+        totalCost: Number(wo.total_cost || 0),
+        address: wo.address,
+        city: wo.city,
+        state: wo.state,
+        zip: wo.zip,
+        notes: wo.notes,
+        attachments: wo.attachments || [],
+        checklistItems: wo.checklist_items || [],
+        createdBy: wo.created_by,
+        createdAt: wo.created_at,
+        updatedAt: wo.updated_at,
+      }));
+
+      const suppliers = (dbSuppliers || []).map((s: any) => ({
+        id: s.id,
+        name: s.name,
+        contactName: s.contact_name,
+        email: s.email,
+        phone: s.phone,
+        address: s.address,
+        city: s.city,
+        state: s.state,
+        zip: s.zip,
+        website: s.website,
+        accountNumber: s.account_number,
+        paymentTerms: s.payment_terms,
+        notes: s.notes,
+        isActive: s.is_active,
+        createdAt: s.created_at,
+        updatedAt: s.updated_at,
+      }));
+
+      const materialOrders = (dbMaterialOrders || []).map((mo: any) => ({
+        id: mo.id,
+        orderNumber: mo.order_number || '',
+        supplierId: mo.supplier_id,
+        supplierName: suppliers.find((s: any) => s.id === mo.supplier_id)?.name || '',
+        contactId: mo.contact_id,
+        projectId: mo.project_id || mo.job_id,
+        jobId: mo.job_id || mo.project_id,
+        status: mo.status,
+        orderDate: mo.order_date,
+        expectedDeliveryDate: mo.expected_delivery_date,
+        actualDeliveryDate: mo.actual_delivery_date,
+        subtotal: Number(mo.subtotal || mo.total_cost || 0),
+        tax: Number(mo.tax || 0),
+        shipping: Number(mo.shipping || 0),
+        total: Number(mo.total || mo.total_cost || 0),
+        items: [],
+        notes: mo.notes,
+        createdBy: mo.created_by,
+        createdAt: mo.created_at,
+        updatedAt: mo.updated_at,
+      }));
+
       dispatch({
         type: 'INITIALIZE_DATA',
         payload: {
@@ -444,11 +609,11 @@ function CRMApp() {
           leadSources,
           automations,
           teamMembers,
-          suppliers: [],
-          materialOrders: [],
-          estimates: [],
-          projects: [],
-          workOrders: [],
+          suppliers,
+          materialOrders,
+          estimates,
+          projects,
+          workOrders,
         },
       });
 
@@ -648,10 +813,14 @@ function CRMApp() {
 
 // Auth Gate - shows login or CRM based on auth state
 function AuthGate() {
-  const { session, loading } = useAuth();
+  const { session, loading, isPasswordReset } = useAuth();
 
   if (loading) {
     return <LoadingScreen />;
+  }
+
+  if (isPasswordReset) {
+    return <UpdatePassword />;
   }
 
   if (!session) {
@@ -665,7 +834,9 @@ function AuthGate() {
 export default function AppLayout() {
   return (
     <AuthProvider>
-      <AuthGate />
+      <PermissionProvider>
+        <AuthGate />
+      </PermissionProvider>
     </AuthProvider>
   );
 }

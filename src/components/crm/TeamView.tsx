@@ -43,7 +43,7 @@ export default function TeamView() {
   const [isSendingInvite, setIsSendingInvite] = useState(false);
   const [isSavingMember, setIsSavingMember] = useState(false);
 
-  const userRole = state.currentUser?.role || 'sales';
+  const userRole = state.currentUser?.role || profile?.role || 'owner';
   const canManage = canManageTeam(userRole);
   const assignableRoles = getAssignableRoles(userRole);
 
@@ -92,7 +92,8 @@ export default function TeamView() {
       return;
     }
 
-    if (!state.companyId) {
+    const effectiveCompanyId = state.companyId || profile?.company_id;
+    if (!effectiveCompanyId) {
       toast.error('No company linked. Please refresh and try again.');
       return;
     }
@@ -114,7 +115,7 @@ export default function TeamView() {
       const token = globalThis.crypto?.randomUUID?.() || `invite-${Date.now()}`;
       
       const inviteRecord = await db.createInvite({
-        company_id: state.companyId,
+        company_id: effectiveCompanyId,
         email: inviteEmail.trim().toLowerCase(),
         role: inviteRole,
         invited_by: profile?.id,
@@ -146,7 +147,7 @@ export default function TeamView() {
         body: {
           email: inviteEmail.trim().toLowerCase(),
           token,
-          companyId: state.companyId,
+          companyId: effectiveCompanyId,
           role: inviteRole,
           invitedBy: profile?.id,
         },

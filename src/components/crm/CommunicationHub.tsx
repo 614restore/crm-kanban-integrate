@@ -137,6 +137,10 @@ export default function CommunicationHub() {
   const [selectedComm, setSelectedComm] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
   const [showTemplates, setShowTemplates] = useState(false);
+  const [showComposeModal, setShowComposeModal] = useState(false);
+  const [composeContactId, setComposeContactId] = useState('');
+  const [composeText, setComposeText] = useState('');
+  const [composeType, setComposeType] = useState<'note' | 'email' | 'sms' | 'call'>('note');
 
   // Gather all communications from all contacts
   const allCommunications = state.contacts.flatMap((contact) =>
@@ -218,14 +222,14 @@ export default function CommunicationHub() {
     });
   };
 
-  const persistCommunication = async (contactId: string, content: string) => {
+  const persistCommunication = async (contactId: string, content: string, type: Communication['type'] = 'note') => {
     const fallbackUserId = state.currentUser?.id || '';
     const fallbackUserName = state.currentUser?.name || 'Team Member';
 
     const draft: Communication = {
       id: `comm-${Date.now()}`,
       contactId,
-      type: 'note',
+      type,
       direction: 'outbound',
       content,
       timestamp: new Date().toISOString(),
@@ -297,17 +301,19 @@ export default function CommunicationHub() {
     toast.success(`Template "${template.title}" loaded`);
   };
 
-  const handleCompose = async () => {
-    const contact = selectedCommData?.contact || state.contacts[0];
-    if (!contact) {
-      toast.error('No contact available to compose a message');
-      return;
-    }
+  const handleCompose = () => {
+    const defaultContact = selectedCommData?.contact || state.contacts[0];
+    setComposeContactId(defaultContact?.id || '');
+    setComposeText('');
+    setComposeType('note');
+    setShowComposeModal(true);
+  };
 
-    const content = window.prompt('Compose note/message', '');
-    if (!content?.trim()) return;
-
-    await persistCommunication(contact.id, content.trim());
+  const handleSaveCompose = async () => {
+    if (!composeText.trim() || !composeContactId) return;
+    await persistCommunication(composeContactId, composeText.trim(), composeType);
+    setShowComposeModal(false);
+    setComposeText('');
     toast.success('Communication saved');
   };
 
@@ -613,6 +619,76 @@ export default function CommunicationHub() {
                   </div>
                 ))}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Compose Modal */}
+      {showComposeModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">New Communication</h3>
+              <button onClick={() => setShowComposeModal(false)} className="p-2 hover:bg-gray-100 rounded-lg">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Contact</label>
+                <select
+                  value={composeContactId}
+                  onChange={(e) => setComposeContactId(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                >
+                  <option value="">Select a contact...</option>
+                  {state.contacts.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.firstName} {c.lastName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                <div className="flex gap-2">
+                  {(['note', 'email', 'sms', 'call'] as const).map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setComposeType(t)}
+                      className={`flex-1 py-2 rounded-lg text-sm font-medium capitalize transition-colors ${
+                        composeType === t ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
+                <textarea
+                  value={composeText}
+                  onChange={(e) => setComposeText(e.target.value)}
+                  placeholder="Type your message or note..."
+                  rows={5}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none resize-none"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 p-6 pt-0">
+              <button onClick={() => setShowComposeModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
+                Cancel
+              </button>
+              <button
+                onClick={() => { void handleSaveCompose(); }}
+                disabled={!composeText.trim() || !composeContactId}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              >
+                <Send size={16} />
+                Save
+              </button>
             </div>
           </div>
         </div>
