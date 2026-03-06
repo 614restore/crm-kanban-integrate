@@ -89,6 +89,7 @@ export default function ContactDetail() {
   const [contactMaterialOrders, setContactMaterialOrders] = useState<any[]>([]);
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [showEstimateModal, setShowEstimateModal] = useState(false);
+  const [viewingEstimate, setViewingEstimate] = useState<any>(null);
   const [showWorkOrderModal, setShowWorkOrderModal] = useState(false);
   const [showSurveyModal, setShowSurveyModal] = useState(false);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
@@ -1619,26 +1620,36 @@ export default function ContactDetail() {
                     <div key={estimate.id} className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg transition-shadow">
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex-1">
-                          <h4 className="text-lg font-semibold text-gray-900">Estimate #{estimate.estimateNumber}</h4>
+                          <h4 className="text-lg font-semibold text-gray-900">Estimate #{estimate.estimateNumber || estimate.estimate_number}</h4>
                           <p className="text-sm text-gray-500 mt-1">
-                            Created {formatDate(estimate.createdAt)}
+                            {estimate.title && <span className="mr-2">{estimate.title}</span>}
+                            Created {formatDate(estimate.createdAt || estimate.created_at)}
                           </p>
                         </div>
-                        <span
-                          className={`px-3 py-1 rounded-full text-sm font-medium ${
-                            estimate.status === 'accepted'
-                              ? 'bg-green-100 text-green-800'
-                              : estimate.status === 'sent'
-                              ? 'bg-blue-100 text-blue-800'
-                              : estimate.status === 'viewed'
-                              ? 'bg-purple-100 text-purple-800'
-                              : estimate.status === 'declined'
-                              ? 'bg-red-100 text-red-800'
-                              : 'bg-gray-100 text-gray-800'
-                          }`}
-                        >
-                          {estimate.status}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`px-3 py-1 rounded-full text-sm font-medium ${
+                              estimate.status === 'accepted'
+                                ? 'bg-green-100 text-green-800'
+                                : estimate.status === 'sent'
+                                ? 'bg-blue-100 text-blue-800'
+                                : estimate.status === 'viewed'
+                                ? 'bg-purple-100 text-purple-800'
+                                : estimate.status === 'declined'
+                                ? 'bg-red-100 text-red-800'
+                                : 'bg-gray-100 text-gray-800'
+                            }`}
+                          >
+                            {estimate.status}
+                          </span>
+                          <button
+                            onClick={() => setViewingEstimate(estimate)}
+                            className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                            title="View estimate"
+                          >
+                            <Eye size={16} />
+                          </button>
+                        </div>
                       </div>
                       
                       <div className="grid grid-cols-2 gap-4 text-sm">
@@ -2049,6 +2060,101 @@ export default function ContactDetail() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* View Estimate Detail Modal */}
+      {viewingEstimate && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">{viewingEstimate.title || `Estimate #${viewingEstimate.estimateNumber || viewingEstimate.estimate_number}`}</h2>
+                <p className="text-sm text-gray-500 mt-1">{viewingEstimate.estimateNumber || viewingEstimate.estimate_number} · {contact?.name}</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                  viewingEstimate.status === 'accepted' ? 'bg-green-100 text-green-800' :
+                  viewingEstimate.status === 'sent' ? 'bg-blue-100 text-blue-800' :
+                  viewingEstimate.status === 'viewed' ? 'bg-purple-100 text-purple-800' :
+                  viewingEstimate.status === 'declined' ? 'bg-red-100 text-red-800' :
+                  'bg-gray-100 text-gray-800'
+                }`}>{viewingEstimate.status}</span>
+                <button onClick={() => setViewingEstimate(null)} className="text-gray-400 hover:text-gray-600">
+                  <X size={24} />
+                </button>
+              </div>
+            </div>
+            <div className="p-6 space-y-6">
+              {viewingEstimate.description && (
+                <p className="text-gray-600">{viewingEstimate.description}</p>
+              )}
+              {viewingEstimate.items && viewingEstimate.items.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">Line Items</h3>
+                  <div className="border border-gray-200 rounded-lg overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="text-left px-4 py-3 font-medium text-gray-600">Description</th>
+                          <th className="text-right px-4 py-3 font-medium text-gray-600">Qty</th>
+                          <th className="text-right px-4 py-3 font-medium text-gray-600">Unit Price</th>
+                          <th className="text-right px-4 py-3 font-medium text-gray-600">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {viewingEstimate.items.map((item: any, i: number) => (
+                          <tr key={i} className="hover:bg-gray-50">
+                            <td className="px-4 py-3 text-gray-900">{item.description}</td>
+                            <td className="px-4 py-3 text-right text-gray-600">{item.quantity}</td>
+                            <td className="px-4 py-3 text-right text-gray-600">{formatCurrency(item.unitPrice || item.unit_price || 0)}</td>
+                            <td className="px-4 py-3 text-right font-medium text-gray-900">{formatCurrency(item.total || 0)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+              <div className="flex justify-end">
+                <div className="w-64 space-y-2 text-sm">
+                  <div className="flex justify-between text-gray-600">
+                    <span>Subtotal</span>
+                    <span>{formatCurrency(viewingEstimate.amount || viewingEstimate.subtotal || 0)}</span>
+                  </div>
+                  <div className="flex justify-between text-gray-600">
+                    <span>Tax</span>
+                    <span>{formatCurrency(viewingEstimate.tax || 0)}</span>
+                  </div>
+                  <div className="flex justify-between font-bold text-gray-900 text-base border-t border-gray-200 pt-2">
+                    <span>Total</span>
+                    <span className="text-blue-600">{formatCurrency(viewingEstimate.total || 0)}</span>
+                  </div>
+                </div>
+              </div>
+              {(viewingEstimate.notes || viewingEstimate.terms || viewingEstimate.terms_and_conditions) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {viewingEstimate.notes && (
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Notes</h4>
+                      <p className="text-sm text-gray-700 whitespace-pre-wrap">{viewingEstimate.notes}</p>
+                    </div>
+                  )}
+                  {(viewingEstimate.terms || viewingEstimate.terms_and_conditions) && (
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Terms & Conditions</h4>
+                      <p className="text-sm text-gray-700 whitespace-pre-wrap">{viewingEstimate.terms || viewingEstimate.terms_and_conditions}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="p-6 border-t border-gray-200 bg-gray-50 rounded-b-xl">
+              <button onClick={() => setViewingEstimate(null)} className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-white transition-colors text-sm">
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
