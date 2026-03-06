@@ -244,10 +244,10 @@ export default function EstimatesView() {
         subtotal,
         tax,
         total,
-        validity_date: validityDate,
+        validity_date: validityDate || undefined,
         status: 'draft' as const,
-        notes,
-        terms_and_conditions: terms,
+        notes: notes || undefined,
+        terms_and_conditions: terms || undefined,
       };
 
       if (editingEstimate) {

@@ -2194,9 +2194,9 @@ export default function ContactDetail() {
                   subtotal: amount,
                   tax: tax,
                   total: total,
-                  valid_until: formData.get('valid_until') as string,
-                  terms: formData.get('terms') as string,
-                  notes: formData.get('notes') as string,
+                  valid_until: (formData.get('valid_until') as string) || undefined,
+                  terms: (formData.get('terms') as string) || undefined,
+                  notes: (formData.get('notes') as string) || undefined,
                   created_by: profile?.id || undefined,
                 };
 
