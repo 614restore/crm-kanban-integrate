@@ -110,14 +110,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
+    let profileFetchInProgress = false;
+
+    const loadProfile = async (userId: string, email: string) => {
+      if (profileFetchInProgress) return;
+      profileFetchInProgress = true;
+      try {
+        const profileData = await ensureUserSetup(userId, email);
+        setProfile(profileData);
+      } finally {
+        profileFetchInProgress = false;
+      }
+    };
+
     // Get initial session
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       
       if (session?.user) {
-        const profileData = await ensureUserSetup(session.user.id, session.user.email || '');
-        setProfile(profileData);
+        await loadProfile(session.user.id, session.user.email || '');
       }
       
       setLoading(false);
@@ -150,8 +162,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(session?.user ?? null);
       
       if (session?.user) {
-        const profileData = await ensureUserSetup(session.user.id, session.user.email || '');
-        setProfile(profileData);
+        await loadProfile(session.user.id, session.user.email || '');
       } else {
         setProfile(null);
       }
