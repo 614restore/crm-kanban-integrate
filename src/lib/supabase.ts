@@ -21,7 +21,6 @@ if (demoMode) {
     console.warn(
       '🚧 Running in DEMO MODE: placeholder Supabase config detected. Configure real credentials to enable live backend.'
     );
-  } else {
   }
 }
 
