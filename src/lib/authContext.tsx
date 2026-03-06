@@ -119,6 +119,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let profileFetchInProgress = false;
+    let recoveryEventFired = false;
 
     const loadProfile = async (userId: string, email: string) => {
       if (profileFetchInProgress) return;
@@ -131,28 +132,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
-    // Get initial session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        await loadProfile(session.user.id, session.user.email || '');
-      }
-      
-      // If the URL hash has an access_token, a PASSWORD_RECOVERY or SIGNED_IN
-      // event is about to fire — keep loading so we don't flash the login page
-      const hash = window.location.hash;
-      if (!hash.includes('access_token')) {
-        setLoading(false);
-      }
-    });
-
-    // Listen for auth changes
+    // Set up onAuthStateChange FIRST so PASSWORD_RECOVERY fires before getSession resolves
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
 
       // Handle password recovery — show reset form instead of app
       if (event === 'PASSWORD_RECOVERY') {
+        recoveryEventFired = true;
         setSession(session);
         setUser(session?.user ?? null);
         setIsPasswordReset(true);
@@ -181,7 +166,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // For SIGNED_IN, INITIAL_SESSION, USER_UPDATED, etc. — full refresh
       // But don't override isPasswordReset if we're in a recovery flow
-      if (isPasswordReset) return;
+      if (recoveryEventFired) return;
       setSession(session);
       setUser(session?.user ?? null);
       
@@ -189,6 +174,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await loadProfile(session.user.id, session.user.email || '');
       } else {
         setProfile(null);
+      }
+      
+      setLoading(false);
+    });
+
+    // Get initial session — by this point PASSWORD_RECOVERY may have already fired
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      // If recovery event already fired, don't interfere
+      if (recoveryEventFired) return;
+
+      setSession(session);
+      setUser(session?.user ?? null);
+      
+      if (session?.user) {
+        await loadProfile(session.user.id, session.user.email || '');
       }
       
       setLoading(false);
