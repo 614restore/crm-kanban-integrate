@@ -15,6 +15,7 @@ import {
   LeadSource,
   Automation,
   TeamMember,
+  Estimate,
 } from '@/lib/crmData';
 
 // Import core components (needed immediately)
@@ -332,6 +333,7 @@ function CRMApp() {
         dbLeadSources,
         dbAutomations,
         dbTeamMembers,
+        dbEstimates,
       ] = await Promise.all([
         db.getContacts(profile.company_id),
         db.getCommunications(profile.company_id),
@@ -342,6 +344,7 @@ function CRMApp() {
         db.getAutomations(profile.company_id),
         db.getTeamMembers(profile.company_id),
         db.getCompany(profile.company_id), // pre-warm company cache for Sidebar
+        db.getEstimates(profile.company_id),
       ]);
 
       // Convert DB contacts to app contacts
@@ -448,6 +451,33 @@ function CRMApp() {
         isActive: tm.is_active,
       }));
 
+      const estimates: Estimate[] = (dbEstimates || []).map((e: any) => ({
+        id: e.id,
+        contactId: e.contact_id,
+        contactName: enrichedContacts.find(c => c.id === e.contact_id)?.name || '',
+        jobId: e.job_id,
+        estimateNumber: e.estimate_number,
+        title: e.title,
+        description: e.description,
+        status: e.status,
+        amount: Number(e.subtotal || e.amount || 0),
+        tax: Number(e.tax || 0),
+        total: Number(e.total || 0),
+        validUntil: e.valid_until || e.validity_date,
+        createdAt: e.created_at,
+        sentAt: e.sent_at,
+        viewedAt: e.viewed_at,
+        acceptedAt: e.accepted_at,
+        declinedAt: e.declined_at,
+        signedBy: e.signed_by,
+        signatureData: e.signature_data,
+        items: e.items || [],
+        terms: e.terms || e.terms_and_conditions,
+        notes: e.notes,
+        createdBy: e.created_by,
+        updatedAt: e.updated_at,
+      }));
+
       dispatch({
         type: 'INITIALIZE_DATA',
         payload: {
@@ -460,7 +490,7 @@ function CRMApp() {
           teamMembers,
           suppliers: [],
           materialOrders: [],
-          estimates: [],
+          estimates,
           projects: [],
           workOrders: [],
         },
