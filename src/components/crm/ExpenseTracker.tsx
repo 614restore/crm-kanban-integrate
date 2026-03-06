@@ -228,6 +228,40 @@ const ExpenseTracker: React.FC = () => {
     });
   };
 
+  // Export expenses to CSV
+  const handleExportExpenses = () => {
+    if (filteredExpenses.length === 0) {
+      toast({ title: 'No Data', description: 'No expenses to export', variant: 'destructive' });
+      return;
+    }
+
+    const headers = ['Date', 'Description', 'Category', 'Amount', 'Vendor', 'Job', 'Status', 'Payment Method', 'Submitted By', 'Reimbursable', 'Notes'];
+    const rows = filteredExpenses.map((exp) => [
+      exp.date,
+      `"${exp.description.replace(/"/g, '""')}"`,
+      exp.category,
+      exp.amount.toFixed(2),
+      exp.vendor || '',
+      exp.jobName || '',
+      exp.status,
+      exp.paymentMethod,
+      exp.submittedBy,
+      exp.reimbursable ? 'Yes' : 'No',
+      `"${(exp.notes || '').replace(/"/g, '""')}"`,
+    ]);
+
+    const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `expenses_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    toast({ title: 'Exported', description: `${filteredExpenses.length} expenses exported to CSV` });
+  };
+
   // Update expense status
   const updateExpenseStatus = (expenseId: string, status: Expense['status']) => {
     setExpenses(prev => prev.map(exp => 
@@ -396,7 +430,7 @@ const ExpenseTracker: React.FC = () => {
               </SelectContent>
             </Select>
 
-            <Button variant="outline">
+            <Button variant="outline" onClick={handleExportExpenses}>
               <Download className="w-4 h-4 mr-2" />
               Export
             </Button>
@@ -493,6 +527,13 @@ const ExpenseTracker: React.FC = () => {
                         </div>
                       )}
 
+                      {expense.receipt && (
+                        <div className="flex items-center gap-1 text-sm text-green-600">
+                          <Camera className="w-4 h-4" />
+                          Receipt attached
+                        </div>
+                      )}
+
                       {viewMode === 'list' && (
                         <div className="flex gap-2">
                           {expense.status === 'pending' && (
@@ -577,8 +618,24 @@ const AddExpenseModal: React.FC<{
     mileage: '',
     jobId: '',
     jobName: '',
-    notes: ''
+    notes: '',
+    receipt: '' as string,
   });
+  const receiptInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleReceiptUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Receipt file must be under 10 MB');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setFormData((prev) => ({ ...prev, receipt: reader.result as string }));
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -596,6 +653,7 @@ const AddExpenseModal: React.FC<{
       jobId: formData.jobId || undefined,
       jobName: formData.jobName || undefined,
       notes: formData.notes || undefined,
+      receipt: formData.receipt || undefined,
       status: 'pending',
       submittedBy: 'Current User' // Would come from auth context
     };
@@ -615,7 +673,8 @@ const AddExpenseModal: React.FC<{
       mileage: '',
       jobId: '',
       jobName: '',
-      notes: ''
+      notes: '',
+      receipt: '',
     });
   };
 
@@ -715,6 +774,46 @@ const AddExpenseModal: React.FC<{
                 rows={3}
               />
             </div>
+
+            <div className="md:col-span-2">
+              <Label>Receipt / Document</Label>
+              <input
+                ref={receiptInputRef}
+                type="file"
+                accept="image/*,.pdf"
+                onChange={handleReceiptUpload}
+                className="hidden"
+              />
+              <div className="flex items-center gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => receiptInputRef.current?.click()}
+                  className="flex items-center gap-2"
+                >
+                  <Upload className="w-4 h-4" />
+                  {formData.receipt ? 'Change File' : 'Upload Receipt'}
+                </Button>
+                {formData.receipt && (
+                  <div className="flex items-center gap-2">
+                    {formData.receipt.startsWith('data:image') ? (
+                      <img src={formData.receipt} alt="Receipt" className="h-10 w-10 object-cover rounded border" />
+                    ) : (
+                      <FileText className="w-5 h-5 text-blue-600" />
+                    )}
+                    <span className="text-sm text-green-600 font-medium">Attached</span>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({...formData, receipt: ''})}
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-gray-400 mt-1">Max 10 MB — Images or PDF</p>
+            </div>
           </div>
           
           <div className="flex justify-end gap-2">
@@ -810,6 +909,33 @@ const ExpenseDetailModal: React.FC<{
             <div>
               <Label>Notes</Label>
               <p className="bg-gray-50 p-3 rounded">{expense.notes}</p>
+            </div>
+          )}
+
+          {expense.receipt && (
+            <div>
+              <Label>Receipt / Document</Label>
+              <div className="mt-1">
+                {expense.receipt.startsWith('data:image') ? (
+                  <a href={expense.receipt} target="_blank" rel="noopener noreferrer">
+                    <img
+                      src={expense.receipt}
+                      alt="Receipt"
+                      className="max-h-64 rounded-lg border border-gray-200 cursor-pointer hover:opacity-90 transition"
+                    />
+                  </a>
+                ) : (
+                  <a
+                    href={expense.receipt}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition"
+                  >
+                    <FileText className="w-4 h-4" />
+                    View Attached Document
+                  </a>
+                )}
+              </div>
             </div>
           )}
 

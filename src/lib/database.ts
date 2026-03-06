@@ -13,6 +13,11 @@ export interface DbCompany {
   zip?: string;
   website?: string;
   logo_url?: string;
+  tagline?: string;
+  contractor_license?: string;
+  tax_id?: string;
+  from_email?: string;
+  from_name?: string;
   created_at: string;
   updated_at: string;
 }
@@ -553,6 +558,11 @@ class DatabaseService {
           p_state: updates.state ?? null,
           p_zip: updates.zip ?? null,
           p_logo_url: updates.logo_url ?? null,
+          p_tagline: updates.tagline ?? null,
+          p_contractor_license: updates.contractor_license ?? null,
+          p_tax_id: updates.tax_id ?? null,
+          p_from_email: updates.from_email ?? null,
+          p_from_name: updates.from_name ?? null,
         });
       
       if (!rpcError && rpcData) {

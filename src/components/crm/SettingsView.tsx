@@ -53,6 +53,14 @@ interface CompanyFormData {
   email: string;
   website: string;
   address: string;
+  city: string;
+  state: string;
+  zip: string;
+  tagline: string;
+  contractor_license: string;
+  tax_id: string;
+  from_email: string;
+  from_name: string;
 }
 
 function normalizeCompanyName(rawName?: string | null, email?: string | null): string {
@@ -110,6 +118,14 @@ export default function SettingsView() {
     email: '',
     website: '',
     address: '',
+    city: '',
+    state: '',
+    zip: '',
+    tagline: '',
+    contractor_license: '',
+    tax_id: '',
+    from_email: '',
+    from_name: '',
   });
   
   const [profileForm, setProfileForm] = useState({
@@ -253,6 +269,14 @@ export default function SettingsView() {
             email: company.email || '',
             website: company.website || '',
             address: company.address || '',
+            city: company.city || '',
+            state: company.state || '',
+            zip: company.zip || '',
+            tagline: company.tagline || '',
+            contractor_license: company.contractor_license || '',
+            tax_id: company.tax_id || '',
+            from_email: company.from_email || '',
+            from_name: company.from_name || '',
           });
           if (company.logo_url && !company.logo_url.startsWith('blob:')) {
             setCompanyLogo(company.logo_url);
@@ -343,6 +367,14 @@ export default function SettingsView() {
           email: companyForm.email,
           website: companyForm.website,
           address: companyForm.address,
+          city: companyForm.city,
+          state: companyForm.state,
+          zip: companyForm.zip,
+          tagline: companyForm.tagline,
+          contractor_license: companyForm.contractor_license,
+          tax_id: companyForm.tax_id,
+          from_email: companyForm.from_email,
+          from_name: companyForm.from_name,
         }),
         15000,
         'Save company profile'
@@ -1381,13 +1413,83 @@ export default function SettingsView() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Street Address</label>
                   <input
                     type="text"
                     value={companyForm.address}
                     onChange={(e) => setCompanyForm({ ...companyForm, address: e.target.value })}
                     className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                    placeholder="1234 Commerce Blvd"
                   />
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+                    <input
+                      type="text"
+                      value={companyForm.city}
+                      onChange={(e) => setCompanyForm({ ...companyForm, city: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                      placeholder="Columbus"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
+                    <input
+                      type="text"
+                      value={companyForm.state}
+                      onChange={(e) => setCompanyForm({ ...companyForm, state: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                      placeholder="OH"
+                      maxLength={2}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">ZIP Code</label>
+                    <input
+                      type="text"
+                      value={companyForm.zip}
+                      onChange={(e) => setCompanyForm({ ...companyForm, zip: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                      placeholder="43215"
+                      maxLength={10}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Company Tagline</label>
+                  <input
+                    type="text"
+                    value={companyForm.tagline}
+                    onChange={(e) => setCompanyForm({ ...companyForm, tagline: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                    placeholder="Professional Storm Damage Restoration"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Contractor License #</label>
+                    <input
+                      type="text"
+                      value={companyForm.contractor_license}
+                      onChange={(e) => setCompanyForm({ ...companyForm, contractor_license: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                      placeholder="OH-RC-2024-8812"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Tax ID / EIN</label>
+                    <input
+                      type="text"
+                      value={companyForm.tax_id}
+                      onChange={(e) => setCompanyForm({ ...companyForm, tax_id: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                      placeholder="31-1234567"
+                    />
+                  </div>
                 </div>
 
                 <button
@@ -1404,6 +1506,58 @@ export default function SettingsView() {
                     <>
                       <Save size={18} />
                       Save Changes
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Email Sender Settings */}
+            <div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-6">Email Sender Settings</h3>
+              <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+                <p className="text-sm text-gray-500 mb-2">
+                  Configure the sender name and email address used when sending invoices, estimates, and other emails to your customers.
+                  Leave blank to use the system default.
+                </p>
+                <div className="grid grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Sender Name</label>
+                    <input
+                      type="text"
+                      value={companyForm.from_name}
+                      onChange={(e) => setCompanyForm({ ...companyForm, from_name: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                      placeholder={companyForm.name || 'Your Company Name'}
+                    />
+                    <p className="text-xs text-gray-400 mt-1">Appears as the "from" name in customer emails</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Sender Email Address</label>
+                    <input
+                      type="email"
+                      value={companyForm.from_email}
+                      onChange={(e) => setCompanyForm({ ...companyForm, from_email: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                      placeholder="invoices@yourdomain.com"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">Must be a verified domain in your email service (Resend, SendGrid, etc.)</p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleSaveCompany}
+                  disabled={isSavingCompany}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSavingCompany ? (
+                    <>
+                      <Loader2 size={18} className="animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save size={18} />
+                      Save Email Settings
                     </>
                   )}
                 </button>

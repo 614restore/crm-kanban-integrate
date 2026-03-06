@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useCRM, useFinancialStats } from '@/lib/crmStore';
-import { db } from '@/lib/database';
+import { db, DbCompany } from '@/lib/database';
 import { sendEmail } from '@/lib/emailApi';
 import { exportToExcel } from '@/lib/exportUtils';
+import { useAuth } from '@/lib/authContext';
 import { toast } from 'sonner';
 import {
   formatCurrency,
@@ -31,12 +32,28 @@ import {
 } from 'lucide-react';
 
 type InvoiceFilter = 'all' | 'draft' | 'sent' | 'paid' | 'overdue';
+type FinancialView = 'all' | 'sales' | 'projects';
 
 export default function FinancialDashboard() {
   const { state, dispatch } = useCRM();
+  const { profile } = useAuth();
   const financialStats = useFinancialStats();
   const [invoiceFilter, setInvoiceFilter] = useState<InvoiceFilter>('all');
+  const [financialView, setFinancialView] = useState<FinancialView>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [companyProfile, setCompanyProfile] = useState<DbCompany | null>(null);
+
+  // Load company profile for sender email
+  useEffect(() => {
+    const loadCompany = async () => {
+      if (!profile?.company_id) return;
+      try {
+        const company = await db.getCompany(profile.company_id);
+        if (company) setCompanyProfile(company);
+      } catch { /* ignore */ }
+    };
+    loadCompany();
+  }, [profile?.company_id]);
 
   const handleExport = () => {
     if (allInvoices.length === 0) {
@@ -75,9 +92,11 @@ export default function FinancialDashboard() {
     }
 
     try {
+      const fromName = companyProfile?.from_name || companyProfile?.name || 'TrussCTR';
+      const fromEmail = companyProfile?.from_email || companyProfile?.email || undefined;
       await sendEmail({
         to: contact.email,
-        subject: `Invoice ${existingInvoice.id} from 614 Restore CRM`,
+        subject: `Invoice ${existingInvoice.id} from ${companyProfile?.name || 'our company'}`,
         html: `
           <p>Hello ${contact.firstName},</p>
           <p>Your invoice is ready.</p>
@@ -85,7 +104,9 @@ export default function FinancialDashboard() {
           <p><strong>Amount:</strong> ${formatCurrency(existingInvoice.amount)}</p>
           <p><strong>Due Date:</strong> ${formatDate(existingInvoice.dueDate)}</p>
           <p>Please reply to this email if you have any questions.</p>
+          <p>Best regards,<br/>${fromName}</p>
         `,
+        ...(fromEmail ? { from: `${fromName} <${fromEmail}>` } : {}),
       });
 
       const updated = await db.updateInvoice(invoiceId, { status: 'sent' });
@@ -142,8 +163,12 @@ export default function FinancialDashboard() {
 
   const allInvoices = [...state.invoices];
 
-  // Filter invoices
+  // Filter invoices by financial view + status + search
   const filteredInvoices = allInvoices.filter((inv) => {
+    // Financial view filter
+    if (financialView === 'sales' && inv.jobId && inv.jobId !== '') return false;
+    if (financialView === 'projects' && (!inv.jobId || inv.jobId === '')) return false;
+
     const matchesFilter = invoiceFilter === 'all' || inv.status === invoiceFilter;
     const matchesSearch =
       searchQuery === '' ||
@@ -201,6 +226,26 @@ export default function FinancialDashboard() {
           <p className="text-gray-500 mt-1">Track revenue, invoices, and payments</p>
         </div>
         <div className="flex items-center gap-3">
+          {/* View Filter */}
+          <div className="flex items-center bg-gray-100 rounded-lg p-1">
+            {[
+              { id: 'all' as FinancialView, label: 'All' },
+              { id: 'sales' as FinancialView, label: 'Sales' },
+              { id: 'projects' as FinancialView, label: 'Projects' },
+            ].map((v) => (
+              <button
+                key={v.id}
+                onClick={() => setFinancialView(v.id)}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  financialView === v.id
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
           <button
             onClick={handleExport}
             className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
@@ -308,6 +353,69 @@ export default function FinancialDashboard() {
           </button>
         ))}
       </div>
+
+      {/* Project Cost Breakdown — visible in Projects view */}
+      {financialView === 'projects' && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Project Cost Breakdown</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="p-4 bg-blue-50 rounded-xl">
+              <p className="text-sm text-blue-600 font-medium">Materials</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1">
+                {formatCurrency(
+                  state.contacts
+                    .filter((c) => c.stage === 'production' || c.stage === 'completed')
+                    .reduce((sum, c) => sum + ((c as any).materialCost || 0), 0)
+                )}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">Lumber, shingles, underlayment, etc.</p>
+            </div>
+            <div className="p-4 bg-orange-50 rounded-xl">
+              <p className="text-sm text-orange-600 font-medium">Sub-Contractor Costs</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1">
+                {formatCurrency(
+                  state.contacts
+                    .filter((c) => c.stage === 'production' || c.stage === 'completed')
+                    .reduce((sum, c) => sum + ((c as any).subContractorCost || 0), 0)
+                )}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">Electrical, plumbing, HVAC subs</p>
+            </div>
+            <div className="p-4 bg-purple-50 rounded-xl">
+              <p className="text-sm text-purple-600 font-medium">Payroll / Labor</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1">
+                {formatCurrency(
+                  state.contacts
+                    .filter((c) => c.stage === 'production' || c.stage === 'completed')
+                    .reduce((sum, c) => sum + ((c as any).payrollCost || 0), 0)
+                )}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">Crew wages, overtime, benefits</p>
+            </div>
+            <div className="p-4 bg-green-50 rounded-xl">
+              <p className="text-sm text-green-600 font-medium">Profit Margin</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1">
+                {(() => {
+                  const revenue = financialStats.totalRevenue;
+                  const costs = state.contacts
+                    .filter((c) => c.stage === 'production' || c.stage === 'completed')
+                    .reduce(
+                      (sum, c) =>
+                        sum +
+                        ((c as any).materialCost || 0) +
+                        ((c as any).subContractorCost || 0) +
+                        ((c as any).payrollCost || 0),
+                      0
+                    );
+                  const margin = revenue > 0 ? ((revenue - costs) / revenue) * 100 : 0;
+                  return `${margin.toFixed(1)}%`;
+                })()}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">Revenue minus all project costs</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* QuickBooks Integration Banner */}
       <div className="bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl p-6 text-white">

@@ -33,6 +33,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/lib/authContext';
+import { db, DbCompany } from '@/lib/database';
 
 interface DocumentTemplate {
   id: string;
@@ -69,8 +71,29 @@ const DocumentTemplates: React.FC = () => {
   const [showCreateTemplate, setShowCreateTemplate] = useState(false);
   const [previewMode, setPreviewMode] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [companyProfile, setCompanyProfile] = useState<DbCompany | null>(null);
   
   const { toast } = useToast();
+  const { profile } = useAuth();
+
+  // Load company profile for template variable replacement
+  useEffect(() => {
+    const loadCompany = async () => {
+      if (!profile?.company_id) return;
+      try {
+        const company = await db.getCompany(profile.company_id);
+        if (company) setCompanyProfile(company);
+      } catch (err) {
+        console.warn('[DocumentTemplates] Failed to load company profile:', err);
+      }
+    };
+    loadCompany();
+
+    // Refresh if company updated elsewhere
+    const onCompanyUpdated = () => { loadCompany(); };
+    window.addEventListener('crm-company-updated', onCompanyUpdated);
+    return () => window.removeEventListener('crm-company-updated', onCompanyUpdated);
+  }, [profile?.company_id]);
 
   // Template categories for contractors
   const templateCategories = [
@@ -1642,19 +1665,21 @@ const DocumentTemplates: React.FC = () => {
     
     // Replace variables with sample data
     const sampleData: Record<string, string> = {
-      // Company info
-      'COMPANY_NAME': '614 Restore',
-      'COMPANY_TAGLINE': 'Professional Storm Damage Restoration',
-      'COMPANY_ADDRESS': '1234 Commerce Blvd',
-      'COMPANY_CITY': 'Columbus',
-      'COMPANY_STATE': 'OH',
-      'COMPANY_ZIP': '43215',
-      'COMPANY_PHONE': '(614) 555-0199',
-      'COMPANY_EMAIL': 'info@614restore.com',
-      'CONTRACTOR_LICENSE': 'OH-RC-2024-8812',
-      'COMPANY_LOGO': 'LOGO',
-      'TAX_ID': '31-1234567',
-      'REP_NAME': 'David Mitchell',
+      // Company info — use real profile data when available, fallback to sample
+      'COMPANY_NAME': companyProfile?.name || '614 Restore',
+      'COMPANY_TAGLINE': companyProfile?.tagline || 'Professional Storm Damage Restoration',
+      'COMPANY_ADDRESS': companyProfile?.address || '1234 Commerce Blvd',
+      'COMPANY_CITY': companyProfile?.city || 'Columbus',
+      'COMPANY_STATE': companyProfile?.state || 'OH',
+      'COMPANY_ZIP': companyProfile?.zip || '43215',
+      'COMPANY_PHONE': companyProfile?.phone || '(614) 555-0199',
+      'COMPANY_EMAIL': companyProfile?.email || 'info@614restore.com',
+      'CONTRACTOR_LICENSE': companyProfile?.contractor_license || 'OH-RC-2024-8812',
+      'COMPANY_LOGO': companyProfile?.logo_url
+        ? `<img src="${companyProfile.logo_url}" alt="${companyProfile.name || 'Company'} Logo" style="max-height:60px;max-width:180px;object-fit:contain;" />`
+        : (companyProfile?.name || '614 Restore'),
+      'TAX_ID': companyProfile?.tax_id || '31-1234567',
+      'REP_NAME': (profile?.first_name && profile?.last_name) ? `${profile.first_name} ${profile.last_name}` : 'David Mitchell',
       // Customer info
       'CUSTOMER_NAME': 'John & Mary Johnson',
       'CUSTOMER_PHONE': '(614) 555-0142',
