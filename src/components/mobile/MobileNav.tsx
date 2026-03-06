@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { 
   Home, 
   Users, 
@@ -13,6 +13,7 @@ import {
   WifiOff 
 } from 'lucide-react';
 import { offlineDB } from '@/lib/offlineDB';
+import { useCRM, ViewType } from '@/lib/crmStore';
 
 interface NavItem {
   icon: React.ComponentType<{ className?: string }>;
@@ -20,11 +21,12 @@ interface NavItem {
   path: string;
   color: string;
   badge?: number;
+  view?: ViewType;
 }
 
 export default function MobileNav() {
   const navigate = useNavigate();
-  const location = useLocation();
+  const { state, dispatch } = useCRM();
   const [photoCount, setPhotoCount] = useState(0);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [showMore, setShowMore] = useState(false);
@@ -62,61 +64,41 @@ export default function MobileNav() {
   }, []);
 
   const primaryNavItems: NavItem[] = [
+    { icon: Home, label: 'Dashboard', path: '/', view: 'dashboard', color: 'text-blue-600' },
+    { icon: Users, label: 'Contacts', path: '/', view: 'contacts', color: 'text-green-600' },
     { 
-      icon: Home, 
-      label: 'Dashboard', 
-      path: '/', 
-      color: 'text-blue-600' 
-    },
-    { 
-      icon: Users, 
-      label: 'Contacts', 
-      path: '/contacts',
-      color: 'text-green-600'
-    },
-    { 
-      icon: Camera, 
-      label: 'Photos', 
-      path: '/photos',
-      color: 'text-purple-600',
+      icon: Camera, label: 'Photos', path: '/photos', color: 'text-purple-600',
       badge: photoCount > 0 ? photoCount : undefined
     },
-    { 
-      icon: BarChart3, 
-      label: 'Pipeline', 
-      path: '/pipeline',
-      color: 'text-orange-600' 
-    },
-    { 
-      icon: Menu, 
-      label: 'More', 
-      path: '/more',
-      color: 'text-gray-600'
-    }
+    { icon: BarChart3, label: 'Pipeline', path: '/', view: 'pipeline', color: 'text-orange-600' },
+    { icon: Menu, label: 'More', path: '/more', color: 'text-gray-600' }
   ];
 
   const secondaryNavItems: NavItem[] = [
-    { icon: Calendar, label: 'Calendar', path: '/calendar', color: 'text-blue-500' },
-    { icon: FileText, label: 'Estimates', path: '/estimates', color: 'text-green-500' },
-    { icon: BarChart3, label: 'Projects', path: '/projects', color: 'text-orange-500' },
-    { icon: FileText, label: 'Work Orders', path: '/work-orders', color: 'text-purple-500' },
-    { icon: Upload, label: 'Documents', path: '/documents', color: 'text-indigo-500' },
+    { icon: Calendar, label: 'Calendar', path: '/', view: 'calendar', color: 'text-blue-500' },
+    { icon: FileText, label: 'Estimates', path: '/', view: 'estimates', color: 'text-green-500' },
+    { icon: BarChart3, label: 'Projects', path: '/', view: 'projects', color: 'text-orange-500' },
+    { icon: FileText, label: 'Work Orders', path: '/', view: 'work_orders', color: 'text-purple-500' },
+    { icon: Upload, label: 'Documents', path: '/', view: 'documents', color: 'text-indigo-500' },
   ];
 
-  const handleNavigation = (path: string) => {
-    if (path === '/more') {
+  const handleNavigation = (item: NavItem) => {
+    if (item.path === '/more') {
       setShowMore(!showMore);
-    } else {
-      navigate(path);
+    } else if (item.path === '/photos') {
+      navigate('/photos');
+      setShowMore(false);
+    } else if (item.view) {
+      dispatch({ type: 'SET_VIEW', payload: item.view });
+      navigate('/');
       setShowMore(false);
     }
   };
 
-  const isActive = (path: string) => {
-    if (path === '/') {
-      return location.pathname === '/';
-    }
-    return location.pathname.startsWith(path);
+  const isActive = (item: NavItem) => {
+    if (item.path === '/more') return showMore;
+    if (item.path === '/photos') return window.location.pathname === '/photos';
+    return item.view === state.currentView;
   };
 
   return (
@@ -131,12 +113,12 @@ export default function MobileNav() {
             <div className="grid grid-cols-2 gap-3 mb-4">
               {secondaryNavItems.map((item) => {
                 const Icon = item.icon;
-                const active = isActive(item.path);
+                const active = isActive(item);
                 
                 return (
                   <button
                     key={item.path}
-                    onClick={() => handleNavigation(item.path)}
+                    onClick={() => handleNavigation(item)}
                     className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
                       active 
                         ? `${item.color} bg-blue-50 dark:bg-blue-900/20 border-blue-200` 
@@ -180,12 +162,12 @@ export default function MobileNav() {
         <div className="flex items-center justify-around px-1 py-2">
           {primaryNavItems.map((item) => {
             const Icon = item.icon;
-            const active = item.path === '/more' ? showMore : isActive(item.path);
+            const active = item.path === '/more' ? showMore : isActive(item);
             
             return (
               <button
                 key={item.path}
-                onClick={() => handleNavigation(item.path)}
+                onClick={() => handleNavigation(item)}
                 className={`relative flex flex-col items-center py-2 px-3 rounded-lg transition-colors min-w-0 flex-1 max-w-[70px] touch-manipulation ${
                   active 
                     ? `${item.color} bg-blue-50 dark:bg-blue-900/20` 
