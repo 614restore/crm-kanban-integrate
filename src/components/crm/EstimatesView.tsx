@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
+import { sendEmail } from '@/lib/emailApi';
 import { Estimate, EstimateItem, Contact } from '@/lib/crmData';
 import { exportEstimatesToExcel } from '@/lib/exportUtils';
 import {
@@ -280,14 +281,77 @@ export default function EstimatesView() {
 
   const handleSendEstimate = async (estimateId: string) => {
     try {
+      const estimate = state.estimates.find((e) => e.id === estimateId);
+      if (!estimate) { toast.error('Estimate not found'); return; }
+
+      const contact = state.contacts.find((c) => c.id === estimate.contactId);
+      if (!contact?.email) {
+        // Still mark as sent even without email
+        const updated = await db.markEstimateSent(estimateId);
+        if (updated) {
+          dispatch({ type: 'UPDATE_ESTIMATE', payload: mapDbEstimateToApp(updated) });
+          toast.success('Estimate marked as sent (no email on file for this customer)');
+        }
+        return;
+      }
+
+      const companyProfile = await db.getCompany(profile?.company_id || '').catch(() => null);
+      const fromEmail = (companyProfile as any)?.from_email || undefined;
+
+      // Build estimate items HTML
+      const itemsHtml = (estimate.items || []).map((item: EstimateItem) =>
+        `<tr style="border-bottom:1px solid #e5e7eb">
+          <td style="padding:8px 12px">${item.description}</td>
+          <td style="padding:8px 12px;text-align:center">${item.quantity} ${item.unit || ''}</td>
+          <td style="padding:8px 12px;text-align:right">$${Number(item.unitPrice).toFixed(2)}</td>
+          <td style="padding:8px 12px;text-align:right;font-weight:600">$${Number(item.total).toFixed(2)}</td>
+        </tr>`
+      ).join('');
+
+      const companyName = (companyProfile as any)?.name || '614 Restore';
+
+      await sendEmail({
+        to: contact.email,
+        from: fromEmail,
+        subject: `Estimate ${estimate.estimateNumber} from ${companyName}`,
+        html: `
+          <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
+            <h2 style="color:#1e40af">Estimate from ${companyName}</h2>
+            <p>Hi ${contact.firstName},</p>
+            <p>Please find your estimate below. It is valid until ${estimate.validUntil ? new Date(estimate.validUntil).toLocaleDateString() : 'further notice'}.</p>
+            <h3 style="margin-bottom:4px">${estimate.title}</h3>
+            <table style="width:100%;border-collapse:collapse;margin:16px 0">
+              <thead style="background:#f3f4f6">
+                <tr>
+                  <th style="padding:8px 12px;text-align:left">Description</th>
+                  <th style="padding:8px 12px;text-align:center">Qty</th>
+                  <th style="padding:8px 12px;text-align:right">Unit Price</th>
+                  <th style="padding:8px 12px;text-align:right">Total</th>
+                </tr>
+              </thead>
+              <tbody>${itemsHtml}</tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="3" style="padding:12px;text-align:right;font-weight:bold">Total</td>
+                  <td style="padding:12px;text-align:right;font-weight:bold;font-size:1.1em">$${Number(estimate.total).toFixed(2)}</td>
+                </tr>
+              </tfoot>
+            </table>
+            ${estimate.notes ? `<p><strong>Notes:</strong> ${estimate.notes}</p>` : ''}
+            ${estimate.terms ? `<p style="font-size:0.85em;color:#6b7280"><strong>Terms:</strong> ${estimate.terms}</p>` : ''}
+            <p>Please reply to this email or call us if you have any questions.</p>
+            <p>Thank you,<br/>${companyName}</p>
+          </div>`,
+      });
+
       const updated = await db.markEstimateSent(estimateId);
       if (updated) {
         dispatch({ type: 'UPDATE_ESTIMATE', payload: mapDbEstimateToApp(updated) });
-        toast.success('Estimate marked as sent');
       }
+      toast.success(`Estimate emailed to ${contact.email}`);
     } catch (error) {
       console.error('Error sending estimate:', error);
-      toast.error('Failed to send estimate');
+      toast.error(error instanceof Error ? error.message : 'Failed to send estimate');
     }
   };
 

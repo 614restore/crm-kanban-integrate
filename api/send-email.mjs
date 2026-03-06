@@ -33,7 +33,7 @@ export default async function handler(req, res) {
         Authorization: `Bearer ${RESEND_API_KEY}`,
       },
       body: JSON.stringify({
-        from: from || 'CRM <onboarding@resend.dev>',
+        from: from || '614 Restore <scopemgr@614restore.com>',
         to: Array.isArray(to) ? to : [to],
         subject,
         html,

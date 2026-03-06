@@ -42,6 +42,7 @@ export default function FinancialDashboard() {
   const [financialView, setFinancialView] = useState<FinancialView>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [companyProfile, setCompanyProfile] = useState<DbCompany | null>(null);
+  const [statusMenuId, setStatusMenuId] = useState<string | null>(null);
 
   // Load company profile for sender email
   useEffect(() => {
@@ -131,34 +132,26 @@ export default function FinancialDashboard() {
     }
   };
 
-  const handleCycleInvoiceStatus = async (invoiceId: string) => {
+  const handleChangeInvoiceStatus = async (invoiceId: string, newStatus: Invoice['status']) => {
+    setStatusMenuId(null);
     const invoice = state.invoices.find((inv) => inv.id === invoiceId);
     if (!invoice) return;
 
-    const next = window.prompt('Set status: draft | sent | paid | overdue | cancelled', invoice.status);
-    if (!next) return;
-
-    const normalized = next.trim().toLowerCase();
-    if (!['draft', 'sent', 'paid', 'overdue', 'cancelled'].includes(normalized)) {
-      toast.error('Invalid status');
-      return;
-    }
-
-    const updated = await db.updateInvoice(invoiceId, { status: normalized });
-    if (!updated) {
-      toast.error('Failed to update invoice status');
-      return;
-    }
+    const updated = await db.updateInvoice(invoiceId, {
+      status: newStatus,
+      ...(newStatus === 'paid' ? { paid_at: new Date().toISOString() } : {}),
+    });
+    if (!updated) { toast.error('Failed to update invoice status'); return; }
 
     dispatch({
       type: 'UPDATE_INVOICE',
       payload: {
         ...invoice,
-        status: normalized as Invoice['status'],
+        status: newStatus,
+        paidAt: newStatus === 'paid' ? new Date().toISOString() : invoice.paidAt,
       },
     });
-
-    toast.success('Invoice status updated');
+    toast.success(`Invoice marked as ${newStatus}`);
   };
 
   const allInvoices = [...state.invoices];
@@ -543,22 +536,39 @@ export default function FinancialDashboard() {
                       >
                         <Printer size={16} className="text-gray-500" />
                       </button>
-                      {invoice.status === 'draft' && (
+                      {(invoice.status === 'draft' || invoice.status === 'sent') && (
                         <button
                           onClick={() => handleSendInvoice(invoice.id)}
                           className="p-2 hover:bg-blue-100 rounded-lg transition-colors"
-                          title="Send"
+                          title="Send via email"
                         >
                           <Send size={16} className="text-blue-500" />
                         </button>
                       )}
-                      <button
-                        onClick={() => handleCycleInvoiceStatus(invoice.id)}
-                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                        title="Change status"
-                      >
-                        <MoreVertical size={16} className="text-gray-500" />
-                      </button>
+                      <div className="relative">
+                        <button
+                          onClick={() => setStatusMenuId(statusMenuId === invoice.id ? null : invoice.id)}
+                          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                          title="Change status"
+                        >
+                          <MoreVertical size={16} className="text-gray-500" />
+                        </button>
+                        {statusMenuId === invoice.id && (
+                          <div className="absolute right-0 top-8 z-20 bg-white border border-gray-200 rounded-xl shadow-lg py-1 w-40">
+                            {(['draft', 'sent', 'paid', 'overdue', 'cancelled'] as Invoice['status'][])
+                              .filter((s) => s !== invoice.status)
+                              .map((s) => (
+                                <button
+                                  key={s}
+                                  onClick={() => handleChangeInvoiceStatus(invoice.id, s)}
+                                  className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50 capitalize"
+                                >
+                                  Mark as {s}
+                                </button>
+                              ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </td>
                 </tr>
