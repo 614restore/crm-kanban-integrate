@@ -1917,6 +1917,15 @@ export default function ContactDetail() {
               onSubmit={async (e) => {
                 e.preventDefault();
                 const formData = new FormData(e.currentTarget);
+                const materialCostGoal = parseFloat(formData.get('material_cost_goal') as string) || 0;
+                const subcontractorCostGoal = parseFloat(formData.get('subcontractor_cost_goal') as string) || 0;
+                const laborCostGoal = parseFloat(formData.get('labor_cost_goal') as string) || 0;
+                const otherCostGoal = parseFloat(formData.get('other_cost_goal') as string) || 0;
+                const materialCostActual = parseFloat(formData.get('material_cost') as string) || 0;
+                const subcontractorCostActual = parseFloat(formData.get('subcontractor_cost') as string) || 0;
+                const laborCostActual = parseFloat(formData.get('labor_cost') as string) || 0;
+                const otherCostActual = parseFloat(formData.get('other_cost') as string) || 0;
+                const actualCostTotal = materialCostActual + subcontractorCostActual + laborCostActual + otherCostActual;
                 const projectData = {
                   company_id: profile?.company_id,
                   contact_id: contactId,
@@ -1928,8 +1937,21 @@ export default function ContactDetail() {
                   start_date: (formData.get('start_date') as string) || undefined,
                   end_date: (formData.get('end_date') as string) || undefined,
                   estimated_budget: parseFloat(formData.get('estimated_budget') as string) || 0,
-                  actual_cost: 0,
-                  project_manager_id: profile?.id,
+                  actual_cost: actualCostTotal,
+                  material_cost_goal: materialCostGoal,
+                  subcontractor_cost_goal: subcontractorCostGoal,
+                  labor_cost_goal: laborCostGoal,
+                  other_cost_goal: otherCostGoal,
+                  material_cost: materialCostActual,
+                  subcontractor_cost: subcontractorCostActual,
+                  labor_cost: laborCostActual,
+                  other_cost: otherCostActual,
+                  address: (formData.get('address') as string) || undefined,
+                  city: (formData.get('city') as string) || undefined,
+                  state: (formData.get('state') as string) || undefined,
+                  zip: (formData.get('zip') as string) || undefined,
+                  project_manager_id: (formData.get('project_manager_id') as string) || profile?.id || undefined,
+                  notes: (formData.get('notes') as string) || undefined,
                   created_by: profile?.id || undefined,
                   created_at: new Date().toISOString(),
                   updated_at: new Date().toISOString(),
@@ -2042,6 +2064,70 @@ export default function ContactDetail() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="0.00"
                 />
+              </div>
+
+              {/* Cost Breakdown */}
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900 mb-3">Cost Breakdown</h3>
+                <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                  <div className="grid grid-cols-3 gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wide pb-1 border-b border-gray-200">
+                    <span>Category</span><span className="text-right">Budgeted</span><span className="text-right">Actual</span>
+                  </div>
+                  {[
+                    { label: 'Materials', goalName: 'material_cost_goal', actualName: 'material_cost' },
+                    { label: 'Subcontractors', goalName: 'subcontractor_cost_goal', actualName: 'subcontractor_cost' },
+                    { label: 'Labor / Payroll', goalName: 'labor_cost_goal', actualName: 'labor_cost' },
+                    { label: 'Other', goalName: 'other_cost_goal', actualName: 'other_cost' },
+                  ].map(({ label, goalName, actualName }) => (
+                    <div key={label} className="grid grid-cols-3 gap-2 items-center">
+                      <span className="text-sm text-gray-700 font-medium">{label}</span>
+                      <input type="number" name={goalName} min="0" step="0.01" placeholder="0.00"
+                        className="px-2 py-1.5 border border-gray-300 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      <input type="number" name={actualName} min="0" step="0.01" placeholder="0.00"
+                        className="px-2 py-1.5 border border-gray-300 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Project Manager */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Project Manager
+                </label>
+                <select
+                  name="project_manager_id"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">No manager assigned</option>
+                  {state.teamMembers.filter(m => m.isActive).map((member) => (
+                    <option key={member.id} value={member.id}>{member.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Project Location */}
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900 mb-3">Project Location</h3>
+                <div className="space-y-3">
+                  <input type="text" name="address" placeholder="Street Address"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                  <div className="grid grid-cols-3 gap-3">
+                    <input type="text" name="city" placeholder="City"
+                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                    <input type="text" name="state" placeholder="State"
+                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                    <input type="text" name="zip" placeholder="ZIP"
+                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                <textarea name="notes" rows={3} placeholder="Additional notes..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none" />
               </div>
 
               <div className="flex gap-3 pt-4 border-t border-gray-200">
