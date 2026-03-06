@@ -11,7 +11,7 @@ export default function InvoiceModal() {
   const { profile } = useAuth();
   const prefill = state.invoiceModalPrefill;
   const [selectedContactId, setSelectedContactId] = useState(prefill?.contactId || '');
-  const [dueDate, setDueDate] = useState('');
+  const [dueDate, setDueDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [items, setItems] = useState<InvoiceItem[]>(
     prefill?.items?.length
       ? prefill.items.map((i: any) => ({
@@ -299,7 +299,7 @@ export default function InvoiceModal() {
           </button>
           <button
             onClick={() => handleSave('draft')}
-            disabled={!selectedContactId || !dueDate}
+            disabled={!selectedContactId}
             className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Save size={18} />
@@ -307,7 +307,7 @@ export default function InvoiceModal() {
           </button>
           <button
             onClick={() => handleSave('sent')}
-            disabled={!selectedContactId || !dueDate}
+            disabled={!selectedContactId}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Send size={18} />
