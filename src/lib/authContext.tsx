@@ -140,7 +140,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await loadProfile(session.user.id, session.user.email || '');
       }
       
-      setLoading(false);
+      // If the URL hash has an access_token, a PASSWORD_RECOVERY or SIGNED_IN
+      // event is about to fire — keep loading so we don't flash the login page
+      const hash = window.location.hash;
+      if (!hash.includes('access_token')) {
+        setLoading(false);
+      }
     });
 
     // Listen for auth changes
