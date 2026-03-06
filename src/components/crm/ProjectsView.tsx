@@ -86,6 +86,14 @@ export default function ProjectsView() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [estimatedBudget, setEstimatedBudget] = useState('0');
+  const [materialCostGoal, setMaterialCostGoal] = useState('0');
+  const [subcontractorCostGoal, setSubcontractorCostGoal] = useState('0');
+  const [laborCostGoal, setLaborCostGoal] = useState('0');
+  const [otherCostGoal, setOtherCostGoal] = useState('0');
+  const [materialCost, setMaterialCost] = useState('0');
+  const [subcontractorCost, setSubcontractorCost] = useState('0');
+  const [laborCost, setLaborCost] = useState('0');
+  const [otherCost, setOtherCost] = useState('0');
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
   const [projectState, setProjectState] = useState('');
@@ -120,6 +128,14 @@ export default function ProjectsView() {
         completedDate: p.completed_date,
         estimatedBudget: Number(p.estimated_budget),
         actualCost: Number(p.actual_cost),
+        materialCostGoal: Number((p as any).material_cost_goal || 0),
+        subcontractorCostGoal: Number((p as any).subcontractor_cost_goal || 0),
+        salesRepPayGoal: Number((p as any).labor_cost_goal || 0),
+        otherExpensesGoal: Number((p as any).other_cost_goal || 0),
+        actualMaterialCost: Number((p as any).material_cost || 0),
+        actualSubcontractorCost: Number((p as any).subcontractor_cost || 0),
+        actualSalesRepPay: Number((p as any).labor_cost || 0),
+        actualOtherExpenses: Number((p as any).other_cost || 0),
         address: p.address,
         city: p.city,
         state: p.state,
@@ -152,6 +168,14 @@ export default function ProjectsView() {
       setStartDate(project.startDate || '');
       setEndDate(project.endDate || '');
       setEstimatedBudget(project.estimatedBudget.toString());
+      setMaterialCostGoal((project.materialCostGoal || 0).toString());
+      setSubcontractorCostGoal((project.subcontractorCostGoal || 0).toString());
+      setLaborCostGoal((project.salesRepPayGoal || 0).toString());
+      setOtherCostGoal((project.otherExpensesGoal || 0).toString());
+      setMaterialCost((project.actualMaterialCost || 0).toString());
+      setSubcontractorCost((project.actualSubcontractorCost || 0).toString());
+      setLaborCost((project.actualSalesRepPay || 0).toString());
+      setOtherCost((project.actualOtherExpenses || 0).toString());
       setAddress(project.address || '');
       setCity(project.city || '');
       setProjectState(project.state || '');
@@ -180,6 +204,14 @@ export default function ProjectsView() {
     setStartDate('');
     setEndDate('');
     setEstimatedBudget('0');
+    setMaterialCostGoal('0');
+    setSubcontractorCostGoal('0');
+    setLaborCostGoal('0');
+    setOtherCostGoal('0');
+    setMaterialCost('0');
+    setSubcontractorCost('0');
+    setLaborCost('0');
+    setOtherCost('0');
     setAddress('');
     setCity('');
     setProjectState('');
@@ -216,7 +248,15 @@ export default function ProjectsView() {
         start_date: startDate || undefined,
         end_date: endDate || undefined,
         estimated_budget: parseFloat(estimatedBudget) || 0,
-        actual_cost: editingProject?.actualCost || 0,
+        actual_cost: (parseFloat(materialCost) || 0) + (parseFloat(subcontractorCost) || 0) + (parseFloat(laborCost) || 0) + (parseFloat(otherCost) || 0),
+        material_cost_goal: parseFloat(materialCostGoal) || 0,
+        subcontractor_cost_goal: parseFloat(subcontractorCostGoal) || 0,
+        labor_cost_goal: parseFloat(laborCostGoal) || 0,
+        other_cost_goal: parseFloat(otherCostGoal) || 0,
+        material_cost: parseFloat(materialCost) || 0,
+        subcontractor_cost: parseFloat(subcontractorCost) || 0,
+        labor_cost: parseFloat(laborCost) || 0,
+        other_cost: parseFloat(otherCost) || 0,
         address: address.trim() || undefined,
         city: city.trim() || undefined,
         state: projectState.trim() || undefined,
@@ -245,6 +285,14 @@ export default function ProjectsView() {
             completedDate: updated.completed_date,
             estimatedBudget: Number(updated.estimated_budget),
             actualCost: Number(updated.actual_cost),
+            materialCostGoal: Number((updated as any).material_cost_goal || 0),
+            subcontractorCostGoal: Number((updated as any).subcontractor_cost_goal || 0),
+            salesRepPayGoal: Number((updated as any).labor_cost_goal || 0),
+            otherExpensesGoal: Number((updated as any).other_cost_goal || 0),
+            actualMaterialCost: Number((updated as any).material_cost || 0),
+            actualSubcontractorCost: Number((updated as any).subcontractor_cost || 0),
+            actualSalesRepPay: Number((updated as any).labor_cost || 0),
+            actualOtherExpenses: Number((updated as any).other_cost || 0),
             address: updated.address,
             city: updated.city,
             state: updated.state,
@@ -278,6 +326,14 @@ export default function ProjectsView() {
             completedDate: created.completed_date,
             estimatedBudget: Number(created.estimated_budget),
             actualCost: Number(created.actual_cost),
+            materialCostGoal: Number((created as any).material_cost_goal || 0),
+            subcontractorCostGoal: Number((created as any).subcontractor_cost_goal || 0),
+            salesRepPayGoal: Number((created as any).labor_cost_goal || 0),
+            otherExpensesGoal: Number((created as any).other_cost_goal || 0),
+            actualMaterialCost: Number((created as any).material_cost || 0),
+            actualSubcontractorCost: Number((created as any).subcontractor_cost || 0),
+            actualSalesRepPay: Number((created as any).labor_cost || 0),
+            actualOtherExpenses: Number((created as any).other_cost || 0),
             address: created.address,
             city: created.city,
             state: created.state,
@@ -554,10 +610,36 @@ export default function ProjectsView() {
                   <p className="text-sm font-semibold text-indigo-600">{formatCurrency(project.estimatedBudget)}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500 mb-1">Actual Cost</p>
+                  <p className="text-xs text-gray-500 mb-1">Total Cost</p>
                   <p className="text-sm font-semibold text-gray-900">{formatCurrency(project.actualCost)}</p>
                 </div>
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">Profit</p>
+                  <p className={`text-sm font-semibold ${project.estimatedBudget - project.actualCost >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {formatCurrency(project.estimatedBudget - project.actualCost)}
+                  </p>
+                </div>
               </div>
+
+              {/* Cost Breakdown */}
+              {(project.actualMaterialCost || project.actualSubcontractorCost || project.actualSalesRepPay || project.actualOtherExpenses) ? (
+                <div className="mt-3 bg-gray-50 rounded-lg p-3">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Cost Breakdown</p>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                    {[
+                      { label: 'Materials', actual: project.actualMaterialCost, goal: project.materialCostGoal },
+                      { label: 'Subcontractors', actual: project.actualSubcontractorCost, goal: project.subcontractorCostGoal },
+                      { label: 'Labor / Payroll', actual: project.actualSalesRepPay, goal: project.salesRepPayGoal },
+                      { label: 'Other', actual: project.actualOtherExpenses, goal: project.otherExpensesGoal },
+                    ].filter(r => r.actual || r.goal).map(({ label, actual, goal }) => (
+                      <div key={label} className="flex justify-between">
+                        <span className="text-gray-500">{label}</span>
+                        <span className="font-medium text-gray-700">{formatCurrency(actual || 0)}{goal ? ` / ${formatCurrency(goal)}` : ''}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
 
               {/* Budget Progress */}
               {project.estimatedBudget > 0 && (
@@ -780,6 +862,56 @@ export default function ProjectsView() {
                         </option>
                       ))}
                   </select>
+                </div>
+              </div>
+
+              {/* Cost Breakdown */}
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900 mb-3">Cost Breakdown</h3>
+                <div className="grid grid-cols-2 gap-4 bg-gray-50 rounded-lg p-4">
+                  <div className="col-span-2 grid grid-cols-3 gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wide pb-1 border-b border-gray-200">
+                    <span>Category</span><span className="text-right">Budgeted</span><span className="text-right">Actual</span>
+                  </div>
+                  {[
+                    { label: 'Materials', goal: materialCostGoal, setGoal: setMaterialCostGoal, actual: materialCost, setActual: setMaterialCost },
+                    { label: 'Subcontractors', goal: subcontractorCostGoal, setGoal: setSubcontractorCostGoal, actual: subcontractorCost, setActual: setSubcontractorCost },
+                    { label: 'Labor / Payroll', goal: laborCostGoal, setGoal: setLaborCostGoal, actual: laborCost, setActual: setLaborCost },
+                    { label: 'Other', goal: otherCostGoal, setGoal: setOtherCostGoal, actual: otherCost, setActual: setOtherCost },
+                  ].map(({ label, goal, setGoal, actual, setActual }) => (
+                    <div key={label} className="col-span-2 grid grid-cols-3 gap-2 items-center">
+                      <span className="text-sm text-gray-700 font-medium">{label}</span>
+                      <input type="number" min="0" step="0.01" value={goal} onChange={e => setGoal(e.target.value)}
+                        placeholder="0.00" className="px-2 py-1.5 border border-gray-300 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                      <input type="number" min="0" step="0.01" value={actual} onChange={e => setActual(e.target.value)}
+                        placeholder="0.00" className="px-2 py-1.5 border border-gray-300 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    </div>
+                  ))}
+                  <div className="col-span-2 grid grid-cols-3 gap-2 items-center border-t border-gray-200 pt-2 mt-1">
+                    <span className="text-sm font-bold text-gray-900">Total Costs</span>
+                    <span className="text-sm font-bold text-right text-gray-700">
+                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(
+                        [materialCostGoal, subcontractorCostGoal, laborCostGoal, otherCostGoal].reduce((s, v) => s + (parseFloat(v) || 0), 0)
+                      )}
+                    </span>
+                    <span className="text-sm font-bold text-right text-gray-700">
+                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(
+                        [materialCost, subcontractorCost, laborCost, otherCost].reduce((s, v) => s + (parseFloat(v) || 0), 0)
+                      )}
+                    </span>
+                  </div>
+                  <div className="col-span-2 grid grid-cols-3 gap-2 items-center">
+                    <span className="text-sm font-bold text-green-700">Est. Profit</span>
+                    <span className="text-sm font-bold text-right text-green-600">
+                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(
+                        (parseFloat(estimatedBudget) || 0) - [materialCostGoal, subcontractorCostGoal, laborCostGoal, otherCostGoal].reduce((s, v) => s + (parseFloat(v) || 0), 0)
+                      )}
+                    </span>
+                    <span className="text-sm font-bold text-right text-green-600">
+                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(
+                        (parseFloat(estimatedBudget) || 0) - [materialCost, subcontractorCost, laborCost, otherCost].reduce((s, v) => s + (parseFloat(v) || 0), 0)
+                      )}
+                    </span>
+                  </div>
                 </div>
               </div>
 
