@@ -1919,7 +1919,7 @@ export default function ContactDetail() {
                   estimated_budget: parseFloat(formData.get('estimated_budget') as string) || 0,
                   actual_cost: 0,
                   project_manager_id: profile?.id,
-                  created_by: profile?.id || '',
+                  created_by: profile?.id || undefined,
                   created_at: new Date().toISOString(),
                   updated_at: new Date().toISOString(),
                 };
@@ -2085,18 +2085,22 @@ export default function ContactDetail() {
                   title: formData.get('title') as string,
                   description: formData.get('description') as string,
                   status: 'draft',
-                  amount: amount,
+                  subtotal: amount,
                   tax: tax,
                   total: total,
                   valid_until: formData.get('valid_until') as string,
                   terms: formData.get('terms') as string,
                   notes: formData.get('notes') as string,
-                  created_by: profile?.id || '',
-                  created_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString(),
+                  created_by: profile?.id || undefined,
                 };
 
-                const newEstimate = await db.createEstimate(estimateData);
+                let newEstimate = null;
+                try {
+                  newEstimate = await db.createEstimate(estimateData);
+                } catch (err: any) {
+                  toast.error(`Failed to create estimate: ${err.message || 'Unknown error'}`);
+                  return;
+                }
                 if (newEstimate) {
                   toast.success('Estimate created successfully');
                   setShowEstimateModal(false);
@@ -2264,7 +2268,7 @@ export default function ContactDetail() {
                   labor_cost: laborCost,
                   material_cost: materialCost,
                   total_cost: totalCost,
-                  created_by: profile?.id || '',
+                  created_by: profile?.id || undefined,
                   created_at: new Date().toISOString(),
                   updated_at: new Date().toISOString(),
                 };

@@ -280,20 +280,23 @@ export interface DbEstimate {
   title: string;
   description?: string;
   status: string;
-  amount: number;
+  items?: any[];
+  subtotal: number;
   tax: number;
   total: number;
+  validity_date?: string;
   valid_until?: string;
-  created_at: string;
+  notes?: string;
+  terms?: string;
+  terms_and_conditions?: string;
   sent_at?: string;
   viewed_at?: string;
   accepted_at?: string;
   declined_at?: string;
   signed_by?: string;
   signature_data?: string;
-  terms?: string;
-  notes?: string;
-  created_by: string;
+  created_by?: string;
+  created_at: string;
   updated_at: string;
 }
 
@@ -1723,7 +1726,7 @@ class DatabaseService {
         supabase.from('estimates').insert(estimate).select().single(),
         10000, 'createEstimate'
       );
-      if (error) { console.error('Error creating estimate:', error); return null; }
+      if (error) { console.error('Error creating estimate:', error); throw new Error(error.message); }
       return data;
     } catch (err) { console.error('createEstimate timed out or failed:', err); return null; }
   }
