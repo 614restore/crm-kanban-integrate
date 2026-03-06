@@ -26,7 +26,7 @@ BEGIN
     v_company_id,
     COALESCE(NEW.raw_user_meta_data->>'first_name', ''),
     COALESCE(NEW.raw_user_meta_data->>'last_name', ''),
-    COALESCE(NEW.raw_user_meta_data->>'role', 'admin')
+    COALESCE(NEW.raw_user_meta_data->>'role', 'owner')
   );
 
   RETURN NEW;
