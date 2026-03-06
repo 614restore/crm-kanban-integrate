@@ -318,7 +318,7 @@ export default function WorkOrdersView() {
       handleCloseModal();
     } catch (error) {
       console.error('Error saving work order:', error);
-      toast.error('Failed to save work order');
+      toast.error(error instanceof Error ? error.message : 'Failed to save work order');
     } finally {
       setIsSaving(false);
     }

@@ -1920,7 +1920,7 @@ class DatabaseService {
     
     if (error) {
       console.error('Error creating work order:', error);
-      return null;
+      throw new Error(error.message);
     }
     return data;
   }
