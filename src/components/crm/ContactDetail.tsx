@@ -89,6 +89,7 @@ export default function ContactDetail() {
   const [contactMaterialOrders, setContactMaterialOrders] = useState<any[]>([]);
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [viewingProject, setViewingProject] = useState<any>(null);
+  const [editingProjectInDetail, setEditingProjectInDetail] = useState<any>(null);
   const [showEstimateModal, setShowEstimateModal] = useState(false);
   const [viewingEstimate, setViewingEstimate] = useState<any>(null);
   const [showWorkOrderModal, setShowWorkOrderModal] = useState(false);
@@ -1925,9 +1926,9 @@ export default function ContactDetail() {
           <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-gray-900">Create Project</h2>
+                <h2 className="text-xl font-semibold text-gray-900">{editingProjectInDetail ? 'Edit Project' : 'Create Project'}</h2>
                 <button
-                  onClick={() => setShowProjectModal(false)}
+                  onClick={() => { setShowProjectModal(false); setEditingProjectInDetail(null); }}
                   className="text-gray-400 hover:text-gray-600"
                 >
                   <X size={24} />
@@ -1951,7 +1952,7 @@ export default function ContactDetail() {
                 const projectData = {
                   company_id: profile?.company_id,
                   contact_id: contactId,
-                  project_number: `PRJ-${Date.now()}`,
+                  project_number: editingProjectInDetail?.projectNumber || `PRJ-${Date.now()}`,
                   name: formData.get('name') as string,
                   description: formData.get('description') as string,
                   status: formData.get('status') as string || 'planning',
@@ -1974,20 +1975,29 @@ export default function ContactDetail() {
                   zip: (formData.get('zip') as string) || undefined,
                   project_manager_id: (formData.get('project_manager_id') as string) || profile?.id || undefined,
                   notes: (formData.get('notes') as string) || undefined,
-                  created_by: profile?.id || undefined,
-                  created_at: new Date().toISOString(),
                   updated_at: new Date().toISOString(),
+                  ...(!editingProjectInDetail && { created_by: profile?.id || undefined, created_at: new Date().toISOString() }),
                 };
 
-                const newProject = await db.createProject(projectData);
-                if (newProject) {
-                  toast.success('Project created successfully');
-                  setShowProjectModal(false);
-                  // Reload data
-                  const projects = await db.getProjectsByContact(contactId!);
-                  setContactProjects(projects);
-                } else {
-                  toast.error('Failed to create project');
+                try {
+                  let saved;
+                  if (editingProjectInDetail) {
+                    saved = await db.updateProject(editingProjectInDetail.id, projectData);
+                    if (saved) toast.success('Project updated successfully');
+                  } else {
+                    saved = await db.createProject(projectData);
+                    if (saved) toast.success('Project created successfully');
+                  }
+                  if (saved) {
+                    setShowProjectModal(false);
+                    setEditingProjectInDetail(null);
+                    const projects = await db.getProjectsByContact(contactId!);
+                    setContactProjects(projects);
+                  } else {
+                    toast.error(editingProjectInDetail ? 'Failed to update project' : 'Failed to create project');
+                  }
+                } catch (err: any) {
+                  toast.error(err.message || 'Failed to save project');
                 }
               }}
               className="p-6 space-y-4"
@@ -1997,9 +2007,11 @@ export default function ContactDetail() {
                   Project Name *
                 </label>
                 <input
+                  key={editingProjectInDetail?.id || 'new'}
                   type="text"
                   name="name"
                   required
+                  defaultValue={editingProjectInDetail?.name || ''}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Enter project name"
                 />
@@ -2012,6 +2024,7 @@ export default function ContactDetail() {
                 <textarea
                   name="description"
                   rows={3}
+                  defaultValue={editingProjectInDetail?.description || ''}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Project description"
                 />
@@ -2024,6 +2037,7 @@ export default function ContactDetail() {
                   </label>
                   <select
                     name="status"
+                    defaultValue={editingProjectInDetail?.status || 'planning'}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
                     <option value="planning">Planning</option>
@@ -2040,6 +2054,7 @@ export default function ContactDetail() {
                   </label>
                   <select
                     name="priority"
+                    defaultValue={editingProjectInDetail?.priority || 'medium'}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
                     <option value="low">Low</option>
@@ -2058,6 +2073,7 @@ export default function ContactDetail() {
                   <input
                     type="date"
                     name="start_date"
+                    defaultValue={editingProjectInDetail?.startDate || ''}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
@@ -2069,6 +2085,7 @@ export default function ContactDetail() {
                   <input
                     type="date"
                     name="end_date"
+                    defaultValue={editingProjectInDetail?.endDate || ''}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
@@ -2083,6 +2100,7 @@ export default function ContactDetail() {
                   name="estimated_budget"
                   step="0.01"
                   min="0"
+                  defaultValue={editingProjectInDetail?.estimatedBudget || ''}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="0.00"
                 />
@@ -2096,16 +2114,16 @@ export default function ContactDetail() {
                     <span>Category</span><span className="text-right">Budgeted</span><span className="text-right">Actual</span>
                   </div>
                   {[
-                    { label: 'Materials', goalName: 'material_cost_goal', actualName: 'material_cost' },
-                    { label: 'Subcontractors', goalName: 'subcontractor_cost_goal', actualName: 'subcontractor_cost' },
-                    { label: 'Labor / Payroll', goalName: 'labor_cost_goal', actualName: 'labor_cost' },
-                    { label: 'Other', goalName: 'other_cost_goal', actualName: 'other_cost' },
-                  ].map(({ label, goalName, actualName }) => (
+                    { label: 'Materials', goalName: 'material_cost_goal', actualName: 'material_cost', goalVal: editingProjectInDetail?.materialCostGoal, actualVal: editingProjectInDetail?.actualMaterialCost },
+                    { label: 'Subcontractors', goalName: 'subcontractor_cost_goal', actualName: 'subcontractor_cost', goalVal: editingProjectInDetail?.subcontractorCostGoal, actualVal: editingProjectInDetail?.actualSubcontractorCost },
+                    { label: 'Labor / Payroll', goalName: 'labor_cost_goal', actualName: 'labor_cost', goalVal: editingProjectInDetail?.salesRepPayGoal, actualVal: editingProjectInDetail?.actualSalesRepPay },
+                    { label: 'Other', goalName: 'other_cost_goal', actualName: 'other_cost', goalVal: editingProjectInDetail?.otherExpensesGoal, actualVal: editingProjectInDetail?.actualOtherExpenses },
+                  ].map(({ label, goalName, actualName, goalVal, actualVal }) => (
                     <div key={label} className="grid grid-cols-3 gap-2 items-center">
                       <span className="text-sm text-gray-700 font-medium">{label}</span>
-                      <input type="number" name={goalName} min="0" step="0.01" placeholder="0.00"
+                      <input type="number" name={goalName} min="0" step="0.01" placeholder="0.00" defaultValue={goalVal || ''}
                         className="px-2 py-1.5 border border-gray-300 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                      <input type="number" name={actualName} min="0" step="0.01" placeholder="0.00"
+                      <input type="number" name={actualName} min="0" step="0.01" placeholder="0.00" defaultValue={actualVal || ''}
                         className="px-2 py-1.5 border border-gray-300 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500" />
                     </div>
                   ))}
@@ -2119,6 +2137,7 @@ export default function ContactDetail() {
                 </label>
                 <select
                   name="project_manager_id"
+                  defaultValue={editingProjectInDetail?.projectManagerId || ''}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="">No manager assigned</option>
@@ -2132,14 +2151,14 @@ export default function ContactDetail() {
               <div>
                 <h3 className="text-sm font-semibold text-gray-900 mb-3">Project Location</h3>
                 <div className="space-y-3">
-                  <input type="text" name="address" placeholder="Street Address"
+                  <input type="text" name="address" placeholder="Street Address" defaultValue={editingProjectInDetail?.address || ''}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
                   <div className="grid grid-cols-3 gap-3">
-                    <input type="text" name="city" placeholder="City"
+                    <input type="text" name="city" placeholder="City" defaultValue={editingProjectInDetail?.city || ''}
                       className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
-                    <input type="text" name="state" placeholder="State"
+                    <input type="text" name="state" placeholder="State" defaultValue={editingProjectInDetail?.state || ''}
                       className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
-                    <input type="text" name="zip" placeholder="ZIP"
+                    <input type="text" name="zip" placeholder="ZIP" defaultValue={editingProjectInDetail?.zip || ''}
                       className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
                   </div>
                 </div>
@@ -2148,14 +2167,14 @@ export default function ContactDetail() {
               {/* Notes */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-                <textarea name="notes" rows={3} placeholder="Additional notes..."
+                <textarea name="notes" rows={3} placeholder="Additional notes..." defaultValue={editingProjectInDetail?.notes || ''}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none" />
               </div>
 
               <div className="flex gap-3 pt-4 border-t border-gray-200">
                 <button
                   type="button"
-                  onClick={() => setShowProjectModal(false)}
+                  onClick={() => { setShowProjectModal(false); setEditingProjectInDetail(null); }}
                   className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                 >
                   Cancel
@@ -2164,7 +2183,7 @@ export default function ContactDetail() {
                   type="submit"
                   className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                 >
-                  Create Project
+                  {editingProjectInDetail ? 'Save Changes' : 'Create Project'}
                 </button>
               </div>
             </form>
@@ -2373,12 +2392,20 @@ export default function ContactDetail() {
               <button onClick={() => setViewingProject(null)} className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm">
                 Close
               </button>
-              <button
-                onClick={() => { setViewingProject(null); dispatch({ type: 'SET_VIEW', payload: 'projects' }); }}
-                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm"
-              >
-                <ExternalLink size={14} /> Open in Projects
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setEditingProjectInDetail(viewingProject); setViewingProject(null); setShowProjectModal(true); }}
+                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm"
+                >
+                  <Edit2 size={14} /> Edit Project
+                </button>
+                <button
+                  onClick={() => { setViewingProject(null); dispatch({ type: 'SET_VIEW', payload: 'projects' }); }}
+                  className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm"
+                >
+                  <ExternalLink size={14} /> Open in Projects
+                </button>
+              </div>
             </div>
           </div>
         </div>
