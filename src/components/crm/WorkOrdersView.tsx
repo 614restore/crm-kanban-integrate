@@ -100,6 +100,20 @@ export default function WorkOrdersView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Auto-fill location from selected contact (only when creating, not editing)
+  useEffect(() => {
+    if (!editingWorkOrder && selectedContactId) {
+      const contact = state.contacts.find(c => c.id === selectedContactId);
+      if (contact) {
+        if (contact.address) setAddress(contact.address);
+        if (contact.city) setCity(contact.city);
+        if (contact.state) setWorkOrderState(contact.state);
+        if (contact.zip) setZip(contact.zip);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedContactId]);
+
   const loadWorkOrders = async () => {
     if (!profile?.company_id) return;
     try {

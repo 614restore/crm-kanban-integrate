@@ -2166,14 +2166,14 @@ export default function ContactDetail() {
               <div>
                 <h3 className="text-sm font-semibold text-gray-900 mb-3">Project Location</h3>
                 <div className="space-y-3">
-                  <input type="text" name="address" placeholder="Street Address" defaultValue={editingProjectInDetail?.address || ''}
+                  <input type="text" name="address" placeholder="Street Address" defaultValue={editingProjectInDetail?.address || contact?.address || ''}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
                   <div className="grid grid-cols-3 gap-3">
-                    <input type="text" name="city" placeholder="City" defaultValue={editingProjectInDetail?.city || ''}
+                    <input type="text" name="city" placeholder="City" defaultValue={editingProjectInDetail?.city || contact?.city || ''}
                       className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
-                    <input type="text" name="state" placeholder="State" defaultValue={editingProjectInDetail?.state || ''}
+                    <input type="text" name="state" placeholder="State" defaultValue={editingProjectInDetail?.state || contact?.state || ''}
                       className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
-                    <input type="text" name="zip" placeholder="ZIP" defaultValue={editingProjectInDetail?.zip || ''}
+                    <input type="text" name="zip" placeholder="ZIP" defaultValue={editingProjectInDetail?.zip || contact?.zip || ''}
                       className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
                   </div>
                 </div>
