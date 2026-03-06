@@ -47,6 +47,7 @@ export default function UpdatePassword() {
             } else {
                 setSuccess('Password updated successfully! Redirecting...');
                 setTimeout(() => {
+                    try { sessionStorage.removeItem('pending_password_reset'); } catch (_) { /* ignore */ }
                     window.location.href = window.location.origin + (import.meta.env.BASE_URL || '/');
                 }, 2000);
             }

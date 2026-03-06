@@ -36,11 +36,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
-  // Detect recovery token in URL hash immediately so we don't flash the login page
+  // Detect recovery token — captured in supabase.ts before Supabase clears the hash
   const [isPasswordReset, setIsPasswordReset] = useState(() => {
     try {
-      const hash = window.location.hash;
-      return hash.includes('type=recovery') || hash.includes('type=invite');
+      return sessionStorage.getItem('pending_password_reset') === 'true';
     } catch (_) { return false; }
   });
 
@@ -142,6 +141,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(session?.user ?? null);
         setIsPasswordReset(true);
         setLoading(false);
+        try { sessionStorage.removeItem('pending_password_reset'); } catch (_) { /* ignore */ }
         return;
       }
 
