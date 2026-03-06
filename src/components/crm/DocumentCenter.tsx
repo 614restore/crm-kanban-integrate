@@ -279,7 +279,6 @@ export default function DocumentCenter() {
     
     if (!signedUrl) {
       console.error('[DocumentCenter] Failed to create signed URL');
-    } else {
     }
     
     return signedUrl;

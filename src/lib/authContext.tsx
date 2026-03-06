@@ -84,16 +84,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const setupSuccess = await setupNewUser(userId, userEmail);
         
         if (setupSuccess) {
-          // Fetch profile again to get the new company_id
           const updatedProfile = await fetchProfile(userId);
-          if (updatedProfile?.company_id) {
-          } else {
+          if (!updatedProfile?.company_id) {
             console.warn('⚠️ Setup reported success but no company_id found, retrying...');
-            // Retry once after a brief delay
             await new Promise(resolve => setTimeout(resolve, 1000));
             const retryProfile = await fetchProfile(userId);
-            if (retryProfile?.company_id) {
-            } else {
+            if (!retryProfile?.company_id) {
               console.error('❌ Company setup failed even after retry');
             }
             return retryProfile;
@@ -103,6 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.error('❌ Company setup failed');
         }
       } else if (profileData?.company_id) {
+        // company_id already set, nothing to do
       }
       
       return profileData;
@@ -415,7 +412,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { error } = await supabase.auth.signOut();
       if (error) {
         console.error('[Auth] Sign out error:', error);
-      } else {
       }
     } catch (err) {
       console.error('[Auth] Sign out failed:', err);
