@@ -13,11 +13,10 @@ dist-ssr
 *.local
 
 # Environment variables - CRITICAL SECURITY
+# Block ALL .env variants - never commit credentials
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+!.env.example
 
 # Editor directories and files
 .vscode/*
