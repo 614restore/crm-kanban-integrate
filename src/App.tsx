@@ -23,8 +23,7 @@ const PWAUpdateNotification = () => {
   const { updateAvailable, activateUpdate, isOffline } = useServiceWorker();
 
   useEffect(() => {
-    if (updateAvailable) {
-    }
+    // updateAvailable is handled by the banner below
   }, [updateAvailable]);
 
   if (updateAvailable) {

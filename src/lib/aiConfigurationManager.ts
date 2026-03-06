@@ -326,6 +326,7 @@ export class AIConfigurationManager {
 
       // Send notification emails (implement via Supabase Edge Function or external service)
       if (admins && admins.length > 0) {
+        // TODO: notify admins via Edge Function or email service
       }
     } catch (error) {
       console.error('Failed to notify admins:', error);
