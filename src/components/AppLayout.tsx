@@ -20,6 +20,7 @@ import {
 import Sidebar from './crm/Sidebar';
 import TopBar from './crm/TopBar';
 import AuthPage from './crm/AuthPage';
+import UpdatePassword from '@/pages/UpdatePassword';
 import QuickAddModal from './crm/QuickAddModal';
 import InvoiceModal from './crm/InvoiceModal';
 import ResponsiveLayout from './mobile/ResponsiveLayout';
@@ -660,10 +661,14 @@ function CRMApp() {
 
 // Auth Gate - shows login or CRM based on auth state
 function AuthGate() {
-  const { session, loading } = useAuth();
+  const { session, loading, isPasswordReset } = useAuth();
 
   if (loading) {
     return <LoadingScreen />;
+  }
+
+  if (isPasswordReset) {
+    return <UpdatePassword />;
   }
 
   if (!session) {

@@ -21,6 +21,7 @@ interface AuthContextType {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
+  isPasswordReset: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, metadata?: { first_name?: string; last_name?: string; role?: string; company_id?: string; company_name?: string }) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -35,6 +36,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isPasswordReset, setIsPasswordReset] = useState(false);
 
   // Fetch user profile
   const fetchProfile = async (userId: string) => {
@@ -137,6 +139,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+
+      // Handle password recovery — show reset form instead of app
+      if (event === 'PASSWORD_RECOVERY') {
+        setSession(session);
+        setUser(session?.user ?? null);
+        setIsPasswordReset(true);
+        setLoading(false);
+        return;
+      }
 
       // For token refreshes, just update the session/user objects.
       // The profile (including company_id) hasn't changed, so avoid an
@@ -439,7 +450,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const resetPassword = async (email: string) => {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}${import.meta.env.BASE_URL}reset-password`,
+        redirectTo: `${window.location.origin}${import.meta.env.BASE_URL}`,
       });
       return { error };
     } catch (err) {
@@ -494,6 +505,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         profile,
         loading,
+        isPasswordReset,
         signIn,
         signUp,
         signOut,

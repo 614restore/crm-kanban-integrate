@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import {
     Building2,
@@ -13,7 +12,6 @@ import {
 } from 'lucide-react';
 
 export default function UpdatePassword() {
-    const navigate = useNavigate();
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -21,22 +19,6 @@ export default function UpdatePassword() {
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
 
-    useEffect(() => {
-        // Supabase sends tokens in the URL hash as #access_token=...&refresh_token=...
-        const hash = window.location.hash;
-        if (hash && hash.includes('access_token')) {
-            const params = new URLSearchParams(hash.substring(1));
-            const accessToken = params.get('access_token');
-            const refreshToken = params.get('refresh_token');
-
-            if (accessToken && refreshToken) {
-                supabase.auth.setSession({
-                    access_token: accessToken,
-                    refresh_token: refreshToken
-                });
-            }
-        }
-    }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -65,7 +47,7 @@ export default function UpdatePassword() {
             } else {
                 setSuccess('Password updated successfully! Redirecting...');
                 setTimeout(() => {
-                    navigate('/');
+                    window.location.href = window.location.origin + (import.meta.env.BASE_URL || '/');
                 }, 2000);
             }
         } catch (err: any) {
