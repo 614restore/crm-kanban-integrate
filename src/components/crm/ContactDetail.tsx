@@ -1592,6 +1592,21 @@ export default function ContactDetail() {
                           {project.description}
                         </p>
                       )}
+
+                      <div className="flex gap-2 mt-4 pt-3 border-t border-gray-100">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setViewingProject(project); }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors"
+                        >
+                          <Eye size={14} /> View Project
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setEditingProjectInDetail(project); setShowProjectModal(true); }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                        >
+                          <Edit2 size={14} /> Edit
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
