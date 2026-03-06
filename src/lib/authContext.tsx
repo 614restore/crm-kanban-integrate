@@ -119,6 +119,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let profileFetchInProgress = false;
     let recoveryEventFired = false;
+    const pendingReset = (() => { try { return sessionStorage.getItem('pending_password_reset') === 'true'; } catch(_) { return false; } })();
 
     const loadProfile = async (userId: string, email: string) => {
       if (profileFetchInProgress) return;
@@ -146,12 +147,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       // For token refreshes, just update the session/user objects.
-      // The profile (including company_id) hasn't changed, so avoid an
-      // expensive re-fetch that can momentarily null-out company context.
       if (event === 'TOKEN_REFRESHED') {
         setSession(session);
         setUser(session?.user ?? null);
-        // Keep the existing profile — no need to re-fetch
         return;
       }
 
@@ -164,9 +162,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      // For SIGNED_IN, INITIAL_SESSION, USER_UPDATED, etc. — full refresh
-      // But don't override isPasswordReset if we're in a recovery flow
-      if (recoveryEventFired) return;
+      // For SIGNED_IN, INITIAL_SESSION, USER_UPDATED, etc.
+      // Don't override if we're in a recovery flow
+      if (recoveryEventFired || pendingReset) return;
       setSession(session);
       setUser(session?.user ?? null);
       
@@ -179,10 +177,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     });
 
-    // Get initial session — by this point PASSWORD_RECOVERY may have already fired
+    // Get initial session — skip everything if this is a password reset
     supabase.auth.getSession().then(async ({ data: { session } }) => {
-      // If recovery event already fired, don't interfere
-      if (recoveryEventFired) return;
+      // If pending reset or recovery already fired, don't interfere — wait for PASSWORD_RECOVERY event
+      if (recoveryEventFired || pendingReset) return;
 
       setSession(session);
       setUser(session?.user ?? null);
@@ -463,7 +461,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const resetPassword = async (email: string) => {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}${import.meta.env.BASE_URL}`,
+        redirectTo: `${window.location.origin}${import.meta.env.BASE_URL}reset-password`,
       });
       return { error };
     } catch (err) {
