@@ -36,7 +36,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isPasswordReset, setIsPasswordReset] = useState(false);
+  // Detect recovery token in URL hash immediately so we don't flash the login page
+  const [isPasswordReset, setIsPasswordReset] = useState(() => {
+    try {
+      const hash = window.location.hash;
+      return hash.includes('type=recovery') || hash.includes('type=invite');
+    } catch (_) { return false; }
+  });
 
   // Fetch user profile
   const fetchProfile = async (userId: string) => {
@@ -169,6 +175,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       // For SIGNED_IN, INITIAL_SESSION, USER_UPDATED, etc. — full refresh
+      // But don't override isPasswordReset if we're in a recovery flow
+      if (isPasswordReset) return;
       setSession(session);
       setUser(session?.user ?? null);
       
