@@ -1819,10 +1819,7 @@ class DatabaseService {
       .select()
       .single();
     
-    if (error) {
-      console.error('Error creating project:', error);
-      return null;
-    }
+    if (error) { console.error('Error creating project:', error); throw new Error(error.message); }
     return data;
   }
 
