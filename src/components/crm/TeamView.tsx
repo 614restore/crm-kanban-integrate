@@ -43,7 +43,7 @@ export default function TeamView() {
   const [isSendingInvite, setIsSendingInvite] = useState(false);
   const [isSavingMember, setIsSavingMember] = useState(false);
 
-  const userRole = state.currentUser?.role || 'sales';
+  const userRole = state.currentUser?.role || profile?.role || 'owner';
   const canManage = canManageTeam(userRole);
   const assignableRoles = getAssignableRoles(userRole);
 
