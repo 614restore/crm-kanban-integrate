@@ -658,18 +658,27 @@ class DatabaseService {
   }
 
   async updateContact(contactId: string, updates: Partial<DbContact>): Promise<DbContact | null> {
-    const { data, error } = await supabase
-      .from('contacts')
-      .update({ ...updates, updated_at: new Date().toISOString() })
-      .eq('id', contactId)
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error updating contact:', error);
+    try {
+      const { data, error } = await this.raceTimeout(
+        supabase
+          .from('contacts')
+          .update({ ...updates, updated_at: new Date().toISOString() })
+          .eq('id', contactId)
+          .select()
+          .single(),
+        10000,
+        'updateContact',
+      );
+
+      if (error) {
+        console.error('Error updating contact:', error);
+        return null;
+      }
+      return data;
+    } catch (err) {
+      console.error('updateContact timed out or failed:', err);
       return null;
     }
-    return data;
   }
 
   async deleteContact(contactId: string): Promise<boolean> {
