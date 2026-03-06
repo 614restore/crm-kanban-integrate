@@ -1,10 +1,14 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Capture recovery token from hash BEFORE Supabase clears it at client init time
+// Capture recovery token from query string (PKCE flow) or hash (implicit flow)
+// BEFORE Supabase processes it, so we can show the reset form immediately
 if (typeof window !== 'undefined') {
   try {
+    const params = new URLSearchParams(window.location.search);
     const hash = window.location.hash;
-    if (hash.includes('type=recovery')) {
+    // PKCE flow: ?code=...&type=recovery  OR  Supabase adds type to the redirect_to
+    // Implicit flow: #access_token=...&type=recovery
+    if (params.get('type') === 'recovery' || hash.includes('type=recovery')) {
       sessionStorage.setItem('pending_password_reset', 'true');
     }
   } catch (_) { /* ignore */ }
