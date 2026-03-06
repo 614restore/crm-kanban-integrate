@@ -338,6 +338,8 @@ function CRMApp() {
         dbEstimates,
         dbProjects,
         dbWorkOrders,
+        dbSuppliers,
+        dbMaterialOrders,
       ] = await Promise.all([
         db.getContacts(profile.company_id),
         db.getCommunications(profile.company_id),
@@ -351,6 +353,8 @@ function CRMApp() {
         db.getEstimates(profile.company_id),
         db.getProjects(profile.company_id),
         db.getWorkOrders(profile.company_id),
+        db.getSuppliers(profile.company_id),
+        db.getMaterialOrders(profile.company_id),
       ]);
 
       // Convert DB contacts to app contacts
@@ -553,6 +557,48 @@ function CRMApp() {
         updatedAt: wo.updated_at,
       }));
 
+      const suppliers = (dbSuppliers || []).map((s: any) => ({
+        id: s.id,
+        name: s.name,
+        contactName: s.contact_name,
+        email: s.email,
+        phone: s.phone,
+        address: s.address,
+        city: s.city,
+        state: s.state,
+        zip: s.zip,
+        website: s.website,
+        accountNumber: s.account_number,
+        paymentTerms: s.payment_terms,
+        notes: s.notes,
+        isActive: s.is_active,
+        createdAt: s.created_at,
+        updatedAt: s.updated_at,
+      }));
+
+      const materialOrders = (dbMaterialOrders || []).map((mo: any) => ({
+        id: mo.id,
+        orderNumber: mo.order_number || '',
+        supplierId: mo.supplier_id,
+        supplierName: suppliers.find((s: any) => s.id === mo.supplier_id)?.name || '',
+        contactId: mo.contact_id,
+        projectId: mo.project_id || mo.job_id,
+        jobId: mo.job_id || mo.project_id,
+        status: mo.status,
+        orderDate: mo.order_date,
+        expectedDeliveryDate: mo.expected_delivery_date,
+        actualDeliveryDate: mo.actual_delivery_date,
+        subtotal: Number(mo.subtotal || mo.total_cost || 0),
+        tax: Number(mo.tax || 0),
+        shipping: Number(mo.shipping || 0),
+        total: Number(mo.total || mo.total_cost || 0),
+        items: [],
+        notes: mo.notes,
+        createdBy: mo.created_by,
+        createdAt: mo.created_at,
+        updatedAt: mo.updated_at,
+      }));
+
       dispatch({
         type: 'INITIALIZE_DATA',
         payload: {
@@ -563,8 +609,8 @@ function CRMApp() {
           leadSources,
           automations,
           teamMembers,
-          suppliers: [],
-          materialOrders: [],
+          suppliers,
+          materialOrders,
           estimates,
           projects,
           workOrders,

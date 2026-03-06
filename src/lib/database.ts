@@ -1602,7 +1602,7 @@ class DatabaseService {
     
     if (error) {
       console.error('Error creating supplier:', error);
-      return null;
+      throw new Error(error.message);
     }
     return data;
   }

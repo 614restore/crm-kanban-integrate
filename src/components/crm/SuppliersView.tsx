@@ -307,7 +307,7 @@ export default function SuppliersView() {
       resetForm();
     } catch (error) {
       console.error('Error saving supplier:', error);
-      toast.error('Failed to save supplier');
+      toast.error(error instanceof Error ? error.message : 'Failed to save supplier');
     } finally {
       setIsSaving(false);
     }
