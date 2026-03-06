@@ -267,9 +267,9 @@ export default function EstimatesView() {
           toast.error('Failed to create estimate. Please try again.');
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving estimate:', error);
-      toast.error('Failed to save estimate');
+      toast.error(`Failed to save estimate: ${error?.message || 'Unknown error'}`);
     } finally {
       setIsSaving(false);
     }

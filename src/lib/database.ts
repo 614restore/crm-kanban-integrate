@@ -1726,7 +1726,7 @@ class DatabaseService {
         supabase.from('estimates').insert(estimate).select().single(),
         10000, 'createEstimate'
       );
-      if (error) { console.error('Error creating estimate:', error); return null; }
+      if (error) { console.error('Error creating estimate:', error); throw new Error(error.message); }
       return data;
     } catch (err) { console.error('createEstimate timed out or failed:', err); return null; }
   }
