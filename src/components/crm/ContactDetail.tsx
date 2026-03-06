@@ -88,6 +88,7 @@ export default function ContactDetail() {
   const [contactWorkOrders, setContactWorkOrders] = useState<any[]>([]);
   const [contactMaterialOrders, setContactMaterialOrders] = useState<any[]>([]);
   const [showProjectModal, setShowProjectModal] = useState(false);
+  const [viewingProject, setViewingProject] = useState<any>(null);
   const [showEstimateModal, setShowEstimateModal] = useState(false);
   const [viewingEstimate, setViewingEstimate] = useState<any>(null);
   const [showWorkOrderModal, setShowWorkOrderModal] = useState(false);
@@ -1534,33 +1535,42 @@ export default function ContactDetail() {
               {contactProjects.length > 0 ? (
                 <div className="grid gap-4">
                   {contactProjects.map((project) => (
-                    <div key={project.id} className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg transition-shadow">
+                    <div key={project.id} className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg transition-shadow cursor-pointer" onClick={() => setViewingProject(project)}>
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex-1">
                           <h4 className="text-lg font-semibold text-gray-900">{project.name}</h4>
                           <p className="text-sm text-gray-500 mt-1">#{project.projectNumber}</p>
                         </div>
-                        <span
-                          className={`px-3 py-1 rounded-full text-sm font-medium ${
-                            project.status === 'completed'
-                              ? 'bg-green-100 text-green-800'
-                              : project.status === 'in_progress'
-                              ? 'bg-blue-100 text-blue-800'
-                              : project.status === 'planning'
-                              ? 'bg-purple-100 text-purple-800'
-                              : project.status === 'on_hold'
-                              ? 'bg-amber-100 text-amber-800'
-                              : 'bg-gray-100 text-gray-800'
-                          }`}
-                        >
-                          {project.status.replace('_', ' ')}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`px-3 py-1 rounded-full text-sm font-medium ${
+                              project.status === 'completed'
+                                ? 'bg-green-100 text-green-800'
+                                : project.status === 'in_progress'
+                                ? 'bg-blue-100 text-blue-800'
+                                : project.status === 'planning'
+                                ? 'bg-purple-100 text-purple-800'
+                                : project.status === 'on_hold'
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-gray-100 text-gray-800'
+                            }`}
+                          >
+                            {project.status.replace('_', ' ')}
+                          </span>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setViewingProject(project); }}
+                            className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                            title="View Project"
+                          >
+                            <Eye size={16} />
+                          </button>
+                        </div>
                       </div>
                       
                       <div className="grid grid-cols-3 gap-4 text-sm">
                         <div>
                           <p className="text-gray-500">Budget</p>
-                          <p className="font-semibold text-gray-900">{formatCurrency(project.estimatedBudget || 0)}</p>
+                          <p className="font-semibold text-indigo-600">{formatCurrency(project.estimatedBudget || 0)}</p>
                         </div>
                         <div>
                           <p className="text-gray-500">Start Date</p>
@@ -2251,6 +2261,123 @@ export default function ContactDetail() {
             <div className="p-6 border-t border-gray-200 bg-gray-50 rounded-b-xl">
               <button onClick={() => setViewingEstimate(null)} className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-white transition-colors text-sm">
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Project View Modal */}
+      {viewingProject && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200 flex items-start justify-between">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">{viewingProject.name}</h2>
+                <p className="text-sm text-gray-500 mt-1">#{viewingProject.projectNumber} · {contact?.name}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                  viewingProject.status === 'completed' ? 'bg-green-100 text-green-800'
+                  : viewingProject.status === 'in_progress' ? 'bg-blue-100 text-blue-800'
+                  : viewingProject.status === 'planning' ? 'bg-purple-100 text-purple-800'
+                  : viewingProject.status === 'on_hold' ? 'bg-amber-100 text-amber-800'
+                  : 'bg-gray-100 text-gray-800'
+                }`}>{viewingProject.status?.replace(/_/g, ' ')}</span>
+                {viewingProject.priority && (
+                  <span className={`px-2 py-1 rounded text-xs font-medium ${
+                    viewingProject.priority === 'urgent' ? 'bg-red-100 text-red-700'
+                    : viewingProject.priority === 'high' ? 'bg-orange-100 text-orange-700'
+                    : viewingProject.priority === 'medium' ? 'bg-yellow-100 text-yellow-700'
+                    : 'bg-gray-100 text-gray-600'
+                  }`}>{viewingProject.priority}</span>
+                )}
+                <button onClick={() => setViewingProject(null)} className="text-gray-400 hover:text-gray-600 ml-2">
+                  <X size={24} />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Dates + Manager */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+                <div><p className="text-gray-500 mb-1">Start Date</p><p className="font-medium">{viewingProject.startDate ? formatDate(viewingProject.startDate) : '—'}</p></div>
+                <div><p className="text-gray-500 mb-1">End Date</p><p className="font-medium">{viewingProject.endDate ? formatDate(viewingProject.endDate) : '—'}</p></div>
+                <div><p className="text-gray-500 mb-1">Completed</p><p className="font-medium">{viewingProject.completedDate ? formatDate(viewingProject.completedDate) : '—'}</p></div>
+                <div><p className="text-gray-500 mb-1">Project Manager</p><p className="font-medium">{viewingProject.projectManagerName || '—'}</p></div>
+              </div>
+
+              {/* Description */}
+              {viewingProject.description && (
+                <div>
+                  <p className="text-sm font-semibold text-gray-700 mb-1">Description</p>
+                  <p className="text-sm text-gray-600 bg-gray-50 rounded-lg p-3">{viewingProject.description}</p>
+                </div>
+              )}
+
+              {/* Budget + Cost Breakdown */}
+              <div>
+                <p className="text-sm font-semibold text-gray-700 mb-3">Financials</p>
+                <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                  <div className="grid grid-cols-3 gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wide pb-2 border-b border-gray-200">
+                    <span>Category</span><span className="text-right">Budgeted</span><span className="text-right">Actual</span>
+                  </div>
+                  {[
+                    { label: 'Contract / Budget', goal: viewingProject.estimatedBudget, actual: null, isBudget: true },
+                    { label: 'Materials', goal: viewingProject.materialCostGoal, actual: viewingProject.actualMaterialCost },
+                    { label: 'Subcontractors', goal: viewingProject.subcontractorCostGoal, actual: viewingProject.actualSubcontractorCost },
+                    { label: 'Labor / Payroll', goal: viewingProject.salesRepPayGoal, actual: viewingProject.actualSalesRepPay },
+                    { label: 'Other', goal: viewingProject.otherExpensesGoal, actual: viewingProject.actualOtherExpenses },
+                  ].map(({ label, goal, actual, isBudget }) => (
+                    <div key={label} className={`grid grid-cols-3 gap-2 text-sm ${isBudget ? 'font-semibold text-indigo-700 border-b border-gray-200 pb-2' : ''}`}>
+                      <span className={isBudget ? '' : 'text-gray-700'}>{label}</span>
+                      <span className="text-right">{goal ? formatCurrency(goal) : '—'}</span>
+                      <span className="text-right">{actual !== null && actual !== undefined ? formatCurrency(actual) : '—'}</span>
+                    </div>
+                  ))}
+                  <div className="grid grid-cols-3 gap-2 text-sm font-bold border-t border-gray-300 pt-2">
+                    <span className="text-gray-900">Total Costs</span>
+                    <span className="text-right text-gray-700">{formatCurrency((viewingProject.materialCostGoal || 0) + (viewingProject.subcontractorCostGoal || 0) + (viewingProject.salesRepPayGoal || 0) + (viewingProject.otherExpensesGoal || 0))}</span>
+                    <span className="text-right text-gray-700">{formatCurrency(viewingProject.actualCost || 0)}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-sm font-bold">
+                    <span className="text-green-700">Est. Profit</span>
+                    <span className={`text-right ${(viewingProject.estimatedBudget || 0) - ((viewingProject.materialCostGoal || 0) + (viewingProject.subcontractorCostGoal || 0) + (viewingProject.salesRepPayGoal || 0) + (viewingProject.otherExpensesGoal || 0)) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {formatCurrency((viewingProject.estimatedBudget || 0) - ((viewingProject.materialCostGoal || 0) + (viewingProject.subcontractorCostGoal || 0) + (viewingProject.salesRepPayGoal || 0) + (viewingProject.otherExpensesGoal || 0)))}
+                    </span>
+                    <span className={`text-right ${(viewingProject.estimatedBudget || 0) - (viewingProject.actualCost || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {formatCurrency((viewingProject.estimatedBudget || 0) - (viewingProject.actualCost || 0))}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Location */}
+              {(viewingProject.address || viewingProject.city) && (
+                <div>
+                  <p className="text-sm font-semibold text-gray-700 mb-1">Project Location</p>
+                  <p className="text-sm text-gray-600">{[viewingProject.address, viewingProject.city, viewingProject.state, viewingProject.zip].filter(Boolean).join(', ')}</p>
+                </div>
+              )}
+
+              {/* Notes */}
+              {viewingProject.notes && (
+                <div>
+                  <p className="text-sm font-semibold text-gray-700 mb-1">Notes</p>
+                  <p className="text-sm text-gray-600 bg-gray-50 rounded-lg p-3">{viewingProject.notes}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 border-t border-gray-200 flex justify-between">
+              <button onClick={() => setViewingProject(null)} className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm">
+                Close
+              </button>
+              <button
+                onClick={() => { setViewingProject(null); dispatch({ type: 'SET_VIEW', payload: 'projects' }); }}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm"
+              >
+                <ExternalLink size={14} /> Open in Projects
               </button>
             </div>
           </div>
