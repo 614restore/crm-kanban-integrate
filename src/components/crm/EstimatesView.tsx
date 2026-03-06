@@ -22,6 +22,7 @@ import {
   Clock,
   CheckCircle,
   Download,
+  Printer,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -349,6 +350,101 @@ export default function EstimatesView() {
       month: 'short',
       day: 'numeric'
     });
+  };
+
+  const printEstimate = (estimate: Estimate) => {
+    const contactName = getContactName(estimate.contactId);
+    const itemsHtml = estimate.items && estimate.items.length > 0
+      ? `<table style="width:100%;border-collapse:collapse;margin-bottom:24px">
+          <thead>
+            <tr style="background:#f3f4f6">
+              <th style="text-align:left;padding:10px 12px;border-bottom:2px solid #e5e7eb;font-size:13px">Description</th>
+              <th style="text-align:right;padding:10px 12px;border-bottom:2px solid #e5e7eb;font-size:13px">Qty</th>
+              <th style="text-align:right;padding:10px 12px;border-bottom:2px solid #e5e7eb;font-size:13px">Unit Price</th>
+              <th style="text-align:right;padding:10px 12px;border-bottom:2px solid #e5e7eb;font-size:13px">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${estimate.items.map((item: any) => `
+              <tr>
+                <td style="padding:10px 12px;border-bottom:1px solid #f3f4f6">${item.description || ''}</td>
+                <td style="text-align:right;padding:10px 12px;border-bottom:1px solid #f3f4f6">${item.quantity || 0}</td>
+                <td style="text-align:right;padding:10px 12px;border-bottom:1px solid #f3f4f6">$${(item.unitPrice || item.unit_price || 0).toFixed(2)}</td>
+                <td style="text-align:right;padding:10px 12px;border-bottom:1px solid #f3f4f6">$${(item.total || 0).toFixed(2)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>`
+      : '';
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Estimate ${estimate.estimateNumber}</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111; margin: 0; padding: 40px; }
+    @media print { body { padding: 20px; } }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; padding-bottom: 24px; border-bottom: 2px solid #e5e7eb; }
+    .company-name { font-size: 24px; font-weight: 700; color: #1d4ed8; }
+    .estimate-meta { text-align: right; }
+    .estimate-number { font-size: 20px; font-weight: 700; color: #111; }
+    .badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; text-transform: uppercase; background: #dbeafe; color: #1d4ed8; margin-top: 6px; }
+    .section-title { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: #6b7280; margin-bottom: 8px; }
+    .bill-to { margin-bottom: 32px; }
+    .bill-to p { margin: 2px 0; font-size: 15px; }
+    .totals { display: flex; justify-content: flex-end; margin-bottom: 32px; }
+    .totals-box { width: 280px; }
+    .totals-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; color: #374151; }
+    .totals-row.grand { font-size: 16px; font-weight: 700; border-top: 2px solid #e5e7eb; padding-top: 10px; color: #111; }
+    .totals-row.grand span:last-child { color: #1d4ed8; }
+    .notes-section { background: #f9fafb; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+    .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #9ca3af; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <div class="company-name">${profile?.company_id ? 'TrussCTR' : 'Your Company'}</div>
+    </div>
+    <div class="estimate-meta">
+      <div class="estimate-number">Estimate ${estimate.estimateNumber}</div>
+      ${estimate.validUntil ? `<div style="font-size:13px;color:#6b7280;margin-top:4px">Valid until ${new Date(estimate.validUntil).toLocaleDateString()}</div>` : ''}
+      <div class="badge">${estimate.status.toUpperCase()}</div>
+    </div>
+  </div>
+
+  <div class="bill-to">
+    <div class="section-title">Prepared For</div>
+    <p><strong>${contactName}</strong></p>
+    ${estimate.title ? `<p style="color:#6b7280">${estimate.title}</p>` : ''}
+  </div>
+
+  ${estimate.description ? `<p style="color:#374151;margin-bottom:24px">${estimate.description}</p>` : ''}
+
+  ${itemsHtml}
+
+  <div class="totals">
+    <div class="totals-box">
+      <div class="totals-row"><span>Subtotal</span><span>$${(estimate.amount || 0).toFixed(2)}</span></div>
+      <div class="totals-row"><span>Tax</span><span>$${(estimate.tax || 0).toFixed(2)}</span></div>
+      <div class="totals-row grand"><span>Total</span><span>$${(estimate.total || 0).toFixed(2)}</span></div>
+    </div>
+  </div>
+
+  ${estimate.notes ? `<div class="notes-section"><div class="section-title">Notes</div><p style="margin:0;font-size:14px;color:#374151">${estimate.notes}</p></div>` : ''}
+  ${estimate.terms ? `<div class="notes-section"><div class="section-title">Terms &amp; Conditions</div><p style="margin:0;font-size:14px;color:#374151">${estimate.terms}</p></div>` : ''}
+
+  <div class="footer">Generated ${new Date().toLocaleDateString()} · ${estimate.estimateNumber}</div>
+</body>
+</html>`;
+
+    const win = window.open('', '_blank');
+    if (win) {
+      win.document.write(html);
+      win.document.close();
+      win.onload = () => win.print();
+    }
   };
 
   return (
@@ -880,13 +976,22 @@ export default function EstimatesView() {
 
             {/* Footer Actions */}
             <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50 rounded-b-xl">
-              <button
-                onClick={() => { setViewingEstimate(null); handleOpenModal(viewingEstimate); }}
-                className="flex items-center gap-2 px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-white transition-colors text-sm"
-              >
-                <Edit2 size={16} />
-                Edit
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { setViewingEstimate(null); handleOpenModal(viewingEstimate); }}
+                  className="flex items-center gap-2 px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-white transition-colors text-sm"
+                >
+                  <Edit2 size={16} />
+                  Edit
+                </button>
+                <button
+                  onClick={() => printEstimate(viewingEstimate)}
+                  className="flex items-center gap-2 px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-white transition-colors text-sm"
+                >
+                  <Printer size={16} />
+                  Print / PDF
+                </button>
+              </div>
               {viewingEstimate.status === 'draft' && (
                 <button
                   onClick={() => { handleSendEstimate(viewingEstimate.id); setViewingEstimate(null); }}
