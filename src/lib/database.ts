@@ -1721,14 +1721,12 @@ class DatabaseService {
   }
 
   async createEstimate(estimate: Partial<DbEstimate>): Promise<DbEstimate | null> {
-    try {
-      const { data, error } = await this.raceTimeout(
-        supabase.from('estimates').insert(estimate).select().single(),
-        10000, 'createEstimate'
-      );
-      if (error) { console.error('Error creating estimate:', error); throw new Error(error.message); }
-      return data;
-    } catch (err) { console.error('createEstimate timed out or failed:', err); return null; }
+    const { data, error } = await this.raceTimeout(
+      supabase.from('estimates').insert(estimate).select().single(),
+      10000, 'createEstimate'
+    );
+    if (error) { console.error('Error creating estimate:', error); throw new Error(error.message); }
+    return data;
   }
 
   async updateEstimate(estimateId: string, updates: Partial<DbEstimate>): Promise<DbEstimate | null> {
