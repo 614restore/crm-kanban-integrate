@@ -349,14 +349,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Update profile with additional info (retry up to 3 times)
         let profileUpdateSuccess = false;
         for (let attempt = 1; attempt <= 3; attempt++) {
-          const { error: profileError, count } = await supabase
-            .from('profiles')
-            .update({
+          const profileUpdates: Record<string, unknown> = {
               first_name: metadata?.first_name,
               last_name: metadata?.last_name,
               role: userRole,
-              company_id: metadata?.company_id, // Set company_id if provided (invite signup)
-            })
+            };
+          // Only set company_id if provided (invite signup) — don't overwrite trigger-created company_id
+          if (metadata?.company_id) {
+            profileUpdates.company_id = metadata.company_id;
+          }
+          const { error: profileError, count } = await supabase
+            .from('profiles')
+            .update(profileUpdates)
             .eq('id', data.user.id);
           
           if (profileError) {
