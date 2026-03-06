@@ -51,7 +51,7 @@ export default function AIAssistant() {
       id: '1',
       role: 'assistant',
       content:
-        "Hello! I'm your StormCraft CRM AI Assistant. I can help you with:\n\n• Navigating the CRM and its features\n• Sales pipeline optimization\n• Insurance claim management\n• Payment and invoicing best practices\n• Team management tips\n• Workflow automation suggestions\n\nHow can I assist you today?",
+        "Hello! I'm your TrussCTR AI Assistant. I can help you with:\n\n• Navigating the CRM and its features\n• Sales pipeline optimization\n• Insurance claim management\n• Payment and invoicing best practices\n• Team management tips\n• Workflow automation suggestions\n\nHow can I assist you today?",
       timestamp: new Date(),
     },
   ]);
@@ -84,7 +84,7 @@ export default function AIAssistant() {
 
     // Insurance claims
     if (q.includes('insurance') || q.includes('claim') || q.includes('contingency')) {
-      return `Managing insurance claims effectively is key for restoration work. Here's how to use StormCraft CRM for claims:\n\n• **Track claim status** — Use pipeline stages to move contacts from "Inspection Completed" → "Estimate Sent" → "Contingency" → "Signed".\n• **Store documents** — Upload insurance documents and photos in the Documents section linked to each contact.\n• **Log communications** — Record every call and email with the insurance company in the contact's communication history.\n• **Set reminders** — Use Appointments to set follow-up dates for claim approvals.\n• **Photo documentation** — Use the Photo Capture feature in the field to take and organize damage photos by contact.\n\nYou currently have ${state.contacts.filter((c) => c.status === 'contingency').length} contacts in contingency stage.`;
+      return `Managing insurance claims effectively is key for restoration work. Here's how to use TrussCTR for claims:\n\n• **Track claim status** — Use pipeline stages to move contacts from "Inspection Completed" → "Estimate Sent" → "Contingency" → "Signed".\n• **Store documents** — Upload insurance documents and photos in the Documents section linked to each contact.\n• **Log communications** — Record every call and email with the insurance company in the contact's communication history.\n• **Set reminders** — Use Appointments to set follow-up dates for claim approvals.\n• **Photo documentation** — Use the Photo Capture feature in the field to take and organize damage photos by contact.\n\nYou currently have ${state.contacts.filter((c) => c.status === 'contingency').length} contacts in contingency stage.`;
     }
 
     // Payment / invoicing
@@ -128,12 +128,12 @@ export default function AIAssistant() {
 
     // Dashboard
     if (q.includes('dashboard') || q.includes('overview') || q.includes('home')) {
-      return `The **Dashboard** is your command center:\n\n• **KPI Cards** — See total contacts, pipeline value, conversion rate, and avg deal size at a glance with period-over-period trends.\n• **Upcoming Appointments** — View your next scheduled appointments.\n• **Pipeline Overview** — See how contacts are distributed across stages.\n• **Recent Activity** — Track the latest activity in your CRM.\n\nThe Dashboard is the first screen you see when you open StormCraft CRM.`;
+      return `The **Dashboard** is your command center:\n\n• **KPI Cards** — See total contacts, pipeline value, conversion rate, and avg deal size at a glance with period-over-period trends.\n• **Upcoming Appointments** — View your next scheduled appointments.\n• **Pipeline Overview** — See how contacts are distributed across stages.\n• **Recent Activity** — Track the latest activity in your CRM.\n\nThe Dashboard is the first screen you see when you open TrussCTR.`;
     }
 
     // General help / greetings
     if (q.includes('hello') || q.includes('hi') || q.includes('hey') || q.includes('help') || q.includes('what can you')) {
-      return `I'm here to help you get the most out of StormCraft CRM! Here's what I can help with:\n\n• **Pipeline & Conversions** — Tips to improve your sales process\n• **Insurance Claims** — Managing restoration claims effectively\n• **Invoicing & Payments** — Getting paid faster\n• **Scheduling** — Optimizing your appointments\n• **Team Management** — Organizing your team\n• **Automations** — Saving time with workflows\n• **Reports** — Understanding your business metrics\n• **Documents** — Creating professional templates\n• **Expenses** — Tracking costs and receipts\n\nJust ask about any topic and I'll provide CRM-specific guidance!`;
+      return `I'm here to help you get the most out of TrussCTR! Here's what I can help with:\n\n• **Pipeline & Conversions** — Tips to improve your sales process\n• **Insurance Claims** — Managing restoration claims effectively\n• **Invoicing & Payments** — Getting paid faster\n• **Scheduling** — Optimizing your appointments\n• **Team Management** — Organizing your team\n• **Automations** — Saving time with workflows\n• **Reports** — Understanding your business metrics\n• **Documents** — Creating professional templates\n• **Expenses** — Tracking costs and receipts\n\nJust ask about any topic and I'll provide CRM-specific guidance!`;
     }
 
     // Default intelligent response
