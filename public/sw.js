@@ -1,7 +1,7 @@
 // Basic service worker for StormCraft CRM
 // This provides offline caching and PWA functionality
 
-const CACHE_NAME = 'stormcraft-v3';
+const CACHE_NAME = 'stormcraft-v4';
 const urlsToCache = [
   '/crm-kanban-integrate/',
   '/crm-kanban-integrate/index.html',
