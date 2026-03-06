@@ -28,13 +28,31 @@ export default function UpdatePassword() {
 
         if (code) {
             supabase.auth.exchangeCodeForSession(code)
-                .then(({ error }) => {
-                    if (error) setError('Invalid or expired reset link. Please request a new one.');
+                .then(async ({ data, error }) => {
+                    if (error) {
+                        setError('Invalid or expired reset link. Please request a new one.');
+                        return;
+                    }
+                    // Verify session is actually available before showing form
+                    if (!data?.session) {
+                        // Give Supabase a moment to persist the session
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        const { data: { session } } = await supabase.auth.getSession();
+                        if (!session) {
+                            setError('Could not establish session. Please request a new reset link.');
+                        }
+                    }
                 })
+                .catch(() => setError('Invalid or expired reset link. Please request a new one.'))
                 .finally(() => setExchanging(false));
         } else {
-            // No code — might be implicit flow or already exchanged
-            setExchanging(false);
+            // No code — check if we already have a session (PASSWORD_RECOVERY flow)
+            supabase.auth.getSession().then(({ data: { session } }) => {
+                if (!session) {
+                    setError('No valid reset session found. Please request a new reset link.');
+                }
+                setExchanging(false);
+            });
         }
     }, []);
 
