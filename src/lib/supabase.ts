@@ -43,9 +43,9 @@ const supabase = createClient(
   supabaseKey || 'demo-key', 
   {
     auth: {
-      autoRefreshToken: !demoMode,
-      persistSession: !demoMode,
-      detectSessionInUrl: !demoMode,
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: false, // hash routing on GH Pages conflicts with URL session detection
       storage: typeof window !== 'undefined' ? window.localStorage : undefined,
       storageKey: 'sb-auth-token',
       flowType: 'pkce',

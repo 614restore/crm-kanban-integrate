@@ -744,6 +744,18 @@ function CRMApp() {
     loadData();
   }, [loadData]);
 
+  // Re-load data when tab becomes visible (fixes stale/blank state after idle)
+  useEffect(() => {
+    if (!profile?.company_id) return;
+    const handleVisible = () => {
+      if (document.visibilityState === 'visible') {
+        requestSoftReload();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisible);
+    return () => document.removeEventListener('visibilitychange', handleVisible);
+  }, [profile?.company_id, requestSoftReload]);
+
   // Fail-safe: avoid getting stuck on the loading screen if initial data calls stall
   useEffect(() => {
     if (!state.isLoading || state.isInitialized) return;
