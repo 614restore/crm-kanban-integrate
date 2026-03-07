@@ -152,32 +152,26 @@ export default function TeamView() {
       }
 
 
-      // Send email via Supabase Edge Function
-      
-      // Get current session to ensure we have auth
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        clearTimeout(timeoutId);
-        toast.error('Not authenticated. Please log in again.');
-        return;
-      }
-      
-      const { data: emailData, error: emailError } = await supabase.functions.invoke('send-invite-email', {
-        body: {
-          email: inviteEmail.trim().toLowerCase(),
-          token,
-          companyId: effectiveCompanyId,
-          role: inviteRole,
-          invitedBy: profile?.id,
-        },
+      // Send email via our Vercel API (Resend)
+      const inviteUrl = `${window.location.origin}${window.location.pathname}#/join?token=${token}`;
+      const emailRes = await fetch('https://crm-kanban-integrate.vercel.app/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: inviteEmail.trim().toLowerCase(),
+          subject: `You're invited to join ${state.currentUser?.name || 'TrussCTR'}`,
+          html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto">
+            <h2>You've been invited!</h2>
+            <p>You've been invited to join as a <strong>${inviteRole.replace('_', ' ')}</strong>.</p>
+            <p><a href="${inviteUrl}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:white;border-radius:8px;text-decoration:none;font-weight:600">Accept Invitation</a></p>
+            <p style="color:#6b7280;font-size:13px">This invite expires in 7 days.</p>
+          </div>`,
+        }),
       });
-      
 
-      if (emailError) {
-        console.error('Email sending failed:', emailError);
+      if (!emailRes.ok) {
         clearTimeout(timeoutId);
-        toast.error(`Failed to send invitation email. Check console for details.`);
+        toast.error('Failed to send invitation email.');
         return;
       }
       
