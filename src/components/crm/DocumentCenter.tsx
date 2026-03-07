@@ -20,6 +20,9 @@ import {
   Share2,
   FolderOpen,
   Loader2,
+  User,
+  Camera,
+  X,
 } from 'lucide-react';
 
 type ViewMode = 'list' | 'grid';
@@ -43,9 +46,12 @@ export default function DocumentCenter() {
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<DocCategory>('all');
+  const [contactFilter, setContactFilter] = useState<string>('all');
   const [uploadedDocuments, setUploadedDocuments] = useState<DocumentItem[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const loadCompanyDocuments = async () => {
@@ -94,7 +100,7 @@ export default function DocumentCenter() {
     return 'other';
   };
 
-  const handleUploadFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUploadFile = async (event: React.ChangeEvent<HTMLInputElement>, forceCategory?: DocCategory) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -122,21 +128,12 @@ export default function DocumentCenter() {
         return;
       }
 
-      
-      // Verify the file actually exists in the bucket
-      const verifyUrl = await getDocumentSignedUrl(uploadResult.path, 60);
-      if (!verifyUrl) {
-        console.error('[DocumentCenter] CRITICAL: File upload succeeded but file is not in bucket!');
-        console.error('[DocumentCenter] This indicates the bucket might not exist or upload silently failed');
-        toast.error('Upload completed but file verification failed. Check if projectceo-documents bucket exists in Supabase.');
-        setIsUploading(false);
-        event.target.value = '';
-        return;
-      }
+      const category = forceCategory || inferCategory(file);
+      const linkedContactId = contactFilter !== 'all' ? contactFilter : undefined;
 
-      const category = inferCategory(file);
       const created = await db.createDocument({
         company_id: state.companyId,
+        contact_id: linkedContactId || undefined,
         name: file.name,
         type: category,
         url: uploadResult.path,
@@ -145,7 +142,6 @@ export default function DocumentCenter() {
       });
 
       if (!created) {
-        console.error('[DocumentCenter] Failed to save document record');
         toast.error('File uploaded but failed to save document record');
         setIsUploading(false);
         event.target.value = '';
@@ -158,6 +154,7 @@ export default function DocumentCenter() {
             : (await getDocumentSignedUrl(created.url)) || undefined)
         : undefined;
 
+      const linkedContact = linkedContactId ? state.contacts.find(c => c.id === linkedContactId) : undefined;
 
       setUploadedDocuments((prev) => [
         {
@@ -169,11 +166,13 @@ export default function DocumentCenter() {
           size: created.size || formatFileSize(file.size),
           uploadedAt: created.created_at,
           uploadedBy: created.uploaded_by || 'Team member',
+          contactName: linkedContact ? getContactFullName(linkedContact) : undefined,
+          contactId: linkedContactId,
         },
         ...prev,
       ]);
 
-      toast.success(`${file.name} uploaded successfully!`);
+      toast.success(`${file.name} uploaded successfully!${linkedContact ? ` Linked to ${getContactFullName(linkedContact)}` : ''}`);
     } catch (error) {
       console.error('[DocumentCenter] Document upload error:', error);
       toast.error('Failed to upload file: ' + (error instanceof Error ? error.message : 'Unknown error'));
@@ -222,7 +221,8 @@ export default function DocumentCenter() {
       doc.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (doc.contactName && doc.contactName.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesCategory = categoryFilter === 'all' || doc.category === categoryFilter;
-    return matchesSearch && matchesCategory;
+    const matchesContact = contactFilter === 'all' || doc.contactId === contactFilter;
+    return matchesSearch && matchesCategory && matchesContact;
   });
 
   // Sort by upload date (newest first)
@@ -331,6 +331,7 @@ export default function DocumentCenter() {
   }, {} as Record<string, number>);
 
   return (
+    <>
     <div className="h-full flex">
       <input
         ref={fileInputRef}
@@ -339,17 +340,58 @@ export default function DocumentCenter() {
         onChange={handleUploadFile}
         disabled={isUploading}
       />
+      <input
+        ref={photoInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={(e) => handleUploadFile(e, 'photo')}
+        disabled={isUploading}
+      />
 
       {/* Sidebar */}
-      <div className="w-64 bg-white border-r border-gray-200 p-4 flex-shrink-0">
+      <div className="w-64 bg-white border-r border-gray-200 p-4 flex-shrink-0 overflow-y-auto">
+        {/* Customer Filter */}
+        <div className="mb-4">
+          <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Customer</label>
+          <div className="relative">
+            <User size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+            <select
+              value={contactFilter}
+              onChange={(e) => setContactFilter(e.target.value)}
+              className="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none bg-white"
+            >
+              <option value="all">All Customers</option>
+              {state.contacts.map((c) => (
+                <option key={c.id} value={c.id}>{getContactFullName(c)}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
         <button
           onClick={() => fileInputRef.current?.click()}
           disabled={isUploading}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors mb-6 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors mb-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {isUploading ? <Loader2 size={18} className="animate-spin" /> : <Upload size={18} />}
-          <span className="font-medium">{isUploading ? 'Uploading...' : 'Upload Files'}</span>
+          {isUploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+          <span className="font-medium text-sm">{isUploading ? 'Uploading...' : 'Upload File'}</span>
         </button>
+        <button
+          onClick={() => photoInputRef.current?.click()}
+          disabled={isUploading}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors mb-5 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Camera size={16} />
+          <span className="font-medium text-sm">Upload Photo</span>
+        </button>
+        {contactFilter !== 'all' && (
+          <div className="mb-4 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700 flex items-center justify-between">
+            <span>Files linked to: <strong>{getContactFullName(state.contacts.find(c => c.id === contactFilter)!)}</strong></span>
+            <button onClick={() => setContactFilter('all')}><X size={12} /></button>
+          </div>
+        )}
 
         <nav className="space-y-1">
           {categories.map((cat) => (
@@ -372,14 +414,8 @@ export default function DocumentCenter() {
         </nav>
 
         {/* Storage Info */}
-        <div className="mt-8 p-4 bg-gray-50 rounded-lg">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-gray-700">Storage Used</span>
-            <span className="text-sm text-gray-500">2.4 GB / 10 GB</span>
-          </div>
-          <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-            <div className="h-full w-1/4 bg-blue-500 rounded-full" />
-          </div>
+        <div className="mt-8 p-3 bg-gray-50 rounded-lg text-xs text-gray-500 text-center">
+          {allDocuments.length} file{allDocuments.length !== 1 ? 's' : ''} stored
         </div>
       </div>
 
@@ -541,12 +577,19 @@ export default function DocumentCenter() {
                   className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow cursor-pointer group"
                 >
                   <div
-                    onClick={() => handleOpenDocument(doc.url)}
-                    className="aspect-square bg-gray-50 rounded-lg flex items-center justify-center mb-3"
+                    onClick={() => doc.category === 'photo' && doc.url ? setLightboxUrl(doc.url) : handleOpenDocument(doc.url)}
+                    className="aspect-square bg-gray-50 rounded-lg flex items-center justify-center mb-3 overflow-hidden"
                   >
-                    {getFileIcon(doc.type)}
+                    {doc.category === 'photo' && doc.url ? (
+                      <img src={doc.url} alt={doc.name} className="w-full h-full object-cover rounded-lg" />
+                    ) : (
+                      getFileIcon(doc.type)
+                    )}
                   </div>
                   <h4 className="font-medium text-gray-900 truncate text-sm">{doc.name}</h4>
+                  {doc.contactName && (
+                    <p className="text-xs text-blue-600 mt-0.5 truncate">{doc.contactName}</p>
+                  )}
                   <p className="text-xs text-gray-500 mt-1">{doc.size}</p>
                   <div className="mt-3 flex items-center justify-between">
                     <span
@@ -583,5 +626,27 @@ export default function DocumentCenter() {
         </div>
       </div>
     </div>
+
+    {/* Photo Lightbox */}
+    {lightboxUrl && (
+      <div
+        className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4"
+        onClick={() => setLightboxUrl(null)}
+      >
+        <button
+          className="absolute top-4 right-4 text-white hover:text-gray-300 p-2"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <X size={28} />
+        </button>
+        <img
+          src={lightboxUrl}
+          alt="Photo"
+          className="max-w-full max-h-full object-contain rounded-lg"
+          onClick={(e) => e.stopPropagation()}
+        />
+      </div>
+    )}
+    </>
   );
 }
