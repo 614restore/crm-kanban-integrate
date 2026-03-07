@@ -1243,7 +1243,7 @@ export default function SettingsView() {
   }, []);
 
   return (
-    <div className="h-full flex">
+    <div style={{ display: 'grid', gridTemplateColumns: '256px 1fr', width: '100%', minHeight: '100%' }}>
       {/* Hidden file inputs */}
       <input
         ref={companyLogoInputRef}
@@ -1263,7 +1263,7 @@ export default function SettingsView() {
       />
 
       {/* Settings inner sidebar */}
-      <div className="w-64 bg-white border-r border-gray-200 p-4 flex-shrink-0">
+      <div className="bg-white border-r border-gray-200 p-4">
         <h2 className="text-lg font-semibold text-gray-900 mb-4 px-3">Settings</h2>
         <nav className="space-y-1">
           {tabs.map((tab) => (
@@ -1284,7 +1284,7 @@ export default function SettingsView() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto p-8">
+      <div className="overflow-auto p-8">
         {activeTab === 'company' && (
           <div className="max-w-3xl space-y-8">
             <div>
