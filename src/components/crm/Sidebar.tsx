@@ -26,6 +26,8 @@ import {
   Receipt,
   FilePlus,
   BarChart,
+  Shield,
+  AlertCircle,
 } from 'lucide-react';
 
 interface NavItem {
@@ -50,6 +52,8 @@ const navItems: NavItem[] = [
   { id: 'projects', label: 'Projects', icon: <FolderKanban size={20} /> },
   { id: 'work-orders', label: 'Work Orders', icon: <Clipboard size={20} /> },
   { id: 'material-orders', label: 'Material Orders', icon: <Package size={20} /> },
+  { id: 'insurance-tracking', label: 'Insurance', icon: <Shield size={20} /> },
+  { id: 'supplement-tracking', label: 'Supplements', icon: <AlertCircle size={20} /> },
   { id: 'reports', label: 'Reports', icon: <BarChart size={20} /> },
   { id: 'team', label: 'Team', icon: <UserCog size={20} />, requiresPermission: 'team' },
   { id: 'automations', label: 'Automations', icon: <Zap size={20} /> },

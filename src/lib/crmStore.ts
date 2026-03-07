@@ -39,7 +39,9 @@ export type ViewType =
   | 'work-orders'
   | 'material-orders'
   | 'reports'
-  | 'ai-assistant';
+  | 'ai-assistant'
+  | 'insurance-tracking'
+  | 'supplement-tracking';
 
 export interface CRMState {
   // Current user
