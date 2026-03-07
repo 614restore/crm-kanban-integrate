@@ -59,10 +59,30 @@ const INTEGRATION_CONFIGS: Record<string, Array<{
     },
   ],
   openweather: [
-    { field: 'apiKey', label: 'API Key', type: 'password', required: true },
+    { field: 'apiKey', label: 'API Key', type: 'password', required: true, placeholder: 'Your OpenWeather API key', help: 'Get your free API key at openweathermap.org/api' },
   ],
   hailtrace: [
-    { field: 'apiKey', label: 'API Key', type: 'password', required: true },
+    { field: 'apiKey', label: 'API Key', type: 'password', required: true, placeholder: 'Your HailTrace API key', help: 'Get your API key at hailtrace.com — required to look up hail events on insurance contacts' },
+    {
+      field: 'environment',
+      label: 'Environment',
+      type: 'select',
+      required: true,
+      options: [
+        { label: 'Production', value: 'production' },
+        { label: 'Sandbox', value: 'sandbox' },
+      ],
+      help: 'Use Production for live hail data. Sandbox for testing only.',
+    },
+  ],
+  sendgrid: [
+    { field: 'apiKey', label: 'API Key', type: 'password', required: true, placeholder: 'SG.xxxxxxxx', help: 'Create an API key at app.sendgrid.com → Settings → API Keys. Requires "Mail Send" permission.' },
+    { field: 'fromEmail', label: 'From Email Address', type: 'text', required: true, placeholder: 'noreply@yourcompany.com', help: 'Must be a verified sender in your SendGrid account.' },
+    { field: 'fromName', label: 'From Name', type: 'text', required: false, placeholder: 'TrussCTR Notifications' },
+  ],
+  square: [
+    { field: 'accessToken', label: 'Access Token', type: 'password', required: true, placeholder: 'EAAAl...', help: 'Get your access token at developer.squareup.com → Applications → your app → Credentials.' },
+    { field: 'locationId', label: 'Location ID', type: 'text', required: true, placeholder: 'Your Square location ID', help: 'Found in your Square Dashboard under Account & Settings → Locations.' },
     {
       field: 'environment',
       label: 'Environment',
@@ -73,6 +93,11 @@ const INTEGRATION_CONFIGS: Record<string, Array<{
         { label: 'Sandbox', value: 'sandbox' },
       ],
     },
+  ],
+  auth0: [
+    { field: 'domain', label: 'Domain', type: 'text', required: true, placeholder: 'yourapp.us.auth0.com', help: 'Found in your Auth0 Dashboard → Applications → your app → Settings.' },
+    { field: 'clientId', label: 'Client ID', type: 'text', required: true, placeholder: 'Auth0 Client ID' },
+    { field: 'clientSecret', label: 'Client Secret', type: 'password', required: true, placeholder: 'Auth0 Client Secret' },
   ],
 };
 

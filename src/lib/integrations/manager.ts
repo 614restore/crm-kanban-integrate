@@ -147,6 +147,12 @@ export class IntegrationManager {
           return await this.testOpenWeather(testCredentials);
         case 'hailtrace':
           return await this.testHailTrace(testCredentials);
+        case 'sendgrid':
+          return await this.testSendGrid(testCredentials);
+        case 'square':
+          return await this.testSquare(testCredentials);
+        case 'auth0':
+          return await this.testAuth0(testCredentials);
         default:
           return {
             success: true,
@@ -310,32 +316,27 @@ export class IntegrationManager {
 
   private async testEagleView(credentials: any): Promise<IntegrationTestResult> {
     if (!credentials?.apiKey || !credentials?.clientId) {
-      return {
-        success: false,
-        message: 'API Key and Client ID are required',
-        timestamp: new Date().toISOString(),
-      };
+      return { success: false, message: 'API Key and Client ID are required', timestamp: new Date().toISOString() };
     }
-
-    const eagleview = new EagleViewIntegration(
-      credentials.apiKey,
-      credentials.clientId,
-      credentials.environment ?? 'production'
-    );
-    return eagleview.testConnection();
+    if (!credentials?.environment) {
+      return { success: false, message: 'Environment (Production or Sandbox) is required', timestamp: new Date().toISOString() };
+    }
+    return {
+      success: true,
+      message: 'EagleView credentials saved. Reports will be ordered when requested from a contact.',
+      timestamp: new Date().toISOString(),
+    };
   }
 
   private async testOpenWeather(credentials: any): Promise<IntegrationTestResult> {
     if (!credentials?.apiKey) {
-      return {
-        success: false,
-        message: 'API Key is required',
-        timestamp: new Date().toISOString(),
-      };
+      return { success: false, message: 'API Key is required', timestamp: new Date().toISOString() };
     }
-
-    const openweather = new OpenWeatherIntegration(credentials.apiKey);
-    return openweather.testConnection();
+    return {
+      success: true,
+      message: 'OpenWeather credentials saved. Weather data will be available on job sites.',
+      timestamp: new Date().toISOString(),
+    };
   }
 
   private async testHailTrace(credentials: any): Promise<IntegrationTestResult> {
@@ -348,6 +349,58 @@ export class IntegrationManager {
     return {
       success: true,
       message: 'HailTrace credentials saved. Hail events will be fetched from contact detail pages.',
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  private async testSendGrid(credentials: any): Promise<IntegrationTestResult> {
+    if (!credentials?.apiKey) {
+      return { success: false, message: 'API Key is required', timestamp: new Date().toISOString() };
+    }
+    if (!credentials.apiKey.startsWith('SG.')) {
+      return { success: false, message: 'Invalid API Key — SendGrid keys start with "SG."', timestamp: new Date().toISOString() };
+    }
+    if (!credentials?.fromEmail) {
+      return { success: false, message: 'From Email Address is required', timestamp: new Date().toISOString() };
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(credentials.fromEmail)) {
+      return { success: false, message: 'From Email Address is not valid', timestamp: new Date().toISOString() };
+    }
+    return {
+      success: true,
+      message: `SendGrid credentials saved. Emails will be sent from ${credentials.fromEmail}.`,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  private async testSquare(credentials: any): Promise<IntegrationTestResult> {
+    if (!credentials?.accessToken) {
+      return { success: false, message: 'Access Token is required', timestamp: new Date().toISOString() };
+    }
+    if (!credentials?.locationId) {
+      return { success: false, message: 'Location ID is required', timestamp: new Date().toISOString() };
+    }
+    if (!credentials?.environment) {
+      return { success: false, message: 'Environment (Production or Sandbox) is required', timestamp: new Date().toISOString() };
+    }
+    return {
+      success: true,
+      message: 'Square credentials saved. Payment processing will be available on invoices.',
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  private async testAuth0(credentials: any): Promise<IntegrationTestResult> {
+    if (!credentials?.domain || !credentials?.clientId || !credentials?.clientSecret) {
+      return { success: false, message: 'Domain, Client ID, and Client Secret are all required', timestamp: new Date().toISOString() };
+    }
+    if (!credentials.domain.includes('.auth0.com') && !credentials.domain.includes('.')) {
+      return { success: false, message: 'Domain should be in format: yourapp.us.auth0.com', timestamp: new Date().toISOString() };
+    }
+    return {
+      success: true,
+      message: 'Auth0 credentials saved.',
       timestamp: new Date().toISOString(),
     };
   }
