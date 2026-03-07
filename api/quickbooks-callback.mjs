@@ -29,9 +29,9 @@ export default async function handler(req, res) {
   const redirectUri = 'https://crm-kanban-integrate.vercel.app/api/quickbooks-callback';
 
   const oauthClient = new OAuthClient({
-    clientId: process.env.QBO_CLIENT_ID,
-    clientSecret: process.env.QBO_CLIENT_SECRET,
-    environment,
+    clientId: (process.env.QBO_CLIENT_ID || '').trim(),
+    clientSecret: (process.env.QBO_CLIENT_SECRET || '').trim(),
+    environment: environment === 'production' ? 'production' : 'sandbox',
     redirectUri,
   });
 
