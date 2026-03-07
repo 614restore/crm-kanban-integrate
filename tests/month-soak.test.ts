@@ -138,6 +138,6 @@ test('30-day reducer soak keeps CRM state coherent', () => {
 
   assert.equal(canAssignRole('manager', 'owner'), false);
   assert.equal(canAssignRole('owner', 'owner'), true);
-  assert.equal(canModifyMember('admin', 'manager'), false);
-  assert.equal(canModifyMember('admin', 'sales'), true);
+  assert.equal(canModifyMember('admin', 'owner'), false);
+  assert.equal(canModifyMember('admin', 'sales_rep'), true);
 });
