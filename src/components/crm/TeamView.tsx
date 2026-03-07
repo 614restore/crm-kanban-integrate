@@ -125,29 +125,33 @@ export default function TeamView() {
 
     setIsSendingInvite(true);
 
-    // Set timeout to cover entire operation (DB save + email send)
     const timeoutId = setTimeout(() => {
       setIsSendingInvite(false);
       toast.error('Request timed out. Please try again.');
-    }, 45000); // 45 second timeout for entire operation
+    }, 15000);
 
     try {
       const token = globalThis.crypto?.randomUUID?.() || `invite-${Date.now()}`;
-      
-      const inviteRecord = await db.createInvite({
-        company_id: effectiveCompanyId,
-        email: inviteEmail.trim().toLowerCase(),
-        role: inviteRole,
-        invited_by: profile?.id,
-        token,
-        accepted: false,
-        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-      });
 
-      if (!inviteRecord) {
+      // Insert directly via supabase client
+      const { data: inviteRecord, error: inviteError } = await supabase
+        .from('invitations')
+        .insert({
+          company_id: effectiveCompanyId,
+          email: inviteEmail.trim().toLowerCase(),
+          role: inviteRole,
+          invited_by: profile?.id,
+          token,
+          accepted: false,
+          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        })
+        .select()
+        .single();
+
+      if (inviteError || !inviteRecord) {
         clearTimeout(timeoutId);
         setIsSendingInvite(false);
-        toast.error('Failed to create invite record in database');
+        toast.error(`Failed to save invite: ${inviteError?.message || 'Unknown error'}`);
         return;
       }
 
