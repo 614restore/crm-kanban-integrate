@@ -1243,7 +1243,7 @@ export default function SettingsView() {
   }, []);
 
   return (
-    <div className="h-full w-full flex overflow-hidden">
+    <div className="flex w-full min-h-full bg-gray-50">
       {/* Hidden file inputs */}
       <input
         ref={companyLogoInputRef}
@@ -1263,7 +1263,7 @@ export default function SettingsView() {
       />
 
       {/* Sidebar */}
-      <div className="w-64 bg-white border-r border-gray-200 p-4 flex-shrink-0">
+      <div className="w-64 bg-white border-r border-gray-200 p-4 flex-shrink-0 sticky top-0 self-start" style={{ height: 'calc(100vh - 64px)', overflowY: 'auto' }}>
         <h2 className="text-lg font-semibold text-gray-900 mb-4 px-3">Settings</h2>
         <nav className="space-y-1">
           {tabs.map((tab) => (
@@ -1284,7 +1284,7 @@ export default function SettingsView() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto p-8 flex flex-col min-h-full">
+      <div className="flex-1 min-w-0 p-8">
         {activeTab === 'company' && (
           <div className="max-w-3xl space-y-8">
             <div>
