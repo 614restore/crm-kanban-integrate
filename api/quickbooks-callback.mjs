@@ -32,8 +32,9 @@ export default async function handler(req, res) {
   });
 
   try {
-    // Exchange code for tokens
-    const authResponse = await oauthClient.createToken(req.url);
+    // Exchange code for tokens (Vercel req.url is path-only, need full URL)
+    const fullUrl = `https://crm-kanban-integrate.vercel.app${req.url}`;
+    const authResponse = await oauthClient.createToken(fullUrl);
     const token = authResponse.getJson();
 
     const expiresAt = new Date(Date.now() + token.expires_in * 1000).toISOString();
