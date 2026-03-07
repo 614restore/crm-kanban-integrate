@@ -298,7 +298,7 @@ function dbInvoiceToAppInvoice(dbInvoice: any, contacts: Contact[]): Invoice {
 
 // CRM App (authenticated view)
 function CRMApp() {
-  const { profile, user } = useAuth();
+  const { profile, user, loading: authLoading } = useAuth();
   const [state, dispatch] = useReducer(crmReducer, initialState);
   useEffect(() => {
     try { sessionStorage.setItem('crm_current_view', state.currentView); } catch (_) { /* ignore */ }
@@ -311,8 +311,8 @@ function CRMApp() {
   const loadData = useCallback(async (options?: { silent?: boolean }) => {
     const silent = options?.silent ?? false;
     if (!profile?.company_id) {
-      // No company yet - just mark as not loading, don't initialize with empty data yet
-      if (!silent) {
+      // If auth is still loading, don't mark as done — wait for profile to arrive
+      if (!authLoading && !silent) {
         dispatch({ type: 'SET_LOADING', payload: false });
       }
       return;
@@ -638,7 +638,7 @@ function CRMApp() {
         },
       });
     }
-  }, [profile?.company_id]);
+  }, [profile?.company_id, authLoading]);
 
   const requestSoftReload = useCallback(() => {
     if (isReloadingRef.current) {
@@ -759,6 +759,8 @@ function CRMApp() {
   // Fail-safe: avoid getting stuck on the loading screen if initial data calls stall
   useEffect(() => {
     if (!state.isLoading || state.isInitialized) return;
+    // Don't start the timeout until auth has finished loading
+    if (authLoading) return;
 
     const timer = window.setTimeout(() => {
       console.warn('Initial CRM data load timed out; showing app shell with empty data.');
@@ -774,10 +776,10 @@ function CRMApp() {
           teamMembers: [],
         },
       });
-    }, 15000);
+    }, 20000);
 
     return () => window.clearTimeout(timer);
-  }, [state.isLoading, state.isInitialized]);
+  }, [state.isLoading, state.isInitialized, authLoading]);
 
   // Set current user from profile
   useEffect(() => {
