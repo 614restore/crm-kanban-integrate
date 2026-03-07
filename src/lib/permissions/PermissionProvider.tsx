@@ -67,6 +67,7 @@ interface PermissionContextType {
 const PermissionContext = createContext<PermissionContextType | undefined>(undefined);
 
 // Default role configurations
+// eslint-disable-next-line react-refresh/only-export-components
 export const DEFAULT_ROLES: UserRole[] = [
   {
     id: 'owner',
@@ -209,6 +210,7 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setUser(null);
       setPermissions([]);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.id, profile?.role, profile?.is_active]);
 
   const hasPermission = (resource: ResourceType, action: ActionType): boolean => {
@@ -286,6 +288,7 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 };
 
 // Custom hook to use permissions
+// eslint-disable-next-line react-refresh/only-export-components
 export const usePermissions = (): PermissionContextType => {
   const context = useContext(PermissionContext);
   if (!context) {
@@ -330,6 +333,7 @@ export class PermissionChecker {
 }
 
 // Permission-based route guard
+// eslint-disable-next-line react-refresh/only-export-components
 export const withPermission = (
   WrappedComponent: React.ComponentType<any>,
   requiredResource: ResourceType,
