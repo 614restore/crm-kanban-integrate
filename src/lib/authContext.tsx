@@ -132,6 +132,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
+    // Re-check session when tab becomes visible again (fixes stale state after idle)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        supabase.auth.getSession().then(async ({ data: { session } }) => {
+          if (session?.user) {
+            setSession(session);
+            setUser(session.user);
+            // Only reload profile if we don't already have one (avoids full re-init on every tab focus)
+            setProfile(prev => {
+              if (!prev) {
+                loadProfile(session.user.id, session.user.email || '');
+              }
+              return prev;
+            });
+          }
+        });
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     // Set up onAuthStateChange FIRST so PASSWORD_RECOVERY fires before getSession resolves
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
 
@@ -192,7 +212,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
