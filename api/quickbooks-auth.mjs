@@ -21,7 +21,7 @@ export default async function handler(req, res) {
     clientId: process.env.QBO_CLIENT_ID,
     clientSecret: process.env.QBO_CLIENT_SECRET,
     environment,
-    redirectUri: `${process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://crm-kanban-integrate.vercel.app'}/api/quickbooks-callback`,
+    redirectUri: 'https://crm-kanban-integrate.vercel.app/api/quickbooks-callback',
   });
 
   const authUri = oauthClient.authorizeUri({

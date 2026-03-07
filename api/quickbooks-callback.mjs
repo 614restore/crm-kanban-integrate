@@ -4,7 +4,7 @@ import OAuthClient from 'intuit-oauth';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
-  process.env.VITE_SUPABASE_URL,
+  process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://qgvuzrvpyyrrulhwlzma.supabase.co',
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
@@ -22,7 +22,7 @@ export default async function handler(req, res) {
   }
 
   const environment = process.env.QBO_ENVIRONMENT || 'sandbox';
-  const redirectUri = `${process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://crm-kanban-integrate.vercel.app'}/api/quickbooks-callback`;
+  const redirectUri = 'https://crm-kanban-integrate.vercel.app/api/quickbooks-callback';
 
   const oauthClient = new OAuthClient({
     clientId: process.env.QBO_CLIENT_ID,
