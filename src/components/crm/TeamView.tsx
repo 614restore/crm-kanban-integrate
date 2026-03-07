@@ -43,6 +43,11 @@ export default function TeamView() {
   const [isSendingInvite, setIsSendingInvite] = useState(false);
   const [isSavingMember, setIsSavingMember] = useState(false);
 
+  const [pendingInvites, setPendingInvites] = useState<Array<{
+    id: string; email: string; role: string; created_at: string; expires_at: string; accepted: boolean;
+  }>>([]);
+  const [isLoadingInvites, setIsLoadingInvites] = useState(false);
+
   const userRole = state.currentUser?.role || profile?.role || 'owner';
   const canManage = canManageTeam(userRole);
   const assignableRoles = getAssignableRoles(userRole);
@@ -50,6 +55,21 @@ export default function TeamView() {
   // Debug logging for team members
   useEffect(() => {
   }, [state.teamMembers, state.companyId, profile]);
+
+  // Load pending invites
+  useEffect(() => {
+    if (!state.companyId || !canManageTeam(userRole)) return;
+    setIsLoadingInvites(true);
+    supabase
+      .from('invitations')
+      .select('id, email, role, created_at, expires_at, accepted')
+      .eq('company_id', state.companyId)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        if (data) setPendingInvites(data);
+        setIsLoadingInvites(false);
+      });
+  }, [state.companyId, userRole]);
 
   // Filter team members
   const filteredMembers = state.teamMembers.filter((tm) => {
@@ -179,6 +199,13 @@ export default function TeamView() {
       setInviteEmail('');
       setInviteRole('sales');
       clearTimeout(timeoutId);
+      // Refresh pending invites list
+      const { data } = await supabase
+        .from('invitations')
+        .select('id, email, role, created_at, expires_at, accepted')
+        .eq('company_id', state.companyId)
+        .order('created_at', { ascending: false });
+      if (data) setPendingInvites(data);
     } catch (error: unknown) {
       clearTimeout(timeoutId);
       console.error('Failed to send invitation:', error);
@@ -288,6 +315,14 @@ export default function TeamView() {
       console.error('Failed to save permissions:', error);
       toast.error(`Failed to save permissions: ${error?.message || 'Unknown error'}`);
     }
+  };
+
+  const handleRevokeInvite = async (inviteId: string, email: string) => {
+    if (!confirm(`Revoke invite for ${email}?`)) return;
+    const { error } = await supabase.from('invitations').delete().eq('id', inviteId);
+    if (error) { toast.error('Failed to revoke invite'); return; }
+    setPendingInvites(prev => prev.filter(i => i.id !== inviteId));
+    toast.success(`Invite for ${email} revoked`);
   };
 
   // Calculate team stats
@@ -510,6 +545,67 @@ export default function TeamView() {
           </div>
         </div>
       ))}
+
+      {/* Pending Invites */}
+      {canManage && (
+        <div className="bg-white rounded-xl border border-gray-200">
+          <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Mail size={18} className="text-blue-600" />
+              <h3 className="font-semibold text-gray-900">Pending Invites</h3>
+              {pendingInvites.filter(i => !i.accepted).length > 0 && (
+                <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-medium rounded-full">
+                  {pendingInvites.filter(i => !i.accepted).length} pending
+                </span>
+              )}
+            </div>
+          </div>
+          {isLoadingInvites ? (
+            <div className="p-6 text-center text-gray-400 text-sm">Loading invites...</div>
+          ) : pendingInvites.length === 0 ? (
+            <div className="p-6 text-center text-gray-400 text-sm">No invites sent yet</div>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {pendingInvites.map(invite => {
+                const isExpired = new Date(invite.expires_at) < new Date();
+                return (
+                  <div key={invite.id} className="flex items-center justify-between px-5 py-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
+                        <Mail size={14} className="text-gray-500" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{invite.email}</p>
+                        <p className="text-xs text-gray-500 capitalize">{invite.role.replace('_', ' ')} · Sent {new Date(invite.created_at).toLocaleDateString()}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                      {invite.accepted ? (
+                        <span className="flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full">
+                          <CheckCircle size={12} /> Accepted
+                        </span>
+                      ) : isExpired ? (
+                        <span className="px-2 py-1 bg-red-100 text-red-700 text-xs font-medium rounded-full">Expired</span>
+                      ) : (
+                        <span className="px-2 py-1 bg-amber-100 text-amber-700 text-xs font-medium rounded-full">Pending</span>
+                      )}
+                      {!invite.accepted && (
+                        <button
+                          onClick={() => handleRevokeInvite(invite.id, invite.email)}
+                          className="p-1 text-gray-400 hover:text-red-500 rounded transition-colors"
+                          title="Revoke invite"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Invite Modal */}
       {showInviteModal && (
