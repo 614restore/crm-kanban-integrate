@@ -29,10 +29,10 @@ const severityConfig = {
   severe: { label: 'Severe', className: 'bg-red-100 text-red-800 border border-red-200' },
 };
 
-function formatDateRange() {
+function getDateRange(months: number) {
   const to = new Date();
   const from = new Date(to);
-  from.setDate(from.getDate() - 30);
+  from.setMonth(from.getMonth() - months);
   return {
     from: from.toISOString().split('T')[0],
     to: to.toISOString().split('T')[0],
@@ -40,9 +40,7 @@ function formatDateRange() {
 }
 
 export default function HailTracePanel({ address, city, state, zip, companyId }: HailTracePanelProps) {
-  const defaults = formatDateRange();
-  const [fromDate, setFromDate] = useState(defaults.from);
-  const [toDate, setToDate] = useState(defaults.to);
+  const [months, setMonths] = useState(12);
   const [loading, setLoading] = useState(false);
   const [events, setEvents] = useState<HailEvent[] | null>(null);
   const [status, setStatus] = useState<'idle' | 'no-config' | 'no-events' | 'events' | 'demo'>('idle');
@@ -97,7 +95,8 @@ export default function HailTracePanel({ address, city, state, zip, companyId }:
         if (coords) {
           result = await ht.checkHailDamage(coords.lat, coords.lon, 5);
         } else {
-          result = await ht.getHailEvents(fromDate, toDate);
+          const range = getDateRange(months);
+          result = await ht.getHailEvents(range.from, range.to);
         }
 
         // Normalize response — HailTrace may return { events: [...] } or an array
@@ -132,22 +131,18 @@ export default function HailTracePanel({ address, city, state, zip, companyId }:
 
       <div className="flex flex-wrap items-end gap-3 mb-4">
         <div>
-          <label className="block text-xs font-medium text-gray-500 mb-1">From</label>
-          <input
-            type="date"
-            value={fromDate}
-            onChange={(e) => setFromDate(e.target.value)}
+          <label className="block text-xs font-medium text-gray-500 mb-1">Look back</label>
+          <select
+            value={months}
+            onChange={(e) => setMonths(Number(e.target.value))}
             className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-500 mb-1">To</label>
-          <input
-            type="date"
-            value={toDate}
-            onChange={(e) => setToDate(e.target.value)}
-            className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-          />
+          >
+            {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+              <option key={m} value={m}>
+                {m} {m === 1 ? 'month' : 'months'}
+              </option>
+            ))}
+          </select>
         </div>
         <button
           onClick={handleCheck}
