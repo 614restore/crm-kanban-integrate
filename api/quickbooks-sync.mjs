@@ -4,6 +4,7 @@
 import OAuthClient from 'intuit-oauth';
 import QuickBooks from 'node-quickbooks';
 import { createClient } from '@supabase/supabase-js';
+import { encrypt, decrypt, setNoCacheHeaders } from './crypto-utils.mjs';
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -19,8 +20,12 @@ const supabase = createClient(
 async function refreshTokenIfNeeded(company) {
   const expires = new Date(company.qb_token_expires_at);
   const now = new Date();
+  // Decrypt stored tokens before use
+  const accessToken = decrypt(company.qb_access_token);
+  const refreshToken = decrypt(company.qb_refresh_token);
+
   // Refresh if expires within 5 minutes
-  if (expires - now > 5 * 60 * 1000) return company.qb_access_token;
+  if (expires - now > 5 * 60 * 1000) return accessToken;
 
   const environment = company.qb_environment || 'sandbox';
   const oauthClient = new OAuthClient({
@@ -32,8 +37,8 @@ async function refreshTokenIfNeeded(company) {
 
   oauthClient.setToken({
     token_type: 'bearer',
-    access_token: company.qb_access_token,
-    refresh_token: company.qb_refresh_token,
+    access_token: accessToken,
+    refresh_token: refreshToken,
     expires_in: 3600,
   });
 
@@ -41,9 +46,10 @@ async function refreshTokenIfNeeded(company) {
   const token = refreshed.getJson();
   const expiresAt = new Date(Date.now() + token.expires_in * 1000).toISOString();
 
+  // Re-encrypt refreshed tokens before saving
   await supabase.from('companies').update({
-    qb_access_token: token.access_token,
-    qb_refresh_token: token.refresh_token || company.qb_refresh_token,
+    qb_access_token: encrypt(token.access_token),
+    qb_refresh_token: encrypt(token.refresh_token || refreshToken),
     qb_token_expires_at: expiresAt,
   }).eq('id', company.id);
 
@@ -68,6 +74,7 @@ function getQBClient(accessToken, realmId, environment) {
 
 export default async function handler(req, res) {
   setCors(res);
+  setNoCacheHeaders(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 

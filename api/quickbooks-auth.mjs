@@ -1,6 +1,7 @@
 // GET /api/quickbooks-auth?company_id=<uuid>
 // Redirects user to Intuit OAuth consent screen
 import OAuthClient from 'intuit-oauth';
+import { createOAuthState, setNoCacheHeaders } from './crypto-utils.mjs';
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -10,6 +11,7 @@ function setCors(res) {
 
 export default async function handler(req, res) {
   setCors(res);
+  setNoCacheHeaders(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   const { company_id } = req.query;
@@ -24,9 +26,12 @@ export default async function handler(req, res) {
     redirectUri: 'https://crm-kanban-integrate.vercel.app/api/quickbooks-callback',
   });
 
+  // Sign state with HMAC to prevent CSRF
+  const signedState = createOAuthState(company_id);
+
   const authUri = oauthClient.authorizeUri({
     scope: [OAuthClient.scopes.Accounting, OAuthClient.scopes.Payment],
-    state: company_id, // pass company_id through OAuth state param
+    state: signedState,
   });
 
   return res.redirect(authUri);

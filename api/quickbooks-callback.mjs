@@ -1,13 +1,15 @@
-// GET /api/quickbooks-callback?code=...&state=<company_id>&realmId=...
-// Exchanges auth code for tokens, saves to DB, redirects back to app
+// GET /api/quickbooks-callback?code=...&state=<signed_state>&realmId=...
+// Exchanges auth code for tokens, saves encrypted tokens to DB, redirects back to app
 import OAuthClient from 'intuit-oauth';
 import { createClient } from '@supabase/supabase-js';
+import { encrypt, verifyOAuthState, setNoCacheHeaders } from './crypto-utils.mjs';
 
 const SUPABASE_URL = 'https://qgvuzrvpyyrrulhwlzma.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 export default async function handler(req, res) {
-  const { code, state: company_id, realmId, error } = req.query;
+  setNoCacheHeaders(res);
+  const { code, state: signedState, realmId, error } = req.query;
 
   const appBase = 'https://614restore.github.io/crm-kanban-integrate';
 
@@ -21,8 +23,17 @@ export default async function handler(req, res) {
     return res.redirect(`${appBase}/#/settings?qb_error=${encodeURIComponent(error)}`);
   }
 
-  if (!code || !company_id || !realmId) {
+  if (!code || !signedState || !realmId) {
     return res.status(400).send('Missing required OAuth params');
+  }
+
+  // Verify CSRF state — extract company_id from signed state
+  let company_id;
+  try {
+    company_id = verifyOAuthState(signedState);
+  } catch (stateErr) {
+    console.error('OAuth state validation failed:', stateErr.message);
+    return res.redirect(`${appBase}/#/settings?qb_error=${encodeURIComponent('Invalid OAuth state. Please try connecting again.')}`);
   }
 
   const environment = process.env.QBO_ENVIRONMENT || 'sandbox';
@@ -47,8 +58,8 @@ export default async function handler(req, res) {
     const { error: dbError } = await supabase
       .from('companies')
       .update({
-        qb_access_token: token.access_token,
-        qb_refresh_token: token.refresh_token,
+        qb_access_token: encrypt(token.access_token),
+        qb_refresh_token: encrypt(token.refresh_token),
         qb_realm_id: realmId,
         qb_token_expires_at: expiresAt,
         qb_connected_at: new Date().toISOString(),
