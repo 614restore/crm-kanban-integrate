@@ -339,6 +339,7 @@ export interface Estimate {
   declinedAt?: string;
   signedBy?: string;
   signatureData?: string;
+  signToken?: string;
   items: EstimateItem[];
   terms?: string;
   notes?: string;
@@ -423,6 +424,8 @@ export interface WorkOrder {
   notes?: string;
   attachments?: string[];
   checklistItems?: WorkOrderChecklistItem[];
+  signedBy?: string;
+  signatureData?: string;
   createdBy: string;
   createdAt: string;
   updatedAt: string;

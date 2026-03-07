@@ -4,6 +4,7 @@ import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
 import { WorkOrder } from '@/lib/crmData';
 import { exportWorkOrdersToExcel } from '@/lib/exportUtils';
+import { SignaturePad } from './SignaturePad';
 import {
   Clipboard,
   Plus,
@@ -25,6 +26,7 @@ import {
   ListChecks,
   FolderKanban,
   Download,
+  PenLine,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -73,6 +75,8 @@ export default function WorkOrdersView() {
   const [editingWorkOrder, setEditingWorkOrder] = useState<WorkOrder | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const [showSignModal, setShowSignModal] = useState<WorkOrder | null>(null);
+  const [signerName, setSignerName] = useState('');
 
   // Form state
   const [workOrderNumber, setWorkOrderNumber] = useState('');
@@ -147,6 +151,8 @@ export default function WorkOrdersView() {
         notes: wo.notes,
         attachments: wo.attachments || [],
         checklistItems: wo.checklist_items || [],
+        signedBy: wo.signed_by,
+        signatureData: wo.signature_data,
         createdBy: wo.created_by,
         createdAt: wo.created_at,
         updatedAt: wo.updated_at,
@@ -440,6 +446,61 @@ export default function WorkOrdersView() {
     }
   };
 
+  const handleSignWorkOrder = async (signatureData: string) => {
+    const workOrder = showSignModal;
+    if (!workOrder || !profile?.company_id) return;
+    const name = signerName.trim() || profile.id;
+    try {
+      const updated = await db.markWorkOrderSigned(workOrder.id, name, signatureData);
+      if (updated) {
+        const appWorkOrder: WorkOrder = {
+          id: updated.id,
+          workOrderNumber: updated.work_order_number,
+          projectId: updated.project_id,
+          contactId: updated.contact_id,
+          contactName: state.contacts.find(c => c.id === updated.contact_id)
+            ? `${state.contacts.find(c => c.id === updated.contact_id)!.firstName} ${state.contacts.find(c => c.id === updated.contact_id)!.lastName}`.trim()
+            : '',
+          title: updated.title,
+          description: updated.description,
+          status: updated.status as WorkOrder['status'],
+          priority: updated.priority as WorkOrder['priority'],
+          scheduledDate: updated.scheduled_date,
+          startedAt: updated.started_at,
+          completedAt: updated.completed_at,
+          assignedTo: updated.assigned_to || [],
+          assignedToNames: (updated.assigned_to || []).map(id => {
+            const m = state.teamMembers?.find((tm: any) => tm.id === id);
+            return m ? `${m.firstName} ${m.lastName}`.trim() : '';
+          }).filter(Boolean) as string[],
+          estimatedHours: updated.estimated_hours ? Number(updated.estimated_hours) : undefined,
+          actualHours: updated.actual_hours ? Number(updated.actual_hours) : undefined,
+          laborCost: Number(updated.labor_cost),
+          materialCost: Number(updated.material_cost),
+          totalCost: Number(updated.total_cost),
+          address: updated.address,
+          city: updated.city,
+          state: updated.state,
+          zip: updated.zip,
+          notes: updated.notes,
+          attachments: updated.attachments || [],
+          checklistItems: updated.checklist_items || [],
+          signedBy: updated.signed_by,
+          signatureData: updated.signature_data,
+          createdBy: updated.created_by,
+          createdAt: updated.created_at,
+          updatedAt: updated.updated_at,
+        };
+        dispatch({ type: 'UPDATE_WORK_ORDER', payload: appWorkOrder });
+        toast.success('Work order signed & completed');
+        setShowSignModal(null);
+        setSignerName('');
+      }
+    } catch (err: any) {
+      toast.error(`Failed to save signature: ${err.message}`);
+    }
+  };
+
   const handleExport = () => {
     try {
       if (filteredWorkOrders.length === 0) {
@@ -691,13 +752,22 @@ export default function WorkOrdersView() {
                     </button>
                   )}
                   {workOrder.status === 'in_progress' && (
-                    <button
-                      onClick={() => handleCompleteWork(workOrder.id)}
-                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                      title="Complete work"
-                    >
-                      <CheckCircle size={18} />
-                    </button>
+                    <>
+                      <button
+                        onClick={() => { setShowSignModal(workOrder); setSignerName(''); }}
+                        className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                        title="Get signature & complete"
+                      >
+                        <PenLine size={18} />
+                      </button>
+                      <button
+                        onClick={() => handleCompleteWork(workOrder.id)}
+                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Complete work"
+                      >
+                        <CheckCircle size={18} />
+                      </button>
+                    </>
                   )}
                   <button
                     onClick={() => handleOpenModal(workOrder)}
@@ -760,6 +830,17 @@ export default function WorkOrdersView() {
                       <span>Actual Hours: {workOrder.actualHours}h</span>
                     )}
                   </div>
+                </div>
+              )}
+
+              {/* Signature Info */}
+              {workOrder.signedBy && (
+                <div className="mt-4 pt-4 border-t border-gray-100 flex items-center gap-2 text-xs text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2">
+                  <CheckCircle size={14} className="flex-shrink-0" />
+                  <span>Signed by <strong>{workOrder.signedBy}</strong></span>
+                  {workOrder.signatureData && (
+                    <img src={workOrder.signatureData} alt="Signature" className="h-6 ml-2 rounded border border-emerald-200 bg-white" />
+                  )}
                 </div>
               )}
 
@@ -1102,6 +1183,55 @@ export default function WorkOrdersView() {
                 <Save size={18} />
                 {isSaving ? 'Saving...' : 'Save Work Order'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Signature Modal */}
+      {showSignModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Sign & Complete Work Order</h2>
+                <p className="text-sm text-gray-500 mt-0.5">{showSignModal.workOrderNumber} · {showSignModal.title}</p>
+              </div>
+              <button
+                onClick={() => { setShowSignModal(null); setSignerName(''); }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Signer Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={signerName}
+                  onChange={e => setSignerName(e.target.value)}
+                  placeholder="Full name of signer"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Draw Signature
+                </label>
+                <p className="text-xs text-gray-500 mb-2">Draw your signature below to confirm work completion</p>
+                <SignaturePad
+                  onSave={dataUrl => {
+                    if (!signerName.trim()) {
+                      toast.error('Please enter the signer name before saving');
+                      return;
+                    }
+                    handleSignWorkOrder(dataUrl);
+                  }}
+                />
+              </div>
             </div>
           </div>
         </div>

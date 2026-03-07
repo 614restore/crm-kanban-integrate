@@ -27,6 +27,7 @@ import {
   Printer,
   FolderPlus,
   PenLine,
+  Mail,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -105,6 +106,7 @@ export default function EstimatesView() {
         declinedAt: e.declined_at,
         signedBy: e.signed_by,
         signatureData: e.signature_data,
+        signToken: e.sign_token,
         items: e.items || [],
         terms: e.terms,
         notes: e.notes,
@@ -139,6 +141,7 @@ export default function EstimatesView() {
     declinedAt: e.declined_at,
     signedBy: e.signed_by,
     signatureData: e.signature_data,
+    signToken: e.sign_token,
     items: e.items || [],
     terms: e.terms || e.terms_and_conditions,
     notes: e.notes,
@@ -440,6 +443,52 @@ export default function EstimatesView() {
       }
     } catch (err: any) {
       toast.error(`Failed to save signature: ${err.message}`);
+    }
+  };
+
+  const handleRequestSignature = async (estimate: Estimate) => {
+    const contact = state.contacts.find(c => c.id === estimate.contactId);
+    if (!contact?.email) {
+      toast.error('No email address on file for this customer');
+      return;
+    }
+    try {
+      const token = crypto.randomUUID();
+      const updated = await db.requestEstimateSignature(estimate.id, token);
+      if (updated) {
+        dispatch({ type: 'UPDATE_ESTIMATE', payload: mapDbEstimateToApp(updated) });
+      }
+
+      const companyProfile = await db.getCompany(profile?.company_id || '').catch(() => null);
+      const companyName = (companyProfile as any)?.name || '614 Restore';
+      const fromEmail = (companyProfile as any)?.from_email || undefined;
+      const appUrl = import.meta.env.VITE_APP_URL || window.location.origin;
+      const signUrl = `${appUrl}/sign?estimateId=${estimate.id}&token=${token}`;
+
+      await sendEmail({
+        to: contact.email,
+        from: fromEmail,
+        subject: `Action Required: Please sign Estimate ${estimate.estimateNumber} from ${companyName}`,
+        html: `
+          <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
+            <h2 style="color:#1e40af">Signature Requested</h2>
+            <p>Hi ${contact.firstName},</p>
+            <p>${companyName} is requesting your signature on <strong>Estimate ${estimate.estimateNumber}: ${estimate.title}</strong>.</p>
+            <p><strong>Total: $${Number(estimate.total).toFixed(2)}</strong></p>
+            <div style="text-align:center;margin:32px 0">
+              <a href="${signUrl}" style="background:#16a34a;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:1.1em">
+                Review &amp; Sign Estimate
+              </a>
+            </div>
+            <p style="font-size:0.85em;color:#6b7280">Or copy this link into your browser:<br/>${signUrl}</p>
+            <p>If you have any questions, please reply to this email or call us.</p>
+            <p>Thank you,<br/>${companyName}</p>
+          </div>`,
+      });
+
+      toast.success(`Signature request sent to ${contact.email}`);
+    } catch (err: any) {
+      toast.error(`Failed to send signature request: ${err.message}`);
     }
   };
 
@@ -1214,6 +1263,13 @@ export default function EstimatesView() {
                 )}
                 {(viewingEstimate.status === 'sent' || viewingEstimate.status === 'viewed') && (
                   <>
+                    <button
+                      onClick={() => handleRequestSignature(viewingEstimate)}
+                      className="flex items-center gap-2 px-4 py-2 text-blue-700 border border-blue-300 rounded-lg hover:bg-blue-50 transition-colors text-sm"
+                    >
+                      <Mail size={16} />
+                      Request Signature
+                    </button>
                     <button
                       onClick={() => { setShowSignatureModal(viewingEstimate); }}
                       className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm"
