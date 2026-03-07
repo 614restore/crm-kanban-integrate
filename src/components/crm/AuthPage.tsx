@@ -536,11 +536,11 @@ export default function AuthPage() {
 
           <p className="text-center text-slate-400 text-sm mt-6">
             By signing up, you agree to our{' '}
-            <a href="#" className="text-blue-400 hover:text-blue-300">
+            <a href="/crm-kanban-integrate/terms" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300">
               Terms of Service
             </a>{' '}
             and{' '}
-            <a href="#" className="text-blue-400 hover:text-blue-300">
+            <a href="/crm-kanban-integrate/privacy" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300">
               Privacy Policy
             </a>
           </p>
