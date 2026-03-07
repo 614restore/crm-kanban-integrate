@@ -1243,7 +1243,7 @@ export default function SettingsView() {
   }, []);
 
   return (
-    <div className="flex w-full min-h-full bg-gray-50">
+    <div style={{ display: 'flex', width: '100%', minHeight: '100%', background: '#f9fafb' }}>
       {/* Hidden file inputs */}
       <input
         ref={companyLogoInputRef}
@@ -1262,8 +1262,8 @@ export default function SettingsView() {
         disabled={isUploadingAvatar}
       />
 
-      {/* Sidebar */}
-      <div className="w-64 bg-white border-r border-gray-200 p-4 flex-shrink-0 sticky top-0 self-start" style={{ height: 'calc(100vh - 64px)', overflowY: 'auto' }}>
+      {/* Settings inner sidebar */}
+      <div style={{ width: '256px', flexShrink: 0, background: 'white', borderRight: '1px solid #e5e7eb', padding: '16px' }}>
         <h2 className="text-lg font-semibold text-gray-900 mb-4 px-3">Settings</h2>
         <nav className="space-y-1">
           {tabs.map((tab) => (
@@ -1284,7 +1284,7 @@ export default function SettingsView() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 min-w-0 p-8">
+      <div style={{ flex: 1, padding: '32px', overflowY: 'auto' }}>
         {activeTab === 'company' && (
           <div className="max-w-3xl space-y-8">
             <div>
