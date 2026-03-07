@@ -28,9 +28,12 @@ export function useIntegrations(): UseIntegrationsReturn {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Initialize integrations on mount
+  // Initialize integrations on mount — load meta from localStorage, then credentials from Supabase
   useEffect(() => {
     refresh();
+    integrationManager.loadFromSupabase()
+      .then(() => refresh())
+      .catch(() => {/* ignore — offline or not authenticated */});
   }, []);
 
   /**

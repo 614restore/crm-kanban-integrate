@@ -1,6 +1,6 @@
 // Integration Configuration Dialog Component
 import React, { useState, useMemo } from 'react';
-import { AlertCircle, Check, Loader2, X } from 'lucide-react';
+import { AlertCircle, Check, ExternalLink, Loader2, X } from 'lucide-react';
 import { BaseIntegration } from '@/lib/integrations/apiTypes';
 
 interface IntegrationConfigDialogProps {
@@ -192,7 +192,37 @@ export function IntegrationConfigDialog({
             </div>
           )}
 
-          {/* Credential Fields */}
+          {/* QuickBooks: OAuth flow only — no manual tokens */}
+          {integration.id === 'quickbooks' ? (
+            <div className="space-y-4">
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-800 font-medium mb-1">QuickBooks uses OAuth 2.0</p>
+                <p className="text-sm text-blue-700">
+                  Connect your QuickBooks account securely. You'll be redirected to Intuit to authorize access —
+                  no passwords are stored in TrussCTR.
+                </p>
+              </div>
+              {integration.isConfigured && (
+                <div className="p-3 bg-green-50 border border-green-200 rounded-lg flex gap-2">
+                  <Check size={16} className="text-green-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-green-700">QuickBooks is currently connected.</p>
+                </div>
+              )}
+              <a
+                href={`${import.meta.env.VITE_API_URL || 'https://crm-kanban-integrate.vercel.app'}/api/quickbooks-auth`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-[#2CA01C] text-white rounded-lg hover:bg-[#239117] font-medium transition-colors"
+              >
+                <ExternalLink size={16} />
+                {integration.isConfigured ? 'Reconnect QuickBooks' : 'Connect QuickBooks'}
+              </a>
+              <p className="text-xs text-gray-500 text-center">
+                After authorizing, close that window and refresh this page.
+              </p>
+            </div>
+          ) : (
+          /* Credential Fields */
           <div className="space-y-3">
             <label className="block text-sm font-medium text-gray-700">Credentials</label>
             {configFields.map((field) => (
@@ -235,6 +265,7 @@ export function IntegrationConfigDialog({
               </div>
             ))}
           </div>
+          )}
 
           {/* Settings Section */}
           {Object.keys(settings).length > 0 && (
@@ -247,28 +278,32 @@ export function IntegrationConfigDialog({
 
         {/* Actions */}
         <div className="flex gap-3 p-6 border-t border-gray-200 bg-gray-50 rounded-b-xl">
-          <button
-            onClick={handleTest}
-            disabled={testLoading || loading}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-          >
-            {testLoading && <Loader2 size={16} className="animate-spin" />}
-            Test Connection
-          </button>
-          <button
-            onClick={handleConfigure}
-            disabled={loading || testLoading}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-          >
-            {loading && <Loader2 size={16} className="animate-spin" />}
-            Save Configuration
-          </button>
+          {integration.id !== 'quickbooks' && (
+            <>
+              <button
+                onClick={handleTest}
+                disabled={testLoading || loading}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+              >
+                {testLoading && <Loader2 size={16} className="animate-spin" />}
+                Test Connection
+              </button>
+              <button
+                onClick={handleConfigure}
+                disabled={loading || testLoading}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+              >
+                {loading && <Loader2 size={16} className="animate-spin" />}
+                Save Configuration
+              </button>
+            </>
+          )}
           <button
             onClick={onClose}
             disabled={loading || testLoading}
             className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
           >
-            Cancel
+            {integration.id === 'quickbooks' ? 'Close' : 'Cancel'}
           </button>
         </div>
       </div>

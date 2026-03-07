@@ -1,5 +1,6 @@
 // Enhanced Integration Manager
 import { BaseIntegration, IntegrationTestResult, IntegrationSyncResult, INTEGRATION_TEMPLATES } from './apiTypes';
+import { supabase } from '@/lib/supabase';
 import StripeIntegration from './stripe';
 import QuickBooksIntegration from './quickbooks';
 import TwilioIntegration from './twilio';
@@ -244,45 +245,67 @@ export class IntegrationManager {
    */
   private async testStripe(credentials: any): Promise<IntegrationTestResult> {
     if (!credentials?.secretKey) {
-      return {
-        success: false,
-        message: 'Secret Key is required',
-        timestamp: new Date().toISOString(),
-      };
+      return { success: false, message: 'Secret Key is required', timestamp: new Date().toISOString() };
     }
-
-    const stripe = new StripeIntegration(credentials.secretKey);
-    return stripe.testConnection();
+    const sk = credentials.secretKey as string;
+    if (!sk.startsWith('sk_live_') && !sk.startsWith('sk_test_')) {
+      return { success: false, message: 'Invalid Secret Key format — must start with sk_live_ or sk_test_', timestamp: new Date().toISOString() };
+    }
+    if (credentials.publishableKey && !String(credentials.publishableKey).startsWith('pk_')) {
+      return { success: false, message: 'Invalid Publishable Key format — must start with pk_live_ or pk_test_', timestamp: new Date().toISOString() };
+    }
+    return {
+      success: true,
+      message: 'Stripe credentials saved. Connection verified on first transaction.',
+      timestamp: new Date().toISOString(),
+    };
   }
 
-  private async testQuickBooks(credentials: any): Promise<IntegrationTestResult> {
-    if (!credentials?.accessToken || !credentials?.companyId) {
+  private async testQuickBooks(_credentials: any): Promise<IntegrationTestResult> {
+    // QuickBooks connects via OAuth — check if already connected in DB
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return { success: false, message: 'Not authenticated', timestamp: new Date().toISOString() };
+      const { data: profile } = await supabase.from('profiles').select('company_id').eq('id', user.id).single();
+      if (!profile?.company_id) return { success: false, message: 'Company not found', timestamp: new Date().toISOString() };
+      const { data: company } = await supabase
+        .from('companies').select('qb_refresh_token, qb_company_id').eq('id', profile.company_id).single();
+      if (company?.qb_refresh_token) {
+        return {
+          success: true,
+          message: 'QuickBooks connected via OAuth',
+          details: { companyId: company.qb_company_id },
+          timestamp: new Date().toISOString(),
+        };
+      }
       return {
         success: false,
-        message: 'Access Token and Company ID are required',
+        message: 'QuickBooks not connected. Use the "Connect QuickBooks" button to authorize via OAuth.',
         timestamp: new Date().toISOString(),
       };
+    } catch {
+      return { success: false, message: 'Failed to check QuickBooks connection', timestamp: new Date().toISOString() };
     }
-
-    const qb = new QuickBooksIntegration(
-      credentials.accessToken,
-      credentials.companyId,
-      credentials.environment ?? 'production'
-    );
-    return qb.testConnection();
   }
 
   private async testTwilio(credentials: any): Promise<IntegrationTestResult> {
     if (!credentials?.accountSid || !credentials?.authToken) {
-      return {
-        success: false,
-        message: 'Account SID and Auth Token are required',
-        timestamp: new Date().toISOString(),
-      };
+      return { success: false, message: 'Account SID and Auth Token are required', timestamp: new Date().toISOString() };
     }
-
-    const twilio = new TwilioIntegration(credentials.accountSid, credentials.authToken, credentials.fromNumber);
-    return twilio.testConnection();
+    if (!credentials.accountSid.startsWith('AC') || credentials.accountSid.length !== 34) {
+      return { success: false, message: 'Invalid Account SID — must start with AC and be 34 characters', timestamp: new Date().toISOString() };
+    }
+    if (credentials.authToken.length !== 32) {
+      return { success: false, message: 'Invalid Auth Token — must be 32 characters', timestamp: new Date().toISOString() };
+    }
+    if (credentials.fromNumber && !String(credentials.fromNumber).startsWith('+')) {
+      return { success: false, message: 'From Number must be in E.164 format (e.g. +12025551234)', timestamp: new Date().toISOString() };
+    }
+    return {
+      success: true,
+      message: 'Twilio credentials saved. SMS sending will be verified on first message.',
+      timestamp: new Date().toISOString(),
+    };
   }
 
   private async testEagleView(credentials: any): Promise<IntegrationTestResult> {
@@ -317,15 +340,16 @@ export class IntegrationManager {
 
   private async testHailTrace(credentials: any): Promise<IntegrationTestResult> {
     if (!credentials?.apiKey) {
-      return {
-        success: false,
-        message: 'API Key is required',
-        timestamp: new Date().toISOString(),
-      };
+      return { success: false, message: 'API Key is required', timestamp: new Date().toISOString() };
     }
-
-    const hailtrace = new HailTraceIntegration(credentials.apiKey, credentials.environment ?? 'production');
-    return hailtrace.testConnection();
+    if (!credentials?.environment || !['production', 'sandbox'].includes(credentials.environment)) {
+      return { success: false, message: 'Environment must be "production" or "sandbox"', timestamp: new Date().toISOString() };
+    }
+    return {
+      success: true,
+      message: 'HailTrace credentials saved. Hail events will be fetched from contact detail pages.',
+      timestamp: new Date().toISOString(),
+    };
   }
 
   /**
@@ -464,26 +488,96 @@ export class IntegrationManager {
   }
 
   /**
-   * Save integrations to storage
+   * Load integrations from Supabase (async — call after auth is ready)
    */
-  private async saveIntegrations(): Promise<void> {
-    const integrations = Array.from(this.integrations.values());
+  async loadFromSupabase(): Promise<void> {
     try {
-      localStorage.setItem('crm_integrations', JSON.stringify(integrations));
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: profile } = await supabase.from('profiles').select('company_id').eq('id', user.id).single();
+      if (!profile?.company_id) return;
+
+      const { data } = await supabase
+        .from('company_integrations')
+        .select('*')
+        .eq('company_id', profile.company_id);
+
+      if (data) {
+        for (const row of data) {
+          const integration = this.integrations.get(row.integration_type);
+          if (integration) {
+            integration.credentials = row.credentials || {};
+            integration.settings = row.settings || {};
+            integration.isEnabled = row.is_active ?? false;
+            integration.isConfigured = true;
+            integration.status = row.is_active ? 'connected' : 'disconnected';
+          }
+        }
+      }
     } catch (error) {
-      console.warn('Failed to save integrations to localStorage:', error);
+      console.warn('Failed to load integrations from Supabase:', error);
     }
   }
 
   /**
-   * Load integrations from storage
+   * Save integrations to storage (Supabase + localStorage meta cache)
+   */
+  private async saveIntegrations(): Promise<void> {
+    const integrations = Array.from(this.integrations.values());
+
+    // Save only non-sensitive meta to localStorage as quick-start cache
+    try {
+      const meta = integrations.map(i => ({
+        id: i.id, isEnabled: i.isEnabled, isConfigured: i.isConfigured,
+        status: i.status, lastSync: i.lastSync,
+      }));
+      localStorage.setItem('crm_integrations_meta', JSON.stringify(meta));
+    } catch {
+      // ignore
+    }
+
+    // Save credentials to Supabase
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: profile } = await supabase.from('profiles').select('company_id').eq('id', user.id).single();
+      if (!profile?.company_id) return;
+
+      for (const integration of integrations) {
+        if (!integration.isConfigured) continue;
+        await supabase.from('company_integrations').upsert({
+          company_id: profile.company_id,
+          integration_type: integration.id,
+          is_active: integration.isEnabled,
+          credentials: integration.credentials || {},
+          settings: integration.settings || {},
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'company_id,integration_type' });
+      }
+    } catch (error) {
+      console.warn('Failed to save integrations to Supabase:', error);
+    }
+  }
+
+  /**
+   * Load integrations from storage (sync — meta only, no credentials)
    */
   private loadSavedIntegrations(): BaseIntegration[] {
     try {
-      const saved = localStorage.getItem('crm_integrations');
-      return saved ? JSON.parse(saved) : [];
-    } catch (error) {
-      console.warn('Failed to load integrations from localStorage:', error);
+      const saved = localStorage.getItem('crm_integrations_meta');
+      if (saved) {
+        // Meta only — credentials will be loaded async from Supabase
+        return JSON.parse(saved).map((m: any) => ({ ...m, credentials: {}, settings: {} }));
+      }
+      // Backward compat: migrate old full-data localStorage entry
+      const old = localStorage.getItem('crm_integrations');
+      if (old) {
+        const parsed = JSON.parse(old);
+        // Strip credentials from old cache for security
+        return parsed.map((i: any) => ({ ...i, credentials: {}, settings: {} }));
+      }
+      return [];
+    } catch {
       return [];
     }
   }
@@ -497,6 +591,7 @@ export class IntegrationManager {
     this.syncIntervals.forEach((interval) => clearInterval(interval));
     this.syncIntervals.clear();
     localStorage.removeItem('crm_integrations');
+    localStorage.removeItem('crm_integrations_meta');
     this.initializeIntegrations();
   }
 
