@@ -6,6 +6,7 @@ import { fireAutomationEvent } from '@/lib/automationEngine';
 import JobStatusTimeline from './JobStatusTimeline';
 import CustomerSurvey from './CustomerSurvey';
 import AppointmentModal from './AppointmentModal';
+import HailTracePanel from './HailTracePanel';
 import {
   applyMention,
   findActiveMentionQuery,
@@ -1054,6 +1055,16 @@ export default function ContactDetail() {
                     )}
                   </div>
                 </div>
+              )}
+
+              {!currentData.isRetail && (
+                <HailTracePanel
+                  address={contact.address || ''}
+                  city={contact.city || ''}
+                  state={contact.state || ''}
+                  zip={contact.zip || ''}
+                  companyId={contact.companyId || ''}
+                />
               )}
 
               {/* Inspection Information */}
