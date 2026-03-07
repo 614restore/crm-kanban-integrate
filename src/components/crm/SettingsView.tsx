@@ -40,9 +40,9 @@ import {
   Zap,
   Target,
   DollarSign,
-  Send,
 } from 'lucide-react';
-import { sendEmail } from '@/lib/emailApi';
+import { supabase, isDemoMode } from '@/lib/supabase';
+import { ensureDefaultLeadSources } from '@/lib/setupCompany';
 import ImageCropDialog from '@/components/ui/ImageCropDialog';
 
 type SettingsTab = 'company' | 'profile' | 'integrations' | 'ai-assistant' | 'notifications' | 'security' | 'billing' | 'api';
@@ -94,7 +94,6 @@ export default function SettingsView() {
   const [isSavingLeadSource, setIsSavingLeadSource] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
   const [isSavingCompany, setIsSavingCompany] = useState(false);
-  const [isSendingTestEmail, setIsSendingTestEmail] = useState(false);
 
   // Integration hooks
   const {
@@ -388,38 +387,6 @@ export default function SettingsView() {
       toast.error(errorMessage);
     } finally {
       setIsSavingCompany(false);
-    }
-  };
-
-  const handleSendTestEmail = async () => {
-    const toEmail = profile?.email || companyForm.email;
-    if (!toEmail) {
-      toast.error('No email address found. Add your email to the company profile first.');
-      return;
-    }
-    if (!companyForm.from_email) {
-      toast.error('Set a Sender Email Address first, then test.');
-      return;
-    }
-    setIsSendingTestEmail(true);
-    try {
-      const fromName = companyForm.from_name || companyForm.name || '614 Restore';
-      await sendEmail({
-        to: toEmail,
-        from: `${fromName} <${companyForm.from_email}>`,
-        subject: `Test email from ${fromName}`,
-        html: `<div style="font-family:sans-serif;max-width:500px">
-          <h2 style="color:#1e40af">✅ Email settings are working!</h2>
-          <p>Your invoices, estimates, and other customer emails will be sent from:</p>
-          <p><strong>${fromName} &lt;${companyForm.from_email}&gt;</strong></p>
-          <p style="color:#6b7280;font-size:0.9em">This test was sent from TrussCTR Settings.</p>
-        </div>`,
-      });
-      toast.success(`Test email sent to ${toEmail}`);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Test email failed');
-    } finally {
-      setIsSendingTestEmail(false);
     }
   };
 
@@ -1543,15 +1510,10 @@ export default function SettingsView() {
             <div>
               <h3 className="text-xl font-semibold text-gray-900 mb-6">Email Sender Settings</h3>
               <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <p className="text-sm font-medium text-blue-900 mb-1">📧 How this works</p>
-                  <p className="text-sm text-blue-800">
-                    Invoices, estimates, and other customer emails will be sent <strong>from the address below</strong>.
-                    The email address must use a domain verified in your{' '}
-                    <a href="https://resend.com/domains" target="_blank" rel="noopener noreferrer" className="underline font-medium">Resend account</a>.
-                    {' '}Your domain <strong>614restore.com</strong> is already verified — any address ending in <strong>@614restore.com</strong> will work.
-                  </p>
-                </div>
+                <p className="text-sm text-gray-500 mb-2">
+                  Configure the sender name and email address used when sending invoices, estimates, and other emails to your customers.
+                  Leave blank to use the system default.
+                </p>
                 <div className="grid grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Sender Name</label>
@@ -1571,48 +1533,28 @@ export default function SettingsView() {
                       value={companyForm.from_email}
                       onChange={(e) => setCompanyForm({ ...companyForm, from_email: e.target.value })}
                       className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                      placeholder="invoices@614restore.com"
+                      placeholder="invoices@yourdomain.com"
                     />
-                    <p className="text-xs text-gray-400 mt-1">Must be on a verified domain (e.g. anything @614restore.com)</p>
+                    <p className="text-xs text-gray-400 mt-1">Must be a verified domain in your email service (Resend, SendGrid, etc.)</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 pt-2">
-                  <button
-                    onClick={handleSaveCompany}
-                    disabled={isSavingCompany}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isSavingCompany ? (
-                      <>
-                        <Loader2 size={18} className="animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      <>
-                        <Save size={18} />
-                        Save Email Settings
-                      </>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => { void handleSendTestEmail(); }}
-                    disabled={isSendingTestEmail || !companyForm.from_email}
-                    className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isSendingTestEmail ? (
-                      <>
-                        <Loader2 size={18} className="animate-spin" />
-                        Sending...
-                      </>
-                    ) : (
-                      <>
-                        <Send size={18} />
-                        Send Test Email
-                      </>
-                    )}
-                  </button>
-                  <p className="text-xs text-gray-400">Test email will be sent to your account email</p>
-                </div>
+                <button
+                  onClick={handleSaveCompany}
+                  disabled={isSavingCompany}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSavingCompany ? (
+                    <>
+                      <Loader2 size={18} className="animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save size={18} />
+                      Save Email Settings
+                    </>
+                  )}
+                </button>
               </div>
             </div>
 
@@ -2331,6 +2273,17 @@ export default function SettingsView() {
           // Refresh the AI configurations in the approval panel
         }}
       />
+
+      {/* Legal Footer */}
+      <div className="mt-8 pt-6 border-t border-gray-200 flex flex-wrap items-center justify-center gap-4 text-sm text-gray-400">
+        <span>© {new Date().getFullYear()} TrussCTR by 614 Restore LLC</span>
+        <span>·</span>
+        <a href="/crm-kanban-integrate/terms" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 transition-colors">Terms of Service</a>
+        <span>·</span>
+        <a href="/crm-kanban-integrate/privacy" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 transition-colors">Privacy Policy</a>
+        <span>·</span>
+        <a href="mailto:support@614restore.com" className="hover:text-blue-600 transition-colors">Contact Support</a>
+      </div>
     </div>
   );
 }
