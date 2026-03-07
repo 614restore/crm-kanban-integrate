@@ -218,6 +218,29 @@ export default function Sidebar() {
         </button>
       </div>
 
+      {/* Legal Links */}
+      {!sidebarCollapsed && (
+        <div className="px-3 pb-2 flex gap-3 justify-center">
+          <a
+            href="/crm-kanban-integrate/terms"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+          >
+            Terms
+          </a>
+          <span className="text-slate-600 text-xs">·</span>
+          <a
+            href="/crm-kanban-integrate/privacy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+          >
+            Privacy
+          </a>
+        </div>
+      )}
+
       {/* User Profile */}
       <div className="border-t border-slate-700 p-3">
         {profile ? (
