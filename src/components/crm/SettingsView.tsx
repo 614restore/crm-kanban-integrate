@@ -1284,7 +1284,7 @@ export default function SettingsView() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto p-8">
+      <div className="flex-1 overflow-auto p-8 flex flex-col min-h-full">
         {activeTab === 'company' && (
           <div className="max-w-3xl space-y-8">
             <div>
@@ -2275,7 +2275,8 @@ export default function SettingsView() {
       />
 
       {/* Legal Footer */}
-      <div className="mt-8 pt-6 border-t border-gray-200 flex flex-wrap items-center justify-center gap-4 text-sm text-gray-400">
+      <div className="mt-auto pt-8">
+        <div className="pt-6 border-t border-gray-200 flex flex-wrap items-center justify-center gap-4 text-sm text-gray-400">
         <span>© {new Date().getFullYear()} TrussCTR by 614 Restore LLC</span>
         <span>·</span>
         <a href="/crm-kanban-integrate/terms" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 transition-colors">Terms of Service</a>
@@ -2285,6 +2286,7 @@ export default function SettingsView() {
         <a href="/crm-kanban-integrate/eula" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 transition-colors">EULA</a>
         <span>·</span>
         <a href="mailto:support@614restore.com" className="hover:text-blue-600 transition-colors">Contact Support</a>
+        </div>
       </div>
     </div>
   );
