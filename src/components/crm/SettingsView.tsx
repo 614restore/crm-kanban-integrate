@@ -1243,7 +1243,7 @@ export default function SettingsView() {
   }, []);
 
   return (
-    <div className="h-full flex">
+    <div className="h-full w-full flex overflow-hidden">
       {/* Hidden file inputs */}
       <input
         ref={companyLogoInputRef}
