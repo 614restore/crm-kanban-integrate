@@ -17,15 +17,11 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-async function refreshTokenIfNeeded(company) {
-  const expires = new Date(company.qb_token_expires_at);
-  const now = new Date();
-  // Decrypt stored tokens before use
-  const accessToken = decrypt(company.qb_access_token);
+async function getAccessToken(company) {
+  // Access tokens are never stored in DB (volatile memory only per Intuit requirement).
+  // Always generate a fresh access token from the encrypted refresh token.
   const refreshToken = decrypt(company.qb_refresh_token);
-
-  // Refresh if expires within 5 minutes
-  if (expires - now > 5 * 60 * 1000) return accessToken;
+  if (!refreshToken) throw new Error('No refresh token — please reconnect QuickBooks.');
 
   const environment = company.qb_environment || 'sandbox';
   const oauthClient = new OAuthClient({
@@ -37,23 +33,23 @@ async function refreshTokenIfNeeded(company) {
 
   oauthClient.setToken({
     token_type: 'bearer',
-    access_token: accessToken,
+    access_token: '',
     refresh_token: refreshToken,
-    expires_in: 3600,
+    expires_in: 0,
   });
 
   const refreshed = await oauthClient.refresh();
   const token = refreshed.getJson();
   const expiresAt = new Date(Date.now() + token.expires_in * 1000).toISOString();
 
-  // Re-encrypt refreshed tokens before saving
+  // Save the new encrypted refresh token back to DB; access token stays in memory only
   await supabase.from('companies').update({
-    qb_access_token: encrypt(token.access_token),
+    qb_access_token: null,
     qb_refresh_token: encrypt(token.refresh_token || refreshToken),
     qb_token_expires_at: expiresAt,
   }).eq('id', company.id);
 
-  return token.access_token;
+  return token.access_token; // returned in memory, never persisted
 }
 
 function getQBClient(accessToken, realmId, environment) {
@@ -88,14 +84,14 @@ export default async function handler(req, res) {
     .eq('id', company_id)
     .single();
 
-  if (companyError || !company?.qb_access_token) {
+  if (companyError || !company?.qb_refresh_token) {
     return res.status(400).json({ error: 'QuickBooks not connected. Please connect first.' });
   }
 
   const results = { customers: 0, invoices: 0, errors: [] };
 
   try {
-    const accessToken = await refreshTokenIfNeeded(company);
+    const accessToken = await getAccessToken(company);
     const qb = getQBClient(accessToken, company.qb_realm_id, company.qb_environment);
 
     // Load contacts (customers)

@@ -58,7 +58,7 @@ export default async function handler(req, res) {
     const { error: dbError } = await supabase
       .from('companies')
       .update({
-        qb_access_token: encrypt(token.access_token),
+        qb_access_token: null, // access tokens stored in volatile memory only (Intuit requirement)
         qb_refresh_token: encrypt(token.refresh_token),
         qb_realm_id: realmId,
         qb_token_expires_at: expiresAt,
