@@ -2,11 +2,15 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useCRM, useCurrentContact } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
+import { supabase } from '@/lib/supabase';
 import { fireAutomationEvent } from '@/lib/automationEngine';
 import JobStatusTimeline from './JobStatusTimeline';
 import CustomerSurvey from './CustomerSurvey';
 import AppointmentModal from './AppointmentModal';
 import HailTracePanel from './HailTracePanel';
+import ChangeOrderModal, { ChangeOrder } from './ChangeOrderModal';
+import PermitTracker from './PermitTracker';
+import CrewScheduleView from './CrewScheduleView';
 import {
   applyMention,
   findActiveMentionQuery,
@@ -63,9 +67,13 @@ import {
   Truck,
   Activity,
   Star,
+  CalendarClock,
+  Wrench,
+  FileSignature,
+  ShieldCheck,
 } from 'lucide-react';
 
-type TabType = 'overview' | 'timeline' | 'documents' | 'financial' | 'projects' | 'jobStatus' | 'survey';
+type TabType = 'overview' | 'timeline' | 'documents' | 'financial' | 'projects' | 'jobStatus' | 'survey' | 'schedule' | 'permits' | 'change-orders';
 
 export default function ContactDetail() {
   const { state, dispatch } = useCRM();
@@ -97,6 +105,10 @@ export default function ContactDetail() {
   const [showWorkOrderModal, setShowWorkOrderModal] = useState(false);
   const [showSurveyModal, setShowSurveyModal] = useState(false);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
+  const [showChangeOrderModal, setShowChangeOrderModal] = useState(false);
+  const [editingChangeOrder, setEditingChangeOrder] = useState<ChangeOrder | null>(null);
+  const [changeOrderRefresh, setChangeOrderRefresh] = useState(0);
+  const [changeOrders, setChangeOrders] = useState<ChangeOrder[]>([]);
   
   const noteInputRef = useRef<HTMLInputElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
@@ -108,6 +120,18 @@ export default function ContactDetail() {
     if (!contactId) return;
     setQuickNote(contactNotes);
   }, [contactId, contactNotes]);
+
+  // Load change orders for this contact
+  useEffect(() => {
+    if (!contactId || !state.companyId) return;
+    supabase
+      .from('change_orders')
+      .select('*')
+      .eq('contact_id', contactId)
+      .eq('company_id', state.companyId)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => { if (data) setChangeOrders(data as ChangeOrder[]); });
+  }, [contactId, state.companyId, changeOrderRefresh]);
 
   // Load contact projects, estimates, work orders, and material orders
   useEffect(() => {
@@ -603,6 +627,9 @@ export default function ContactDetail() {
     { id: 'documents', label: 'Documents', icon: <FileText size={16} /> },
     { id: 'financial', label: 'Financial', icon: <DollarSign size={16} /> },
     { id: 'projects', label: 'Projects', icon: <Briefcase size={16} /> },
+    { id: 'change-orders', label: 'Change Orders', icon: <FileSignature size={16} /> },
+    { id: 'permits', label: 'Permits', icon: <ShieldCheck size={16} /> },
+    { id: 'schedule', label: 'Crew Schedule', icon: <CalendarClock size={16} /> },
   ];
 
   // Add survey trigger functionality
@@ -1937,6 +1964,65 @@ export default function ContactDetail() {
             />
           </div>
         )}
+
+        {/* ── Change Orders tab ── */}
+        {activeTab === 'change-orders' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">Change Orders</h3>
+              <button
+                onClick={() => { setEditingChangeOrder(null); setShowChangeOrderModal(true); }}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
+              >
+                <Plus size={16} /> New Change Order
+              </button>
+            </div>
+            {changeOrders.length === 0 ? (
+              <div className="text-center py-12 text-gray-500">
+                <FileSignature size={32} className="mx-auto mb-2 text-gray-300" />
+                <p>No change orders yet</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {changeOrders.map(co => (
+                  <div key={co.id} className="bg-white border border-gray-200 rounded-lg p-4 flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-gray-900">{co.changeOrderNumber}</span>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                          co.status === 'signed' ? 'bg-green-100 text-green-700' :
+                          co.status === 'sent' ? 'bg-blue-100 text-blue-700' :
+                          co.status === 'approved' ? 'bg-teal-100 text-teal-700' :
+                          co.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                          'bg-gray-100 text-gray-600'
+                        }`}>{co.status}</span>
+                      </div>
+                      <p className="text-sm text-gray-600 mt-0.5">{co.title}</p>
+                      <p className="text-sm font-medium text-gray-800">${co.total?.toFixed(2)}</p>
+                    </div>
+                    <button
+                      onClick={() => { setEditingChangeOrder(co); setShowChangeOrderModal(true); }}
+                      className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+                    >Edit</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Permits tab ── */}
+        {activeTab === 'permits' && state.companyId && (
+          <PermitTracker contactId={contact.id} companyId={state.companyId} />
+        )}
+
+        {/* ── Crew Schedule tab ── */}
+        {activeTab === 'schedule' && (
+          <div className="space-y-4">
+            <p className="text-sm text-gray-500">Crew assignments for this contact. To manage the full schedule, use <strong>Crew Schedule</strong> in the sidebar.</p>
+            <CrewScheduleView contactFilterId={contact.id} />
+          </div>
+        )}
       </div>
 
       {/* Survey Modal */}
@@ -2889,6 +2975,22 @@ export default function ContactDetail() {
         onClose={() => setShowAppointmentModal(false)}
         preselectedContactId={contact.id}
       />
+
+      {showChangeOrderModal && state.companyId && (
+        <ChangeOrderModal
+          isOpen={showChangeOrderModal}
+          onClose={() => { setShowChangeOrderModal(false); setEditingChangeOrder(null); }}
+          onSave={() => {
+            setShowChangeOrderModal(false);
+            setEditingChangeOrder(null);
+            setChangeOrderRefresh(r => r + 1);
+          }}
+          contactId={contact.id}
+          contactName={`${contact.firstName} ${contact.lastName}`}
+          changeOrder={editingChangeOrder}
+          companyId={state.companyId}
+        />
+      )}
     </div>
   );
 }

@@ -47,6 +47,8 @@ export default function TopBar() {
     automations: 'Workflow Automations',
     settings: 'Settings',
     'ai-assistant': 'AI Assistant',
+    'crew-schedule': 'Crew Schedule',
+    equipment: 'Equipment & Assets',
   };
 
   return (

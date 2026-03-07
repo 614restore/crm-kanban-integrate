@@ -1,6 +1,8 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { db } from '@/lib/database';
+import { supabase } from '@/lib/supabase';
 import { useCRM, useFilteredContacts } from '@/lib/crmStore';
+import { useAuth } from '@/lib/authContext';
 import { toast } from 'sonner';
 import { exportContactsToExcel } from '@/lib/exportUtils';
 import {
@@ -30,6 +32,8 @@ import {
   CheckSquare,
   Square,
   ArrowUpDown,
+  Archive,
+  ArchiveRestore,
 } from 'lucide-react';
 
 type SortField = 'name' | 'status' | 'createdAt' | 'projectValue';
@@ -37,6 +41,7 @@ type SortDirection = 'asc' | 'desc';
 
 export default function ContactList() {
   const { state, dispatch } = useCRM();
+  const { profile } = useAuth();
   const filteredContacts = useFilteredContacts();
   const importInputRef = useRef<HTMLInputElement>(null);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
@@ -44,6 +49,8 @@ export default function ContactList() {
   const [sortField, setSortField] = useState<SortField>('createdAt');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [showBulkActions, setShowBulkActions] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
+  const [archivedContacts, setArchivedContacts] = useState<Contact[]>([]);
 
   // Sort contacts
   const sortedContacts = [...filteredContacts].sort((a, b) => {
@@ -64,6 +71,47 @@ export default function ContactList() {
     }
     return sortDirection === 'asc' ? comparison : -comparison;
   });
+
+  // Load archived contacts from Supabase
+  const loadArchivedContacts = useCallback(async () => {
+    if (!profile?.company_id) return;
+    const { data } = await supabase
+      .from('contacts')
+      .select('*')
+      .eq('company_id', profile.company_id)
+      .eq('is_archived', true)
+      .order('archived_at', { ascending: false });
+    if (data) setArchivedContacts(data as unknown as Contact[]);
+  }, [profile?.company_id]);
+
+  useEffect(() => { if (showArchived) loadArchivedContacts(); }, [showArchived, loadArchivedContacts]);
+
+  const handleArchiveContact = async (contactId: string) => {
+    if (!confirm('Archive this contact? They will be hidden from the active list but can be restored.')) return;
+    const { error } = await supabase
+      .from('contacts')
+      .update({ is_archived: true, archived_at: new Date().toISOString() })
+      .eq('id', contactId);
+    if (error) { toast.error('Failed to archive contact'); return; }
+    dispatch({ type: 'DELETE_CONTACT', payload: contactId });
+    toast.success('Contact archived');
+  };
+
+  const handleRestoreContact = async (contactId: string) => {
+    const { error } = await supabase
+      .from('contacts')
+      .update({ is_archived: false, archived_at: null })
+      .eq('id', contactId);
+    if (error) { toast.error('Failed to restore contact'); return; }
+    setArchivedContacts(prev => prev.filter(c => c.id !== contactId));
+    toast.success('Contact restored — refresh Contacts to see them');
+  };
+
+  const handleExportArchived = () => {
+    if (archivedContacts.length === 0) { toast.error('No archived contacts to export'); return; }
+    exportContactsToExcel(archivedContacts, `archived-contacts-${new Date().toISOString().split('T')[0]}.xlsx`);
+    toast.success(`Exported ${archivedContacts.length} archived contacts`);
+  };
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -252,6 +300,13 @@ export default function ContactList() {
             </p>
           </div>
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowArchived(a => !a)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors text-sm font-medium ${showArchived ? 'bg-amber-100 text-amber-700' : 'text-gray-600 hover:bg-gray-100'}`}
+            >
+              <Archive size={18} />
+              {showArchived ? 'Active Contacts' : 'Archived'}
+            </button>
             <button
               onClick={handleExportContacts}
               className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
@@ -448,6 +503,13 @@ export default function ContactList() {
                       >
                         <Edit2 size={16} className="text-gray-400" />
                       </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleArchiveContact(contact.id); }}
+                        className="p-2 hover:bg-amber-100 rounded-lg transition-colors"
+                        title="Archive"
+                      >
+                        <Archive size={16} className="text-gray-400 hover:text-amber-600" />
+                      </button>
                     </div>
                   </div>
                 );
@@ -555,6 +617,44 @@ export default function ContactList() {
           </div>
         )}
       </div>
+
+      {/* Archived Contacts Panel */}
+      {showArchived && (
+        <div className="mt-6 bg-amber-50 border border-amber-200 rounded-xl p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Archive size={20} className="text-amber-600" />
+              <h3 className="text-lg font-semibold text-amber-900">Archived Contacts ({archivedContacts.length})</h3>
+            </div>
+            <button
+              onClick={handleExportArchived}
+              className="flex items-center gap-2 px-3 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 text-sm font-medium"
+            >
+              <Download size={16} /> Export to Excel
+            </button>
+          </div>
+          {archivedContacts.length === 0 ? (
+            <p className="text-amber-700 text-sm">No archived contacts.</p>
+          ) : (
+            <div className="space-y-2">
+              {archivedContacts.map(contact => (
+                <div key={contact.id} className="bg-white border border-amber-200 rounded-lg px-4 py-3 flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-gray-900">{getContactFullName(contact)}</p>
+                    <p className="text-sm text-gray-500">{contact.email} · {contact.phone1}</p>
+                  </div>
+                  <button
+                    onClick={() => handleRestoreContact(contact.id)}
+                    className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-green-700 bg-green-50 hover:bg-green-100 border border-green-200 rounded-lg"
+                  >
+                    <ArchiveRestore size={14} /> Restore
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
