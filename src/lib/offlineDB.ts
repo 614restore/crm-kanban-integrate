@@ -41,12 +41,12 @@ export interface OfflinePhoto {
   id: string;
   temp_id?: string; // For offline-created photos
   job_id?: string;
-  contact_id: string;
-  user_id: string;
-  category: 'before' | 'during' | 'after' | 'damage';
+  contact_id?: string;
+  user_id?: string;
+  category?: 'before' | 'during' | 'after' | 'damage';
   damage_type?: 'roof' | 'siding' | 'gutter' | 'window' | 'interior';
   room?: string;
-  timestamp: number;
+  timestamp: number | Date;
   gps_coords?: { lat: number; lng: number; accuracy?: number };
   stage?: CustomerStatus;
   annotations?: Array<{ x: number; y: number; note: string }>;
@@ -59,6 +59,18 @@ export interface OfflinePhoto {
   upload_progress?: number;
   upload_error?: string;
   created_offline?: boolean;
+  // Additional fields used by PhotoCapture/Photos components
+  data?: string; // base64 or Supabase public URL
+  fileName?: string;
+  description?: string;
+  tags?: string[];
+  latitude?: number;
+  longitude?: number;
+  accuracy?: number;
+  queuedAt?: Date;
+  contactId?: string;
+  size?: number;
+  mimeType?: string;
 }
 
 // Sync queue for offline actions
@@ -172,6 +184,18 @@ class OfflineDatabase extends Dexie {
     }
     
     return size;
+  }
+
+  async addPhoto(photo: OfflinePhoto): Promise<void> {
+    await this.photos.add(photo);
+  }
+
+  async getAllPhotos(): Promise<OfflinePhoto[]> {
+    return await this.photos.orderBy('timestamp').reverse().toArray();
+  }
+
+  async deletePhoto(photoId: string): Promise<void> {
+    await this.photos.delete(photoId);
   }
 }
 

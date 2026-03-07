@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useCRM, useCurrentContact } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
+import { fireAutomationEvent } from '@/lib/automationEngine';
 import JobStatusTimeline from './JobStatusTimeline';
 import CustomerSurvey from './CustomerSurvey';
 import AppointmentModal from './AppointmentModal';
@@ -434,6 +435,13 @@ export default function ContactDetail() {
         type: 'UPDATE_CONTACT_STATUS',
         payload: { contactId: contact.id, status: newStatus },
       });
+
+      fireAutomationEvent('status_change', effectiveCompanyId, {
+        contactId: contact.id,
+        contactName: `${contact.firstName} ${contact.lastName}`.trim(),
+        oldStatus: contact.status,
+        newStatus,
+      }).catch(() => {});
     } catch (error) {
       console.error('Error updating status:', error);
       toast.error('Failed to update status');

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
+import { fireAutomationEvent } from '@/lib/automationEngine';
 import { sendEmail } from '@/lib/emailApi';
 import { Estimate, EstimateItem, Contact } from '@/lib/crmData';
 import { exportEstimatesToExcel } from '@/lib/exportUtils';
@@ -492,6 +493,14 @@ export default function EstimatesView() {
         } else {
           toast.success('Estimate marked as accepted');
         }
+
+        const contact = state.contacts.find((c) => c.id === estimate.contactId);
+        fireAutomationEvent('estimate_accepted', profile.company_id, {
+          contactId: estimate.contactId,
+          contactName: contact ? `${contact.firstName} ${contact.lastName}`.trim() : undefined,
+          amount: estimate.total,
+        }).catch(() => {});
+
         setViewingEstimate(null);
       }
     } catch (err: any) {

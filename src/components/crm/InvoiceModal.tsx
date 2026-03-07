@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
+import { fireAutomationEvent } from '@/lib/automationEngine';
 import { Invoice, InvoiceItem, formatCurrency, getContactFullName } from '@/lib/crmData';
 import { toast } from 'sonner';
 import { X, Plus, Trash2, Save, Send, DollarSign } from 'lucide-react';
@@ -119,6 +120,13 @@ export default function InvoiceModal() {
     };
 
     dispatch({ type: 'ADD_INVOICE', payload: newInvoice });
+
+    fireAutomationEvent('invoice_created', effectiveCompanyId, {
+      contactId: selectedContactId,
+      contactName: newInvoice.contactName,
+      amount: newInvoice.amount,
+    }).catch(() => {});
+
     dispatch({
       type: 'ADD_NOTIFICATION',
       payload: {

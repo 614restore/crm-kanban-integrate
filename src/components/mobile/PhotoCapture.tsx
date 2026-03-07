@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { offlineDB } from '@/lib/offlineDB';
+import { supabase } from '@/lib/supabase';
 
 interface PhotoMetadata {
   id?: string;
@@ -242,10 +243,32 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({
       };
 
       // Save to offline database
+      let photoData = base64Data;
+      let uploaded = false;
+
+      if (isOnline) {
+        try {
+          const uploadPath = `photos/${photoMetadata.id}/${photoMetadata.fileName}`;
+          const { error: uploadError } = await supabase.storage
+            .from('projectceo-photos')
+            .upload(uploadPath, blob, { contentType: blob.type, upsert: false });
+
+          if (!uploadError) {
+            const { data: publicUrlData } = supabase.storage
+              .from('projectceo-photos')
+              .getPublicUrl(uploadPath);
+            photoData = publicUrlData.publicUrl;
+            uploaded = true;
+          }
+        } catch (uploadErr) {
+          console.warn('⚠️ Supabase upload failed, saving offline:', uploadErr);
+        }
+      }
+
       await offlineDB.addPhoto({
         ...photoMetadata,
-        data: base64Data,
-        uploaded: false,
+        data: photoData,
+        uploaded,
         queuedAt: new Date()
       });
 
