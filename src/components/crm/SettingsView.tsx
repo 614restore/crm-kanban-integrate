@@ -2282,6 +2282,8 @@ export default function SettingsView() {
         <span>·</span>
         <a href="/crm-kanban-integrate/privacy" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 transition-colors">Privacy Policy</a>
         <span>·</span>
+        <a href="/crm-kanban-integrate/eula" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 transition-colors">EULA</a>
+        <span>·</span>
         <a href="mailto:support@614restore.com" className="hover:text-blue-600 transition-colors">Contact Support</a>
       </div>
     </div>
