@@ -20,7 +20,8 @@ import {
   Briefcase,
   FileSignature,
   ClipboardList,
-  Wrench
+  Wrench,
+  User
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,6 +36,8 @@ import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/authContext';
 import { db, DbCompany } from '@/lib/database';
+import { useCRM } from '@/lib/crmStore';
+import { getContactFullName } from '@/lib/crmData';
 
 interface DocumentTemplate {
   id: string;
@@ -72,9 +75,13 @@ const DocumentTemplates: React.FC = () => {
   const [previewMode, setPreviewMode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [companyProfile, setCompanyProfile] = useState<DbCompany | null>(null);
+  const [customerEditMode, setCustomerEditMode] = useState(false);
+  const [selectedContactId, setSelectedContactId] = useState<string>('');
+  const [editedContent, setEditedContent] = useState<string>('');
   
   const { toast } = useToast();
   const { profile } = useAuth();
+  const { state: crmState } = useCRM();
 
   // Load company profile for template variable replacement
   useEffect(() => {
@@ -1659,6 +1666,63 @@ const DocumentTemplates: React.FC = () => {
     });
   };
 
+  // Delete a non-default template
+  const deleteTemplate = (template: DocumentTemplate) => {
+    if (!window.confirm(`Delete "${template.name}"?`)) return;
+    setTemplates(prev => prev.filter(t => t.id !== template.id));
+    if (selectedTemplate?.id === template.id) {
+      setSelectedTemplate(null);
+      setPreviewMode(false);
+    }
+    toast({ title: "Template Deleted", description: `"${template.name}" has been removed.` });
+  };
+
+  // Fill template variables for a specific contact
+  const fillTemplateForContact = (template: DocumentTemplate, contactId: string): string => {
+    const contact = crmState.contacts.find(c => c.id === contactId);
+    if (!contact) return getPreviewContent(template);
+    let content = template.content;
+    const fullName = getContactFullName(contact);
+    const address = [contact.address, contact.city, contact.state, contact.zip].filter(Boolean).join(', ');
+    const overrides: Record<string, string> = {
+      'CUSTOMER_NAME': fullName,
+      'CLIENT_NAME': fullName,
+      'CUSTOMER_PHONE': contact.phone || '',
+      'CUSTOMER_EMAIL': contact.email || '',
+      'PROPERTY_ADDRESS': contact.address || '',
+      'PROPERTY_CITY': contact.city || '',
+      'PROPERTY_STATE': contact.state || '',
+      'PROPERTY_ZIP': contact.zip || '',
+      'PROJECT_ADDRESS': address,
+      'BILLING_ADDRESS': contact.address || '',
+      'BILLING_CITY': contact.city || '',
+      'BILLING_STATE': contact.state || '',
+      'BILLING_ZIP': contact.zip || '',
+      'JOB_SITE_ADDRESS': contact.address || '',
+      'JOB_SITE_CITY': contact.city || '',
+      'JOB_SITE_STATE': contact.state || '',
+      'JOB_SITE_ZIP': contact.zip || '',
+      'INSURANCE_COMPANY': (contact as any).insurance_company || '',
+      'POLICY_NUMBER': (contact as any).policy_number || '',
+      'CLAIM_NUMBER': (contact as any).claim_number || '',
+    };
+    // First apply company/default values
+    content = getPreviewContent({ ...template, content });
+    // Then override with real contact values
+    Object.entries(overrides).forEach(([key, val]) => {
+      if (val) content = content.replace(new RegExp(`\\[${key}\\]`, 'g'), val);
+    });
+    return content;
+  };
+
+  // Open per-customer editor
+  const openCustomerEdit = (template: DocumentTemplate) => {
+    const contactId = selectedContactId || crmState.contacts[0]?.id || '';
+    setSelectedContactId(contactId);
+    setEditedContent(fillTemplateForContact(template, contactId));
+    setCustomerEditMode(true);
+  };
+
   // Preview template with sample data
   const getPreviewContent = (template: DocumentTemplate) => {
     let content = template.content;
@@ -2008,6 +2072,16 @@ const DocumentTemplates: React.FC = () => {
                       >
                         <Copy className="w-4 h-4" />
                       </Button>
+                      {!template.isDefault && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-red-500 hover:bg-red-50 hover:border-red-300"
+                          onClick={() => deleteTemplate(template)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      )}
                       <Button size="sm">
                         <Download className="w-4 h-4" />
                       </Button>
@@ -2064,9 +2138,79 @@ const DocumentTemplates: React.FC = () => {
                   <Copy className="w-4 h-4 mr-2" />
                   Duplicate
                 </Button>
+                <Button variant="outline" onClick={() => openCustomerEdit(selectedTemplate)}>
+                  <User className="w-4 h-4 mr-2" />
+                  Use for Customer
+                </Button>
                 <Button>
                   <Download className="w-4 h-4 mr-2" />
                   Generate Document
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Per-Customer Template Editor */}
+      {customerEditMode && selectedTemplate && (
+        <Dialog open={customerEditMode} onOpenChange={() => setCustomerEditMode(false)}>
+          <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Edit "{selectedTemplate.name}" for Customer</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label>Customer</Label>
+                <select
+                  value={selectedContactId}
+                  onChange={(e) => {
+                    setSelectedContactId(e.target.value);
+                    setEditedContent(fillTemplateForContact(selectedTemplate, e.target.value));
+                  }}
+                  className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                >
+                  <option value="">— Select a customer —</option>
+                  {crmState.contacts.map(c => (
+                    <option key={c.id} value={c.id}>{getContactFullName(c)}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <Label>Document Content (editable)</Label>
+                <Textarea
+                  value={editedContent}
+                  onChange={(e) => setEditedContent(e.target.value)}
+                  className="mt-1 font-mono text-xs"
+                  rows={20}
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setCustomerEditMode(false)}>Cancel</Button>
+                <Button
+                  onClick={() => {
+                    if (!selectedContactId) {
+                      toast({ title: 'Select a customer first', variant: 'destructive' });
+                      return;
+                    }
+                    const contact = crmState.contacts.find(c => c.id === selectedContactId);
+                    const contactName = contact ? getContactFullName(contact) : 'Customer';
+                    const customized: DocumentTemplate = {
+                      ...selectedTemplate,
+                      id: Date.now().toString(),
+                      name: `${selectedTemplate.name} — ${contactName}`,
+                      content: editedContent,
+                      isDefault: false,
+                      createdAt: new Date().toISOString().split('T')[0],
+                      lastModified: new Date().toISOString().split('T')[0],
+                      usageCount: 0,
+                    };
+                    setTemplates(prev => [customized, ...prev]);
+                    setCustomerEditMode(false);
+                    toast({ title: 'Saved', description: `Customer document saved as "${customized.name}"` });
+                  }}
+                >
+                  Save as Customer Document
                 </Button>
               </div>
             </div>
