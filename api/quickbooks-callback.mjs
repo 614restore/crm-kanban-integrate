@@ -3,15 +3,19 @@
 import OAuthClient from 'intuit-oauth';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://qgvuzrvpyyrrulhwlzma.supabase.co',
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const SUPABASE_URL = 'https://qgvuzrvpyyrrulhwlzma.supabase.co';
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 export default async function handler(req, res) {
   const { code, state: company_id, realmId, error } = req.query;
 
   const appBase = 'https://614restore.github.io/crm-kanban-integrate';
+
+  if (!SUPABASE_KEY) {
+    return res.redirect(`${appBase}/#/settings?qb_error=${encodeURIComponent('Missing SUPABASE_SERVICE_ROLE_KEY on server')}`);
+  }
+
+  const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
   if (error) {
     return res.redirect(`${appBase}/#/settings?qb_error=${encodeURIComponent(error)}`);
