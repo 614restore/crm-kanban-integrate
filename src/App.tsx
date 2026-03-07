@@ -13,6 +13,7 @@ import NotFound from "./pages/NotFound";
 import UpdatePassword from "./pages/UpdatePassword";
 import TermsOfService from "./pages/TermsOfService";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
+import EULA from "./pages/EULA";
 
 const queryClient = new QueryClient();
 
@@ -75,6 +76,7 @@ const App = () => (
             <Route path="/reset-password" element={<UpdatePassword />} />
             <Route path="/terms" element={<TermsOfService />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
+            <Route path="/eula" element={<EULA />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
