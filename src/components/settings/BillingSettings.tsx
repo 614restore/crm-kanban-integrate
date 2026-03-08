@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CreditCard, Plus, Zap, Rocket, Building2, Star, ChevronDown, ChevronRight } from 'lucide-react';
+import { CreditCard, Plus, Zap, Rocket, Building2, Star, ChevronDown, ChevronRight, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 // Tell TypeScript about the Stripe custom element
@@ -297,10 +297,16 @@ const BillingSettings: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-900">Billing & Subscription</h1>
           <p className="text-sm text-gray-500 mt-1">All features included in every plan — scale at your own pace.</p>
         </div>
-        <Button variant="outline" onClick={handleManageBilling} className="flex items-center gap-2">
-          <CreditCard className="w-4 h-4" />
-          Manage Billing
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => window.open('/trussctr-comparison.html', '_blank')} className="flex items-center gap-2">
+            <ExternalLink className="w-4 h-4" />
+            Compare Plans
+          </Button>
+          <Button variant="outline" onClick={handleManageBilling} className="flex items-center gap-2">
+            <CreditCard className="w-4 h-4" />
+            Manage Billing
+          </Button>
+        </div>
       </div>
 
       {/* Stripe Pricing Table — handles all checkout securely */}
