@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TrussCTR vs Competitors – Feature Comparison</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f9fafb; color: #111; padding: 24px; }
+    h1 { text-align: center; font-size: 1.6rem; margin-bottom: 6px; color: #1e3a5f; }
+    p.sub { text-align: center; font-size: 0.85rem; color: #6b7280; margin-bottom: 20px; }
+    .controls { display: flex; justify-content: center; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+    .btn { padding: 9px 22px; background: #2563eb; color: #fff; border: none; border-radius: 6px; font-size: 0.9rem; cursor: pointer; }
+    .btn.secondary { background: #e2e8f0; color: #374151; }
+    .btn:hover { opacity: 0.88; }
+    @media print { .controls { display: none; } body { padding: 0; background: #fff; } .section { page-break-inside: avoid; } details { open: true; } }
+
+    /* Accordion sections */
+    .section { border: 1px solid #e2e8f0; border-radius: 10px; margin-bottom: 12px; overflow: hidden; }
+    details > summary { list-style: none; }
+    details > summary::-webkit-details-marker { display: none; }
+    .section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 18px; background: #1e3a5f; color: #fff; cursor: pointer;
+      user-select: none;
+    }
+    .section-header:hover { background: #16305a; }
+    .section-title { font-size: 0.95rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+    .section-arrow { transition: transform 0.2s; font-size: 0.9rem; }
+    details[open] .section-arrow { transform: rotate(180deg); }
+    .section-body { overflow-x: auto; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+    thead th { background: #2563eb; color: #fff; padding: 9px 8px; text-align: center; }
+    thead th:first-child { text-align: left; min-width: 210px; padding-left: 18px; }
+    thead th.truss { background: #1d4ed8; }
+    tbody tr:nth-child(even) { background: #f1f5f9; }
+    tbody tr:hover { background: #dbeafe; }
+    td { padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: center; }
+    td:first-child { text-align: left; font-weight: 500; color: #374151; padding-left: 18px; }
+    td.truss { background: #eff6ff; font-weight: 600; }
+    .yes { color: #16a34a; font-size: 1rem; }
+    .no  { color: #dc2626; font-size: 1rem; }
+    .par { color: #d97706; font-size: 0.74rem; font-weight: 600; }
+    .price { font-weight: 600; }
+    .legend { text-align: center; font-size: 0.72rem; color: #6b7280; padding: 14px; }
+  </style>
+</head>
+<body>
+  <h1>TrussCTR — Roofing CRM Feature Comparison</h1>
+  <p class="sub">614 Restore LLC · March 2026 · All competitor data based on publicly available information</p>
+
+  <div class="controls">
+    <button class="btn secondary" onclick="toggleAll(true)">▼ Expand All</button>
+    <button class="btn secondary" onclick="toggleAll(false)">▲ Collapse All</button>
+    <button class="btn" onclick="window.print()">🖨 Print / Save as PDF</button>
+  </div>
+
+  <!-- SHARED HEADER TEMPLATE via JS -->
+  <div id="accordion"></div>
+
+  <p class="legend">
+    ✔ = Full support &nbsp;|&nbsp; <span style="color:#d97706">Partial</span> = Partial / limited &nbsp;|&nbsp; ✘ = Not available &nbsp;|&nbsp;
+    Competitor data based on publicly available information as of March 2026. Pricing subject to change.
+  </p>
+
+  <script>
+    const COLS = ['TrussCTR','AccuLynx','JobNimbus','Roofr','Leap CRM','ServiceTitan','Salesforce','HubSpot'];
+    const Y = '<span class="yes">✔</span>';
+    const N = '<span class="no">✘</span>';
+    const P = (t) => `<span class="par">${t}</span>`;
+
+    const sections = [
+      {
+        title: '💰 Pricing',
+        open: true,
+        rows: [
+          ['Starting Price / mo', '<span class="price">TBD (Low)</span>', P('~$250+'), P('~$149+'), P('~$149+'), P('~$79+/user'), P('~$150+/mo'), P('~$25+/user'), 'Free / $45+'],
+          ['Roofing-Specific Pricing', Y, Y, Y, Y, Y, P('Partial'), N, N],
+        ]
+      },
+      {
+        title: '🏠 Core CRM',
+        rows: [
+          ['Contact Management', Y, Y, Y, Y, Y, Y, Y, Y],
+          ['Kanban Pipeline Board', Y, Y, Y, P('Partial'), Y, P('Partial'), Y, Y],
+          ['Calendar / Scheduling', Y, Y, Y, Y, Y, Y, Y, Y],
+          ['Communication Hub (SMS/Email/Calls)', Y, Y, Y, P('Email only'), Y, Y, Y, Y],
+          ['Team Management', Y, Y, Y, Y, Y, Y, Y, Y],
+          ['Reports &amp; Analytics (Individual &amp; Team)', Y, Y, Y, P('Basic'), Y, Y, Y, Y],
+          ['Sales Metrics Tracking', Y, P('Partial'), P('Partial'), N, P('Partial'), Y, Y, Y],
+        ]
+      },
+      {
+        title: '🔨 Roofing-Specific Features',
+        rows: [
+          ['Insurance Claim Tracking (per customer)', Y, Y, P('Partial'), N, Y, Y, N, N],
+          ['Supplement Tracking (linked to claims)', Y, Y, N, N, P('Partial'), P('Partial'), N, N],
+          ['Work Orders', Y, Y, Y, P('Basic'), Y, Y, P('Add-on'), N],
+          ['Material Orders (w/ roofing templates)', Y, Y, P('Partial'), N, P('Partial'), P('Partial'), N, N],
+          ['Job / Project Tracking', Y, Y, Y, Y, Y, Y, Y, P('Partial')],
+          ['Job Status Progression (Lead → Complete)', Y, Y, Y, P('Basic'), Y, Y, P('Custom'), P('Custom')],
+          ['HailTrace / Storm Tracking Integration', Y, Y, P('3rd-party'), Y, P('3rd-party'), P('3rd-party'), N, N],
+        ]
+      },
+      {
+        title: '📄 Documents &amp; Contracts',
+        rows: [
+          ['Document Center', Y, Y, Y, P('Partial'), Y, Y, P('Add-on'), P('Add-on')],
+          ['Proposal Template (auto-fill)', Y, Y, Y, Y, Y, Y, P('Custom'), P('Custom')],
+          ['Contract Template (auto-fill)', Y, Y, Y, Y, Y, Y, P('Custom'), P('Custom')],
+          ['3-Day Right to Cancel Document', Y, Y, N, N, P('Partial'), P('Partial'), N, N],
+          ['Digital Signature (e-Sign)', Y, Y, Y, Y, Y, Y, P('Add-on'), P('Add-on')],
+          ['Per-Customer Template Editing', Y, P('Limited'), P('Limited'), N, P('Limited'), P('Limited'), Y, Y],
+          ['Auto-Fill Company &amp; Customer Info', Y, Y, Y, Y, Y, Y, Y, Y],
+          ['Document Duplication &amp; Delete', Y, P('Partial'), P('Partial'), N, P('Partial'), P('Partial'), Y, Y],
+          ['File Upload (work orders, materials, etc.)', Y, Y, Y, P('Partial'), Y, Y, Y, Y],
+        ]
+      },
+      {
+        title: '💵 Financials',
+        rows: [
+          ['Estimates / Invoicing', Y, Y, Y, Y, Y, Y, P('Add-on'), P('Add-on')],
+          ['Expense Tracking', Y, Y, P('Partial'), N, P('Partial'), Y, P('Add-on'), P('Add-on')],
+          ['Financial Dashboard', Y, Y, Y, P('Basic'), Y, Y, Y, Y],
+          ['Supplier Management', Y, Y, P('Partial'), N, P('Partial'), P('Partial'), Y, P('Partial')],
+          ['QuickBooks Integration', Y, Y, Y, P('Partial'), Y, Y, P('Add-on'), P('Add-on')],
+          ['PDF Export for Reports', Y, P('Partial'), P('Partial'), N, P('Partial'), Y, Y, Y],
+        ]
+      },
+      {
+        title: '🤖 AI &amp; Automation',
+        rows: [
+          ['AI Assistant (built-in)', Y, N, N, N, N, N, P('Einstein (add-on)'), P('Breeze (add-on)')],
+          ['Workflow Automations', Y, Y, Y, P('Basic'), Y, Y, Y, Y],
+          ['Google Review Automation', Y, P('3rd-party'), P('3rd-party'), N, P('3rd-party'), P('3rd-party'), P('3rd-party'), P('3rd-party')],
+          ['Customer Survey (built-in)', Y, P('3rd-party'), P('3rd-party'), N, P('3rd-party'), P('3rd-party'), P('3rd-party'), P('3rd-party')],
+        ]
+      },
+      {
+        title: '📈 Sales Tracking',
+        rows: [
+          ['Sales Metrics (Individual)', Y, P('Partial'), P('Partial'), N, P('Partial'), Y, Y, Y],
+          ['Sales Metrics (Team / Company-Wide)', Y, P('Partial'), P('Partial'), N, P('Partial'), Y, Y, Y],
+          ['Lead Source Tracking', Y, Y, Y, P('Basic'), Y, Y, Y, Y],
+          ['Win / Loss Reporting', Y, Y, P('Partial'), N, P('Partial'), Y, Y, Y],
+          ['Sales Pipeline Value (by stage)', Y, Y, Y, P('Basic'), Y, Y, Y, Y],
+          ['Closed Revenue Tracking', Y, Y, Y, P('Basic'), Y, Y, Y, Y],
+          ['Rep Performance Leaderboard', Y, P('Partial'), N, N, N, Y, P('Custom'), P('Custom')],
+          ['PDF Export of Sales Reports', Y, P('Partial'), P('Partial'), N, P('Partial'), Y, Y, Y],
+          ['Sales Activity Tracking (calls, visits, etc.)', Y, Y, Y, P('Basic'), Y, Y, Y, Y],
+        ]
+      },
+      {
+        title: '⚙️ Setup &amp; Support',
+        rows: [
+          ['Built for Roofing Contractors', Y, Y, Y, Y, Y, Y, N, N],
+          ['Multi-Company / Team Isolation', Y, Y, Y, P('Partial'), Y, Y, Y, Y],
+          ['Role-Based Permissions (RLS)', Y, Y, Y, P('Basic'), Y, Y, Y, Y],
+          ['Mobile-Friendly (PWA/Responsive)', Y, Y, Y, Y, Y, Y, Y, Y],
+          ['Subscription Management (built-in)', Y, N, N, N, N, P('Partial'), P('Add-on'), P('Add-on')],
+          ['API Access', Y, P('Limited'), Y, P('Limited'), P('Limited'), Y, Y, Y],
+          ['Webhook Support', Y, N, P('Limited'), N, N, Y, Y, Y],
+          ['EULA / Terms / Privacy Built-In', Y, Y, Y, Y, Y, Y, Y, Y],
+          ['Phone Number Formatting (consistent)', Y, P('Partial'), P('Partial'), P('Partial'), P('Partial'), Y, Y, Y],
+        ]
+      },
+    ];
+
+    function renderCell(val) {
+      if (val === Y || val === N) return val;
+      if (typeof val === 'string') return val;
+      return val;
+    }
+
+    const container = document.getElementById('accordion');
+    sections.forEach((sec, i) => {
+      const detailsEl = document.createElement('details');
+      detailsEl.className = 'section';
+      if (sec.open) detailsEl.open = true;
+
+      const headerHTML = `
+        <summary>
+          <div class="section-header">
+            <span class="section-title">${sec.title}</span>
+            <span class="section-arrow">▼</span>
+          </div>
+        </summary>`;
+
+      const colHeaders = COLS.map((c,idx) => `<th${idx===0?' class="truss"':''}>${c}</th>`).join('');
+      let rowsHTML = sec.rows.map(row => {
+        const feature = row[0];
+        const cells = row.slice(1).map((v,idx) => `<td${idx===0?' class="truss"':''}>${renderCell(v)}</td>`).join('');
+        return `<tr><td>${feature}</td>${cells}</tr>`;
+      }).join('');
+
+      const bodyHTML = `
+        <div class="section-body">
+          <table>
+            <thead><tr><th>Feature</th>${colHeaders}</tr></thead>
+            <tbody>${rowsHTML}</tbody>
+          </table>
+        </div>`;
+
+      detailsEl.innerHTML = headerHTML + bodyHTML;
+      container.appendChild(detailsEl);
+    });
+
+    function toggleAll(open) {
+      document.querySelectorAll('details').forEach(d => d.open = open);
+    }
+  </script>
+</body>
+</html>
