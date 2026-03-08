@@ -68,11 +68,14 @@ export default function FinancialDashboard() {
 
   const handleConnectQuickBooks = () => {
     dispatch({ type: 'SET_VIEW', payload: 'settings' });
-    window.dispatchEvent(
-      new CustomEvent('crm-open-settings-tab', {
-        detail: { tab: 'integrations' },
-      })
-    );
+    // Delay so SettingsView mounts and attaches its event listener before we fire
+    setTimeout(() => {
+      window.dispatchEvent(
+        new CustomEvent('crm-open-settings-tab', {
+          detail: { tab: 'integrations' },
+        })
+      );
+    }, 150);
   };
 
   const handleViewInvoiceContact = (contactId: string) => {
