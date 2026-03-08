@@ -2275,7 +2275,7 @@ export default function SettingsView() {
       />
 
       {/* Legal Footer */}
-      <div className="mt-8 pt-6 border-t border-gray-200 flex flex-wrap items-center justify-center gap-4 text-sm text-gray-400">
+      <div className="mt-8 pt-4 border-t border-gray-200 flex flex-nowrap items-center justify-center gap-2 text-xs text-gray-400 whitespace-nowrap overflow-x-auto">
         <span>© {new Date().getFullYear()} TrussCTR by 614 Restore LLC</span>
         <span>·</span>
         <a href="/crm-kanban-integrate/terms" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 transition-colors">Terms of Service</a>
