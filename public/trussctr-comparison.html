@@ -65,7 +65,7 @@
   </p>
 
   <script>
-    const COLS = ['TrussCTR','AccuLynx','JobNimbus','Roofr','Leap CRM','Salesforce','HubSpot'];
+    const COLS = ['TrussCTR','AccuLynx','JobNimbus','Roofr','Leap CRM','ServiceTitan','Salesforce','HubSpot'];
     const Y = '<span class="yes">✔</span>';
     const N = '<span class="no">✘</span>';
     const P = (t) => `<span class="par">${t}</span>`;
@@ -75,80 +75,80 @@
         title: '💰 Pricing',
         open: true,
         rows: [
-          ['Starting Price / mo', '<span class="price">TBD (Low)</span>', P('~$250+'), P('~$149+'), P('~$149+'), P('~$79+/user'), P('~$25+/user'), 'Free / $45+'],
-          ['Roofing-Specific Pricing', Y, Y, Y, Y, Y, N, N],
+          ['Starting Price / mo', '<span class="price">TBD (Low)</span>', P('~$250+'), P('~$149+'), P('~$149+'), P('~$79+/user'), P('~$150+/mo'), P('~$25+/user'), 'Free / $45+'],
+          ['Roofing-Specific Pricing', Y, Y, Y, Y, Y, P('Partial'), N, N],
         ]
       },
       {
         title: '🏠 Core CRM',
         rows: [
-          ['Contact Management', Y, Y, Y, Y, Y, Y, Y],
-          ['Kanban Pipeline Board', Y, Y, Y, P('Partial'), Y, Y, Y],
-          ['Calendar / Scheduling', Y, Y, Y, Y, Y, Y, Y],
-          ['Communication Hub (SMS/Email/Calls)', Y, Y, Y, P('Email only'), Y, Y, Y],
-          ['Team Management', Y, Y, Y, Y, Y, Y, Y],
-          ['Reports &amp; Analytics (Individual &amp; Team)', Y, Y, Y, P('Basic'), Y, Y, Y],
-          ['Sales Metrics Tracking', Y, P('Partial'), P('Partial'), N, P('Partial'), Y, Y],
+          ['Contact Management', Y, Y, Y, Y, Y, Y, Y, Y],
+          ['Kanban Pipeline Board', Y, Y, Y, P('Partial'), Y, P('Partial'), Y, Y],
+          ['Calendar / Scheduling', Y, Y, Y, Y, Y, Y, Y, Y],
+          ['Communication Hub (SMS/Email/Calls)', Y, Y, Y, P('Email only'), Y, Y, Y, Y],
+          ['Team Management', Y, Y, Y, Y, Y, Y, Y, Y],
+          ['Reports &amp; Analytics (Individual &amp; Team)', Y, Y, Y, P('Basic'), Y, Y, Y, Y],
+          ['Sales Metrics Tracking', Y, P('Partial'), P('Partial'), N, P('Partial'), Y, Y, Y],
         ]
       },
       {
         title: '🔨 Roofing-Specific Features',
         rows: [
-          ['Insurance Claim Tracking (per customer)', Y, Y, P('Partial'), N, Y, N, N],
-          ['Supplement Tracking (linked to claims)', Y, Y, N, N, P('Partial'), N, N],
-          ['Work Orders', Y, Y, Y, P('Basic'), Y, P('Add-on'), N],
-          ['Material Orders (w/ roofing templates)', Y, Y, P('Partial'), N, P('Partial'), N, N],
-          ['Job / Project Tracking', Y, Y, Y, Y, Y, Y, P('Partial')],
-          ['Job Status Progression (Lead → Complete)', Y, Y, Y, P('Basic'), Y, P('Custom'), P('Custom')],
-          ['HailTrace / Storm Tracking Integration', Y, Y, P('3rd-party'), Y, P('3rd-party'), N, N],
+          ['Insurance Claim Tracking (per customer)', Y, Y, P('Partial'), N, Y, Y, N, N],
+          ['Supplement Tracking (linked to claims)', Y, Y, N, N, P('Partial'), P('Partial'), N, N],
+          ['Work Orders', Y, Y, Y, P('Basic'), Y, Y, P('Add-on'), N],
+          ['Material Orders (w/ roofing templates)', Y, Y, P('Partial'), N, P('Partial'), P('Partial'), N, N],
+          ['Job / Project Tracking', Y, Y, Y, Y, Y, Y, Y, P('Partial')],
+          ['Job Status Progression (Lead → Complete)', Y, Y, Y, P('Basic'), Y, Y, P('Custom'), P('Custom')],
+          ['HailTrace / Storm Tracking Integration', Y, Y, P('3rd-party'), Y, P('3rd-party'), P('3rd-party'), N, N],
         ]
       },
       {
         title: '📄 Documents &amp; Contracts',
         rows: [
-          ['Document Center', Y, Y, Y, P('Partial'), Y, P('Add-on'), P('Add-on')],
-          ['Proposal Template (auto-fill)', Y, Y, Y, Y, Y, P('Custom'), P('Custom')],
-          ['Contract Template (auto-fill)', Y, Y, Y, Y, Y, P('Custom'), P('Custom')],
-          ['3-Day Right to Cancel Document', Y, Y, N, N, P('Partial'), N, N],
-          ['Digital Signature (e-Sign)', Y, Y, Y, Y, Y, P('Add-on'), P('Add-on')],
-          ['Per-Customer Template Editing', Y, P('Limited'), P('Limited'), N, P('Limited'), Y, Y],
-          ['Auto-Fill Company &amp; Customer Info', Y, Y, Y, Y, Y, Y, Y],
-          ['Document Duplication &amp; Delete', Y, P('Partial'), P('Partial'), N, P('Partial'), Y, Y],
-          ['File Upload (work orders, materials, etc.)', Y, Y, Y, P('Partial'), Y, Y, Y],
+          ['Document Center', Y, Y, Y, P('Partial'), Y, Y, P('Add-on'), P('Add-on')],
+          ['Proposal Template (auto-fill)', Y, Y, Y, Y, Y, Y, P('Custom'), P('Custom')],
+          ['Contract Template (auto-fill)', Y, Y, Y, Y, Y, Y, P('Custom'), P('Custom')],
+          ['3-Day Right to Cancel Document', Y, Y, N, N, P('Partial'), P('Partial'), N, N],
+          ['Digital Signature (e-Sign)', Y, Y, Y, Y, Y, Y, P('Add-on'), P('Add-on')],
+          ['Per-Customer Template Editing', Y, P('Limited'), P('Limited'), N, P('Limited'), P('Limited'), Y, Y],
+          ['Auto-Fill Company &amp; Customer Info', Y, Y, Y, Y, Y, Y, Y, Y],
+          ['Document Duplication &amp; Delete', Y, P('Partial'), P('Partial'), N, P('Partial'), P('Partial'), Y, Y],
+          ['File Upload (work orders, materials, etc.)', Y, Y, Y, P('Partial'), Y, Y, Y, Y],
         ]
       },
       {
         title: '💵 Financials',
         rows: [
-          ['Estimates / Invoicing', Y, Y, Y, Y, Y, P('Add-on'), P('Add-on')],
-          ['Expense Tracking', Y, Y, P('Partial'), N, P('Partial'), P('Add-on'), P('Add-on')],
-          ['Financial Dashboard', Y, Y, Y, P('Basic'), Y, Y, Y],
-          ['Supplier Management', Y, Y, P('Partial'), N, P('Partial'), Y, P('Partial')],
-          ['QuickBooks Integration', Y, Y, Y, P('Partial'), Y, P('Add-on'), P('Add-on')],
-          ['PDF Export for Reports', Y, P('Partial'), P('Partial'), N, P('Partial'), Y, Y],
+          ['Estimates / Invoicing', Y, Y, Y, Y, Y, Y, P('Add-on'), P('Add-on')],
+          ['Expense Tracking', Y, Y, P('Partial'), N, P('Partial'), Y, P('Add-on'), P('Add-on')],
+          ['Financial Dashboard', Y, Y, Y, P('Basic'), Y, Y, Y, Y],
+          ['Supplier Management', Y, Y, P('Partial'), N, P('Partial'), P('Partial'), Y, P('Partial')],
+          ['QuickBooks Integration', Y, Y, Y, P('Partial'), Y, Y, P('Add-on'), P('Add-on')],
+          ['PDF Export for Reports', Y, P('Partial'), P('Partial'), N, P('Partial'), Y, Y, Y],
         ]
       },
       {
         title: '🤖 AI &amp; Automation',
         rows: [
-          ['AI Assistant (built-in)', Y, N, N, N, N, P('Einstein (add-on)'), P('Breeze (add-on)')],
-          ['Workflow Automations', Y, Y, Y, P('Basic'), Y, Y, Y],
-          ['Google Review Automation', Y, P('3rd-party'), P('3rd-party'), N, P('3rd-party'), P('3rd-party'), P('3rd-party')],
-          ['Customer Survey (built-in)', Y, P('3rd-party'), P('3rd-party'), N, P('3rd-party'), P('3rd-party'), P('3rd-party')],
+          ['AI Assistant (built-in)', Y, N, N, N, N, N, P('Einstein (add-on)'), P('Breeze (add-on)')],
+          ['Workflow Automations', Y, Y, Y, P('Basic'), Y, Y, Y, Y],
+          ['Google Review Automation', Y, P('3rd-party'), P('3rd-party'), N, P('3rd-party'), P('3rd-party'), P('3rd-party'), P('3rd-party')],
+          ['Customer Survey (built-in)', Y, P('3rd-party'), P('3rd-party'), N, P('3rd-party'), P('3rd-party'), P('3rd-party'), P('3rd-party')],
         ]
       },
       {
         title: '⚙️ Setup &amp; Support',
         rows: [
-          ['Built for Roofing Contractors', Y, Y, Y, Y, Y, N, N],
-          ['Multi-Company / Team Isolation', Y, Y, Y, P('Partial'), Y, Y, Y],
-          ['Role-Based Permissions (RLS)', Y, Y, Y, P('Basic'), Y, Y, Y],
-          ['Mobile-Friendly (PWA/Responsive)', Y, Y, Y, Y, Y, Y, Y],
-          ['Subscription Management (built-in)', Y, N, N, N, N, P('Add-on'), P('Add-on')],
-          ['API Access', Y, P('Limited'), Y, P('Limited'), P('Limited'), Y, Y],
-          ['Webhook Support', Y, N, P('Limited'), N, N, Y, Y],
-          ['EULA / Terms / Privacy Built-In', Y, Y, Y, Y, Y, Y, Y],
-          ['Phone Number Formatting (consistent)', Y, P('Partial'), P('Partial'), P('Partial'), P('Partial'), Y, Y],
+          ['Built for Roofing Contractors', Y, Y, Y, Y, Y, Y, N, N],
+          ['Multi-Company / Team Isolation', Y, Y, Y, P('Partial'), Y, Y, Y, Y],
+          ['Role-Based Permissions (RLS)', Y, Y, Y, P('Basic'), Y, Y, Y, Y],
+          ['Mobile-Friendly (PWA/Responsive)', Y, Y, Y, Y, Y, Y, Y, Y],
+          ['Subscription Management (built-in)', Y, N, N, N, N, P('Partial'), P('Add-on'), P('Add-on')],
+          ['API Access', Y, P('Limited'), Y, P('Limited'), P('Limited'), Y, Y, Y],
+          ['Webhook Support', Y, N, P('Limited'), N, N, Y, Y, Y],
+          ['EULA / Terms / Privacy Built-In', Y, Y, Y, Y, Y, Y, Y, Y],
+          ['Phone Number Formatting (consistent)', Y, P('Partial'), P('Partial'), P('Partial'), P('Partial'), Y, Y, Y],
         ]
       },
     ];
