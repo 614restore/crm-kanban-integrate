@@ -281,7 +281,13 @@ const ComparisonTable: React.FC = () => {
 const BillingSettings: React.FC = () => {
 
   const handleManageBilling = () => {
-    window.open('https://billing.stripe.com/p/login/aFa9AVb73faq5vsfmw6Na00', '_blank');
+    const a = document.createElement('a');
+    a.href = 'https://billing.stripe.com/p/login/aFa9AVb73faq5vsfmw6Na00';
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
 
   return (

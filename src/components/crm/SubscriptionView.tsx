@@ -109,7 +109,14 @@ export default function SubscriptionView() {
   const currentPlanIndex = PLANS.findIndex((p) => p.key === plan);
 
   function handleManageBilling() {
-    window.open('https://billing.stripe.com/p/login/aFa9AVb73faq5vsfmw6Na00', '_blank');
+    // Use anchor navigation to avoid popup blocker issues
+    const a = document.createElement('a');
+    a.href = 'https://billing.stripe.com/p/login/aFa9AVb73faq5vsfmw6Na00';
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   }
 
   function handlePlanAction(_planKey: string) {
