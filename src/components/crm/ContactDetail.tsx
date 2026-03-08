@@ -7,6 +7,8 @@ import JobStatusTimeline from './JobStatusTimeline';
 import CustomerSurvey from './CustomerSurvey';
 import AppointmentModal from './AppointmentModal';
 import ContactTemplateModal from './ContactTemplateModal';
+import HailTracePanel from './HailTracePanel';
+import EagleViewPanel from './EagleViewPanel';
 import InsuranceTrackingView from './InsuranceTrackingView';
 import SupplementTrackingView from './SupplementTrackingView';
 import {
@@ -1381,6 +1383,18 @@ export default function ContactDetail() {
         )}
 
         {activeTab === 'documents' && (
+          <div className="space-y-4">
+            <EagleViewPanel
+              address={contact.address || ''}
+              city={contact.city || ''}
+              state={contact.state || ''}
+              zip={contact.zip || ''}
+              companyId={effectiveCompanyId || ''}
+              contactId={contact.id}
+              contactName={getContactFullName(contact)}
+              userId={profile?.id}
+              onDocumentSaved={(doc) => setContactDocuments(prev => [doc, ...prev])}
+            />
           <div className="bg-white rounded-xl border border-gray-200">
             <input
               ref={documentInputRef}
@@ -1470,6 +1484,7 @@ export default function ContactDetail() {
                 </div>
               )}
             </div>
+          </div>
           </div>
         )}
 
@@ -1948,10 +1963,42 @@ export default function ContactDetail() {
 
         {activeTab === 'insurance' && (
           <div className="space-y-6">
-            <InsuranceTrackingView
+            <HailTracePanel
+              address={contact.address || ''}
+              city={contact.city || ''}
+              state={contact.state || ''}
+              zip={contact.zip || ''}
+              companyId={effectiveCompanyId || ''}
               contactId={contact.id}
               contactName={getContactFullName(contact)}
+              onEventsFound={async (count, severities) => {
+                const hasSevere = severities.some(s => s === 'severe');
+                try {
+                  await db.createNotification({
+                    company_id: effectiveCompanyId || '',
+                    user_id: profile?.id,
+                    type: 'hail_event',
+                    title: `${hasSevere ? '🚨' : '⚡'} Hail Event — ${getContactFullName(contact)}`,
+                    message: `${count} storm event(s) (${severities.join(', ')}) detected at ${contact.address || 'this property'}. Review the insurance tab for details.`,
+                    related_id: contact.id,
+                    related_type: 'contact',
+                    read: false,
+                  });
+                } catch { /* non-critical */ }
+              }}
+              onStartClaim={() => {
+                // Scroll user to the InsuranceTrackingView below
+                setTimeout(() => {
+                  document.querySelector('[data-section="insurance-claims"]')?.scrollIntoView({ behavior: 'smooth' });
+                }, 100);
+              }}
             />
+            <div data-section="insurance-claims">
+              <InsuranceTrackingView
+                contactId={contact.id}
+                contactName={getContactFullName(contact)}
+              />
+            </div>
             <SupplementTrackingView
               contactId={contact.id}
               contactName={getContactFullName(contact)}

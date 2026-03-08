@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { CloudRain, Loader2, AlertTriangle, CheckCircle, Settings, Wind, Copy, Check } from 'lucide-react';
+import { CloudRain, Loader2, AlertTriangle, CheckCircle, Settings, Wind, Copy, Check, FileText, Bell } from 'lucide-react';
 import { HailTraceIntegration } from '@/lib/integrations/weather';
 import { supabase } from '@/lib/supabase';
+import { db } from '@/lib/database';
+import { toast } from 'sonner';
 
 interface HailTracePanelProps {
   address: string;
@@ -9,6 +11,12 @@ interface HailTracePanelProps {
   state: string;
   zip: string;
   companyId: string;
+  contactId?: string;
+  contactName?: string;
+  /** Called when moderate/severe events are found so parent can act (e.g. switch to insurance tab) */
+  onEventsFound?: (count: number, severities: string[]) => void;
+  /** Called when user wants to start a new insurance claim from this hail event */
+  onStartClaim?: () => void;
 }
 
 interface HailEvent {
@@ -99,7 +107,7 @@ function formatClaimText(events: HailEvent[], address: string, city: string, sta
   return lines.join('\n');
 }
 
-export default function HailTracePanel({ address, city, state, zip, companyId }: HailTracePanelProps) {
+export default function HailTracePanel({ address, city, state, zip, companyId, contactId, contactName, onEventsFound, onStartClaim }: HailTracePanelProps) {
   const [months, setMonths] = useState(12);
   const [loading, setLoading] = useState(false);
   const [events, setEvents] = useState<HailEvent[] | null>(null);
@@ -169,9 +177,47 @@ export default function HailTracePanel({ address, city, state, zip, companyId }:
 
         setEvents(normalized);
         setStatus(normalized.length > 0 ? 'events' : 'no-events');
+
+        // Fire notification + callback for actionable events
+        if (normalized.length > 0) {
+          const actionable = normalized.filter(e => e.severity === 'moderate' || e.severity === 'severe');
+          if (actionable.length > 0) {
+            const severities = [...new Set(actionable.map(e => e.severity))];
+            // Create a persistent in-app notification
+            try {
+              await db.createNotification({
+                company_id: companyId,
+                type: 'hail_event',
+                title: `⚡ Hail Event Detected${contactName ? ` — ${contactName}` : ''}`,
+                message: `${actionable.length} actionable storm event${actionable.length > 1 ? 's' : ''} found at ${[address, city, state].filter(Boolean).join(', ')}. Largest hail: ${Math.max(...actionable.map(e => e.hailSize ?? 0))}" • Max wind: ${Math.max(...actionable.map(e => e.windSpeed ?? 0))} mph. Consider opening an insurance claim.`,
+                related_id: contactId,
+                related_type: 'contact',
+                read: false,
+              });
+            } catch { /* non-critical */ }
+            toast.warning(`${actionable.length} storm event${actionable.length > 1 ? 's' : ''} found! Check insurance tab to open a claim.`, { duration: 6000 });
+            onEventsFound?.(actionable.length, severities);
+          }
+        }
       } catch {
         setEvents(MOCK_EVENTS);
         setStatus('demo');
+        // Demo: notify about mock severe event
+        const actionable = MOCK_EVENTS.filter(e => e.severity === 'moderate' || e.severity === 'severe');
+        if (actionable.length > 0) {
+          try {
+            await db.createNotification({
+              company_id: companyId,
+              type: 'hail_event',
+              title: `⚡ Hail Event Detected (Demo)${contactName ? ` — ${contactName}` : ''}`,
+              message: `Demo data: ${actionable.length} storm event${actionable.length > 1 ? 's' : ''} at ${[address, city, state].filter(Boolean).join(', ')}. Consider opening an insurance claim.`,
+              related_id: contactId,
+              related_type: 'contact',
+              read: false,
+            });
+          } catch { /* non-critical */ }
+          onEventsFound?.(actionable.length, ['severe', 'moderate']);
+        }
       }
     } catch {
       setError('Unexpected error checking hail events.');
@@ -199,13 +245,24 @@ export default function HailTracePanel({ address, city, state, zip, companyId }:
           <h3 className="text-lg font-semibold text-gray-900">Hail &amp; Wind Event Lookup</h3>
         </div>
         {showResults && (
-          <button
-            onClick={handleCopy}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-gray-600"
-          >
-            {copied ? <Check size={13} className="text-green-600" /> : <Copy size={13} />}
-            {copied ? 'Copied!' : 'Copy for Claim'}
-          </button>
+          <div className="flex items-center gap-2">
+            {onStartClaim && (
+              <button
+                onClick={onStartClaim}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
+              >
+                <FileText size={13} />
+                Start Insurance Claim
+              </button>
+            )}
+            <button
+              onClick={handleCopy}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-gray-600"
+            >
+              {copied ? <Check size={13} className="text-green-600" /> : <Copy size={13} />}
+              {copied ? 'Copied!' : 'Copy for Claim'}
+            </button>
+          </div>
         )}
       </div>
 
