@@ -109,14 +109,19 @@ export default function SubscriptionView() {
   const currentPlanIndex = PLANS.findIndex((p) => p.key === plan);
 
   function handleManageBilling() {
-    window.location.href = 'mailto:scopemgr@614restore.com?subject=CONTACT%20TrussCTR%20-%20Billing%20Management';
+    // Use anchor navigation to avoid popup blocker issues
+    const a = document.createElement('a');
+    a.href = 'https://billing.stripe.com/p/login/aFa9AVb73faq5vsfmw6Na00';
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   }
 
-  function handlePlanAction(planKey: string) {
-    const idx = PLANS.findIndex((p) => p.key === planKey);
-    const action = idx > currentPlanIndex ? 'Upgrade' : 'Downgrade';
-    const subject = encodeURIComponent(`CONTACT TrussCTR - ${action} to ${PLANS[idx].name}`);
-    window.location.href = `mailto:scopemgr@614restore.com?subject=${subject}`;
+  function handlePlanAction(_planKey: string) {
+    // Scroll to the Stripe pricing table below
+    document.querySelector('stripe-pricing-table')?.scrollIntoView({ behavior: 'smooth' });
   }
 
   return (
@@ -189,64 +194,16 @@ export default function SubscriptionView() {
         )}
       </div>
 
-      {/* Plan cards */}
+      {/* Stripe Pricing Table */}
       <div>
         <h4 className="text-base font-semibold text-gray-900 mb-4">Available Plans</h4>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {PLANS.map((p) => {
-            const isCurrent = p.key === plan;
-            const isUpgrade = currentPlanIndex !== -1 && PLANS.findIndex((x) => x.key === p.key) > currentPlanIndex;
-            return (
-              <div
-                key={p.key}
-                className={`bg-white rounded-xl border p-6 flex flex-col ${
-                  p.highlight ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-200'
-                }`}
-              >
-                {p.highlight && (
-                  <span className="inline-block mb-3 text-xs font-semibold text-blue-600 uppercase tracking-wide">
-                    Most Popular
-                  </span>
-                )}
-                <div className="flex items-center gap-2 mb-2">
-                  {p.icon}
-                  <span className="font-semibold text-gray-900">{p.name}</span>
-                </div>
-                <div className="mb-4">
-                  <span className="text-3xl font-bold text-gray-900">${p.price}</span>
-                  <span className="text-gray-500 text-sm">/mo</span>
-                </div>
-                <ul className="space-y-2 mb-6 flex-1">
-                  {p.features.map((f) => (
-                    <li key={f} className="flex items-center gap-2 text-sm text-gray-700">
-                      <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                {isCurrent ? (
-                  <button
-                    disabled
-                    className="w-full py-2 px-4 border border-gray-300 rounded-lg text-sm font-medium text-gray-500 bg-gray-50 cursor-not-allowed"
-                  >
-                    Current Plan
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => handlePlanAction(p.key)}
-                    className={`w-full py-2 px-4 rounded-lg text-sm font-medium transition-colors inline-flex items-center justify-center gap-1 ${
-                      isUpgrade || currentPlanIndex === -1
-                        ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                        : 'border border-gray-300 hover:bg-gray-50 text-gray-700'
-                    }`}
-                  >
-                    {isUpgrade || currentPlanIndex === -1 ? 'Upgrade' : 'Downgrade'}
-                    <ArrowRight className="w-3 h-3" />
-                  </button>
-                )}
-              </div>
-            );
-          })}
+        <div className="bg-white rounded-xl border border-gray-200 p-4 overflow-x-auto">
+          {/* @ts-expect-error stripe-pricing-table is a custom element */}
+          <stripe-pricing-table
+            pricing-table-id="prctbl_1T8ahXQ4qbAu1D2SCifFughX"
+            publishable-key="pk_live_51T8YyaQ4qbAu1D2STcaoAsxjqScvBgvTttf0k5DXp8t0BbDswCY6Hqdtd81MOlWeQqPBGCkAFBtAidM5Fsa8n0JK006K6b0Uv7"
+            customer-email={profile?.email ?? ''}
+          />
         </div>
       </div>
     </div>
