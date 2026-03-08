@@ -1,6 +1,20 @@
-import React, { useState } from 'react';
-import { CreditCard, Check, Zap, Building2, Rocket, Star, Users, Database, Plus } from 'lucide-react';
+import React from 'react';
+import { CreditCard, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+
+// Tell TypeScript about the Stripe custom element
+declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace JSX {
+    interface IntrinsicElements {
+      'stripe-pricing-table': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement> & {
+        'pricing-table-id'?: string;
+        'publishable-key'?: string;
+        'customer-email'?: string;
+      }, HTMLElement>;
+    }
+  }
+}
 
 // Stripe Price IDs — fill these in from your Stripe Dashboard after creating products
 const STRIPE_PRICES = {
@@ -131,40 +145,7 @@ const buttonColorMap: Record<string, string> = {
 };
 
 const BillingSettings: React.FC = () => {
-  const [billing, setBilling] = useState<'monthly' | 'yearly'>('monthly');
-  const [loading, setLoading] = useState<string | null>(null);
-
   const apiBase = import.meta.env.VITE_EMAIL_API_BASE_URL || '';
-
-  const handleCheckout = async (planId: string) => {
-    const priceKey = `${planId}_${billing}` as keyof typeof STRIPE_PRICES;
-    const priceId = STRIPE_PRICES[priceKey];
-
-    if (!priceId) {
-      // Stripe not yet configured — show info
-      alert(
-        'Stripe is not yet configured. Please add your Stripe Price IDs to the environment variables (VITE_STRIPE_*) and Vercel settings.'
-      );
-      return;
-    }
-
-    setLoading(planId);
-    try {
-      const res = await fetch(`${apiBase}/api/stripe-checkout`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ priceId, planId }),
-      });
-      const data = await res.json();
-      if (data.url) {
-        window.location.href = data.url;
-      }
-    } catch (err) {
-      alert('Could not start checkout. Please try again.');
-    } finally {
-      setLoading(null);
-    }
-  };
 
   const handleManageBilling = async () => {
     try {
@@ -189,72 +170,12 @@ const BillingSettings: React.FC = () => {
         </Button>
       </div>
 
-      {/* Billing toggle */}
-      <div className="flex items-center justify-center gap-4 mb-8">
-        <span className={`text-sm font-medium ${billing === 'monthly' ? 'text-gray-900' : 'text-gray-400'}`}>Monthly</span>
-        <button
-          onClick={() => setBilling(billing === 'monthly' ? 'yearly' : 'monthly')}
-          className={`relative w-12 h-6 rounded-full transition-colors ${billing === 'yearly' ? 'bg-blue-600' : 'bg-gray-300'}`}
-        >
-          <span
-            className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${billing === 'yearly' ? 'translate-x-6' : ''}`}
-          />
-        </button>
-        <span className={`text-sm font-medium ${billing === 'yearly' ? 'text-gray-900' : 'text-gray-400'}`}>
-          Yearly <span className="text-green-600 text-xs font-semibold ml-1">Save ~17%</span>
-        </span>
-      </div>
-
-      {/* Plan cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-10">
-        {PLANS.map((plan) => {
-          const Icon = plan.icon;
-          const price = billing === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice;
-          const period = billing === 'monthly' ? '/mo' : '/yr';
-          return (
-            <div
-              key={plan.id}
-              className={`relative rounded-xl border-2 p-5 flex flex-col ${plan.popular ? colorMap[plan.color] : 'border-gray-200 bg-white'}`}
-            >
-              {plan.popular && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-purple-600 text-white text-xs font-bold px-3 py-1 rounded-full">
-                  Most Popular
-                </div>
-              )}
-              <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-3 ${iconColorMap[plan.color]}`}>
-                <Icon className="w-5 h-5" />
-              </div>
-              <h3 className="text-lg font-bold text-gray-900">{plan.name}</h3>
-              <p className="text-xs text-gray-500 mt-1 mb-3">{plan.description}</p>
-              <div className="mb-4">
-                <span className="text-3xl font-bold text-gray-900">${price}</span>
-                <span className="text-sm text-gray-500">{period}</span>
-              </div>
-
-              <div className="flex gap-3 text-xs text-gray-600 mb-4">
-                <span className="flex items-center gap-1"><Users className="w-3 h-3" />{plan.users} users</span>
-                <span className="flex items-center gap-1"><Database className="w-3 h-3" />{typeof plan.contacts === 'number' ? plan.contacts.toLocaleString() : plan.contacts} contacts</span>
-              </div>
-
-              <ul className="space-y-1.5 mb-5 flex-1">
-                {plan.features.map((f) => (
-                  <li key={f} className="flex items-start gap-2 text-xs text-gray-700">
-                    <Check className="w-3.5 h-3.5 text-green-500 mt-0.5 shrink-0" />
-                    {f}
-                  </li>
-                ))}
-              </ul>
-
-              <button
-                onClick={() => handleCheckout(plan.id)}
-                disabled={loading === plan.id}
-                className={`w-full py-2 px-4 rounded-lg text-white text-sm font-semibold transition-colors ${buttonColorMap[plan.color]} disabled:opacity-50`}
-              >
-                {loading === plan.id ? 'Loading...' : `Get ${plan.name}`}
-              </button>
-            </div>
-          );
-        })}
+      {/* Stripe Pricing Table — handles all checkout securely */}
+      <div className="mb-10">
+        <stripe-pricing-table
+          pricing-table-id="prctbl_1T8ahXQ4qbAu1D2SCifFughX"
+          publishable-key="pk_live_51T8YyaQ4qbAu1D2STcaoAsxjqScvBgvTttf0k5DXp8t0BbDswCY6Hqdtd81MOlWeQqPBGCkAFBtAidM5Fsa8n0JK006K6b0Uv7"
+        />
       </div>
 
       {/* Add-ons */}
