@@ -298,7 +298,7 @@ const BillingSettings: React.FC = () => {
           <p className="text-sm text-gray-500 mt-1">All features included in every plan — scale at your own pace.</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => window.open('/trussctr-comparison.html', '_blank')} className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => window.open(`${import.meta.env.BASE_URL}trussctr-comparison.html`, '_blank')} className="flex items-center gap-2">
             <ExternalLink className="w-4 h-4" />
             Compare Plans
           </Button>
