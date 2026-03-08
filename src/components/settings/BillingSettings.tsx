@@ -39,6 +39,7 @@ const PLANS = [
     yearlyPrice: 290,
     users: 2,
     contacts: 100,
+
     features: [
       'Up to 2 users',
       'Up to 100 active contacts',
@@ -56,8 +57,8 @@ const PLANS = [
     icon: Rocket,
     color: 'purple',
     description: 'For growing roofing companies ready to scale operations.',
-    monthlyPrice: 69,
-    yearlyPrice: 690,
+    monthlyPrice: 59,
+    yearlyPrice: 590,
     users: 5,
     contacts: 500,
     popular: true,
@@ -79,8 +80,8 @@ const PLANS = [
     icon: Building2,
     color: 'green',
     description: 'For established roofing businesses managing large teams and high volume.',
-    monthlyPrice: 129,
-    yearlyPrice: 1290,
+    monthlyPrice: 99,
+    yearlyPrice: 990,
     users: 15,
     contacts: 2000,
     features: [
@@ -100,8 +101,8 @@ const PLANS = [
     icon: Star,
     color: 'orange',
     description: 'For large roofing enterprises with unlimited scale and dedicated support.',
-    monthlyPrice: 249,
-    yearlyPrice: 2490,
+    monthlyPrice: 179,
+    yearlyPrice: 1790,
     users: 'Unlimited',
     contacts: 'Unlimited',
     features: [
