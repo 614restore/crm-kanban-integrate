@@ -78,7 +78,12 @@ const EMPTY_FORM = {
   notes: '',
 };
 
-export default function SupplementTrackingView() {
+interface SupplementTrackingViewProps {
+  contactId?: string;
+  contactName?: string;
+}
+
+export default function SupplementTrackingView({ contactId, contactName }: SupplementTrackingViewProps = {}) {
   const { state, dispatch } = useCRM();
   const { profile } = useAuth();
   const [supplements, setSupplements] = useState<Supplement[]>([]);
@@ -108,27 +113,33 @@ export default function SupplementTrackingView() {
     if (!companyId) return;
     setLoading(true);
     try {
-      const [suppRes, claimRes] = await Promise.all([
-        supabase
-          .from('supplements')
-          .select(`*, insurance_claims(claim_number, insurance_company)`)
-          .eq('company_id', companyId)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('insurance_claims')
-          .select('id, claim_number, insurance_company')
-          .eq('company_id', companyId)
-          .order('claim_number'),
-      ]);
+      let suppQuery = supabase
+        .from('supplements')
+        .select(`*, insurance_claims(claim_number, insurance_company, contact_id)`)
+        .eq('company_id', companyId)
+        .order('created_at', { ascending: false });
+
+      let claimQuery = supabase
+        .from('insurance_claims')
+        .select('id, claim_number, insurance_company')
+        .eq('company_id', companyId)
+        .order('claim_number');
+
+      if (contactId) claimQuery = claimQuery.eq('contact_id', contactId);
+
+      const [suppRes, claimRes] = await Promise.all([suppQuery, claimQuery]);
 
       if (suppRes.error) throw suppRes.error;
       if (claimRes.error) throw claimRes.error;
 
-      const mapped = (suppRes.data || []).map((row: any) => ({
-        ...row,
-        claim_number: row.insurance_claims?.claim_number,
-        insurance_company: row.insurance_claims?.insurance_company,
-      }));
+      const claimIds = new Set((claimRes.data || []).map((c: any) => c.id));
+      const mapped = (suppRes.data || [])
+        .filter((row: any) => !contactId || claimIds.has(row.claim_id))
+        .map((row: any) => ({
+          ...row,
+          claim_number: row.insurance_claims?.claim_number,
+          insurance_company: row.insurance_claims?.insurance_company,
+        }));
       setSupplements(mapped);
       setClaims(claimRes.data || []);
     } catch (err: any) {
@@ -138,7 +149,7 @@ export default function SupplementTrackingView() {
     }
   };
 
-  useEffect(() => { loadData(); }, [companyId]);
+  useEffect(() => { loadData(); }, [companyId, contactId]);
 
   const openCreate = () => {
     setEditingSupplement(null);
@@ -263,7 +274,11 @@ export default function SupplementTrackingView() {
                   Claim {activeClaim.claim_number} — {activeClaim.insurance_company}
                 </p>
               ) : (
-                <p className="text-sm text-gray-500">Track supplement requests across all claims</p>
+                <p className="text-sm text-gray-500">
+                  {contactName
+                    ? `Supplements for ${contactName}`
+                    : 'Track supplement requests across all claims'}
+                </p>
               )}
             </div>
           </div>

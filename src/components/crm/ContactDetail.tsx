@@ -6,6 +6,8 @@ import { formatPhoneNumber } from '@/lib/utils';
 import JobStatusTimeline from './JobStatusTimeline';
 import CustomerSurvey from './CustomerSurvey';
 import AppointmentModal from './AppointmentModal';
+import InsuranceTrackingView from './InsuranceTrackingView';
+import SupplementTrackingView from './SupplementTrackingView';
 import {
   applyMention,
   findActiveMentionQuery,
@@ -64,7 +66,7 @@ import {
   Star,
 } from 'lucide-react';
 
-type TabType = 'overview' | 'timeline' | 'documents' | 'financial' | 'projects' | 'jobStatus' | 'survey';
+type TabType = 'overview' | 'timeline' | 'documents' | 'financial' | 'projects' | 'jobStatus' | 'survey' | 'insurance';
 
 export default function ContactDetail() {
   const { state, dispatch } = useCRM();
@@ -595,6 +597,7 @@ export default function ContactDetail() {
     { id: 'documents', label: 'Documents', icon: <FileText size={16} /> },
     { id: 'financial', label: 'Financial', icon: <DollarSign size={16} /> },
     { id: 'projects', label: 'Projects', icon: <Briefcase size={16} /> },
+    { id: 'insurance', label: 'Insurance & Supplements', icon: <Shield size={16} /> },
   ];
 
   // Add survey trigger functionality
@@ -1916,6 +1919,19 @@ export default function ContactDetail() {
               companyGoogleUrl="https://www.google.com/search?q=TrussCTR+reviews" // Replace with actual Google Business URL
               onSurveyComplete={handleSurveyComplete}
               onClose={() => setActiveTab('overview')}
+            />
+          </div>
+        )}
+
+        {activeTab === 'insurance' && (
+          <div className="space-y-6">
+            <InsuranceTrackingView
+              contactId={contact.id}
+              contactName={getContactFullName(contact)}
+            />
+            <SupplementTrackingView
+              contactId={contact.id}
+              contactName={getContactFullName(contact)}
             />
           </div>
         )}

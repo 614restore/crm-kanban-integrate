@@ -94,7 +94,12 @@ const EMPTY_FORM = {
   notes: '',
 };
 
-export default function InsuranceTrackingView() {
+interface InsuranceTrackingViewProps {
+  contactId?: string;
+  contactName?: string;
+}
+
+export default function InsuranceTrackingView({ contactId, contactName }: InsuranceTrackingViewProps = {}) {
   const { state, dispatch } = useCRM();
   const { profile } = useAuth();
   const [claims, setClaims] = useState<InsuranceClaim[]>([]);
@@ -114,7 +119,7 @@ export default function InsuranceTrackingView() {
     if (!companyId) return;
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('insurance_claims')
         .select(`
           *,
@@ -123,6 +128,10 @@ export default function InsuranceTrackingView() {
         `)
         .eq('company_id', companyId)
         .order('created_at', { ascending: false });
+
+      if (contactId) query = query.eq('contact_id', contactId);
+
+      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -141,7 +150,7 @@ export default function InsuranceTrackingView() {
     }
   };
 
-  useEffect(() => { loadClaims(); }, [companyId]);
+  useEffect(() => { loadClaims(); }, [companyId, contactId]);
 
   const openCreate = () => {
     setEditingClaim(null);
@@ -177,6 +186,7 @@ export default function InsuranceTrackingView() {
     try {
       const payload = {
         company_id: companyId,
+        contact_id: editingClaim ? editingClaim.contact_id : (contactId || null),
         claim_number: form.claim_number.trim(),
         insurance_company: form.insurance_company.trim(),
         adjuster_name: form.adjuster_name.trim() || null,
@@ -251,7 +261,11 @@ export default function InsuranceTrackingView() {
             <Shield size={24} className="text-blue-600" />
             <div>
               <h1 className="text-xl font-semibold text-gray-900">Insurance Tracking</h1>
-              <p className="text-sm text-gray-500">Manage insurance claims and adjuster communications</p>
+              <p className="text-sm text-gray-500">
+                {contactName
+                  ? `Insurance claims for ${contactName}`
+                  : 'Manage insurance claims and adjuster communications'}
+              </p>
             </div>
           </div>
           <button
