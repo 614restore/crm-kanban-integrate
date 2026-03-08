@@ -2165,6 +2165,245 @@ const DocumentTemplates: React.FC = () => {
       lastModified: '2026-03-07',
       usageCount: 0,
       fileType: 'html'
+    },
+    {
+      id: '10',
+      name: '3-Day Right to Cancel Notice',
+      description: 'Federally-required Notice of Right to Cancel for door-to-door / home solicitation contracts (FTC Cooling-Off Rule). Must be provided at time of signing.',
+      category: 'contract',
+      content: `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Notice of Right to Cancel – {{CONTRACT_NUMBER}}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Segoe UI',Arial,sans-serif;font-size:13px;color:#1a1a1a;background:#fff;padding:0}
+    .page{max-width:780px;margin:0 auto;padding:36px 48px}
+
+    /* Header */
+    .header{display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #1e3a5f;padding-bottom:16px;margin-bottom:24px}
+    .logo-area{display:flex;align-items:center;gap:14px}
+    .logo-area img{max-height:60px;max-width:160px;object-fit:contain}
+    .company-name{font-size:20px;font-weight:700;color:#1e3a5f;line-height:1.2}
+    .company-sub{font-size:11px;color:#555;margin-top:2px}
+    .doc-label{text-align:right}
+    .doc-title{font-size:18px;font-weight:800;color:#b91c1c;text-transform:uppercase;letter-spacing:0.04em}
+    .doc-sub{font-size:11px;color:#555;margin-top:3px}
+
+    /* Federal Notice Banner */
+    .fed-banner{background:#fef2f2;border:2px solid #b91c1c;border-radius:6px;padding:14px 18px;margin-bottom:22px;text-align:center}
+    .fed-banner h2{font-size:15px;font-weight:800;color:#b91c1c;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px}
+    .fed-banner p{font-size:12px;color:#7f1d1d;line-height:1.6}
+
+    /* Info Grid */
+    .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:22px}
+    .info-box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px 14px}
+    .info-box h3{font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px}
+    .info-row{display:flex;justify-content:space-between;margin-bottom:4px;font-size:12px}
+    .info-row .lbl{color:#64748b}
+    .info-row .val{font-weight:600;color:#0f172a;text-align:right;max-width:60%}
+
+    /* Body sections */
+    .section{margin-bottom:20px}
+    .section h3{font-size:13px;font-weight:700;color:#1e3a5f;border-bottom:1px solid #e2e8f0;padding-bottom:5px;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.04em}
+    .section p{font-size:12px;line-height:1.75;color:#374151;margin-bottom:8px}
+    .section ul{padding-left:18px;font-size:12px;line-height:1.75;color:#374151}
+    .section ul li{margin-bottom:4px}
+
+    .highlight-box{background:#fffbeb;border-left:4px solid #f59e0b;padding:12px 16px;border-radius:0 6px 6px 0;margin:12px 0;font-size:12px;line-height:1.7;color:#374151}
+    .highlight-box strong{color:#b45309}
+
+    /* Deadline callout */
+    .deadline-callout{background:#1e3a5f;color:#fff;border-radius:8px;padding:16px 20px;margin:20px 0;text-align:center}
+    .deadline-callout .dl-label{font-size:11px;letter-spacing:0.08em;text-transform:uppercase;opacity:0.8;margin-bottom:4px}
+    .deadline-callout .dl-date{font-size:20px;font-weight:800;letter-spacing:0.02em}
+    .deadline-callout .dl-note{font-size:11px;opacity:0.75;margin-top:4px}
+
+    /* Signature section */
+    .sig-section{margin-top:28px;page-break-inside:avoid}
+    .sig-section h3{font-size:13px;font-weight:700;color:#1e3a5f;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:14px;border-bottom:1px solid #e2e8f0;padding-bottom:5px}
+    .sig-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+    .sig-box{border:1px solid #cbd5e1;border-radius:6px;padding:14px}
+    .sig-box .sig-title{font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:12px}
+    .sig-line{border-bottom:2px solid #1e3a5f;height:36px;margin-bottom:6px;position:relative}
+    .sig-line-label{font-size:10px;color:#64748b;margin-bottom:10px}
+    .date-line{border-bottom:1px solid #94a3b8;height:28px;margin-top:10px;margin-bottom:6px}
+
+    /* Perforated cut line */
+    .cut-line{border-top:2px dashed #94a3b8;margin:28px 0;position:relative;text-align:center}
+    .cut-line span{background:#fff;padding:0 10px;font-size:10px;color:#94a3b8;position:relative;top:-8px;text-transform:uppercase;letter-spacing:0.08em}
+
+    /* Cancellation form */
+    .cancel-form{border:2px solid #b91c1c;border-radius:8px;padding:20px 24px;margin-top:8px}
+    .cancel-form h3{font-size:14px;font-weight:800;color:#b91c1c;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:12px;text-align:center}
+    .cancel-form p{font-size:12px;line-height:1.7;margin-bottom:10px}
+    .cancel-form .fill-line{border-bottom:1px solid #374151;height:24px;margin-bottom:6px;margin-top:4px}
+    .cancel-form .fill-label{font-size:10px;color:#64748b;margin-bottom:8px}
+
+    /* Footer */
+    .footer{margin-top:28px;padding-top:12px;border-top:2px solid #1e3a5f;text-align:center;font-size:10px;color:#64748b;line-height:1.7}
+
+    @media print{.page{padding:20px 28px}}
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="logo-area">
+      <img src="{{COMPANY_LOGO}}" alt="{{COMPANY_NAME}} Logo" onerror="this.style.display='none'" />
+      <div>
+        <div class="company-name">{{COMPANY_NAME}}</div>
+        <div class="company-sub">{{COMPANY_TAGLINE}}</div>
+        <div class="company-sub">{{COMPANY_ADDRESS}}, {{COMPANY_CITY}}, {{COMPANY_STATE}} {{COMPANY_ZIP}}</div>
+        <div class="company-sub">{{COMPANY_PHONE}} | {{COMPANY_EMAIL}} | License #{{CONTRACTOR_LICENSE}}</div>
+      </div>
+    </div>
+    <div class="doc-label">
+      <div class="doc-title">Notice of Right<br>to Cancel</div>
+      <div class="doc-sub">Contract #: {{CONTRACT_NUMBER}}</div>
+      <div class="doc-sub">Date: {{CONTRACT_DATE}}</div>
+    </div>
+  </div>
+
+  <!-- Federal Banner -->
+  <div class="fed-banner">
+    <h2>⚠ Federal Law Notice — Required by FTC Cooling-Off Rule (16 CFR Part 429)</h2>
+    <p>You entered into a contract away from our regular place of business. Federal law gives you the right to cancel this transaction, without any penalty or obligation, within <strong>THREE (3) BUSINESS DAYS</strong> from the date of signing.</p>
+  </div>
+
+  <!-- Info Grid -->
+  <div class="info-grid">
+    <div class="info-box">
+      <h3>Customer Information</h3>
+      <div class="info-row"><span class="lbl">Name</span><span class="val">{{CUSTOMER_NAME}}</span></div>
+      <div class="info-row"><span class="lbl">Address</span><span class="val">{{PROPERTY_ADDRESS}}</span></div>
+      <div class="info-row"><span class="lbl">City, State, ZIP</span><span class="val">{{PROPERTY_CITY}}, {{PROPERTY_STATE}} {{PROPERTY_ZIP}}</span></div>
+      <div class="info-row"><span class="lbl">Phone</span><span class="val">{{CUSTOMER_PHONE}}</span></div>
+      <div class="info-row"><span class="lbl">Email</span><span class="val">{{CUSTOMER_EMAIL}}</span></div>
+    </div>
+    <div class="info-box">
+      <h3>Contractor Information</h3>
+      <div class="info-row"><span class="lbl">Company</span><span class="val">{{COMPANY_NAME}}</span></div>
+      <div class="info-row"><span class="lbl">Representative</span><span class="val">{{REP_NAME}}</span></div>
+      <div class="info-row"><span class="lbl">Phone</span><span class="val">{{COMPANY_PHONE}}</span></div>
+      <div class="info-row"><span class="lbl">Email</span><span class="val">{{COMPANY_EMAIL}}</span></div>
+      <div class="info-row"><span class="lbl">License #</span><span class="val">{{CONTRACTOR_LICENSE}}</span></div>
+    </div>
+  </div>
+
+  <!-- Deadline Callout -->
+  <div class="deadline-callout">
+    <div class="dl-label">Cancellation Deadline</div>
+    <div class="dl-date">{{CANCELLATION_DEADLINE}}</div>
+    <div class="dl-note">Midnight of the third business day after contract date. Saturdays, Sundays & federal holidays do not count.</div>
+  </div>
+
+  <!-- Your Rights -->
+  <div class="section">
+    <h3>Your Cancellation Rights</h3>
+    <p>You may cancel this transaction, without any penalty or obligation, within <strong>three (3) business days</strong> from the date you signed the contract shown above.</p>
+    <p>If you cancel, any payments made by you under the contract or sale will be returned within <strong>10 business days</strong> following receipt of your cancellation notice. Any security interest arising out of the transaction will be cancelled.</p>
+    <p>If you cancel, you must make available to the seller at your residence, in substantially as good condition as when received, any goods delivered to you under this contract or sale; or you may, if you wish, comply with the instructions of the seller regarding the return shipment of the goods at the seller's expense and risk.</p>
+    <p>If you do make the goods available to the seller and the seller does not pick them up within 20 days of your cancellation notice, you may keep them without any further obligation.</p>
+  </div>
+
+  <!-- How to Cancel -->
+  <div class="section">
+    <h3>How to Cancel</h3>
+    <p>To cancel, you must notify us in writing. You may use the Cancellation Form below, or send a written notice to:</p>
+    <div class="highlight-box">
+      <strong>{{COMPANY_NAME}}</strong><br>
+      {{COMPANY_ADDRESS}}, {{COMPANY_CITY}}, {{COMPANY_STATE}} {{COMPANY_ZIP}}<br>
+      Phone: {{COMPANY_PHONE}} | Email: {{COMPANY_EMAIL}}<br><br>
+      <strong>Important:</strong> Your notice must be mailed, emailed, or delivered <em>before midnight of the third business day</em> after you signed this contract. Keep a copy of your notice and proof of delivery.
+    </div>
+    <ul>
+      <li>Acceptable methods: certified mail (postmarked by deadline), hand delivery with written receipt, or email with read receipt.</li>
+      <li>Verbal cancellations are NOT sufficient — written notice is required.</li>
+      <li>Business days are Monday–Friday, excluding federal holidays.</li>
+    </ul>
+  </div>
+
+  <!-- State Rights -->
+  <div class="section">
+    <h3>Additional State Rights</h3>
+    <p>Some states provide additional cancellation rights beyond the federal 3-day rule. Consult your state's consumer protection laws for any extended rights that may apply in {{PROPERTY_STATE}}. This notice does not limit or waive any additional rights provided by state law.</p>
+  </div>
+
+  <!-- Customer Acknowledgment Signature -->
+  <div class="sig-section">
+    <h3>Customer Acknowledgment</h3>
+    <p style="font-size:12px;margin-bottom:14px;color:#374151">By signing below, the customer acknowledges receipt of <strong>two (2) copies</strong> of this Notice of Right to Cancel and understands their cancellation rights as described above.</p>
+    <div class="sig-grid">
+      <div class="sig-box">
+        <div class="sig-title">Customer Signature</div>
+        <div class="sig-line"></div>
+        <div class="sig-line-label">{{CUSTOMER_NAME}}</div>
+        <div class="date-line"></div>
+        <div class="sig-line-label">Date</div>
+      </div>
+      <div class="sig-box">
+        <div class="sig-title">Company Representative</div>
+        <div class="sig-line"></div>
+        <div class="sig-line-label">{{REP_NAME}}, {{REP_TITLE}}</div>
+        <div class="date-line"></div>
+        <div class="sig-line-label">Date Provided</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cut Line -->
+  <div class="cut-line"><span>✂ Cut here — Keep one copy for your records, return one copy to cancel</span></div>
+
+  <!-- Cancellation Form -->
+  <div class="cancel-form">
+    <h3>✉ Cancellation Form</h3>
+    <p>To cancel this transaction, complete this form and mail or deliver it to <strong>{{COMPANY_NAME}}</strong> at <strong>{{COMPANY_ADDRESS}}, {{COMPANY_CITY}}, {{COMPANY_STATE}} {{COMPANY_ZIP}}</strong> — or email it to <strong>{{COMPANY_EMAIL}}</strong> — <u>no later than midnight of {{CANCELLATION_DEADLINE}}</u>.</p>
+    <p>I/We hereby cancel the transaction entered into on:</p>
+    <div class="fill-line"></div>
+    <div class="fill-label">Contract Date</div>
+    <p>Contract Number: {{CONTRACT_NUMBER}}</p>
+    <p style="margin-top:8px">Customer Name(s):</p>
+    <div class="fill-line"></div>
+    <div class="fill-label">Print Name(s)</div>
+    <p style="margin-top:8px">Customer Address:</p>
+    <div class="fill-line"></div>
+    <div class="fill-label">Street Address</div>
+    <div class="fill-line" style="margin-top:8px"></div>
+    <div class="fill-label">City, State, ZIP</div>
+    <div style="display:grid;grid-template-columns:2fr 1fr;gap:20px;margin-top:16px">
+      <div>
+        <div class="fill-line"></div>
+        <div class="fill-label">Customer Signature</div>
+      </div>
+      <div>
+        <div class="fill-line"></div>
+        <div class="fill-label">Date of Cancellation</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    {{COMPANY_NAME}} &bull; {{COMPANY_PHONE}} &bull; {{COMPANY_EMAIL}} &bull; License #{{CONTRACTOR_LICENSE}}<br>
+    This Notice of Right to Cancel is required by the Federal Trade Commission Cooling-Off Rule (16 CFR Part 429) and must be provided at time of contract signing.<br>
+    Contract #{{CONTRACT_NUMBER}} – Issued {{CONTRACT_DATE}}
+  </div>
+
+</div>
+</body>
+</html>`,
+      variables: ['COMPANY_NAME','COMPANY_TAGLINE','REP_NAME','REP_TITLE','COMPANY_ADDRESS','COMPANY_CITY','COMPANY_STATE','COMPANY_ZIP','COMPANY_PHONE','COMPANY_EMAIL','CONTRACTOR_LICENSE','COMPANY_LOGO','CONTRACT_NUMBER','CONTRACT_DATE','CANCELLATION_DEADLINE','CUSTOMER_NAME','CUSTOMER_PHONE','CUSTOMER_EMAIL','PROPERTY_ADDRESS','PROPERTY_CITY','PROPERTY_STATE','PROPERTY_ZIP'],
+      favorite: true,
+      isDefault: true,
+      tags: ['contract', 'legal', 'right-to-cancel', 'ftc', 'required', 'cancellation'],
+      createdAt: '2026-03-07',
+      lastModified: '2026-03-07',
+      usageCount: 0,
+      fileType: 'html'
     }
       ];
       setTemplates(mockTemplates);
@@ -2288,6 +2527,11 @@ const DocumentTemplates: React.FC = () => {
       'INSURANCE_COMPANY': (contact as any).insurance_company || '',
       'POLICY_NUMBER': (contact as any).policy_number || '',
       'CLAIM_NUMBER': (contact as any).claim_number || '',
+      'CANCELLATION_DEADLINE': (() => {
+        let d = new Date(); let count = 0;
+        while (count < 3) { d = new Date(d.getTime() + 24*60*60*1000); if (d.getDay() !== 0 && d.getDay() !== 6) count++; }
+        return d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+      })(),
     };
     // Apply contact overrides FIRST (using {{KEY}} pattern) before company/sample fill
     Object.entries(overrides).forEach(([key, val]) => {
@@ -2403,6 +2647,13 @@ const DocumentTemplates: React.FC = () => {
       // Change order
       'CHANGE_ORDER_NUMBER': 'CO-2026-003',
       'CONTRACT_NUMBER': 'CTR-2026-042',
+      'CONTRACT_DATE': new Date().toLocaleDateString(),
+      'CANCELLATION_DEADLINE': (() => {
+        // 3 business days from today (skip Sat/Sun)
+        let d = new Date(); let count = 0;
+        while (count < 3) { d = new Date(d.getTime() + 24*60*60*1000); if (d.getDay() !== 0 && d.getDay() !== 6) count++; }
+        return d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+      })(),
       'CHANGE_DATE': new Date().toLocaleDateString(),
       'REQUESTED_BY': 'Insurance Adjuster — Robert Chen',
       'REASON_FOR_CHANGE': 'During tear-off, additional damage discovered on the east-facing slope. Three areas of soft/rotted decking identified that were not visible during initial inspection. Insurance adjuster approved supplemental claim for additional decking replacement and related work.',
