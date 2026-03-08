@@ -26,8 +26,8 @@ import {
   Receipt,
   FilePlus,
   BarChart,
-  CalendarClock,
-  Wrench,
+  Shield,
+  AlertCircle,
 } from 'lucide-react';
 
 interface NavItem {
@@ -54,6 +54,8 @@ const navItems: NavItem[] = [
   { id: 'equipment', label: 'Equipment', icon: <Wrench size={20} /> },
   { id: 'work-orders', label: 'Work Orders', icon: <Clipboard size={20} /> },
   { id: 'material-orders', label: 'Material Orders', icon: <Package size={20} /> },
+  { id: 'insurance-tracking', label: 'Insurance', icon: <Shield size={20} /> },
+  { id: 'supplement-tracking', label: 'Supplements', icon: <AlertCircle size={20} /> },
   { id: 'reports', label: 'Reports', icon: <BarChart size={20} /> },
   { id: 'team', label: 'Team', icon: <UserCog size={20} />, requiresPermission: 'team' },
   { id: 'automations', label: 'Automations', icon: <Zap size={20} /> },
@@ -221,6 +223,29 @@ export default function Sidebar() {
           )}
         </button>
       </div>
+
+      {/* Legal Links */}
+      {!sidebarCollapsed && (
+        <div className="px-3 pb-2 flex gap-3 justify-center">
+          <a
+            href="/crm-kanban-integrate/terms"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+          >
+            Terms
+          </a>
+          <span className="text-slate-600 text-xs">·</span>
+          <a
+            href="/crm-kanban-integrate/privacy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+          >
+            Privacy
+          </a>
+        </div>
+      )}
 
       {/* User Profile */}
       <div className="border-t border-slate-700 p-3">

@@ -1262,8 +1262,8 @@ export default function SettingsView() {
         disabled={isUploadingAvatar}
       />
 
-      {/* Settings inner sidebar */}
-      <div className="bg-white border-r border-gray-200 p-4">
+      {/* Sidebar */}
+      <div className="bg-white border-r border-gray-200 p-4 overflow-y-auto">
         <h2 className="text-lg font-semibold text-gray-900 mb-4 px-3">Settings</h2>
         <nav className="space-y-1">
           {tabs.map((tab) => (
@@ -2275,8 +2275,7 @@ export default function SettingsView() {
       />
 
       {/* Legal Footer */}
-      <div className="mt-auto pt-8">
-        <div className="pt-6 border-t border-gray-200 flex flex-wrap items-center justify-center gap-4 text-sm text-gray-400">
+      <div className="mt-8 pt-6 border-t border-gray-200 flex flex-wrap items-center justify-center gap-4 text-sm text-gray-400">
         <span>© {new Date().getFullYear()} TrussCTR by 614 Restore LLC</span>
         <span>·</span>
         <a href="/crm-kanban-integrate/terms" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 transition-colors">Terms of Service</a>
@@ -2286,7 +2285,6 @@ export default function SettingsView() {
         <a href="/crm-kanban-integrate/eula" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 transition-colors">EULA</a>
         <span>·</span>
         <a href="mailto:support@614restore.com" className="hover:text-blue-600 transition-colors">Contact Support</a>
-        </div>
       </div>
     </div>
   );

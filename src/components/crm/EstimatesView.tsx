@@ -6,7 +6,7 @@ import { fireAutomationEvent } from '@/lib/automationEngine';
 import { sendEmail } from '@/lib/emailApi';
 import { Estimate, EstimateItem, Contact } from '@/lib/crmData';
 import { exportEstimatesToExcel } from '@/lib/exportUtils';
-import SignaturePad from '@/components/ui/SignaturePad';
+import { SignaturePad } from './SignaturePad';
 import {
   FileText,
   Plus,
@@ -29,7 +29,6 @@ import {
   FolderPlus,
   PenLine,
   Mail,
-  ExternalLink,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -62,10 +61,8 @@ export default function EstimatesView() {
   const [isSaving, setIsSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [viewingEstimate, setViewingEstimate] = useState<Estimate | null>(null);
-  const [showSignModal, setShowSignModal] = useState(false);
-  const [signatureName, setSignatureName] = useState('');
-  const [isSigning, setIsSigning] = useState(false);
-  const [isRequestingSignature, setIsRequestingSignature] = useState(false);
+  const [showSignatureModal, setShowSignatureModal] = useState<Estimate | null>(null);
+  const [signerName, setSignerName] = useState('');
 
   // Form state
   const [selectedContactId, setSelectedContactId] = useState('');
@@ -110,6 +107,7 @@ export default function EstimatesView() {
         declinedAt: e.declined_at,
         signedBy: e.signed_by,
         signatureData: e.signature_data,
+        signToken: e.sign_token,
         items: e.items || [],
         terms: e.terms,
         notes: e.notes,
@@ -144,6 +142,7 @@ export default function EstimatesView() {
     declinedAt: e.declined_at,
     signedBy: e.signed_by,
     signatureData: e.signature_data,
+    signToken: e.sign_token,
     items: e.items || [],
     terms: e.terms || e.terms_and_conditions,
     notes: e.notes,
@@ -508,6 +507,77 @@ export default function EstimatesView() {
     }
   };
 
+  const handleSignEstimate = async (signatureData: string) => {
+    const estimate = showSignatureModal;
+    if (!estimate || !profile?.company_id || !profile?.id) return;
+    const name = signerName.trim() || profile.id;
+    try {
+      const updated = await db.markEstimateAccepted(estimate.id, name, signatureData);
+      if (updated) {
+        const appEstimate = mapDbEstimateToApp(updated);
+        dispatch({ type: 'UPDATE_ESTIMATE', payload: appEstimate });
+        const dbEstimate = { ...updated, company_id: profile.company_id } as any;
+        const project = await db.createProjectFromEstimate(dbEstimate, profile.id);
+        if (project) {
+          toast.success('Estimate signed & accepted — project created automatically');
+        } else {
+          toast.success('Estimate signed & accepted');
+        }
+        setShowSignatureModal(null);
+        setSignerName('');
+        setViewingEstimate(null);
+      }
+    } catch (err: any) {
+      toast.error(`Failed to save signature: ${err.message}`);
+    }
+  };
+
+  const handleRequestSignature = async (estimate: Estimate) => {
+    const contact = state.contacts.find(c => c.id === estimate.contactId);
+    if (!contact?.email) {
+      toast.error('No email address on file for this customer');
+      return;
+    }
+    try {
+      const token = crypto.randomUUID();
+      const updated = await db.requestEstimateSignature(estimate.id, token);
+      if (updated) {
+        dispatch({ type: 'UPDATE_ESTIMATE', payload: mapDbEstimateToApp(updated) });
+      }
+
+      const companyProfile = await db.getCompany(profile?.company_id || '').catch(() => null);
+      const companyName = (companyProfile as any)?.name || '614 Restore';
+      const fromEmail = (companyProfile as any)?.from_email || undefined;
+      const appUrl = import.meta.env.VITE_APP_URL || window.location.origin;
+      const signUrl = `${appUrl}/sign?estimateId=${estimate.id}&token=${token}`;
+
+      await sendEmail({
+        to: contact.email,
+        from: fromEmail,
+        subject: `Action Required: Please sign Estimate ${estimate.estimateNumber} from ${companyName}`,
+        html: `
+          <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
+            <h2 style="color:#1e40af">Signature Requested</h2>
+            <p>Hi ${contact.firstName},</p>
+            <p>${companyName} is requesting your signature on <strong>Estimate ${estimate.estimateNumber}: ${estimate.title}</strong>.</p>
+            <p><strong>Total: $${Number(estimate.total).toFixed(2)}</strong></p>
+            <div style="text-align:center;margin:32px 0">
+              <a href="${signUrl}" style="background:#16a34a;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:1.1em">
+                Review &amp; Sign Estimate
+              </a>
+            </div>
+            <p style="font-size:0.85em;color:#6b7280">Or copy this link into your browser:<br/>${signUrl}</p>
+            <p>If you have any questions, please reply to this email or call us.</p>
+            <p>Thank you,<br/>${companyName}</p>
+          </div>`,
+      });
+
+      toast.success(`Signature request sent to ${contact.email}`);
+    } catch (err: any) {
+      toast.error(`Failed to send signature request: ${err.message}`);
+    }
+  };
+
   const handleDelete = async (estimateId: string) => {
     try {
       await db.deleteEstimate(estimateId);
@@ -740,8 +810,8 @@ export default function EstimatesView() {
                   <div className="flex items-center gap-3 mb-2">
                     <h3 className="text-lg font-semibold text-gray-900">{estimate.title}</h3>
                     <StatusBadge status={estimate.status} />
-                    {estimate.signedBy && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                    {estimate.signatureData && (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
                         <PenLine size={11} />
                         Signed
                       </span>
@@ -830,6 +900,12 @@ export default function EstimatesView() {
                         <span className="flex items-center gap-1 text-green-600">
                           <Check size={12} />
                           Accepted {formatDate(estimate.acceptedAt)}
+                        </span>
+                      )}
+                      {estimate.signedBy && (
+                        <span className="flex items-center gap-1 text-emerald-700 font-medium">
+                          <PenLine size={12} />
+                          Signed by {estimate.signedBy}
                         </span>
                       )}
                       {estimate.declinedAt && (
@@ -1189,6 +1265,27 @@ export default function EstimatesView() {
                 </div>
               )}
 
+              {/* Signature Info */}
+              {viewingEstimate.signedBy && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 flex items-start gap-3">
+                  <PenLine size={18} className="text-emerald-600 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-semibold text-emerald-800">Document Signed</p>
+                    <p className="text-sm text-emerald-700">
+                      Signed by <strong>{viewingEstimate.signedBy}</strong>
+                      {viewingEstimate.acceptedAt && ` on ${new Date(viewingEstimate.acceptedAt).toLocaleDateString()}`}
+                    </p>
+                    {viewingEstimate.signatureData && (
+                      <img
+                        src={viewingEstimate.signatureData}
+                        alt="Signature"
+                        className="mt-2 h-12 border border-emerald-200 rounded bg-white"
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Valid Until */}
               {viewingEstimate.validUntil && (
                 <p className="text-sm text-gray-500 flex items-center gap-2">
@@ -1276,6 +1373,31 @@ export default function EstimatesView() {
                     Send Estimate
                   </button>
                 )}
+                {(viewingEstimate.status === 'sent' || viewingEstimate.status === 'viewed') && (
+                  <>
+                    <button
+                      onClick={() => handleRequestSignature(viewingEstimate)}
+                      className="flex items-center gap-2 px-4 py-2 text-blue-700 border border-blue-300 rounded-lg hover:bg-blue-50 transition-colors text-sm"
+                    >
+                      <Mail size={16} />
+                      Request Signature
+                    </button>
+                    <button
+                      onClick={() => { setShowSignatureModal(viewingEstimate); }}
+                      className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm"
+                    >
+                      <PenLine size={16} />
+                      Sign Estimate
+                    </button>
+                    <button
+                      onClick={() => handleAcceptEstimate(viewingEstimate)}
+                      className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
+                    >
+                      <CheckCircle size={16} />
+                      Mark Accepted → Create Project
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -1283,47 +1405,49 @@ export default function EstimatesView() {
       )}
 
       {/* Signature Modal */}
-      {showSignModal && viewingEstimate && (
-        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+      {showSignatureModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg">
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <div>
-                <h3 className="text-lg font-semibold text-gray-900">Sign Estimate</h3>
-                <p className="text-sm text-gray-500 mt-0.5">{viewingEstimate.estimateNumber} — {viewingEstimate.title}</p>
+                <h2 className="text-lg font-bold text-gray-900">Sign Estimate</h2>
+                <p className="text-sm text-gray-500 mt-0.5">{showSignatureModal.estimateNumber} · {showSignatureModal.title}</p>
               </div>
-              <button onClick={() => setShowSignModal(false)} className="p-2 hover:bg-gray-100 rounded-lg">
-                <X size={20} />
+              <button
+                onClick={() => { setShowSignatureModal(null); setSignerName(''); }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={24} />
               </button>
             </div>
             <div className="p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Full Name <span className="text-red-500">*</span>
+                  Signer Name <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
-                  value={signatureName}
-                  onChange={(e) => setSignatureName(e.target.value)}
-                  placeholder="Type your full legal name"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                  value={signerName}
+                  onChange={(e) => setSignerName(e.target.value)}
+                  placeholder="Full name of signer"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Signature</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Draw Signature
+                </label>
+                <p className="text-xs text-gray-500 mb-2">Draw your signature in the box below using your mouse or finger</p>
                 <SignaturePad
                   onSave={(dataUrl) => {
-                    if (!signatureName.trim()) {
-                      toast.error('Please enter your full name first');
+                    if (!signerName.trim()) {
+                      toast.error('Please enter the signer name before saving');
                       return;
                     }
-                    void handleSignEstimate(dataUrl);
+                    handleSignEstimate(dataUrl);
                   }}
                 />
               </div>
-              <p className="text-xs text-gray-400">
-                By signing, you agree to the terms of estimate {viewingEstimate.estimateNumber} totaling <strong>${Number(viewingEstimate.total).toFixed(2)}</strong>.
-                This constitutes a legally binding electronic signature.
-              </p>
             </div>
           </div>
         </div>

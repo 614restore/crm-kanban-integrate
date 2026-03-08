@@ -318,6 +318,12 @@ const DocumentManager: React.FC = () => {
             setTemplates(updatedTemplates);
             localStorage.setItem('documentTemplates', JSON.stringify(updatedTemplates));
           }}
+          onDelete={(template) => {
+            if (!window.confirm(`Delete "${template.name}"? This cannot be undone.`)) return;
+            const updatedTemplates = templates.filter(t => t.id !== template.id);
+            setTemplates(updatedTemplates);
+            localStorage.setItem('documentTemplates', JSON.stringify(updatedTemplates));
+          }}
         />
       )}
 
@@ -414,7 +420,8 @@ const TemplatesTab: React.FC<{
   onEdit: (template: DocumentTemplate) => void;
   onGenerate: (template: DocumentTemplate) => void;
   onDuplicate: (template: DocumentTemplate) => void;
-}> = ({ templates, onEdit, onGenerate, onDuplicate }) => {
+  onDelete: (template: DocumentTemplate) => void;
+}> = ({ templates, onEdit, onGenerate, onDuplicate, onDelete }) => {
   const getCategoryIcon = (category: string) => {
     switch (category) {
       case 'contract': return FileCode;
@@ -501,8 +508,16 @@ const TemplatesTab: React.FC<{
               <button
                 onClick={() => onDuplicate(template)}
                 className="p-2 border border-gray-300 text-gray-600 rounded-md hover:bg-gray-50"
+                title="Duplicate template"
               >
                 <Copy className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => onDelete(template)}
+                className="p-2 border border-red-200 text-red-500 rounded-md hover:bg-red-50"
+                title="Delete template"
+              >
+                <Trash2 className="w-4 h-4" />
               </button>
             </div>
           </div>

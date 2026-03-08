@@ -296,6 +296,7 @@ export interface DbEstimate {
   declined_at?: string;
   signed_by?: string;
   signature_data?: string;
+  sign_token?: string;
   created_by?: string;
   created_at: string;
   updated_at: string;
@@ -364,6 +365,9 @@ export interface DbWorkOrder {
   notes?: string;
   attachments?: string[];
   checklist_items?: any[];
+  signed_by?: string;
+  signature_data?: string;
+  sign_token?: string;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -1777,6 +1781,10 @@ class DatabaseService {
     });
   }
 
+  async requestEstimateSignature(estimateId: string, token: string): Promise<DbEstimate | null> {
+    return this.updateEstimate(estimateId, { sign_token: token });
+  }
+
   async markEstimateDeclined(estimateId: string): Promise<DbEstimate | null> {
     return this.updateEstimate(estimateId, {
       status: 'declined',
@@ -1968,6 +1976,19 @@ class DatabaseService {
       completed_at: new Date().toISOString(),
       ...(actualHours !== undefined && { actual_hours: actualHours }),
     });
+  }
+
+  async markWorkOrderSigned(workOrderId: string, signedBy: string, signatureData?: string): Promise<DbWorkOrder | null> {
+    return this.updateWorkOrder(workOrderId, {
+      status: 'completed',
+      completed_at: new Date().toISOString(),
+      signed_by: signedBy,
+      signature_data: signatureData,
+    });
+  }
+
+  async requestWorkOrderSignature(workOrderId: string, token: string): Promise<DbWorkOrder | null> {
+    return this.updateWorkOrder(workOrderId, { sign_token: token });
   }
 
   // ── Notification operations ──────────────────────────────────────

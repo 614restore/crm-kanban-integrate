@@ -14,8 +14,7 @@ import UpdatePassword from "./pages/UpdatePassword";
 import TermsOfService from "./pages/TermsOfService";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import EULA from "./pages/EULA";
-import SignEstimate from "./pages/SignEstimate";
-import SignChangeOrder from "./pages/SignChangeOrder";
+import SignDocument from "./pages/SignDocument";
 
 const queryClient = new QueryClient();
 
@@ -79,8 +78,7 @@ const App = () => (
             <Route path="/terms" element={<TermsOfService />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/eula" element={<EULA />} />
-            <Route path="/sign/:id" element={<SignEstimate />} />
-            <Route path="/sign-change-order/:token" element={<SignChangeOrder />} />
+            <Route path="/sign" element={<SignDocument />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
