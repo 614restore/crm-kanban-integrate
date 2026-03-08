@@ -1243,7 +1243,7 @@ export default function SettingsView() {
   }, []);
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '256px 1fr', width: '100%', minHeight: '100%' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '256px 1fr', width: '100%', height: '100%' }}>
       {/* Hidden file inputs */}
       <input
         ref={companyLogoInputRef}
