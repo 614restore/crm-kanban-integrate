@@ -270,6 +270,12 @@ export default function AuthPage() {
                   ? 'Start your 14-day free trial'
                   : 'Enter your email to receive a reset link'}
               </p>
+              {mode === 'signup' && (
+                <div className="mt-3 inline-flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-medium px-3 py-1.5 rounded-full">
+                  <span>🎉</span>
+                  <span>Subscribe within your trial — get <strong>50% off your first 3 months</strong></span>
+                </div>
+              )}
             </div>
 
             {error && (
