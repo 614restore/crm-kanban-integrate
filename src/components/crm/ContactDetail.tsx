@@ -203,17 +203,6 @@ export default function ContactDetail() {
         return;
       }
 
-
-      // Verify the file exists
-      const verifyUrl = await getDocumentSignedUrl(uploadResult.path, 60);
-      if (!verifyUrl) {
-        console.error('[ContactDetail] File upload succeeded but verification failed');
-        toast.error('Upload completed but file verification failed.');
-        setIsUploadingDocument(false);
-        event.target.value = '';
-        return;
-      }
-
       // Infer document category
       const inferCategory = (file: File): 'contract' | 'estimate' | 'invoice' | 'photo' | 'insurance' | 'other' => {
         const fileName = file.name.toLowerCase();

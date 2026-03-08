@@ -881,8 +881,19 @@ class DatabaseService {
 
   async updateAppointment(appointmentId: string, updates: Partial<DbAppointment>): Promise<DbAppointment | null> {
     try {
+      // Convert legacy date/time/duration fields → start_time/end_time (DB schema uses start_time/end_time)
+      const dbUpdates: Partial<DbAppointment> = { ...updates };
+      if (updates.date && updates.time && updates.duration !== undefined) {
+        const start = new Date(`${updates.date}T${updates.time}:00`);
+        const end = new Date(start.getTime() + updates.duration * 60 * 1000);
+        dbUpdates.start_time = start.toISOString();
+        dbUpdates.end_time = end.toISOString();
+        delete dbUpdates.date;
+        delete dbUpdates.time;
+        delete dbUpdates.duration;
+      }
       const { data, error } = await this.raceTimeout(
-        supabase.from('appointments').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', appointmentId).select().single(),
+        supabase.from('appointments').update({ ...dbUpdates, updated_at: new Date().toISOString() }).eq('id', appointmentId).select().single(),
         10000, 'updateAppointment'
       );
       if (error) { console.error('Error updating appointment:', error); return null; }

@@ -134,21 +134,25 @@ async function uploadBinaryViaRest(
 async function uploadViaSdk(
   bucket: string,
   path: string,
-  file: File
+  file: File,
+  timeoutMs = 20000
 ): Promise<{ ok: true } | { ok: false; message: string }> {
-  
-  const { error } = await supabase.storage.from(bucket).upload(path, file, {
-    upsert: false,
-    cacheControl: "3600",
-    contentType: file.type || undefined,
-  });
+  const timeoutPromise = new Promise<{ ok: false; message: string }>((resolve) =>
+    setTimeout(() => resolve({ ok: false, message: `SDK upload timed out after ${Math.round(timeoutMs / 1000)}s` }), timeoutMs)
+  );
 
-  if (error) {
-    console.error(`[Storage] SDK upload failed:`, error);
-    return { ok: false, message: error.message || "Storage upload failed" };
-  }
+  const uploadPromise = supabase.storage
+    .from(bucket)
+    .upload(path, file, { upsert: false, cacheControl: '3600', contentType: file.type || undefined })
+    .then(({ error }) => {
+      if (error) {
+        console.error(`[Storage] SDK upload failed:`, error);
+        return { ok: false as const, message: error.message || 'Storage upload failed' };
+      }
+      return { ok: true as const };
+    });
 
-  return { ok: true };
+  return Promise.race([uploadPromise, timeoutPromise]);
 }
 
 /**
