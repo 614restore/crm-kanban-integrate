@@ -28,6 +28,8 @@ import {
   Flag,
   Zap,
   X,
+  Sparkles,
+  Loader2,
 } from 'lucide-react';
 
 type CommFilter = 'all' | 'email' | 'sms' | 'call' | 'note' | 'insurance';
@@ -140,6 +142,7 @@ export default function CommunicationHub() {
   const [composeContactId, setComposeContactId] = useState('');
   const [composeText, setComposeText] = useState('');
   const [composeType, setComposeType] = useState<'note' | 'email' | 'sms' | 'call'>('note');
+  const [isAiDrafting, setIsAiDrafting] = useState(false);
 
   // Gather all communications from all contacts
   const allCommunications = state.contacts.flatMap((contact) =>
@@ -306,6 +309,39 @@ export default function CommunicationHub() {
     setComposeText('');
     setComposeType('note');
     setShowComposeModal(true);
+  };
+
+  const handleAIDraft = async () => {
+    const contact = state.contacts.find((c) => c.id === composeContactId);
+    if (!contact) {
+      toast.error('Select a contact first');
+      return;
+    }
+    setIsAiDrafting(true);
+    try {
+      const res = await fetch('/api/ai-draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contactName: `${contact.firstName} ${contact.lastName}`,
+          projectType: contact.projectType || contact.source || 'roofing/restoration',
+          context: composeText.trim() || undefined,
+          tone: 'professional and helpful',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.message || 'AI draft failed');
+        return;
+      }
+      const draft = data.body ? `Subject: ${data.subject}\n\n${data.body}` : data.body;
+      setComposeText(draft || data.body || '');
+      toast.success('AI draft ready — review and edit before sending');
+    } catch {
+      toast.error('AI draft failed — check your network connection');
+    } finally {
+      setIsAiDrafting(false);
+    }
   };
 
   const handleSaveCompose = async () => {
@@ -666,11 +702,26 @@ export default function CommunicationHub() {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-sm font-medium text-gray-700">Message</label>
+                  {composeType === 'email' && (
+                    <button
+                      onClick={() => { void handleAIDraft(); }}
+                      disabled={isAiDrafting || !composeContactId}
+                      className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isAiDrafting ? (
+                        <><Loader2 size={13} className="animate-spin" /> Drafting...</>
+                      ) : (
+                        <><Sparkles size={13} /> AI Draft</>
+                      )}
+                    </button>
+                  )}
+                </div>
                 <textarea
                   value={composeText}
                   onChange={(e) => setComposeText(e.target.value)}
-                  placeholder="Type your message or note..."
+                  placeholder={composeType === 'email' ? 'Type your message or click ✨ AI Draft to generate one...' : 'Type your message or note...'}
                   rows={5}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none resize-none"
                 />
