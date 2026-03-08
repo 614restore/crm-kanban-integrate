@@ -1,5 +1,5 @@
 import React from 'react';
-import { CreditCard, Plus } from 'lucide-react';
+import { CreditCard, Plus, Zap, Rocket, Building2, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 // Tell TypeScript about the Stripe custom element
@@ -145,16 +145,9 @@ const buttonColorMap: Record<string, string> = {
 };
 
 const BillingSettings: React.FC = () => {
-  const apiBase = import.meta.env.VITE_EMAIL_API_BASE_URL || '';
 
-  const handleManageBilling = async () => {
-    try {
-      const res = await fetch(`${apiBase}/api/stripe-portal`, { method: 'POST' });
-      const data = await res.json();
-      if (data.url) window.location.href = data.url;
-    } catch {
-      alert('Could not open billing portal.');
-    }
+  const handleManageBilling = () => {
+    window.open('https://billing.stripe.com/p/login/aFa9AVb73faq5vsfmw6Na00', '_blank');
   };
 
   return (
