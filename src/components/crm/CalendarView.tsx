@@ -201,6 +201,20 @@ export default function CalendarView() {
       return;
     }
     dispatch({ type: 'UPDATE_APPOINTMENT', payload: updatedAppointment });
+
+    // Persist contact status advancement to DB
+    if (appointment.contactId) {
+      const contact = state.contacts.find((c) => c.id === appointment.contactId);
+      if (contact && contact.status === 'appt_set') {
+        const now = new Date().toISOString();
+        await db.updateContact(appointment.contactId, {
+          status: 'inspection_completed',
+          inspectionCompleted: true,
+          inspectionCompletedDate: now,
+        }).catch((err) => console.error('Failed to advance contact status:', err));
+      }
+    }
+
     toast.success('Inspection marked as complete!');
   };
 
