@@ -36,7 +36,8 @@ import {
   Download,
   RefreshCw,
   Eye,
-  PieChart as PieChartIcon
+  PieChart as PieChartIcon,
+  UserCheck
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -90,6 +91,7 @@ const ReportsAnalytics: React.FC = () => {
   const [selectedMetric, setSelectedMetric] = useState('revenue');
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedRep, setSelectedRep] = useState<string>('all');
   
   const { toast } = useToast();
   const { state } = useCRM();
@@ -206,6 +208,57 @@ const ReportsAnalytics: React.FC = () => {
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 8);
   }, [state.teamMembers]);
+
+  // Build per-rep metrics from contacts assigned to each team member
+  const individualRepMetrics = useMemo(() => {
+    return state.teamMembers
+      .filter((tm) => tm.isActive)
+      .map((tm) => {
+        const repContacts = state.contacts.filter(
+          (c) => c.assignedTo === tm.userId || c.assignedTo === tm.id || c.assignedTo === tm.email
+        );
+        const totalLeads = repContacts.length;
+        const closedDeals = repContacts.filter((c) => c.status === 'completed').length;
+        const activeDeals = repContacts.filter((c) => ['active', 'in_progress', 'job_started'].includes(c.status || '')).length;
+        const revenue = repContacts
+          .filter((c) => c.status === 'completed')
+          .reduce((sum, c) => sum + (c.jobValue || c.estimateAmount || 0), 0);
+        const avgDealSize = closedDeals > 0 ? revenue / closedDeals : 0;
+        const conversionRate = totalLeads > 0 ? (closedDeals / totalLeads) * 100 : 0;
+        const pipeline = repContacts
+          .filter((c) => !['completed', 'lost', 'cancelled'].includes(c.status || ''))
+          .reduce((sum, c) => sum + (c.jobValue || c.estimateAmount || 0), 0);
+        const monthlyRevenue: Record<string, number> = {};
+        for (let i = 11; i >= 0; i--) {
+          const d = new Date();
+          d.setMonth(d.getMonth() - i);
+          monthlyRevenue[d.toLocaleString('default', { month: 'short' })] = 0;
+        }
+        repContacts
+          .filter((c) => c.status === 'completed' && c.updatedAt)
+          .forEach((c) => {
+            const d = new Date(c.updatedAt);
+            const key = d.toLocaleString('default', { month: 'short' });
+            if (key in monthlyRevenue) monthlyRevenue[key] += c.jobValue || c.estimateAmount || 0;
+          });
+        return {
+          id: tm.userId || tm.id || tm.email,
+          name: tm.name || tm.email,
+          role: tm.role || 'Sales Rep',
+          totalLeads,
+          closedDeals,
+          activeDeals,
+          revenue,
+          avgDealSize,
+          conversionRate,
+          pipeline,
+          efficiency: tm.performance?.leadsGenerated
+            ? Math.round(((tm.performance.dealsClosed || 0) / tm.performance.leadsGenerated) * 100)
+            : (totalLeads > 0 ? Math.round(conversionRate) : 0),
+          monthlyRevenue: Object.entries(monthlyRevenue).map(([month, rev]) => ({ month, revenue: rev })),
+        };
+      });
+  }, [state.teamMembers, state.contacts]);
 
   // Calculate key metrics
   const metrics = useMemo(() => {
@@ -430,7 +483,7 @@ const ReportsAnalytics: React.FC = () => {
 
       {/* Analytics Tabs */}
       <Tabs defaultValue="revenue" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="revenue" className="flex items-center gap-2">
             <DollarSign className="w-4 h-4" />
             Revenue
@@ -446,6 +499,10 @@ const ReportsAnalytics: React.FC = () => {
           <TabsTrigger value="team" className="flex items-center gap-2">
             <Award className="w-4 h-4" />
             Team
+          </TabsTrigger>
+          <TabsTrigger value="individual" className="flex items-center gap-2">
+            <UserCheck className="w-4 h-4" />
+            Individual
           </TabsTrigger>
           <TabsTrigger value="trends" className="flex items-center gap-2">
             <TrendingUp className="w-4 h-4" />
@@ -801,6 +858,149 @@ const ReportsAnalytics: React.FC = () => {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Individual Rep Metrics */}
+        <TabsContent value="individual" className="space-y-4">
+          <div className="flex items-center gap-4">
+            <Select value={selectedRep} onValueChange={setSelectedRep}>
+              <SelectTrigger className="w-64">
+                <SelectValue placeholder="Select a rep..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Reps — Overview</SelectItem>
+                {individualRepMetrics.map((rep) => (
+                  <SelectItem key={rep.id} value={rep.id}>{rep.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button variant="outline" size="sm" onClick={() => {
+              const rep = selectedRep === 'all' ? null : individualRepMetrics.find(r => r.id === selectedRep);
+              const rows = rep
+                ? [{ heading: `${rep.name} — Individual Metrics`, rows: [
+                    { Label: 'Revenue', Value: formatCurrency(rep.revenue) },
+                    { Label: 'Deals Closed', Value: rep.closedDeals },
+                    { Label: 'Active Deals', Value: rep.activeDeals },
+                    { Label: 'Total Leads', Value: rep.totalLeads },
+                    { Label: 'Conversion Rate', Value: `${rep.conversionRate.toFixed(1)}%` },
+                    { Label: 'Avg Deal Size', Value: formatCurrency(rep.avgDealSize) },
+                    { Label: 'Pipeline Value', Value: formatCurrency(rep.pipeline) },
+                  ]}]
+                : individualRepMetrics.map(r => ({
+                    heading: r.name,
+                    rows: [
+                      { Metric: 'Revenue', Value: formatCurrency(r.revenue) },
+                      { Metric: 'Deals Closed', Value: r.closedDeals },
+                      { Metric: 'Conversion %', Value: `${r.conversionRate.toFixed(1)}%` },
+                      { Metric: 'Pipeline', Value: formatCurrency(r.pipeline) },
+                    ]
+                  }));
+              printDataAsPDF('Individual Rep Metrics Report', rows);
+            }}>
+              <Download className="w-4 h-4 mr-2" />
+              Export PDF
+            </Button>
+          </div>
+
+          {/* Single rep detail view */}
+          {selectedRep !== 'all' && (() => {
+            const rep = individualRepMetrics.find(r => r.id === selectedRep);
+            if (!rep) return null;
+            return (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+                  {[
+                    { label: 'Revenue', value: formatCurrency(rep.revenue), color: 'text-green-600' },
+                    { label: 'Deals Closed', value: rep.closedDeals, color: 'text-blue-600' },
+                    { label: 'Active Deals', value: rep.activeDeals, color: 'text-orange-600' },
+                    { label: 'Total Leads', value: rep.totalLeads, color: 'text-purple-600' },
+                    { label: 'Conversion', value: `${rep.conversionRate.toFixed(1)}%`, color: 'text-teal-600' },
+                    { label: 'Avg Deal Size', value: formatCurrency(rep.avgDealSize), color: 'text-indigo-600' },
+                    { label: 'Pipeline', value: formatCurrency(rep.pipeline), color: 'text-rose-600' },
+                  ].map(({ label, value, color }) => (
+                    <Card key={label}>
+                      <CardContent className="p-4 text-center">
+                        <p className="text-xs text-gray-500 mb-1">{label}</p>
+                        <p className={`text-lg font-bold ${color}`}>{value}</p>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+                <Card>
+                  <CardHeader><CardTitle>{rep.name} — Monthly Revenue</CardTitle></CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={260}>
+                      <BarChart data={rep.monthlyRevenue}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="month" />
+                        <YAxis />
+                        <Tooltip formatter={(v) => [`$${Number(v).toLocaleString()}`, 'Revenue']} />
+                        <Bar dataKey="revenue" fill={colors.primary} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              </div>
+            );
+          })()}
+
+          {/* All reps side-by-side comparison */}
+          {selectedRep === 'all' && (
+            <div className="space-y-4">
+              <Card>
+                <CardHeader><CardTitle>Revenue by Rep</CardTitle></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={individualRepMetrics}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" />
+                      <YAxis />
+                      <Tooltip formatter={(v) => [`$${Number(v).toLocaleString()}`, 'Revenue']} />
+                      <Bar dataKey="revenue" fill={colors.primary} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {individualRepMetrics.map((rep) => (
+                  <Card key={rep.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setSelectedRep(rep.id)}>
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                          <span className="text-blue-700 font-bold text-sm">{rep.name.split(' ').map(n => n[0]).join('').slice(0,2)}</span>
+                        </div>
+                        <div>
+                          <p className="font-semibold">{rep.name}</p>
+                          <p className="text-xs text-gray-500">{rep.role}</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div>
+                          <p className="text-gray-500 text-xs">Revenue</p>
+                          <p className="font-bold text-green-600">{formatCurrency(rep.revenue)}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500 text-xs">Deals Closed</p>
+                          <p className="font-bold text-blue-600">{rep.closedDeals}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500 text-xs">Conversion</p>
+                          <p className="font-bold text-teal-600">{rep.conversionRate.toFixed(1)}%</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500 text-xs">Pipeline</p>
+                          <p className="font-bold text-rose-600">{formatCurrency(rep.pipeline)}</p>
+                        </div>
+                      </div>
+                      <div className="mt-2 flex items-center gap-1 text-xs text-gray-400">
+                        <span>Click for details</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
         </TabsContent>
 
         {/* Trends */}
