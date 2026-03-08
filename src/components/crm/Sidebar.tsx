@@ -28,6 +28,8 @@ import {
   BarChart,
   Shield,
   AlertCircle,
+  CalendarClock,
+  Wrench,
 } from 'lucide-react';
 
 interface NavItem {

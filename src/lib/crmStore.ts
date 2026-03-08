@@ -41,7 +41,9 @@ export type ViewType =
   | 'reports'
   | 'ai-assistant'
   | 'insurance-tracking'
-  | 'supplement-tracking';
+  | 'supplement-tracking'
+  | 'crew-schedule'
+  | 'equipment';
 
 export interface CRMState {
   // Current user
