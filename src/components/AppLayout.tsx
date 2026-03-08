@@ -1,8 +1,8 @@
-import React, { useReducer, useEffect, useCallback, useRef, Suspense, lazy } from 'react';
+import React, { useReducer, useEffect, useCallback, useRef, Suspense, lazy, useState } from 'react';
 import { CRMContext, crmReducer, CRMState, ViewType } from '@/lib/crmStore';
 import { AuthProvider, useAuth } from '@/lib/authContext';
 import { PermissionProvider } from '@/lib/permissions/PermissionProvider';
-import { db } from '@/lib/database';
+import { db, DbCompany } from '@/lib/database';
 import { supabase } from '@/lib/supabase';
 import {
   defaultBoards,
@@ -27,7 +27,7 @@ import QuickAddModal from './crm/QuickAddModal';
 import InvoiceModal from './crm/InvoiceModal';
 import ResponsiveLayout from './mobile/ResponsiveLayout';
 import { useIsMobile } from '@/hooks/useMediaQuery';
-import { Building2, Loader2 } from 'lucide-react';
+import { Building2, Loader2, Zap, X } from 'lucide-react';
 
 // Lazy load all CRM view components for better code splitting
 const Dashboard = lazy(() => import('./crm/Dashboard'));
@@ -302,6 +302,43 @@ function dbInvoiceToAppInvoice(dbInvoice: any, contacts: Contact[]): Invoice {
     paidAt: dbInvoice.paid_at,
     items: [], // Items loaded separately if needed
   };
+}
+
+// Trial banner shown when subscription_status is 'trialing' and trial ends within 7 days
+function TrialBanner({ companyId }: { companyId: string | null }) {
+  const [company, setCompany] = useState<DbCompany | null>(null);
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    if (!companyId) return;
+    db.getCompany(companyId).then((c) => { if (c) setCompany(c); });
+  }, [companyId]);
+
+  if (dismissed || !company) return null;
+  if (company.subscription_status !== 'trialing') return null;
+  if (!company.trial_ends_at) return null;
+
+  const daysLeft = Math.ceil((new Date(company.trial_ends_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  if (daysLeft > 7) return null;
+
+  return (
+    <div className="flex items-center justify-between gap-3 bg-yellow-50 border-b border-yellow-200 px-4 py-2 text-sm text-yellow-800">
+      <div className="flex items-center gap-2">
+        <Zap className="w-4 h-4 flex-shrink-0" />
+        <span>
+          Your free trial ends in <strong>{Math.max(0, daysLeft)} day{daysLeft !== 1 ? 's' : ''}</strong>.{' '}
+          Upgrade now to keep access.
+        </span>
+      </div>
+      <button
+        onClick={() => setDismissed(true)}
+        className="flex-shrink-0 p-1 rounded hover:bg-yellow-100 transition-colors"
+        aria-label="Dismiss"
+      >
+        <X className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
 }
 
 // CRM App (authenticated view)
@@ -819,6 +856,9 @@ function CRMApp() {
           <div className="hidden md:block">
             <TopBar />
           </div>
+
+          {/* Trial banner (shown when trial ends within 7 days) */}
+          <TrialBanner companyId={profile?.company_id ?? state.companyId ?? null} />
           
           {/* Main content area */}
           <main className="flex-1 min-h-0 overflow-auto">

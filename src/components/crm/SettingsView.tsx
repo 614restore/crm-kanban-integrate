@@ -10,6 +10,7 @@ import IntegrationConfigDialog from '@/components/IntegrationConfigDialog';
 import AIConfigDialog from '@/components/AIConfigDialog';
 import { formatPhoneNumber } from '@/lib/utils';
 import AIApprovalPanel from '@/components/AIApprovalPanel';
+import SubscriptionView from '@/components/crm/SubscriptionView';
 import {
   Settings,
   Building2,
@@ -2087,8 +2088,9 @@ export default function SettingsView() {
           <div className="max-w-3xl space-y-6">
             <div>
               <h3 className="text-xl font-semibold text-gray-900 mb-2">Billing & Payments</h3>
-              <p className="text-sm text-gray-500">Manage invoice and payment settings.</p>
+              <p className="text-sm text-gray-500">Manage your subscription and payment settings.</p>
             </div>
+            <SubscriptionView />
             <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
               <h4 className="text-base font-semibold text-gray-900">Payment Gateway</h4>
               <select className="w-full px-3 py-2 border border-gray-300 rounded-lg"><option>Stripe</option><option>Square</option><option>PayPal</option></select>
