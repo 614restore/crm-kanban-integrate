@@ -19,6 +19,7 @@ import {
 
 import IntegrationsSettings from './IntegrationsSettings';
 import CompanyTeamSettings from './CompanyTeamSettings';
+import BillingSettingsPage from './BillingSettings';
 
 // Main Settings Component with Navigation
 const MainSettings: React.FC = () => {
@@ -412,7 +413,7 @@ const DataSettings: React.FC = () => (
 const CommunicationSettings: React.FC = () => <SettingsPlaceholder title="Communication Settings" />;
 const CalendarSettings: React.FC = () => <SettingsPlaceholder title="Calendar Settings" />;
 const DocumentSettings: React.FC = () => <SettingsPlaceholder title="Document Settings" />;
-const BillingSettings: React.FC = () => <SettingsPlaceholder title="Billing & Payment Settings" />;
+const BillingSettings: React.FC = () => <BillingSettingsPage />;
 const ReportingSettings: React.FC = () => <SettingsPlaceholder title="Reporting Settings" />;
 const SupportSettings: React.FC = () => <SettingsPlaceholder title="Help & Support" />;
 
