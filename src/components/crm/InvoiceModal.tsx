@@ -25,6 +25,7 @@ export default function InvoiceModal() {
   );
   const [notes, setNotes] = useState(prefill?.notes || '');
   const [isSaving, setIsSaving] = useState(false);
+  const [validateError, setValidateError] = useState('');
 
   // Re-initialize if prefill changes (new conversion)
   useEffect(() => {
@@ -71,8 +72,6 @@ export default function InvoiceModal() {
   const subtotal = items.reduce((sum, item) => sum + item.total, 0);
   const tax = subtotal * 0.0825; // 8.25% tax
   const total = subtotal + tax;
-
-  const [validateError, setValidateError] = useState('');
 
   const handleSave = async (status: 'draft' | 'sent') => {
     setValidateError('');
