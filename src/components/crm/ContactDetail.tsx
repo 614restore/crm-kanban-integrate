@@ -1751,7 +1751,7 @@ export default function ContactDetail() {
                             {workOrder.status.replace('_', ' ')}
                           </span>
                           <button
-                            onClick={() => dispatch({ type: 'SET_VIEW', payload: 'workOrders' })}
+                            onClick={() => dispatch({ type: 'SET_VIEW', payload: 'work-orders' })}
                             className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                             title="Open in Work Orders"
                           >
@@ -1805,7 +1805,7 @@ export default function ContactDetail() {
                 </h3>
                 <button
                   onClick={() => {
-                    dispatch({ type: 'SET_VIEW', payload: 'materialOrders' });
+                    dispatch({ type: 'SET_VIEW', payload: 'material-orders' });
                     toast.info('Create a material order and link it to this customer');
                   }}
                   className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
@@ -1864,7 +1864,7 @@ export default function ContactDetail() {
                   <p className="text-gray-500">No material orders yet</p>
                   <button
                     onClick={() => {
-                      dispatch({ type: 'SET_VIEW', payload: 'materialOrders' });
+                      dispatch({ type: 'SET_VIEW', payload: 'material-orders' });
                       toast.info('Create a material order and link it to this customer');
                     }}
                     className="mt-4 text-orange-600 hover:text-orange-700 font-medium"
@@ -2230,7 +2230,7 @@ export default function ContactDetail() {
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <div>
                 <h2 className="text-xl font-bold text-gray-900">{viewingEstimate.title || `Estimate #${viewingEstimate.estimateNumber || viewingEstimate.estimate_number}`}</h2>
-                <p className="text-sm text-gray-500 mt-1">{viewingEstimate.estimateNumber || viewingEstimate.estimate_number} · {contact?.name}</p>
+                <p className="text-sm text-gray-500 mt-1">{viewingEstimate.estimateNumber || viewingEstimate.estimate_number} · {contact ? getContactFullName(contact) : ""}</p>
               </div>
               <div className="flex items-center gap-3">
                 <span className={`px-3 py-1 rounded-full text-sm font-medium ${
@@ -2325,7 +2325,7 @@ export default function ContactDetail() {
             <div className="p-6 border-b border-gray-200 flex items-start justify-between">
               <div>
                 <h2 className="text-xl font-bold text-gray-900">{viewingProject.name}</h2>
-                <p className="text-sm text-gray-500 mt-1">#{viewingProject.projectNumber} · {contact?.name}</p>
+                <p className="text-sm text-gray-500 mt-1">#{viewingProject.projectNumber} · {contact ? getContactFullName(contact) : ""}</p>
               </div>
               <div className="flex items-center gap-2">
                 <span className={`px-3 py-1 rounded-full text-sm font-medium ${

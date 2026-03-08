@@ -26,7 +26,6 @@ import {
   ChevronRight,
   Star,
   Flag,
-  FileText,
   Zap,
   X,
 } from 'lucide-react';

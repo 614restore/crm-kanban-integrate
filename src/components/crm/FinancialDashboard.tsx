@@ -357,7 +357,7 @@ export default function FinancialDashboard() {
               <p className="text-2xl font-bold text-gray-900 mt-1">
                 {formatCurrency(
                   state.contacts
-                    .filter((c) => c.stage === 'production' || c.stage === 'completed')
+                    .filter((c) => c.status === 'in_progress' || c.status === 'build_phase' || c.status === 'completed')
                     .reduce((sum, c) => sum + ((c as any).materialCost || 0), 0)
                 )}
               </p>
@@ -368,7 +368,7 @@ export default function FinancialDashboard() {
               <p className="text-2xl font-bold text-gray-900 mt-1">
                 {formatCurrency(
                   state.contacts
-                    .filter((c) => c.stage === 'production' || c.stage === 'completed')
+                    .filter((c) => c.status === 'in_progress' || c.status === 'build_phase' || c.status === 'completed')
                     .reduce((sum, c) => sum + ((c as any).subContractorCost || 0), 0)
                 )}
               </p>
@@ -379,7 +379,7 @@ export default function FinancialDashboard() {
               <p className="text-2xl font-bold text-gray-900 mt-1">
                 {formatCurrency(
                   state.contacts
-                    .filter((c) => c.stage === 'production' || c.stage === 'completed')
+                    .filter((c) => c.status === 'in_progress' || c.status === 'build_phase' || c.status === 'completed')
                     .reduce((sum, c) => sum + ((c as any).payrollCost || 0), 0)
                 )}
               </p>
@@ -391,7 +391,7 @@ export default function FinancialDashboard() {
                 {(() => {
                   const revenue = financialStats.totalRevenue;
                   const costs = state.contacts
-                    .filter((c) => c.stage === 'production' || c.stage === 'completed')
+                    .filter((c) => c.status === 'in_progress' || c.status === 'build_phase' || c.status === 'completed')
                     .reduce(
                       (sum, c) =>
                         sum +

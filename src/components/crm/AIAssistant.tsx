@@ -89,9 +89,9 @@ export default function AIAssistant() {
 
     // Payment / invoicing
     if (q.includes('payment') || q.includes('invoice') || q.includes('invoicing') || q.includes('billing')) {
-      const totalInvoiced = financialStats.totalInvoiced;
-      const totalPaid = financialStats.totalPaid;
-      const outstanding = financialStats.totalOutstanding;
+      const totalInvoiced = financialStats.paidInvoices + financialStats.outstandingInvoices;
+      const totalPaid = financialStats.paidInvoices;
+      const outstanding = financialStats.outstandingInvoices;
       return `Here's your invoicing overview:\n\n• **Total Invoiced:** ${formatCurrency(totalInvoiced)}\n• **Total Paid:** ${formatCurrency(totalPaid)}\n• **Outstanding:** ${formatCurrency(outstanding)}\n\nBest practices for getting paid faster:\n\n• **Send invoices promptly** — Create and send invoices as soon as work is completed.\n• **Set clear terms** — Use NET 30 or shorter payment terms.\n• **Follow up** — Set up reminders for overdue invoices. Check the "Pending Payment" pipeline stage.\n• **Multiple payment options** — Offer various payment methods to make it easy for customers.\n• **Partial invoicing** — For large jobs, send progress invoices at milestones rather than one final bill.`;
     }
 

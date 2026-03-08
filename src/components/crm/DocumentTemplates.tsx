@@ -2509,7 +2509,7 @@ const DocumentTemplates: React.FC = () => {
     const overrides: Record<string, string> = {
       'CUSTOMER_NAME': fullName,
       'CLIENT_NAME': fullName,
-      'CUSTOMER_PHONE': contact.phone || '',
+      'CUSTOMER_PHONE': contact.phone1 || '',
       'CUSTOMER_EMAIL': contact.email || '',
       'PROPERTY_ADDRESS': contact.address || '',
       'PROPERTY_CITY': contact.city || '',
