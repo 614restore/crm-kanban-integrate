@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { supabase } from '@/lib/supabase';
-import { formatPhoneNumber } from '@/lib/utils';
+import { formatPhoneNumber, withTimeout } from '@/lib/utils';
 import {
   Shield,
   Plus,
@@ -202,14 +202,20 @@ export default function InsuranceTrackingView({ contactId, contactName }: Insura
       };
 
       if (editingClaim) {
-        const { error } = await supabase
-          .from('insurance_claims')
-          .update({ ...payload, updated_at: new Date().toISOString() })
-          .eq('id', editingClaim.id);
+        const { error } = await withTimeout(
+          supabase
+            .from('insurance_claims')
+            .update({ ...payload, updated_at: new Date().toISOString() })
+            .eq('id', editingClaim.id),
+          10000, 'updateInsuranceClaim'
+        );
         if (error) throw error;
         toast.success('Claim updated');
       } else {
-        const { error } = await supabase.from('insurance_claims').insert(payload);
+        const { error } = await withTimeout(
+          supabase.from('insurance_claims').insert(payload),
+          10000, 'createInsuranceClaim'
+        );
         if (error) throw error;
         toast.success('Claim created');
       }
@@ -225,7 +231,10 @@ export default function InsuranceTrackingView({ contactId, contactName }: Insura
 
   const handleDelete = async (id: string) => {
     try {
-      const { error } = await supabase.from('insurance_claims').delete().eq('id', id);
+      const { error } = await withTimeout(
+        supabase.from('insurance_claims').delete().eq('id', id),
+        10000, 'deleteInsuranceClaim'
+      );
       if (error) throw error;
       toast.success('Claim deleted');
       setClaims(prev => prev.filter(c => c.id !== id));

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { supabase } from '@/lib/supabase';
+import { withTimeout } from '@/lib/utils';
 import {
   ChevronLeft,
   ChevronRight,
@@ -145,16 +146,20 @@ function AssignmentModal({
       };
 
       if (existing) {
-        const { error } = await supabase
-          .from('crew_schedules')
-          .update(payload)
-          .eq('id', existing.id);
+        const { error } = await withTimeout(
+          supabase
+            .from('crew_schedules')
+            .update(payload)
+            .eq('id', existing.id),
+          10000, 'updateCrewSchedule'
+        );
         if (error) throw error;
         toast.success('Assignment updated');
       } else {
-        const { error } = await supabase
-          .from('crew_schedules')
-          .insert(payload);
+        const { error } = await withTimeout(
+          supabase.from('crew_schedules').insert(payload),
+          10000, 'createCrewSchedule'
+        );
         if (error) throw error;
         toast.success('Assignment created');
       }
@@ -172,10 +177,13 @@ function AssignmentModal({
     if (!existing) return;
     setIsSaving(true);
     try {
-      const { error } = await supabase
-        .from('crew_schedules')
-        .delete()
-        .eq('id', existing.id);
+      const { error } = await withTimeout(
+        supabase
+          .from('crew_schedules')
+          .delete()
+          .eq('id', existing.id),
+        10000, 'deleteCrewSchedule'
+      );
       if (error) throw error;
       toast.success('Assignment removed');
       onSaved();

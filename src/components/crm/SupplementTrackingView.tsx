@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { supabase } from '@/lib/supabase';
+import { withTimeout } from '@/lib/utils';
 import {
   Plus,
   Search,
@@ -194,14 +195,20 @@ export default function SupplementTrackingView({ contactId, contactName }: Suppl
       };
 
       if (editingSupplement) {
-        const { error } = await supabase
-          .from('supplements')
-          .update({ ...payload, updated_at: new Date().toISOString() })
-          .eq('id', editingSupplement.id);
+        const { error } = await withTimeout(
+          supabase
+            .from('supplements')
+            .update({ ...payload, updated_at: new Date().toISOString() })
+            .eq('id', editingSupplement.id),
+          10000, 'updateSupplement'
+        );
         if (error) throw error;
         toast.success('Supplement updated');
       } else {
-        const { error } = await supabase.from('supplements').insert(payload);
+        const { error } = await withTimeout(
+          supabase.from('supplements').insert(payload),
+          10000, 'createSupplement'
+        );
         if (error) throw error;
         toast.success('Supplement created');
       }
@@ -217,7 +224,10 @@ export default function SupplementTrackingView({ contactId, contactName }: Suppl
 
   const handleDelete = async (id: string) => {
     try {
-      const { error } = await supabase.from('supplements').delete().eq('id', id);
+      const { error } = await withTimeout(
+        supabase.from('supplements').delete().eq('id', id),
+        10000, 'deleteSupplement'
+      );
       if (error) throw error;
       toast.success('Supplement deleted');
       setSupplements(prev => prev.filter(s => s.id !== id));

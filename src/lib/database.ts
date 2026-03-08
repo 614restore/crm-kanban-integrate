@@ -551,17 +551,14 @@ class DatabaseService {
       return newCompany;
     }
     
-    const { data, error } = await supabase
-      .from('companies')
-      .insert(company)
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error creating company:', error);
-      return null;
-    }
-    return data;
+    try {
+      const { data, error } = await this.raceTimeout(
+        supabase.from('companies').insert(company).select().single(),
+        10000, 'createCompany'
+      );
+      if (error) { console.error('Error creating company:', error); return null; }
+      return data;
+    } catch (err) { console.error('createCompany timed out or failed:', err); return null; }
   }
 
   async updateCompany(companyId: string, updates: Partial<DbCompany>): Promise<DbCompany | null> {
@@ -581,10 +578,10 @@ class DatabaseService {
       }
     }
     
-    // Try RPC first (SECURITY DEFINER, bypasses RLS)
+    // Try RPC first (SECURITY DEFINER, bypasses RLS) — 5 s cap
     try {
-      const { data: rpcData, error: rpcError } = await supabase
-        .rpc('update_my_company', {
+      const { data: rpcData, error: rpcError } = await this.raceTimeout(
+        supabase.rpc('update_my_company', {
           p_name: updates.name ?? null,
           p_phone: updates.phone ?? null,
           p_email: updates.email ?? null,
@@ -599,8 +596,10 @@ class DatabaseService {
           p_tax_id: updates.tax_id ?? null,
           p_from_email: updates.from_email ?? null,
           p_from_name: updates.from_name ?? null,
-        });
-      
+        }),
+        5000, 'update_my_company RPC'
+      );
+
       if (!rpcError && rpcData) {
         return rpcData as DbCompany;
       }
@@ -608,22 +607,18 @@ class DatabaseService {
         console.warn('[Database] update_my_company RPC failed, falling back:', rpcError.message);
       }
     } catch (rpcErr) {
-      console.warn('[Database] update RPC not available, using direct query');
+      console.warn('[Database] update RPC timed-out or not available, using direct query');
     }
 
-    // Fallback: direct table update
-    const { data, error } = await supabase
-      .from('companies')
-      .update({ ...updates, updated_at: new Date().toISOString() })
-      .eq('id', companyId)
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error updating company:', error);
-      return null;
-    }
-    return data;
+    // Fallback: direct table update — 5 s cap
+    try {
+      const { data, error } = await this.raceTimeout(
+        supabase.from('companies').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', companyId).select().single(),
+        5000, 'updateCompany direct'
+      );
+      if (error) { console.error('Error updating company:', error); return null; }
+      return data;
+    } catch (err) { console.error('updateCompany timed out or failed:', err); return null; }
   }
 
   // Contact operations
@@ -774,16 +769,14 @@ class DatabaseService {
   }
 
   async deleteJob(jobId: string): Promise<boolean> {
-    const { error } = await supabase
-      .from('jobs')
-      .delete()
-      .eq('id', jobId);
-    
-    if (error) {
-      console.error('Error deleting job:', error);
-      return false;
-    }
-    return true;
+    try {
+      const { error } = await this.raceTimeout(
+        supabase.from('jobs').delete().eq('id', jobId),
+        10000, 'deleteJob'
+      );
+      if (error) { console.error('Error deleting job:', error); return false; }
+      return true;
+    } catch (err) { console.error('deleteJob timed out or failed:', err); return false; }
   }
 
   // Appointment operations
@@ -1605,45 +1598,36 @@ class DatabaseService {
   }
 
   async createSupplier(supplier: Partial<DbSupplier>): Promise<DbSupplier | null> {
-    const { data, error } = await supabase
-      .from('suppliers')
-      .insert(supplier)
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error creating supplier:', error);
-      throw new Error(error.message);
-    }
-    return data;
+    try {
+      const { data, error } = await this.raceTimeout(
+        supabase.from('suppliers').insert(supplier).select().single(),
+        10000, 'createSupplier'
+      );
+      if (error) { console.error('Error creating supplier:', error); return null; }
+      return data;
+    } catch (err) { console.error('createSupplier timed out or failed:', err); return null; }
   }
 
   async updateSupplier(supplierId: string, updates: Partial<DbSupplier>): Promise<DbSupplier | null> {
-    const { data, error } = await supabase
-      .from('suppliers')
-      .update({ ...updates, updated_at: new Date().toISOString() })
-      .eq('id', supplierId)
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error updating supplier:', error);
-      return null;
-    }
-    return data;
+    try {
+      const { data, error } = await this.raceTimeout(
+        supabase.from('suppliers').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', supplierId).select().single(),
+        10000, 'updateSupplier'
+      );
+      if (error) { console.error('Error updating supplier:', error); return null; }
+      return data;
+    } catch (err) { console.error('updateSupplier timed out or failed:', err); return null; }
   }
 
   async deleteSupplier(supplierId: string): Promise<boolean> {
-    const { error } = await supabase
-      .from('suppliers')
-      .update({ is_active: false, updated_at: new Date().toISOString() })
-      .eq('id', supplierId);
-    
-    if (error) {
-      console.error('Error deleting supplier:', error);
-      return false;
-    }
-    return true;
+    try {
+      const { error } = await this.raceTimeout(
+        supabase.from('suppliers').update({ is_active: false, updated_at: new Date().toISOString() }).eq('id', supplierId),
+        10000, 'deleteSupplier'
+      );
+      if (error) { console.error('Error deleting supplier:', error); return false; }
+      return true;
+    } catch (err) { console.error('deleteSupplier timed out or failed:', err); return false; }
   }
 
   // Material Order operations
@@ -1662,45 +1646,36 @@ class DatabaseService {
   }
 
   async createMaterialOrder(order: Partial<DbMaterialOrder>): Promise<DbMaterialOrder | null> {
-    const { data, error } = await supabase
-      .from('material_orders')
-      .insert(order)
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error creating material order:', error);
-      return null;
-    }
-    return data;
+    try {
+      const { data, error } = await this.raceTimeout(
+        supabase.from('material_orders').insert(order).select().single(),
+        10000, 'createMaterialOrder'
+      );
+      if (error) { console.error('Error creating material order:', error); return null; }
+      return data;
+    } catch (err) { console.error('createMaterialOrder timed out or failed:', err); return null; }
   }
 
   async updateMaterialOrder(orderId: string, updates: Partial<DbMaterialOrder>): Promise<DbMaterialOrder | null> {
-    const { data, error } = await supabase
-      .from('material_orders')
-      .update({ ...updates, updated_at: new Date().toISOString() })
-      .eq('id', orderId)
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error updating material order:', error);
-      return null;
-    }
-    return data;
+    try {
+      const { data, error } = await this.raceTimeout(
+        supabase.from('material_orders').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', orderId).select().single(),
+        10000, 'updateMaterialOrder'
+      );
+      if (error) { console.error('Error updating material order:', error); return null; }
+      return data;
+    } catch (err) { console.error('updateMaterialOrder timed out or failed:', err); return null; }
   }
 
   async deleteMaterialOrder(orderId: string): Promise<boolean> {
-    const { error } = await supabase
-      .from('material_orders')
-      .delete()
-      .eq('id', orderId);
-    
-    if (error) {
-      console.error('Error deleting material order:', error);
-      return false;
-    }
-    return true;
+    try {
+      const { error } = await this.raceTimeout(
+        supabase.from('material_orders').delete().eq('id', orderId),
+        10000, 'deleteMaterialOrder'
+      );
+      if (error) { console.error('Error deleting material order:', error); return false; }
+      return true;
+    } catch (err) { console.error('deleteMaterialOrder timed out or failed:', err); return false; }
   }
 
   // Estimate operations
@@ -1733,12 +1708,14 @@ class DatabaseService {
   }
 
   async createEstimate(estimate: Partial<DbEstimate>): Promise<DbEstimate | null> {
-    const { data, error } = await this.raceTimeout(
-      supabase.from('estimates').insert(estimate).select().single(),
-      10000, 'createEstimate'
-    );
-    if (error) { console.error('Error creating estimate:', error); throw new Error(error.message); }
-    return data;
+    try {
+      const { data, error } = await this.raceTimeout(
+        supabase.from('estimates').insert(estimate).select().single(),
+        10000, 'createEstimate'
+      );
+      if (error) { console.error('Error creating estimate:', error); return null; }
+      return data;
+    } catch (err) { console.error('createEstimate timed out or failed:', err); return null; }
   }
 
   async updateEstimate(estimateId: string, updates: Partial<DbEstimate>): Promise<DbEstimate | null> {
@@ -1829,14 +1806,14 @@ class DatabaseService {
   }
 
   async createProject(project: Partial<DbProject>): Promise<DbProject | null> {
-    const { data, error } = await supabase
-      .from('projects')
-      .insert([project])
-      .select()
-      .single();
-    
-    if (error) { console.error('Error creating project:', error); throw new Error(error.message); }
-    return data;
+    try {
+      const { data, error } = await this.raceTimeout(
+        supabase.from('projects').insert([project]).select().single(),
+        10000, 'createProject'
+      );
+      if (error) { console.error('Error creating project:', error); return null; }
+      return data;
+    } catch (err) { console.error('createProject timed out or failed:', err); return null; }
   }
 
   async createProjectFromEstimate(estimate: DbEstimate, userId: string): Promise<DbProject | null> {
@@ -1857,31 +1834,25 @@ class DatabaseService {
   }
 
   async updateProject(projectId: string, updates: Partial<DbProject>): Promise<DbProject | null> {
-    const { data, error } = await supabase
-      .from('projects')
-      .update({ ...updates, updated_at: new Date().toISOString() })
-      .eq('id', projectId)
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error updating project:', error);
-      return null;
-    }
-    return data;
+    try {
+      const { data, error } = await this.raceTimeout(
+        supabase.from('projects').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', projectId).select().single(),
+        10000, 'updateProject'
+      );
+      if (error) { console.error('Error updating project:', error); return null; }
+      return data;
+    } catch (err) { console.error('updateProject timed out or failed:', err); return null; }
   }
 
   async deleteProject(projectId: string): Promise<boolean> {
-    const { error } = await supabase
-      .from('projects')
-      .delete()
-      .eq('id', projectId);
-    
-    if (error) {
-      console.error('Error deleting project:', error);
-      return false;
-    }
-    return true;
+    try {
+      const { error } = await this.raceTimeout(
+        supabase.from('projects').delete().eq('id', projectId),
+        10000, 'deleteProject'
+      );
+      if (error) { console.error('Error deleting project:', error); return false; }
+      return true;
+    } catch (err) { console.error('deleteProject timed out or failed:', err); return false; }
   }
 
   // Work Order operations
@@ -1928,45 +1899,36 @@ class DatabaseService {
   }
 
   async createWorkOrder(workOrder: Partial<DbWorkOrder>): Promise<DbWorkOrder | null> {
-    const { data, error } = await supabase
-      .from('work_orders')
-      .insert([workOrder])
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error creating work order:', error);
-      throw new Error(error.message);
-    }
-    return data;
+    try {
+      const { data, error } = await this.raceTimeout(
+        supabase.from('work_orders').insert([workOrder]).select().single(),
+        10000, 'createWorkOrder'
+      );
+      if (error) { console.error('Error creating work order:', error); return null; }
+      return data;
+    } catch (err) { console.error('createWorkOrder timed out or failed:', err); return null; }
   }
 
   async updateWorkOrder(workOrderId: string, updates: Partial<DbWorkOrder>): Promise<DbWorkOrder | null> {
-    const { data, error } = await supabase
-      .from('work_orders')
-      .update({ ...updates, updated_at: new Date().toISOString() })
-      .eq('id', workOrderId)
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error updating work order:', error);
-      return null;
-    }
-    return data;
+    try {
+      const { data, error } = await this.raceTimeout(
+        supabase.from('work_orders').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', workOrderId).select().single(),
+        10000, 'updateWorkOrder'
+      );
+      if (error) { console.error('Error updating work order:', error); return null; }
+      return data;
+    } catch (err) { console.error('updateWorkOrder timed out or failed:', err); return null; }
   }
 
   async deleteWorkOrder(workOrderId: string): Promise<boolean> {
-    const { error } = await supabase
-      .from('work_orders')
-      .delete()
-      .eq('id', workOrderId);
-    
-    if (error) {
-      console.error('Error deleting work order:', error);
-      return false;
-    }
-    return true;
+    try {
+      const { error } = await this.raceTimeout(
+        supabase.from('work_orders').delete().eq('id', workOrderId),
+        10000, 'deleteWorkOrder'
+      );
+      if (error) { console.error('Error deleting work order:', error); return false; }
+      return true;
+    } catch (err) { console.error('deleteWorkOrder timed out or failed:', err); return false; }
   }
 
   // Update work order status helpers
@@ -2036,29 +1998,26 @@ class DatabaseService {
 
   async createNotification(notification: Partial<DbNotification>): Promise<DbNotification | null> {
     if (this.inDemoMode()) return null;
-    const { data, error } = await supabase
-      .from('notifications')
-      .insert(notification)
-      .select()
-      .single();
-    if (error) {
-      console.error('Error creating notification:', error);
-      return null;
-    }
-    return data as DbNotification;
+    try {
+      const { data, error } = await this.raceTimeout(
+        supabase.from('notifications').insert(notification).select().single(),
+        10000, 'createNotification'
+      );
+      if (error) { console.error('Error creating notification:', error); return null; }
+      return data as DbNotification;
+    } catch (err) { console.error('createNotification timed out or failed:', err); return null; }
   }
 
   async markNotificationRead(notificationId: string): Promise<boolean> {
     if (this.inDemoMode()) return true;
-    const { error } = await supabase
-      .from('notifications')
-      .update({ read: true, updated_at: new Date().toISOString() })
-      .eq('id', notificationId);
-    if (error) {
-      console.error('Error marking notification read:', error);
-      return false;
-    }
-    return true;
+    try {
+      const { error } = await this.raceTimeout(
+        supabase.from('notifications').update({ read: true, updated_at: new Date().toISOString() }).eq('id', notificationId),
+        10000, 'markNotificationRead'
+      );
+      if (error) { console.error('Error marking notification read:', error); return false; }
+      return true;
+    } catch (err) { console.error('markNotificationRead timed out or failed:', err); return false; }
   }
 
   async markAllNotificationsRead(companyId: string, userId?: string): Promise<boolean> {
@@ -2107,35 +2066,38 @@ class DatabaseService {
 
   async createExpense(expense: Partial<DbExpense>): Promise<DbExpense | null> {
     if (this.inDemoMode()) return null;
-    const { data, error } = await supabase
-      .from('expenses')
-      .insert(expense)
-      .select()
-      .single();
-    if (error) { console.error('Error creating expense:', error); return null; }
-    return data as DbExpense;
+    try {
+      const { data, error } = await this.raceTimeout(
+        supabase.from('expenses').insert(expense).select().single(),
+        10000, 'createExpense'
+      );
+      if (error) { console.error('Error creating expense:', error); return null; }
+      return data as DbExpense;
+    } catch (err) { console.error('createExpense timed out or failed:', err); return null; }
   }
 
   async updateExpense(expenseId: string, updates: Partial<DbExpense>): Promise<DbExpense | null> {
     if (this.inDemoMode()) return null;
-    const { data, error } = await supabase
-      .from('expenses')
-      .update({ ...updates, updated_at: new Date().toISOString() })
-      .eq('id', expenseId)
-      .select()
-      .single();
-    if (error) { console.error('Error updating expense:', error); return null; }
-    return data as DbExpense;
+    try {
+      const { data, error } = await this.raceTimeout(
+        supabase.from('expenses').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', expenseId).select().single(),
+        10000, 'updateExpense'
+      );
+      if (error) { console.error('Error updating expense:', error); return null; }
+      return data as DbExpense;
+    } catch (err) { console.error('updateExpense timed out or failed:', err); return null; }
   }
 
   async deleteExpense(expenseId: string): Promise<boolean> {
     if (this.inDemoMode()) return true;
-    const { error } = await supabase
-      .from('expenses')
-      .delete()
-      .eq('id', expenseId);
-    if (error) { console.error('Error deleting expense:', error); return false; }
-    return true;
+    try {
+      const { error } = await this.raceTimeout(
+        supabase.from('expenses').delete().eq('id', expenseId),
+        10000, 'deleteExpense'
+      );
+      if (error) { console.error('Error deleting expense:', error); return false; }
+      return true;
+    } catch (err) { console.error('deleteExpense timed out or failed:', err); return false; }
   }
 
   async uploadExpenseReceipt(companyId: string, expenseId: string, file: File): Promise<string | null> {

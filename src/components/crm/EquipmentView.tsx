@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { supabase } from '@/lib/supabase';
+import { withTimeout } from '@/lib/utils';
 import { toast } from 'sonner';
 import {
   Wrench,
@@ -274,22 +275,28 @@ export default function EquipmentView() {
       };
 
       if (editingEquipment) {
-        const { data, error } = await supabase
-          .from('equipment')
-          .update({ ...payload, updated_at: new Date().toISOString() })
-          .eq('id', editingEquipment.id)
-          .select()
-          .single();
+        const { data, error } = await withTimeout(
+          supabase
+            .from('equipment')
+            .update({ ...payload, updated_at: new Date().toISOString() })
+            .eq('id', editingEquipment.id)
+            .select()
+            .single(),
+          10000, 'updateEquipment'
+        );
 
         if (error) throw error;
         setEquipment((prev) => prev.map((e) => (e.id === editingEquipment.id ? (data as Equipment) : e)));
         toast.success('Equipment updated');
       } else {
-        const { data, error } = await supabase
-          .from('equipment')
-          .insert(payload)
-          .select()
-          .single();
+        const { data, error } = await withTimeout(
+          supabase
+            .from('equipment')
+            .insert(payload)
+            .select()
+            .single(),
+          10000, 'createEquipment'
+        );
 
         if (error) throw error;
         setEquipment((prev) => [data as Equipment, ...prev]);
@@ -308,7 +315,10 @@ export default function EquipmentView() {
   const handleDelete = async (item: Equipment) => {
     if (!confirm(`Delete "${item.name}"? This cannot be undone.`)) return;
     try {
-      const { error } = await supabase.from('equipment').delete().eq('id', item.id);
+      const { error } = await withTimeout(
+        supabase.from('equipment').delete().eq('id', item.id),
+        10000, 'deleteEquipment'
+      );
       if (error) throw error;
       setEquipment((prev) => prev.filter((e) => e.id !== item.id));
       toast.success('Equipment deleted');
@@ -324,12 +334,15 @@ export default function EquipmentView() {
       return;
     }
     try {
-      const { data, error } = await supabase
-        .from('equipment')
-        .update({ status: 'in-use', assigned_to: assignContactId, updated_at: new Date().toISOString() })
-        .eq('id', assigningEquipment.id)
-        .select()
-        .single();
+      const { data, error } = await withTimeout(
+        supabase
+          .from('equipment')
+          .update({ status: 'in-use', assigned_to: assignContactId, updated_at: new Date().toISOString() })
+          .eq('id', assigningEquipment.id)
+          .select()
+          .single(),
+        10000, 'assignEquipment'
+      );
 
       if (error) throw error;
       setEquipment((prev) => prev.map((e) => (e.id === assigningEquipment.id ? (data as Equipment) : e)));
