@@ -2274,18 +2274,6 @@ export default function SettingsView() {
         }}
       />
 
-      {/* Legal Footer */}
-      <div className="mt-8 pt-6 border-t border-gray-200 flex flex-wrap items-center justify-center gap-4 text-sm text-gray-400">
-        <span>© {new Date().getFullYear()} TrussCTR by 614 Restore LLC</span>
-        <span>·</span>
-        <a href="/crm-kanban-integrate/terms" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 transition-colors">Terms of Service</a>
-        <span>·</span>
-        <a href="/crm-kanban-integrate/privacy" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 transition-colors">Privacy Policy</a>
-        <span>·</span>
-        <a href="/crm-kanban-integrate/eula" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 transition-colors">EULA</a>
-        <span>·</span>
-        <a href="mailto:support@614restore.com" className="hover:text-blue-600 transition-colors">Contact Support</a>
-      </div>
     </div>
   );
 }
