@@ -114,9 +114,22 @@ export default function InsuranceTrackingView({ contactId, contactName }: Insura
 
   const companyId = state.companyId;
 
+  const withTimeout = async <T,>(promise: Promise<T>, label: string, timeoutMs = 10000): Promise<T> => {
+    return Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
+      }),
+    ]) as Promise<T>;
+  };
+
   // Load claims
   const loadClaims = async () => {
-    if (!companyId) return;
+    if (!companyId) {
+      setClaims([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       let query = supabase
@@ -131,7 +144,7 @@ export default function InsuranceTrackingView({ contactId, contactName }: Insura
 
       if (contactId) query = query.eq('contact_id', contactId);
 
-      const { data, error } = await query;
+      const { data, error } = await withTimeout(query, 'loadClaims');
 
       if (error) throw error;
 
@@ -182,6 +195,10 @@ export default function InsuranceTrackingView({ contactId, contactName }: Insura
       toast.error('Claim number and insurance company are required');
       return;
     }
+    if (!companyId) {
+      toast.error('No company context available. Please refresh and try again.');
+      return;
+    }
     setIsSaving(true);
     try {
       const payload = {
@@ -202,20 +219,26 @@ export default function InsuranceTrackingView({ contactId, contactName }: Insura
       };
 
       if (editingClaim) {
-        const { error } = await supabase
-          .from('insurance_claims')
-          .update({ ...payload, updated_at: new Date().toISOString() })
-          .eq('id', editingClaim.id);
+        const { error } = await withTimeout(
+          supabase
+            .from('insurance_claims')
+            .update({ ...payload, updated_at: new Date().toISOString() })
+            .eq('id', editingClaim.id),
+          'updateInsuranceClaim'
+        );
         if (error) throw error;
         toast.success('Claim updated');
       } else {
-        const { error } = await supabase.from('insurance_claims').insert(payload);
+        const { error } = await withTimeout(
+          supabase.from('insurance_claims').insert(payload),
+          'createInsuranceClaim'
+        );
         if (error) throw error;
         toast.success('Claim created');
       }
 
       setShowModal(false);
-      loadClaims();
+      void loadClaims();
     } catch (err: any) {
       toast.error('Failed to save claim: ' + err.message);
     } finally {
@@ -225,7 +248,10 @@ export default function InsuranceTrackingView({ contactId, contactName }: Insura
 
   const handleDelete = async (id: string) => {
     try {
-      const { error } = await supabase.from('insurance_claims').delete().eq('id', id);
+      const { error } = await withTimeout(
+        supabase.from('insurance_claims').delete().eq('id', id),
+        'deleteInsuranceClaim'
+      );
       if (error) throw error;
       toast.success('Claim deleted');
       setClaims(prev => prev.filter(c => c.id !== id));

@@ -27,6 +27,7 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: Error | null }>;
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: Error | null }>;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -532,6 +533,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Force reload profile from database (useful after subscription updates)
+  const refreshProfile = async () => {
+    if (!user) return;
+    
+    try {
+      const freshProfile = await fetchProfile(user.id);
+      if (freshProfile) {
+        setProfile(freshProfile);
+      }
+    } catch (err) {
+      console.error('[Auth] Failed to refresh profile:', err);
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -545,6 +560,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signOut,
         resetPassword,
         updateProfile,
+        refreshProfile,
       }}
     >
       {children}

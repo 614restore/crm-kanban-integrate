@@ -43,6 +43,7 @@ interface CrewMemberRow {
   full_name: string;
   avatar_url?: string | null;
   role?: string | null;
+  phone?: string | null;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -333,6 +334,14 @@ export default function CrewScheduleView({ contactFilterId }: { contactFilterId?
   const [crewMembers, setCrewMembers] = useState<CrewMemberRow[]>([]);
   const [schedules, setSchedules] = useState<CrewSchedule[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [usesCrewMembersTable, setUsesCrewMembersTable] = useState(true);
+
+  // Add crew modal state
+  const [showAddCrewModal, setShowAddCrewModal] = useState(false);
+  const [newCrewName, setNewCrewName] = useState('');
+  const [newCrewRole, setNewCrewRole] = useState('Crew');
+  const [newCrewPhone, setNewCrewPhone] = useState('');
+  const [isAddingCrew, setIsAddingCrew] = useState(false);
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
@@ -348,18 +357,104 @@ export default function CrewScheduleView({ contactFilterId }: { contactFilterId?
 
   const loadCrewMembers = useCallback(async () => {
     if (!profile?.company_id) return;
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, full_name, avatar_url, role')
+    const crewResult = await supabase
+      .from('crew_members')
+      .select('id, name, role, phone, is_active')
       .eq('company_id', profile.company_id)
-      .order('full_name');
-    if (error) {
-      console.error('Error loading crew members:', error);
+      .eq('is_active', true)
+      .order('name', { ascending: true });
+
+    if (!crewResult.error) {
+      const mapped = (crewResult.data ?? []).map((row: any) => ({
+        id: row.id,
+        full_name: row.name,
+        role: row.role,
+        phone: row.phone,
+      })) as CrewMemberRow[];
+      setUsesCrewMembersTable(true);
+      setCrewMembers(mapped);
+      return;
+    }
+
+    // Legacy fallback for older databases without crew_members table.
+    const relationMissing = (crewResult.error as any)?.code === '42P01';
+    if (!relationMissing) {
+      console.error('Error loading crew members:', crewResult.error);
       toast.error('Failed to load crew members');
       return;
     }
-    setCrewMembers((data ?? []) as CrewMemberRow[]);
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('company_id', profile.company_id);
+
+    if (error) {
+      console.error('Error loading crew members (legacy):', error);
+      toast.error('Failed to load crew members');
+      return;
+    }
+
+    const mapped = (data ?? []).map((row: any) => {
+      const fullName = [row.first_name, row.last_name].filter(Boolean).join(' ').trim();
+      return {
+        id: row.id,
+        full_name: fullName || row.full_name || row.email || 'Crew Member',
+        avatar_url: row.avatar_url ?? null,
+        role: row.role ?? null,
+        phone: row.phone ?? null,
+      } as CrewMemberRow;
+    }).sort((a, b) => a.full_name.localeCompare(b.full_name));
+
+    setUsesCrewMembersTable(false);
+    setCrewMembers(mapped);
   }, [profile?.company_id]);
+
+  const handleAddCrewMember = async () => {
+    if (!profile?.company_id) {
+      toast.error('No company context available. Please refresh and try again.');
+      return;
+    }
+
+    if (!usesCrewMembersTable) {
+      toast.error('Please run the latest crew_members migration before adding non-app crews.');
+      return;
+    }
+
+    const name = newCrewName.trim();
+    if (!name) {
+      toast.error('Crew name is required');
+      return;
+    }
+
+    setIsAddingCrew(true);
+    try {
+      const { error } = await supabase
+        .from('crew_members')
+        .insert({
+          company_id: profile.company_id,
+          name,
+          role: newCrewRole.trim() || 'Crew',
+          phone: newCrewPhone.trim() || null,
+          is_active: true,
+          created_by: profile.id || null,
+        });
+
+      if (error) throw error;
+
+      toast.success('Crew member added');
+      setShowAddCrewModal(false);
+      setNewCrewName('');
+      setNewCrewRole('Crew');
+      setNewCrewPhone('');
+      await loadCrewMembers();
+    } catch (err) {
+      console.error('Error adding crew member:', err);
+      toast.error('Failed to add crew member');
+    } finally {
+      setIsAddingCrew(false);
+    }
+  };
 
   const loadSchedules = useCallback(async () => {
     if (!profile?.company_id) return;
@@ -441,6 +536,13 @@ export default function CrewScheduleView({ contactFilterId }: { contactFilterId?
           {/* Week navigation */}
           <div className="flex items-center gap-2">
             <button
+              onClick={() => setShowAddCrewModal(true)}
+              className="px-3 py-1.5 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
+            >
+              <Plus size={14} />
+              Add Crew
+            </button>
+            <button
               onClick={prevWeek}
               className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors text-gray-600"
             >
@@ -502,6 +604,12 @@ export default function CrewScheduleView({ contactFilterId }: { contactFilterId?
           <div className="flex flex-col items-center justify-center h-64 text-gray-400 gap-3">
             <Users size={40} className="opacity-40" />
             <p className="text-sm">No crew members found for your company.</p>
+            <button
+              onClick={() => setShowAddCrewModal(true)}
+              className="px-3 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Add Crew Member
+            </button>
           </div>
         ) : (
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
@@ -612,6 +720,82 @@ export default function CrewScheduleView({ contactFilterId }: { contactFilterId?
           userId={profile?.id ?? ''}
           hasConflict={getSchedulesFor(modalCrewMember.id, modalDate).length > 0}
         />
+      )}
+
+      {/* Add crew modal */}
+      {showAddCrewModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">Add Crew Member</h2>
+              <button
+                onClick={() => setShowAddCrewModal(false)}
+                className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="px-6 py-4 space-y-4">
+              {!usesCrewMembersTable && (
+                <div className="text-sm bg-amber-50 text-amber-800 border border-amber-200 rounded-lg px-3 py-2">
+                  Database upgrade required: run the latest `crew_members` migration to add non-app crews.
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Crew Name</label>
+                <input
+                  type="text"
+                  value={newCrewName}
+                  onChange={e => setNewCrewName(e.target.value)}
+                  placeholder="e.g., Luis Roofing Crew"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                  <input
+                    type="text"
+                    value={newCrewRole}
+                    onChange={e => setNewCrewRole(e.target.value)}
+                    placeholder="Crew"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                  <input
+                    type="tel"
+                    value={newCrewPhone}
+                    onChange={e => setNewCrewPhone(e.target.value)}
+                    placeholder="(555) 123-4567"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-gray-200">
+              <button
+                onClick={() => setShowAddCrewModal(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddCrewMember}
+                disabled={isAddingCrew || !usesCrewMembersTable}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {isAddingCrew && <Loader2 size={14} className="animate-spin" />}
+                Save Crew
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

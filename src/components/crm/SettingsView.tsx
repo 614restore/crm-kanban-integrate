@@ -90,7 +90,18 @@ function normalizeCompanyName(rawName?: string | null, email?: string | null): s
 export default function SettingsView() {
   const { state, dispatch } = useCRM();
   const { profile, user, updateProfile, signOut } = useAuth();
-  const [activeTab, setActiveTab] = useState<SettingsTab>('company');
+  const [activeTab, setActiveTab] = useState<SettingsTab>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const queryTab = params.get('tab');
+      const storedTab = sessionStorage.getItem('crm_settings_tab');
+      const candidate = (queryTab || storedTab || 'company') as SettingsTab;
+      const validTabs: SettingsTab[] = ['company', 'profile', 'integrations', 'ai-assistant', 'notifications', 'security', 'billing', 'api'];
+      return validTabs.includes(candidate) ? candidate : 'company';
+    } catch (_) {
+      return 'company';
+    }
+  });
   const [newLeadSource, setNewLeadSource] = useState('');
   const [showAddLeadSource, setShowAddLeadSource] = useState(false);
   const [isSavingLeadSource, setIsSavingLeadSource] = useState(false);
@@ -171,6 +182,10 @@ export default function SettingsView() {
   const userRole = (state.currentUser?.role || profile?.role || 'owner') as any;
   const canManageSources = canManageLeadSources(userRole);
   const effectiveCompanyId = profile?.company_id || state.companyId || null;
+
+  useEffect(() => {
+    try { sessionStorage.setItem('crm_settings_tab', activeTab); } catch (_) { /* ignore */ }
+  }, [activeTab]);
 
   const resolveCompanyId = useCallback(async (): Promise<string | null> => {
     const currentCompanyId = profile?.company_id || state.companyId || null;

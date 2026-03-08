@@ -455,6 +455,13 @@ class DatabaseService {
     } catch { /* quota exceeded — ignore */ }
   }
 
+  /** Clear company cache — useful when subscription or important company data changes. */
+  clearCompanyCache(companyId: string): void {
+    try {
+      localStorage.removeItem(`company_cache_${companyId}`);
+    } catch { /* ignore */ }
+  }
+
   /** Race a promise against a timeout (ms). Rejects with a clear message. */
   private raceTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
     return new Promise<T>((resolve, reject) => {
@@ -1361,15 +1368,19 @@ class DatabaseService {
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
-      .eq('company_id', companyId)
-      .order('first_name', { ascending: true });
+      .eq('company_id', companyId);
     
     if (error) {
       console.error('[Database] Error fetching team members:', error);
       console.error('[Database] Error details:', JSON.stringify(error, null, 2));
       return [];
     }
-    return data || [];
+    const sorted = (data || []).sort((a: any, b: any) => {
+      const aName = [a?.first_name, a?.last_name].filter(Boolean).join(' ').trim() || a?.email || '';
+      const bName = [b?.first_name, b?.last_name].filter(Boolean).join(' ').trim() || b?.email || '';
+      return aName.localeCompare(bName);
+    });
+    return sorted;
   }
 
   async updateProfile(profileId: string, updates: Partial<DbProfile>): Promise<DbProfile | null> {
@@ -1829,14 +1840,26 @@ class DatabaseService {
   }
 
   async createProject(project: Partial<DbProject>): Promise<DbProject | null> {
-    const { data, error } = await supabase
-      .from('projects')
-      .insert([project])
-      .select()
-      .single();
-    
-    if (error) { console.error('Error creating project:', error); throw new Error(error.message); }
-    return data;
+    try {
+      const { data, error } = await this.raceTimeout(
+        supabase
+          .from('projects')
+          .insert([project])
+          .select()
+          .single(),
+        10000,
+        'createProject'
+      );
+
+      if (error) {
+        console.error('Error creating project:', error);
+        throw new Error(error.message);
+      }
+      return data;
+    } catch (err) {
+      console.error('createProject timed out or failed:', err);
+      throw err;
+    }
   }
 
   async createProjectFromEstimate(estimate: DbEstimate, userId: string): Promise<DbProject | null> {
@@ -1857,18 +1880,27 @@ class DatabaseService {
   }
 
   async updateProject(projectId: string, updates: Partial<DbProject>): Promise<DbProject | null> {
-    const { data, error } = await supabase
-      .from('projects')
-      .update({ ...updates, updated_at: new Date().toISOString() })
-      .eq('id', projectId)
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error updating project:', error);
+    try {
+      const { data, error } = await this.raceTimeout(
+        supabase
+          .from('projects')
+          .update({ ...updates, updated_at: new Date().toISOString() })
+          .eq('id', projectId)
+          .select()
+          .single(),
+        10000,
+        'updateProject'
+      );
+
+      if (error) {
+        console.error('Error updating project:', error);
+        return null;
+      }
+      return data;
+    } catch (err) {
+      console.error('updateProject timed out or failed:', err);
       return null;
     }
-    return data;
   }
 
   async deleteProject(projectId: string): Promise<boolean> {
@@ -1928,32 +1960,50 @@ class DatabaseService {
   }
 
   async createWorkOrder(workOrder: Partial<DbWorkOrder>): Promise<DbWorkOrder | null> {
-    const { data, error } = await supabase
-      .from('work_orders')
-      .insert([workOrder])
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error creating work order:', error);
-      throw new Error(error.message);
+    try {
+      const { data, error } = await this.raceTimeout(
+        supabase
+          .from('work_orders')
+          .insert([workOrder])
+          .select()
+          .single(),
+        10000,
+        'createWorkOrder'
+      );
+
+      if (error) {
+        console.error('Error creating work order:', error);
+        throw new Error(error.message);
+      }
+      return data;
+    } catch (err) {
+      console.error('createWorkOrder timed out or failed:', err);
+      throw err;
     }
-    return data;
   }
 
   async updateWorkOrder(workOrderId: string, updates: Partial<DbWorkOrder>): Promise<DbWorkOrder | null> {
-    const { data, error } = await supabase
-      .from('work_orders')
-      .update({ ...updates, updated_at: new Date().toISOString() })
-      .eq('id', workOrderId)
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error updating work order:', error);
+    try {
+      const { data, error } = await this.raceTimeout(
+        supabase
+          .from('work_orders')
+          .update({ ...updates, updated_at: new Date().toISOString() })
+          .eq('id', workOrderId)
+          .select()
+          .single(),
+        10000,
+        'updateWorkOrder'
+      );
+
+      if (error) {
+        console.error('Error updating work order:', error);
+        return null;
+      }
+      return data;
+    } catch (err) {
+      console.error('updateWorkOrder timed out or failed:', err);
       return null;
     }
-    return data;
   }
 
   async deleteWorkOrder(workOrderId: string): Promise<boolean> {

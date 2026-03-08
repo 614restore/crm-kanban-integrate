@@ -236,7 +236,10 @@ export default function ProjectsView() {
   };
 
   const handleSave = async () => {
-    if (!profile?.company_id || !profile?.id) return;
+    if (!profile?.company_id || !profile?.id) {
+      toast.error('No company/user context available. Please refresh and sign in again.');
+      return;
+    }
     
     if (!selectedContactId) {
       toast.error('Please select a customer');
@@ -281,6 +284,8 @@ export default function ProjectsView() {
         created_by: profile.id,
       };
 
+      let saveSucceeded = false;
+
       if (editingProject) {
         const updated = await db.updateProject(editingProject.id, projectData);
         if (updated) {
@@ -321,6 +326,9 @@ export default function ProjectsView() {
           };
           dispatch({ type: 'UPDATE_PROJECT', payload: appProject });
           toast.success('Project updated');
+          saveSucceeded = true;
+        } else {
+          toast.error('Failed to save project changes');
         }
       } else {
         const created = await db.createProject(projectData);
@@ -362,10 +370,15 @@ export default function ProjectsView() {
           };
           dispatch({ type: 'ADD_PROJECT', payload: appProject });
           toast.success('Project created');
+          saveSucceeded = true;
+        } else {
+          toast.error('Failed to create project');
         }
       }
 
-      handleCloseModal();
+      if (saveSucceeded) {
+        handleCloseModal();
+      }
     } catch (error) {
       console.error('Error saving project:', error);
       toast.error('Failed to save project');

@@ -23,7 +23,15 @@ const hasMissingConfig = !supabaseUrl || !supabaseKey;
 const hasPlaceholderConfig =
   supabaseUrl?.includes('your-project') || supabaseKey?.includes('your-anon-key');
 
-const demoMode = configuredDemoMode || hasMissingConfig || hasPlaceholderConfig;
+const isLocalHost =
+  typeof window !== 'undefined'
+    ? ['localhost', '127.0.0.1'].includes(window.location.hostname)
+    : true;
+
+// Only auto-fallback to demo mode in local development.
+// In production, require explicit VITE_DEMO_MODE=true to prevent silent fake-data sessions.
+const shouldAutoFallbackToDemo = isLocalHost && (hasMissingConfig || hasPlaceholderConfig);
+const demoMode = configuredDemoMode || shouldAutoFallbackToDemo;
 
 // Demo mode check - allows offline development
 if (demoMode) {
@@ -36,6 +44,10 @@ if (demoMode) {
       '🚧 Running in DEMO MODE: placeholder Supabase config detected. Configure real credentials to enable live backend.'
     );
   }
+} else if (hasMissingConfig || hasPlaceholderConfig) {
+  console.error(
+    '❌ Supabase config is missing/placeholder in a non-local environment. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY for production builds.'
+  );
 }
 
 const supabase = createClient(
@@ -51,6 +63,39 @@ const supabase = createClient(
       flowType: 'pkce',
     },
     global: {
+      fetch: async (input, init) => {
+        const timeoutMs = 15000;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+        const externalSignal = init?.signal;
+        const onAbort = () => controller.abort();
+
+        if (externalSignal) {
+          if (externalSignal.aborted) {
+            clearTimeout(timeoutId);
+            throw new Error(`Supabase request aborted before start`);
+          }
+          externalSignal.addEventListener('abort', onAbort, { once: true });
+        }
+
+        try {
+          return await fetch(input, {
+            ...init,
+            signal: controller.signal,
+          });
+        } catch (error) {
+          if (controller.signal.aborted) {
+            throw new Error(`Supabase request timed out after ${Math.round(timeoutMs / 1000)}s`);
+          }
+          throw error;
+        } finally {
+          clearTimeout(timeoutId);
+          if (externalSignal) {
+            externalSignal.removeEventListener('abort', onAbort);
+          }
+        }
+      },
       headers: {
         'x-client-info': 'crm-kanban-app',
       },

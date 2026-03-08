@@ -31,7 +31,8 @@ export default async function handler(req, res) {
   try {
     const session = await stripe.billingPortal.sessions.create({
       customer: customerId,
-      return_url: `${appUrl}/settings?tab=billing`,
+      // Return to app root with internal view hints so refresh always lands on a valid route.
+      return_url: `${appUrl}/?view=settings&tab=billing`,
     });
 
     return res.status(200).json({ url: session.url });

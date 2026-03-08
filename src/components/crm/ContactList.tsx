@@ -235,25 +235,39 @@ export default function ContactList() {
         break;
       }
 
-      const created = await db.createContact({
-        company_id: state.companyId,
-        first_name: newContact.firstName,
-        last_name: newContact.lastName,
-        email: newContact.email || undefined,
-        phone1: newContact.phone1 || undefined,
-        city: newContact.city || undefined,
-        state: newContact.state || undefined,
-        status: newContact.status,
-        lead_source: newContact.leadSource,
-        assigned_to: newContact.assignedTo || undefined,
-        tags: [],
-      });
-
+      // Validate required fields
+      if (!newContact.firstName || !newContact.lastName || !newContact.phone1) {
+        toast.error(`Missing required fields for contact: ${newContact.firstName} ${newContact.lastName}`);
+        continue;
+      }
+      // Save with timeout
+      let created = null;
+      try {
+        created = await withTimeout(
+          db.createContact({
+            company_id: state.companyId,
+            first_name: newContact.firstName,
+            last_name: newContact.lastName,
+            email: newContact.email || undefined,
+            phone1: newContact.phone1 || undefined,
+            city: newContact.city || undefined,
+            state: newContact.state || undefined,
+            status: newContact.status,
+            lead_source: newContact.leadSource,
+            assigned_to: newContact.assignedTo || undefined,
+            tags: [],
+          }),
+          15000,
+          'Import contact'
+        );
+      } catch (error) {
+        toast.error(`Failed to import contact: ${newContact.firstName} ${newContact.lastName}. ${error?.message || error}`);
+        continue;
+      }
       if (!created) {
         toast.error(`Failed to import contact: ${newContact.firstName} ${newContact.lastName}`);
         continue;
       }
-
       imported += 1;
     }
 

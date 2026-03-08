@@ -58,6 +58,29 @@ const EquipmentView = lazy(() => import('./crm/EquipmentView'));
 // Initial CRM state (completely empty)
 const getInitialView = (): ViewType => {
   try {
+    const params = new URLSearchParams(window.location.search);
+    const queryView = params.get('view');
+    const normalizedPath = window.location.pathname.toLowerCase();
+
+    // URL hints take precedence so external returns (e.g., billing portal) restore correctly.
+    if (queryView === 'settings' || normalizedPath.endsWith('/settings') || normalizedPath.endsWith('/billing')) {
+      const tab = params.get('tab');
+      if (tab) {
+        try { sessionStorage.setItem('crm_settings_tab', tab); } catch (_) { /* ignore */ }
+      }
+
+      // Consume one-time routing hints so refresh/login doesn't keep forcing billing view.
+      params.delete('view');
+      params.delete('tab');
+      try {
+        const nextQuery = params.toString();
+        const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash || ''}`;
+        window.history.replaceState({}, '', nextUrl);
+      } catch (_) { /* ignore */ }
+
+      return 'settings';
+    }
+
     const saved = sessionStorage.getItem('crm_current_view');
     if (saved) return saved as ViewType;
   } catch (_) { /* ignore */ }
@@ -353,7 +376,7 @@ function TrialBanner({ companyId }: { companyId: string | null }) {
 
 // CRM App (authenticated view)
 function CRMApp() {
-  const { profile, user, loading: authLoading } = useAuth();
+  const { profile, user, loading: authLoading, refreshProfile } = useAuth();
   const [state, dispatch] = useReducer(crmReducer, initialState);
   useEffect(() => {
     try { sessionStorage.setItem('crm_current_view', state.currentView); } catch (_) { /* ignore */ }
@@ -361,6 +384,14 @@ function CRMApp() {
   const realtimeFailedRef = useRef(false);
   const isReloadingRef = useRef(false);
   const queuedReloadRef = useRef(false);
+
+  // Recover from transient auth/profile desync so user/company identity doesn't appear blank.
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user?.id) return;
+    if (profile?.id) return;
+    void refreshProfile();
+  }, [authLoading, user?.id, profile?.id, refreshProfile]);
 
   // Load data from database
   const loadData = useCallback(async (options?: { silent?: boolean }) => {
@@ -900,7 +931,77 @@ function AuthGate() {
     return <AuthPage />;
   }
 
-  return <CRMApp />;
+  return (
+    <>
+      <CheckoutHandler />
+      <CRMApp />
+    </>
+  );
+}
+
+// Checkout Handler - detects return from Stripe and refreshes user data
+function CheckoutHandler() {
+  const { profile, refreshProfile } = useAuth();
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get('checkout');
+    const plan = params.get('plan');
+
+    if (status === 'success') {
+      const planName = plan ? plan.charAt(0).toUpperCase() + plan.slice(1) : '';
+      // Show success banner
+      const banner = document.createElement('div');
+      banner.id = 'checkout-success-banner';
+      banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#16a34a;color:white;padding:14px 20px;z-index:9999;display:flex;align-items:center;justify-between;font-family:system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,0.2)';
+
+      const left = document.createElement('div');
+      left.style.cssText = 'display:flex;align-items:center;gap:10px';
+
+      const icon = document.createElement('span');
+      icon.style.cssText = 'font-size:20px';
+      icon.textContent = 'OK';
+
+      const textWrap = document.createElement('div');
+
+      const title = document.createElement('strong');
+      title.style.cssText = 'font-size:15px';
+      title.textContent = `Welcome to TrussCTR${planName ? ` ${planName}` : ''}!`;
+
+      const body = document.createElement('p');
+      body.style.cssText = 'font-size:12px;margin:2px 0 0;opacity:0.9';
+      body.textContent = 'Your subscription is active. You have a 14-day free trial. No charge until the trial ends.';
+
+      textWrap.appendChild(title);
+      textWrap.appendChild(body);
+      left.appendChild(icon);
+      left.appendChild(textWrap);
+
+      const dismiss = document.createElement('button');
+      dismiss.type = 'button';
+      dismiss.style.cssText = 'background:rgba(255,255,255,0.25);border:none;color:white;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:13px';
+      dismiss.textContent = 'Dismiss';
+      dismiss.addEventListener('click', () => banner.remove());
+
+      banner.appendChild(left);
+      banner.appendChild(dismiss);
+      document.body.prepend(banner);
+      setTimeout(() => banner?.remove(), 10000);
+
+      // Clear company cache and refresh profile to get updated subscription info
+      if (profile?.company_id) {
+        db.clearCompanyCache(profile.company_id);
+      }
+      refreshProfile();
+
+      // Clean URL
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (status === 'cancelled') {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [profile?.company_id, refreshProfile]);
+
+  return null;
 }
 
 // Main App Layout with Auth Provider

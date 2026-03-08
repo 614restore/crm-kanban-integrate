@@ -20,7 +20,8 @@ import {
   MapPin,
   FileText,
   AlertTriangle,
-  ChevronDown,
+  Plus,
+  Search,
 } from 'lucide-react';
 
 interface AppointmentModalProps {
@@ -98,6 +99,14 @@ export default function AppointmentModal({
   const [location, setLocation] = useState(editingAppointment?.location || '');
   const [notes, setNotes] = useState(editingAppointment?.notes || '');
   const [isSaving, setIsSaving] = useState(false);
+  const [contactSearch, setContactSearch] = useState('');
+  const [showAddCustomer, setShowAddCustomer] = useState(false);
+  const [newCustomerFirstName, setNewCustomerFirstName] = useState('');
+  const [newCustomerLastName, setNewCustomerLastName] = useState('');
+  const [newCustomerPhone, setNewCustomerPhone] = useState('');
+  const [newCustomerEmail, setNewCustomerEmail] = useState('');
+  const [newCustomerAddress, setNewCustomerAddress] = useState('');
+  const [isCreatingCustomer, setIsCreatingCustomer] = useState(false);
 
   // Mention state
   const notesRef = useRef<HTMLTextAreaElement>(null);
@@ -106,6 +115,20 @@ export default function AppointmentModal({
     ReturnType<typeof getMentionTargets>
   >([]);
   const [mentionIndex, setMentionIndex] = useState(0);
+
+  const filteredContacts = useMemo(() => {
+    const query = contactSearch.trim().toLowerCase();
+    if (!query) return state.contacts;
+
+    return state.contacts.filter((c) => {
+      const fullName = `${c.firstName} ${c.lastName}`.toLowerCase();
+      return (
+        fullName.includes(query) ||
+        c.phone1.toLowerCase().includes(query) ||
+        c.email.toLowerCase().includes(query)
+      );
+    });
+  }, [contactSearch, state.contacts]);
 
   // Prefill location from contact address
   useEffect(() => {
@@ -143,9 +166,124 @@ export default function AppointmentModal({
         setAssignedTo('');
         setLocation('');
         setNotes('');
+        setContactSearch('');
+        setShowAddCustomer(false);
+        setNewCustomerFirstName('');
+        setNewCustomerLastName('');
+        setNewCustomerPhone('');
+        setNewCustomerEmail('');
+        setNewCustomerAddress('');
       }
     }
   }, [isOpen, editingAppointment, selectedDate, preselectedContactId]);
+
+  const handleCreateCustomer = async () => {
+    if (!newCustomerFirstName.trim() || !newCustomerLastName.trim() || !newCustomerPhone.trim()) {
+      toast.error('First name, last name, and phone are required');
+      return;
+    }
+
+    if (!effectiveCompanyId) {
+      toast.error('No company selected. Please refresh and sign in again.');
+      return;
+    }
+
+    if (newCustomerEmail.trim()) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(newCustomerEmail.trim())) {
+        toast.error('Please enter a valid email address');
+        return;
+      }
+    }
+
+    setIsCreatingCustomer(true);
+    try {
+      // Validate required fields
+      if (!newCustomerFirstName.trim() || !newCustomerLastName.trim() || !newCustomerPhone.trim()) {
+        toast.error('First name, last name, and phone are required.');
+        return;
+      }
+      // Save with timeout
+      let created = null;
+      try {
+        created = await withTimeout(
+          db.createContact({
+            company_id: effectiveCompanyId,
+            first_name: newCustomerFirstName.trim(),
+            last_name: newCustomerLastName.trim(),
+            phone1: newCustomerPhone.trim(),
+            email: newCustomerEmail.trim() || undefined,
+            address: newCustomerAddress.trim() || undefined,
+            status: 'lead',
+            lead_source: 'Appointment',
+            assigned_to: assignedTo || undefined,
+            tags: [],
+          }),
+          15000,
+          'Create contact from appointment'
+        );
+      } catch (error) {
+        toast.error(`Failed to create customer: ${error?.message || error}`);
+        return;
+      }
+      if (!created) {
+        toast.error('Failed to create customer');
+        return;
+      }
+      const newContact: Contact = {
+        id: created.id,
+        firstName: created.first_name,
+        lastName: created.last_name,
+        email: created.email || '',
+        phone1: created.phone1 || '',
+        phone2: created.phone2 || undefined,
+        address: created.address || '',
+        city: created.city || '',
+        state: created.state || '',
+        zip: created.zip || '',
+        status: (created.status as Contact['status']) || 'lead',
+        leadSource: created.lead_source || 'Appointment',
+        assignedTo: created.assigned_to || '',
+        createdAt: created.created_at,
+        updatedAt: created.updated_at,
+        tags: created.tags || [],
+        insuranceCompany: created.insurance_company || undefined,
+        policyNumber: created.policy_number || undefined,
+        claimNumber: created.claim_number || undefined,
+        adjusterName: created.adjuster_name || undefined,
+        adjusterPhone: created.adjuster_phone || undefined,
+        adjusterEmail: created.adjuster_email || undefined,
+        deductible: created.deductible || undefined,
+        projectType: created.project_type || undefined,
+        projectValue: created.project_value || undefined,
+        isRetail: created.is_retail,
+        retailNotes: created.retail_notes || undefined,
+        notes: created.notes || undefined,
+      };
+      dispatch({ type: 'ADD_CONTACT', payload: newContact });
+      setContactId(created.id);
+      setContactSearch(`${created.first_name} ${created.last_name}`);
+      if (!location && created.address) {
+        const addr = [created.address, created.city, created.state, created.zip]
+          .filter(Boolean)
+          .join(', ');
+        setLocation(addr);
+      }
+
+      setShowAddCustomer(false);
+      setNewCustomerFirstName('');
+      setNewCustomerLastName('');
+      setNewCustomerPhone('');
+      setNewCustomerEmail('');
+      setNewCustomerAddress('');
+      toast.success('Customer added and selected');
+    } catch (err) {
+      console.error('Error creating customer from appointment modal:', err);
+      toast.error('Failed to create customer');
+    } finally {
+      setIsCreatingCustomer(false);
+    }
+  };
 
   const handleNotesChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
@@ -446,19 +584,99 @@ export default function AppointmentModal({
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Customer <span className="text-red-500">*</span>
             </label>
-            <select
-              value={contactId}
-              onChange={(e) => setContactId(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-            >
-              <option value="">Select a customer...</option>
-              {state.contacts.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.firstName} {c.lastName}
-                  {c.phone1 ? ` — ${c.phone1}` : ''}
-                </option>
-              ))}
-            </select>
+            <div className="space-y-2">
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  value={contactSearch}
+                  onChange={(e) => setContactSearch(e.target.value)}
+                  placeholder="Search customer by name, phone, or email"
+                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                />
+              </div>
+
+              <select
+                value={contactId}
+                onChange={(e) => setContactId(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+              >
+                <option value="">Select a customer...</option>
+                {filteredContacts.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.firstName} {c.lastName}
+                    {c.phone1 ? ` — ${c.phone1}` : ''}
+                  </option>
+                ))}
+              </select>
+
+              {filteredContacts.length === 0 && (
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-md px-2 py-1">
+                  No customers match your search.
+                </p>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setShowAddCustomer((prev) => !prev)}
+                className="inline-flex items-center gap-1 text-sm text-blue-700 hover:text-blue-800 font-medium"
+              >
+                <Plus size={14} />
+                {showAddCustomer ? 'Cancel new customer' : 'Add new customer'}
+              </button>
+
+              {showAddCustomer && (
+                <div className="border border-gray-200 rounded-lg p-3 space-y-2 bg-gray-50">
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      value={newCustomerFirstName}
+                      onChange={(e) => setNewCustomerFirstName(e.target.value)}
+                      placeholder="First name *"
+                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                    />
+                    <input
+                      type="text"
+                      value={newCustomerLastName}
+                      onChange={(e) => setNewCustomerLastName(e.target.value)}
+                      placeholder="Last name *"
+                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                    />
+                  </div>
+                  <input
+                    type="tel"
+                    value={newCustomerPhone}
+                    onChange={(e) => setNewCustomerPhone(e.target.value)}
+                    placeholder="Phone *"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                  />
+                  <input
+                    type="email"
+                    value={newCustomerEmail}
+                    onChange={(e) => setNewCustomerEmail(e.target.value)}
+                    placeholder="Email (optional)"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                  />
+                  <input
+                    type="text"
+                    value={newCustomerAddress}
+                    onChange={(e) => setNewCustomerAddress(e.target.value)}
+                    placeholder="Address (optional)"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                  />
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={handleCreateCustomer}
+                      disabled={isCreatingCustomer}
+                      className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                    >
+                      {isCreatingCustomer ? 'Adding...' : 'Add & Select Customer'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Date & Time row */}

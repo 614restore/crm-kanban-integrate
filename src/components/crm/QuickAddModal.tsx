@@ -5,141 +5,131 @@ import { supabase } from '@/lib/supabase';
 import { db } from '@/lib/database';
 import { ensureUserHasCompany } from '@/lib/setupCompany';
 import { Contact, defaultLeadSources, CustomerStatus } from '@/lib/crmData';
-import { formatPhoneNumber } from '@/lib/utils';
-import { X, User, Phone, Mail, MapPin, DollarSign, Tag, Shield, Building, Loader2 } from 'lucide-react';
-import { toast } from 'sonner';
-
-type FormStep = 'basic' | 'project' | 'insurance';
-
-export default function QuickAddModal() {
-  const { state, dispatch } = useCRM();
-  const { profile, user } = useAuth();
-  const [currentStep, setCurrentStep] = useState<FormStep>('basic');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    phone1: '',
-    phone2: '',
-    address: '',
-    city: '',
-    state: '',
-    zip: '',
-    leadSource: 'Door Knock',
-    assignedTo: state.currentUser?.id || state.teamMembers[0]?.id || '',
-    status: 'lead' as CustomerStatus,
-    projectType: '',
-    projectValue: '',
-    isRetail: false,
-    retailNotes: '',
-    insuranceCompany: '',
-    policyNumber: '',
-    claimNumber: '',
-    adjusterName: '',
-    adjusterPhone: '',
-    deductible: '',
-    notes: '',
-  });
-
-  // Timeout helper for database operations
-  const withTimeout = async <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-
-    const timeoutPromise = new Promise<T>((_, reject) => {
-      timeoutId = setTimeout(() => {
-        reject(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`));
-      }, ms);
-    });
-
     try {
-      return await Promise.race([promise, timeoutPromise]);
-    } finally {
-      if (timeoutId) clearTimeout(timeoutId);
-    }
-  };
-
-  const resolveCompanyId = async (): Promise<string | null> => {
-    // Timeout wrapper to prevent indefinite hanging
-    const timeout = new Promise<string | null>((_, reject) =>
-      setTimeout(() => reject(new Error('Company resolution timed out after 10 seconds')), 10000)
-    );
-
-    const resolveLogic = async (): Promise<string | null> => {
-      const currentCompanyId = profile?.company_id || state.companyId || null;
-      if (currentCompanyId) return currentCompanyId;
-
-      const userId = profile?.id || user?.id;
-      const userEmail = profile?.email || user?.email || '';
-      if (!userId || !userEmail) return null;
-
-      const profileResult = await supabase
-        .from('profiles')
-        .select('company_id')
-        .eq('id', userId)
-        .single();
-
-      if (!profileResult.error && profileResult.data?.company_id) {
-        dispatch({ type: 'SET_COMPANY_ID', payload: profileResult.data.company_id });
-        return profileResult.data.company_id;
+      // Validate required fields
+      if (!formData.firstName || !formData.lastName || !formData.phone1) {
+        throw new Error('First name, last name, and phone are required.');
+      }
+      // Validate email if provided
+      if (formData.email && !emailRegex.test(formData.email)) {
+        throw new Error('Please enter a valid email address');
       }
 
-      const ensured = await ensureUserHasCompany(userId, userEmail);
-      if (ensured) {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('company_id')
-          .eq('id', userId)
-          .single();
-
-        if (!error && data?.company_id) {
-          dispatch({ type: 'SET_COMPANY_ID', payload: data.company_id });
-          return data.company_id;
-        }
+      // Resolve company context
+      const effectiveCompanyId = profile?.company_id || state.companyId;
+      const finalCompanyId = effectiveCompanyId || await resolveCompanyId();
+      if (!finalCompanyId) {
+        throw new Error('Unable to determine company context. Please ensure you are properly logged in and try again.');
       }
 
-      // Final fallback: create and link a company in case previous steps could not repair context.
-      const companyName = userEmail.split('@')[0] || 'My Company';
-      const createdCompany = await db.createCompany({
-        name: companyName + "'s Company",
-        email: userEmail,
-        phone: '',
-        address: '',
-        city: '',
-        state: '',
-        zip: '',
-        website: '',
+      // Save to database with timeout
+      const dbContact = await withTimeout(
+        db.createContact({
+          company_id: finalCompanyId,
+          first_name: formData.firstName,
+          last_name: formData.lastName,
+          email: formData.email || undefined,
+          phone1: formData.phone1 || undefined,
+          phone2: formData.phone2 || undefined,
+          address: formData.address || undefined,
+          city: formData.city || undefined,
+          state: formData.state || undefined,
+          zip: formData.zip || undefined,
+          status: formData.status,
+          lead_source: formData.leadSource,
+          assigned_to: formData.assignedTo || undefined,
+          tags: [],
+          project_type: formData.projectType || undefined,
+          project_value: formData.projectValue ? parseFloat(formData.projectValue) : undefined,
+          is_retail: formData.isRetail,
+          retail_notes: formData.retailNotes || undefined,
+          insurance_company: formData.insuranceCompany || undefined,
+          policy_number: formData.policyNumber || undefined,
+          claim_number: formData.claimNumber || undefined,
+          adjuster_name: formData.adjusterName || undefined,
+          adjuster_phone: formData.adjusterPhone || undefined,
+          deductible: formData.deductible ? parseFloat(formData.deductible) : undefined,
+          notes: formData.notes || undefined,
+        }),
+        15000,
+        'Create contact'
+      );
+      if (!dbContact) {
+        throw new Error('Database operation failed. Please check your connection and try again.');
+      }
+
+      const createdContact: Contact = {
+        id: dbContact.id,
+        firstName: dbContact.first_name,
+        lastName: dbContact.last_name,
+        email: dbContact.email || '',
+        phone1: dbContact.phone1 || '',
+        phone2: dbContact.phone2 || undefined,
+        address: dbContact.address || '',
+        city: dbContact.city || '',
+        state: dbContact.state || '',
+        zip: dbContact.zip || '',
+        status: dbContact.status as CustomerStatus,
+        leadSource: dbContact.lead_source || formData.leadSource,
+        assignedTo: dbContact.assigned_to || formData.assignedTo,
+        createdAt: dbContact.created_at,
+        updatedAt: dbContact.updated_at,
+        tags: dbContact.tags || [],
+        projectType: dbContact.project_type || undefined,
+        projectValue: dbContact.project_value || undefined,
+        isRetail: dbContact.is_retail,
+        retailNotes: dbContact.retail_notes || undefined,
+        insuranceCompany: dbContact.insurance_company || undefined,
+        policyNumber: dbContact.policy_number || undefined,
+        claimNumber: dbContact.claim_number || undefined,
+        adjusterName: dbContact.adjuster_name || undefined,
+        adjusterPhone: dbContact.adjuster_phone || undefined,
+        deductible: dbContact.deductible || undefined,
+        notes: dbContact.notes || undefined,
+      };
+      dispatch({ type: 'ADD_CONTACT', payload: createdContact });
+      toast.success(`${formData.firstName} ${formData.lastName} has been added to the CRM.`);
+      dispatch({
+        type: 'ADD_NOTIFICATION',
+        payload: {
+          id: `notif-${Date.now()}`,
+          type: 'success',
+          title: 'Contact Created',
+          message: `${formData.firstName} ${formData.lastName} has been added to the CRM.`,
+          timestamp: new Date().toISOString(),
+          read: false,
+        },
       });
-
-      if (!createdCompany?.id) return null;
-
-      const { error: linkError } = await supabase
-        .from('profiles')
-        .update({ company_id: createdCompany.id })
-        .eq('id', userId);
-
-      if (linkError) {
-        console.error('Failed to link fallback company for Quick Add:', linkError);
-        return null;
-      }
-
-      dispatch({ type: 'SET_COMPANY_ID', payload: createdCompany.id });
-      return createdCompany.id;
-    };
-
-    try {
-      return await Promise.race([resolveLogic(), timeout]);
+      handleClose();
     } catch (error) {
-      console.error('Error resolving company ID:', error);
-      throw error;
+      let message = 'Failed to create contact. Please try again.';
+      if (error instanceof Error) {
+        message = error.message;
+      } else if (typeof error === 'string') {
+        message = error;
+      }
+      if (message.includes('company')) {
+        message += ' Please ensure you are properly logged in and have a valid company account.';
+      } else if (message.includes('database') || message.includes('connection')) {
+        message += ' Please check your internet connection and try again.';
+      }
+      toast.error(message);
+      dispatch({
+        type: 'ADD_NOTIFICATION',
+        payload: {
+          id: `notif-${Date.now()}`,
+          type: 'error',
+          title: 'Contact Creation Error',
+          message,
+          timestamp: new Date().toISOString(),
+          read: false,
+        },
+      });
+      // Prevent modal close on failure
+      return;
+    } finally {
+      setIsSubmitting(false);
     }
-  };
-
-  const handleClose = () => {
-    dispatch({ type: 'TOGGLE_QUICK_ADD' });
-    setFormData({
-      firstName: '',
-      lastName: '',
       email: '',
       phone1: '',
       phone2: '',

@@ -52,7 +52,9 @@ interface Equipment {
 
 interface TeamProfile {
   id: string;
-  full_name: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  full_name?: string | null;
   email: string | null;
 }
 
@@ -140,20 +142,32 @@ export default function EquipmentView() {
 
   const effectiveCompanyId = profile?.company_id || state.companyId || null;
 
+  const withTimeout = async <T,>(promise: Promise<T>, label: string, timeoutMs = 10000): Promise<T> => {
+    return Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
+      }),
+    ]) as Promise<T>;
+  };
+
   // ── Load data ──────────────────────────────────────────────────────────────
 
   const loadEquipment = useCallback(async () => {
     if (!effectiveCompanyId) return;
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('equipment')
-        .select('*')
-        .eq('company_id', effectiveCompanyId)
-        .order('created_at', { ascending: false });
+      const timedResult = await withTimeout(
+        supabase
+          .from('equipment')
+          .select('*')
+          .eq('company_id', effectiveCompanyId)
+          .order('created_at', { ascending: false }),
+        'loadEquipment'
+      );
 
-      if (error) throw error;
-      setEquipment((data as Equipment[]) || []);
+      if (timedResult.error) throw timedResult.error;
+      setEquipment((timedResult.data as Equipment[]) || []);
     } catch (err) {
       console.error('Error loading equipment:', err);
       toast.error('Failed to load equipment');
@@ -165,13 +179,16 @@ export default function EquipmentView() {
   const loadTeamMembers = useCallback(async () => {
     if (!effectiveCompanyId) return;
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, full_name, email')
-        .eq('company_id', effectiveCompanyId);
+      const timedResult = await withTimeout(
+        supabase
+          .from('profiles')
+          .select('id, first_name, last_name, email')
+          .eq('company_id', effectiveCompanyId),
+        'loadEquipmentTeamMembers'
+      );
 
-      if (error) throw error;
-      setTeamMembers((data as TeamProfile[]) || []);
+      if (timedResult.error) throw timedResult.error;
+      setTeamMembers((timedResult.data as TeamProfile[]) || []);
     } catch (err) {
       console.error('Error loading team members:', err);
     }
@@ -274,22 +291,28 @@ export default function EquipmentView() {
       };
 
       if (editingEquipment) {
-        const { data, error } = await supabase
-          .from('equipment')
-          .update({ ...payload, updated_at: new Date().toISOString() })
-          .eq('id', editingEquipment.id)
-          .select()
-          .single();
+        const { data, error } = await withTimeout(
+          supabase
+            .from('equipment')
+            .update({ ...payload, updated_at: new Date().toISOString() })
+            .eq('id', editingEquipment.id)
+            .select()
+            .single(),
+          'updateEquipment'
+        );
 
         if (error) throw error;
         setEquipment((prev) => prev.map((e) => (e.id === editingEquipment.id ? (data as Equipment) : e)));
         toast.success('Equipment updated');
       } else {
-        const { data, error } = await supabase
-          .from('equipment')
-          .insert(payload)
-          .select()
-          .single();
+        const { data, error } = await withTimeout(
+          supabase
+            .from('equipment')
+            .insert(payload)
+            .select()
+            .single(),
+          'createEquipment'
+        );
 
         if (error) throw error;
         setEquipment((prev) => [data as Equipment, ...prev]);
@@ -308,7 +331,10 @@ export default function EquipmentView() {
   const handleDelete = async (item: Equipment) => {
     if (!confirm(`Delete "${item.name}"? This cannot be undone.`)) return;
     try {
-      const { error } = await supabase.from('equipment').delete().eq('id', item.id);
+      const { error } = await withTimeout(
+        supabase.from('equipment').delete().eq('id', item.id),
+        'deleteEquipment'
+      );
       if (error) throw error;
       setEquipment((prev) => prev.filter((e) => e.id !== item.id));
       toast.success('Equipment deleted');
@@ -324,12 +350,15 @@ export default function EquipmentView() {
       return;
     }
     try {
-      const { data, error } = await supabase
-        .from('equipment')
-        .update({ status: 'in-use', assigned_to: assignContactId, updated_at: new Date().toISOString() })
-        .eq('id', assigningEquipment.id)
-        .select()
-        .single();
+      const { data, error } = await withTimeout(
+        supabase
+          .from('equipment')
+          .update({ status: 'in-use', assigned_to: assignContactId, updated_at: new Date().toISOString() })
+          .eq('id', assigningEquipment.id)
+          .select()
+          .single(),
+        'assignEquipment'
+      );
 
       if (error) throw error;
       setEquipment((prev) => prev.map((e) => (e.id === assigningEquipment.id ? (data as Equipment) : e)));
@@ -346,7 +375,9 @@ export default function EquipmentView() {
   const memberName = (id: string | null) => {
     if (!id) return null;
     const m = teamMembers.find((t) => t.id === id);
-    return m ? (m.full_name || m.email || id) : id;
+    if (!m) return id;
+    const displayName = [m.first_name, m.last_name].filter(Boolean).join(' ').trim();
+    return displayName || m.full_name || m.email || id;
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -755,7 +786,7 @@ export default function EquipmentView() {
                   <option value="">— Unassigned —</option>
                   {teamMembers.map((m) => (
                     <option key={m.id} value={m.id}>
-                      {m.full_name || m.email || m.id}
+                      {[m.first_name, m.last_name].filter(Boolean).join(' ').trim() || m.full_name || m.email || m.id}
                     </option>
                   ))}
                 </select>
