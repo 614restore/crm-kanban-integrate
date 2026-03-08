@@ -93,6 +93,7 @@ export default function Sidebar() {
   const { currentView, sidebarCollapsed, currentUser } = state;
   const [companyName, setCompanyName] = useState('TrussCTR');
   const [companyLogoUrl, setCompanyLogoUrl] = useState<string | null>(null);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   const userRole = (currentUser?.role || profile?.role || 'owner') as any;
 
@@ -201,9 +202,9 @@ export default function Sidebar() {
       </nav>
 
       {/* Notifications */}
-      <div className="px-3 mb-2">
+      <div className="px-3 mb-2 relative">
         <button
-          onClick={() => handleNavClick('calendar')}
+          onClick={() => setShowNotifications(!showNotifications)}
           className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 text-slate-300 hover:bg-slate-800 hover:text-white relative`}
           title={sidebarCollapsed ? 'Notifications' : undefined}
         >
@@ -224,6 +225,57 @@ export default function Sidebar() {
             </span>
           )}
         </button>
+
+        {showNotifications && (
+          <>
+            <div
+              className="fixed inset-0 z-40"
+              onClick={() => setShowNotifications(false)}
+            />
+            <div className={`absolute bottom-full mb-2 ${sidebarCollapsed ? 'left-full ml-2' : 'left-0'} w-80 bg-white rounded-xl shadow-xl border border-gray-200 z-50`}>
+              <div className="flex items-center justify-between p-4 border-b border-gray-100">
+                <h3 className="font-semibold text-gray-900">Notifications</h3>
+                {state.notifications.length > 0 && (
+                  <button
+                    onClick={() => { dispatch({ type: 'CLEAR_NOTIFICATIONS' }); setShowNotifications(false); }}
+                    className="text-sm text-blue-600 hover:text-blue-700"
+                  >
+                    Clear all
+                  </button>
+                )}
+              </div>
+              <div className="max-h-80 overflow-y-auto">
+                {state.notifications.length === 0 ? (
+                  <div className="p-8 text-center text-gray-500">
+                    <Bell size={32} className="mx-auto mb-2 opacity-50" />
+                    <p>No notifications</p>
+                  </div>
+                ) : (
+                  state.notifications.map((notification) => (
+                    <div
+                      key={notification.id}
+                      onClick={() => dispatch({ type: 'MARK_NOTIFICATION_READ', payload: notification.id })}
+                      className={`p-4 border-b border-gray-50 hover:bg-gray-50 cursor-pointer transition-colors ${!notification.read ? 'bg-blue-50/50' : ''}`}
+                    >
+                      <div className="flex gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900">{notification.title}</p>
+                          <p className="text-sm text-gray-500 truncate">{notification.message}</p>
+                          <p className="text-xs text-gray-400 mt-1">
+                            {new Date(notification.timestamp).toLocaleTimeString()}
+                          </p>
+                        </div>
+                        {!notification.read && (
+                          <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-2" />
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Legal Links */}

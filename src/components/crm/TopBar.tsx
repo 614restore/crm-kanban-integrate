@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useCRM } from '@/lib/crmStore';
+import { db, DbNotification } from '@/lib/database';
+import { useAuth } from '@/lib/authContext';
 import {
   Search,
   Bell,
@@ -16,10 +18,52 @@ import { statusLabels, CustomerStatus } from '@/lib/crmData';
 
 export default function TopBar() {
   const { state, dispatch } = useCRM();
+  const { profile } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [dbNotifications, setDbNotifications] = useState<DbNotification[]>([]);
 
-  const unreadCount = state.notifications.filter((n) => !n.read).length;
+  useEffect(() => {
+    if (!state.companyId) return;
+    db.getNotifications(state.companyId).then((rows) => {
+      const userId = profile?.id;
+      setDbNotifications(rows.filter((n) => !n.user_id || n.user_id === userId));
+    });
+  }, [state.companyId, profile?.id]);
+
+  // Merge: DB is authoritative; include in-memory notifications not yet in DB (transient)
+  const dbIds = new Set(dbNotifications.map((n) => n.id));
+  const inMemoryOnly = state.notifications.filter((n) => !dbIds.has(n.id));
+  const allNotifications = [
+    ...inMemoryOnly.map((n) => ({
+      id: n.id,
+      type: n.type,
+      title: n.title,
+      message: n.message,
+      timestamp: n.timestamp,
+      read: n.read,
+      isDb: false,
+    })),
+    ...dbNotifications.map((n) => ({
+      id: n.id,
+      type: n.type,
+      title: n.title,
+      message: n.message,
+      timestamp: n.created_at,
+      read: n.read,
+      isDb: true,
+    })),
+  ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+  const unreadCount = allNotifications.filter((n) => !n.read).length;
+
+  const handleMarkRead = async (id: string, isDb: boolean) => {
+    dispatch({ type: 'MARK_NOTIFICATION_READ', payload: id });
+    if (isDb) {
+      await db.markNotificationRead(id);
+      setDbNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+    }
+  };
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
@@ -183,7 +227,7 @@ export default function TopBar() {
             <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-200 z-50">
               <div className="flex items-center justify-between p-4 border-b border-gray-100">
                 <h3 className="font-semibold text-gray-900">Notifications</h3>
-                {state.notifications.length > 0 && (
+                {allNotifications.length > 0 && (
                   <button
                     onClick={() => dispatch({ type: 'CLEAR_NOTIFICATIONS' })}
                     className="text-sm text-blue-600 hover:text-blue-700"
@@ -194,18 +238,16 @@ export default function TopBar() {
               </div>
 
               <div className="max-h-80 overflow-y-auto">
-                {state.notifications.length === 0 ? (
+                {allNotifications.length === 0 ? (
                   <div className="p-8 text-center text-gray-500">
                     <Bell size={32} className="mx-auto mb-2 opacity-50" />
                     <p>No notifications</p>
                   </div>
                 ) : (
-                  state.notifications.map((notification) => (
+                  allNotifications.map((notification) => (
                     <div
                       key={notification.id}
-                      onClick={() =>
-                        dispatch({ type: 'MARK_NOTIFICATION_READ', payload: notification.id })
-                      }
+                      onClick={() => handleMarkRead(notification.id, notification.isDb)}
                       className={`p-4 border-b border-gray-50 hover:bg-gray-50 cursor-pointer transition-colors ${
                         !notification.read ? 'bg-blue-50/50' : ''
                       }`}

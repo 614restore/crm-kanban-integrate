@@ -407,19 +407,24 @@ export default function MaterialOrdersView() {
     const files = e.target.files;
     if (!files || !profile?.company_id) return;
     setIsUploading(true);
-    const newUrls: string[] = [];
-    for (const file of Array.from(files)) {
-      const result = await uploadDocument(file, profile.company_id, selectedContactId || undefined);
-      if (result.error) {
-        toast.error(`Failed to upload ${file.name}: ${result.error}`);
-      } else {
-        newUrls.push(result.path || result.url);
-        toast.success(`Uploaded ${file.name}`);
+    try {
+      const newUrls: string[] = [];
+      for (const file of Array.from(files)) {
+        const result = await uploadDocument(file, profile.company_id, selectedContactId || undefined);
+        if (result.error) {
+          toast.error(`Failed to upload ${file.name}: ${result.error}`);
+        } else {
+          newUrls.push(result.path || result.url);
+          toast.success(`Uploaded ${file.name}`);
+        }
       }
+      setAttachments(prev => [...prev, ...newUrls]);
+    } catch (err: any) {
+      toast.error(`Upload error: ${err?.message || 'Unknown error'}`);
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
-    setAttachments(prev => [...prev, ...newUrls]);
-    setIsUploading(false);
-    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleViewAttachment = async (pathOrUrl: string) => {

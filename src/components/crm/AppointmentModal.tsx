@@ -273,6 +273,28 @@ export default function AppointmentModal({
 
         dispatch({ type: 'UPDATE_APPOINTMENT', payload: updatedApp });
         toast.success('Appointment updated');
+
+        // Fire mention notifications for anyone @tagged in the notes
+        if (notes.trim()) {
+          const handles = extractMentionHandles(notes);
+          for (const handle of handles) {
+            const target = mentionTargets.find(
+              (t) => t.handle.toLowerCase() === handle.toLowerCase()
+            );
+            if (target) {
+              await db.createNotification({
+                company_id: effectiveCompanyId,
+                user_id: target.id,
+                type: 'mention',
+                title: 'You were tagged in an appointment',
+                message: `You were mentioned in appointment "${title.trim()}" with ${contactName} on ${date}.`,
+                related_id: editingAppointment.id,
+                related_type: 'appointment',
+                read: false,
+              });
+            }
+          }
+        }
       } else {
         // Create new
         const created = await db.createAppointment({
@@ -329,6 +351,7 @@ export default function AppointmentModal({
             message: `"${title.trim()}" with ${contactName} on ${date} at ${formatTimeLabel(time)} has no team member assigned.`,
             related_id: created.id,
             related_type: 'appointment',
+            read: false,
           });
 
           if (notification) {
@@ -362,6 +385,7 @@ export default function AppointmentModal({
                 message: `You were mentioned in appointment "${title.trim()}" with ${contactName} on ${date}.`,
                 related_id: created.id,
                 related_type: 'appointment',
+                read: false,
               });
             }
           }
