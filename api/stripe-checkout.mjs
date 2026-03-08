@@ -18,7 +18,7 @@ export default async function handler(req, res) {
 
   const stripe = new Stripe(stripeKey, { apiVersion: '2023-10-16' });
 
-  const { priceId, planId } = req.body;
+  const { priceId, planId, couponId } = req.body;
 
   if (!priceId) {
     return res.status(400).json({ error: 'priceId is required' });
@@ -27,7 +27,7 @@ export default async function handler(req, res) {
   const appUrl = process.env.APP_URL || 'https://614restore.github.io/crm-kanban-integrate';
 
   try {
-    const session = await stripe.checkout.sessions.create({
+    const sessionParams = {
       mode: 'subscription',
       payment_method_types: ['card'],
       line_items: [{ price: priceId, quantity: 1 }],
@@ -35,12 +35,17 @@ export default async function handler(req, res) {
         trial_period_days: 14,
         metadata: { planId: planId || '' },
       },
-      allow_promotion_codes: true,
+      // If a couponId is passed, apply it directly (disables the promo code field to avoid double-dipping)
+      ...(couponId
+        ? { discounts: [{ coupon: couponId }] }
+        : { allow_promotion_codes: true }),
       phone_number_collection: { enabled: true },
       tax_id_collection: { enabled: true },
       success_url: `${appUrl}/?checkout=success&plan=${planId}`,
       cancel_url: `${appUrl}/?checkout=cancelled`,
-    });
+    };
+
+    const session = await stripe.checkout.sessions.create(sessionParams);
 
     return res.status(200).json({ url: session.url });
   } catch (err) {

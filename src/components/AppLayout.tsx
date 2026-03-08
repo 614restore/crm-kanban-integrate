@@ -27,7 +27,7 @@ import QuickAddModal from './crm/QuickAddModal';
 import InvoiceModal from './crm/InvoiceModal';
 import ResponsiveLayout from './mobile/ResponsiveLayout';
 import { useIsMobile } from '@/hooks/useMediaQuery';
-import { Building2, Loader2, Zap, X } from 'lucide-react';
+import { Building2, Loader2, Zap, X, Tag } from 'lucide-react';
 
 // Lazy load all CRM view components for better code splitting
 const Dashboard = lazy(() => import('./crm/Dashboard'));
@@ -310,10 +310,16 @@ function dbInvoiceToAppInvoice(dbInvoice: any, contacts: Contact[]): Invoice {
   };
 }
 
-// Trial banner shown when subscription_status is 'trialing' and trial ends within 7 days
+// Trial banner shown when subscription_status is 'trialing'
+// Days 1-7: shows 50% off launch offer with promo code
+// Days 1-3 of trial (>11 days left on 14-day trial): emphasise urgency
+const LAUNCH_PROMO_CODE = 'LAUNCH50';
+const BILLING_SETTINGS_VIEW = 'billing';
+
 function TrialBanner({ companyId }: { companyId: string | null }) {
   const [company, setCompany] = useState<DbCompany | null>(null);
   const [dismissed, setDismissed] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!companyId) return;
@@ -324,27 +330,72 @@ function TrialBanner({ companyId }: { companyId: string | null }) {
   if (company.subscription_status !== 'trialing') return null;
   if (!company.trial_ends_at) return null;
 
-  const daysLeft = Math.ceil((new Date(company.trial_ends_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-  if (daysLeft > 7) return null;
+  const trialEndMs = new Date(company.trial_ends_at).getTime();
+  const daysLeft = Math.ceil((trialEndMs - Date.now()) / (1000 * 60 * 60 * 24));
+  if (daysLeft <= 0) return null;
 
-  return (
-    <div className="flex items-center justify-between gap-3 bg-yellow-50 border-b border-yellow-200 px-4 py-2 text-sm text-yellow-800">
-      <div className="flex items-center gap-2">
-        <Zap className="w-4 h-4 flex-shrink-0" />
-        <span>
-          Your free trial ends in <strong>{Math.max(0, daysLeft)} day{daysLeft !== 1 ? 's' : ''}</strong>.{' '}
-          Upgrade now to keep access.
-        </span>
+  // Show discount offer during first 7 days of trial (trial days 1-7 = >7 days left on 14-day trial)
+  const showDiscount = daysLeft > 7;
+  // Show urgency warning last 7 days
+  const showUrgency = daysLeft <= 7;
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(LAUNCH_PROMO_CODE).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  if (showDiscount) {
+    return (
+      <div className="flex items-center justify-between gap-3 bg-indigo-600 px-4 py-2 text-sm text-white">
+        <div className="flex items-center gap-2 min-w-0">
+          <Tag className="w-4 h-4 flex-shrink-0" />
+          <span className="truncate">
+            <strong>Launch offer:</strong> Get <strong>50% off your first 3 months</strong> — subscribe within your trial week.
+          </span>
+          <button
+            onClick={handleCopy}
+            className="flex-shrink-0 flex items-center gap-1 bg-white/20 hover:bg-white/30 border border-white/40 rounded px-2 py-0.5 text-xs font-mono font-bold transition-colors"
+            title="Copy promo code"
+          >
+            {copied ? '✓ Copied!' : LAUNCH_PROMO_CODE}
+          </button>
+          <span className="text-white/70 text-xs flex-shrink-0">Enter at checkout → Billing</span>
+        </div>
+        <button
+          onClick={() => setDismissed(true)}
+          className="flex-shrink-0 p-1 rounded hover:bg-white/20 transition-colors"
+          aria-label="Dismiss"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
       </div>
-      <button
-        onClick={() => setDismissed(true)}
-        className="flex-shrink-0 p-1 rounded hover:bg-yellow-100 transition-colors"
-        aria-label="Dismiss"
-      >
-        <X className="w-3.5 h-3.5" />
-      </button>
-    </div>
-  );
+    );
+  }
+
+  if (showUrgency) {
+    return (
+      <div className="flex items-center justify-between gap-3 bg-yellow-50 border-b border-yellow-200 px-4 py-2 text-sm text-yellow-800">
+        <div className="flex items-center gap-2">
+          <Zap className="w-4 h-4 flex-shrink-0" />
+          <span>
+            Your free trial ends in <strong>{daysLeft} day{daysLeft !== 1 ? 's' : ''}</strong>.{' '}
+            Use code <strong className="font-mono">{LAUNCH_PROMO_CODE}</strong> at checkout for <strong>50% off 3 months</strong>.
+          </span>
+        </div>
+        <button
+          onClick={() => setDismissed(true)}
+          className="flex-shrink-0 p-1 rounded hover:bg-yellow-100 transition-colors"
+          aria-label="Dismiss"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    );
+  }
+
+  return null;
 }
 
 // CRM App (authenticated view)
