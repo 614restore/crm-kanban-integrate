@@ -113,7 +113,7 @@ export default function SupplementTrackingView({ contactId, contactName }: Suppl
     if (!companyId) return;
     setLoading(true);
     try {
-      let suppQuery = supabase
+      const suppQuery = supabase
         .from('supplements')
         .select(`*, insurance_claims(claim_number, insurance_company, contact_id)`)
         .eq('company_id', companyId)
