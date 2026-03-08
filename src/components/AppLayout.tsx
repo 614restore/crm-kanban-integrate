@@ -352,7 +352,7 @@ function TrialBanner({ companyId }: { companyId: string | null }) {
         <div className="flex items-center gap-2 min-w-0">
           <Tag className="w-4 h-4 flex-shrink-0" />
           <span className="truncate">
-            <strong>Launch offer:</strong> Get <strong>50% off your first 3 months</strong> — subscribe within your trial week.
+            <strong>Launch offer:</strong> Get <strong>50% off your first 3 months</strong> on any <strong>monthly</strong> plan — subscribe within your trial week.
           </span>
           <button
             onClick={handleCopy}
@@ -381,7 +381,7 @@ function TrialBanner({ companyId }: { companyId: string | null }) {
           <Zap className="w-4 h-4 flex-shrink-0" />
           <span>
             Your free trial ends in <strong>{daysLeft} day{daysLeft !== 1 ? 's' : ''}</strong>.{' '}
-            Use code <strong className="font-mono">{LAUNCH_PROMO_CODE}</strong> at checkout for <strong>50% off 3 months</strong>.
+            Use code <strong className="font-mono">{LAUNCH_PROMO_CODE}</strong> at checkout for <strong>50% off 3 months</strong> (monthly plans only).
           </span>
         </div>
         <button
