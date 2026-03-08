@@ -8,6 +8,7 @@ import { uploadCompanyLogo, uploadUserAvatar, validateImageFile } from '@/lib/st
 import useIntegrations from '@/hooks/useIntegrations';
 import IntegrationConfigDialog from '@/components/IntegrationConfigDialog';
 import AIConfigDialog from '@/components/AIConfigDialog';
+import { formatPhoneNumber } from '@/lib/utils';
 import AIApprovalPanel from '@/components/AIApprovalPanel';
 import {
   Settings,
@@ -1380,7 +1381,7 @@ export default function SettingsView() {
                     <input
                       type="tel"
                       value={companyForm.phone}
-                      onChange={(e) => setCompanyForm({ ...companyForm, phone: e.target.value })}
+                      onChange={(e) => setCompanyForm({ ...companyForm, phone: formatPhoneNumber(e.target.value) })}
                       className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                     />
                   </div>

@@ -2298,7 +2298,7 @@ const DocumentTemplates: React.FC = () => {
   <div class="deadline-callout">
     <div class="dl-label">Cancellation Deadline</div>
     <div class="dl-date">{{CANCELLATION_DEADLINE}}</div>
-    <div class="dl-note">Midnight of the third business day after contract date. Saturdays, Sundays & federal holidays do not count.</div>
+    <div class="dl-note">Midnight of the third business day after contract date. Saturday counts as a business day. Sundays and federal holidays do not count.</div>
   </div>
 
   <!-- Your Rights -->
@@ -2323,7 +2323,7 @@ const DocumentTemplates: React.FC = () => {
     <ul>
       <li>Acceptable methods: certified mail (postmarked by deadline), hand delivery with written receipt, or email with read receipt.</li>
       <li>Verbal cancellations are NOT sufficient — written notice is required.</li>
-      <li>Business days are Monday–Friday, excluding federal holidays.</li>
+      <li>Business days are Monday–Saturday, excluding federal holidays. Sundays do not count.</li>
     </ul>
   </div>
 
@@ -2649,9 +2649,14 @@ const DocumentTemplates: React.FC = () => {
       'CONTRACT_NUMBER': 'CTR-2026-042',
       'CONTRACT_DATE': new Date().toLocaleDateString(),
       'CANCELLATION_DEADLINE': (() => {
-        // 3 business days from today (skip Sat/Sun)
+        // 3 business days from today (Saturday counts, skip Sunday + federal holidays)
+        const FEDERAL_HOLIDAYS_2026 = ['1/1','1/19','2/16','5/25','6/19','7/4','9/7','10/12','11/11','11/26','12/25'];
         let d = new Date(); let count = 0;
-        while (count < 3) { d = new Date(d.getTime() + 24*60*60*1000); if (d.getDay() !== 0 && d.getDay() !== 6) count++; }
+        while (count < 3) {
+          d = new Date(d.getTime() + 24*60*60*1000);
+          const mmdd = `${d.getMonth()+1}/${d.getDate()}`;
+          if (d.getDay() !== 0 && !FEDERAL_HOLIDAYS_2026.includes(mmdd)) count++;
+        }
         return d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
       })(),
       'CHANGE_DATE': new Date().toLocaleDateString(),
