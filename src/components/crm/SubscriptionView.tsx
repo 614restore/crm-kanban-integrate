@@ -108,15 +108,21 @@ export default function SubscriptionView() {
 
   const currentPlanIndex = PLANS.findIndex((p) => p.key === plan);
 
-  function handleManageBilling() {
-    window.location.href = 'mailto:scopemgr@614restore.com?subject=CONTACT%20TrussCTR%20-%20Billing%20Management';
+  async function handleManageBilling() {
+    try {
+      const apiBase = import.meta.env.VITE_EMAIL_API_BASE_URL || '';
+      const res = await fetch(`${apiBase}/api/stripe-portal`, { method: 'POST' });
+      const data = await res.json();
+      if (data.url) window.location.href = data.url;
+      else toast.error('Could not open billing portal.');
+    } catch {
+      toast.error('Could not open billing portal.');
+    }
   }
 
-  function handlePlanAction(planKey: string) {
-    const idx = PLANS.findIndex((p) => p.key === planKey);
-    const action = idx > currentPlanIndex ? 'Upgrade' : 'Downgrade';
-    const subject = encodeURIComponent(`CONTACT TrussCTR - ${action} to ${PLANS[idx].name}`);
-    window.location.href = `mailto:scopemgr@614restore.com?subject=${subject}`;
+  function handlePlanAction(_planKey: string) {
+    // Scroll to the Stripe pricing table below
+    document.querySelector('stripe-pricing-table')?.scrollIntoView({ behavior: 'smooth' });
   }
 
   return (
