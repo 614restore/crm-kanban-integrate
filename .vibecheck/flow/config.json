@@ -1,0 +1,13 @@
+{
+  "version": "1.0.0",
+  "projectName": "crm-kanban-integrate",
+  "userName": "developer",
+  "skillLevel": "intermediate",
+  "outputFolder": ".vibecheck/flow",
+  "planningArtifacts": ".vibecheck/flow/planning-artifacts",
+  "implementationArtifacts": ".vibecheck/flow/implementation-artifacts",
+  "installedAt": "2026-03-08T18:22:00.530Z",
+  "ide": [
+    "vscode"
+  ]
+}

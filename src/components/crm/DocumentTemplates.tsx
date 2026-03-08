@@ -38,6 +38,7 @@ import { useAuth } from '@/lib/authContext';
 import { db, DbCompany } from '@/lib/database';
 import { useCRM } from '@/lib/crmStore';
 import { getContactFullName } from '@/lib/crmData';
+import { getContractorEstimateTemplates } from '@/lib/contractorTemplates';
 
 interface DocumentTemplate {
   id: string;
@@ -2406,8 +2407,9 @@ const DocumentTemplates: React.FC = () => {
       fileType: 'html'
     }
       ];
-      setTemplates(mockTemplates);
-      setFilteredTemplates(mockTemplates);
+      const allTemplates = [...mockTemplates, ...(getContractorEstimateTemplates() as DocumentTemplate[])];
+      setTemplates(allTemplates);
+      setFilteredTemplates(allTemplates);
     } catch (error) {
       console.error('Error loading templates:', error);
       toast({
