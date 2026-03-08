@@ -155,7 +155,7 @@ export default function AppointmentModal({
     const active = findActiveMentionQuery(val, caret);
     if (active) {
       setMentionQuery(active);
-      const suggestions = getMentionSuggestions(active.query, mentionTargets);
+      const suggestions = getMentionSuggestions(mentionTargets, active.query);
       setMentionSuggestionsState(suggestions);
       setMentionIndex(0);
     } else {
@@ -184,7 +184,7 @@ export default function AppointmentModal({
 
   const applySelectedMention = (target: (typeof mentionTargets)[0]) => {
     if (!mentionQuery || !notesRef.current) return;
-    const result = applyMention(notes, mentionQuery.start, target.handle);
+    const result = applyMention(notes, mentionQuery.start, notesRef.current?.selectionStart ?? notes.length, target.handle);
     setNotes(result.text);
     setMentionQuery(null);
     setMentionSuggestionsState([]);

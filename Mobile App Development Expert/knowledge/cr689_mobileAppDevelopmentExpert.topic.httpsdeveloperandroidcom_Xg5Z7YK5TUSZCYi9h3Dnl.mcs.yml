@@ -1,0 +1,6 @@
+# Name: https://developer.android.com/
+# This knowledge source searches information on the web found in https://developer.android.com/ website
+kind: KnowledgeSourceConfiguration
+source:
+  kind: PublicSiteSearchSource
+  site: https://developer.android.com/

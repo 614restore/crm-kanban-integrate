@@ -195,8 +195,8 @@ export default function FinancialDashboard() {
     const matchesFilter = invoiceFilter === 'all' || inv.status === invoiceFilter;
     const matchesSearch =
       searchQuery === '' ||
-      inv.contactName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      inv.id.toLowerCase().includes(searchQuery.toLowerCase());
+      (inv.contactName ?? '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (inv.id ?? '').toLowerCase().includes(searchQuery.toLowerCase());
     return matchesFilter && matchesSearch;
   });
 

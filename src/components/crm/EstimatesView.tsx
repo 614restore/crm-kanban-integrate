@@ -95,7 +95,7 @@ export default function EstimatesView() {
         title: e.title,
         description: e.description,
         status: e.status,
-        amount: Number(e.amount),
+        amount: Number(e.amount || e.subtotal || 0),
         tax: Number(e.tax),
         total: Number(e.total),
         validUntil: e.valid_until,

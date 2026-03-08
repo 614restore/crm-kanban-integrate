@@ -179,8 +179,7 @@ export default function WorkOrdersView() {
       setSelectedProjectId(workOrder.projectId || '');
       setSelectedContactId(workOrder.contactId);
       setDescription(workOrder.description || '');
-      setStatus(workOrder.status);
-      setPriority(workOrder.priority);
+      setStatus(workOrder.status);      setPriority(workOrder.priority);
       setScheduledDate(workOrder.scheduledDate || '');
       setAssignedTo(workOrder.assignedTo);
       setEstimatedHours(workOrder.estimatedHours?.toString() || '');
@@ -193,7 +192,8 @@ export default function WorkOrdersView() {
       setZip(workOrder.zip || '');
       setNotes(workOrder.notes || '');
       setAttachments(workOrder.attachments || []);
-      // Generate work order number
+    } else {
+      // Generate work order number for new work orders only
       const nextNumber = `WO-${Date.now().toString().slice(-6)}`;
       setWorkOrderNumber(nextNumber);
     }

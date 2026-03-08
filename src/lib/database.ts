@@ -2073,7 +2073,7 @@ class DatabaseService {
   }
 
   async updateExpense(expenseId: string, updates: Partial<DbExpense>): Promise<DbExpense | null> {
-    if (this.inDemoMode()) return null;
+    if (this.inDemoMode()) throw new Error('Expenses are not available in demo mode');
     try {
       const { data, error } = await this.raceTimeout(
         supabase.from('expenses').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', expenseId).select().single(),
