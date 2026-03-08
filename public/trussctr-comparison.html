@@ -9,454 +9,192 @@
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f9fafb; color: #111; padding: 24px; }
     h1 { text-align: center; font-size: 1.6rem; margin-bottom: 6px; color: #1e3a5f; }
     p.sub { text-align: center; font-size: 0.85rem; color: #6b7280; margin-bottom: 20px; }
-    .print-btn { display: block; margin: 0 auto 20px; padding: 10px 28px; background: #2563eb; color: #fff; border: none; border-radius: 6px; font-size: 0.95rem; cursor: pointer; }
-    @media print { .print-btn { display: none; } body { padding: 0; background: #fff; } }
+    .controls { display: flex; justify-content: center; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+    .btn { padding: 9px 22px; background: #2563eb; color: #fff; border: none; border-radius: 6px; font-size: 0.9rem; cursor: pointer; }
+    .btn.secondary { background: #e2e8f0; color: #374151; }
+    .btn:hover { opacity: 0.88; }
+    @media print { .controls { display: none; } body { padding: 0; background: #fff; } .section { page-break-inside: avoid; } details { open: true; } }
+
+    /* Accordion sections */
+    .section { border: 1px solid #e2e8f0; border-radius: 10px; margin-bottom: 12px; overflow: hidden; }
+    details > summary { list-style: none; }
+    details > summary::-webkit-details-marker { display: none; }
+    .section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 18px; background: #1e3a5f; color: #fff; cursor: pointer;
+      user-select: none;
+    }
+    .section-header:hover { background: #16305a; }
+    .section-title { font-size: 0.95rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+    .section-arrow { transition: transform 0.2s; font-size: 0.9rem; }
+    details[open] .section-arrow { transform: rotate(180deg); }
+    .section-body { overflow-x: auto; }
+
     table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
-    thead th { background: #1e3a5f; color: #fff; padding: 10px 8px; text-align: center; position: sticky; top: 0; }
-    thead th:first-child { text-align: left; min-width: 220px; }
-    thead th.highlight { background: #2563eb; }
+    thead th { background: #2563eb; color: #fff; padding: 9px 8px; text-align: center; }
+    thead th:first-child { text-align: left; min-width: 210px; padding-left: 18px; }
+    thead th.truss { background: #1d4ed8; }
     tbody tr:nth-child(even) { background: #f1f5f9; }
     tbody tr:hover { background: #dbeafe; }
     td { padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: center; }
-    td:first-child { text-align: left; font-weight: 500; color: #374151; }
-    .cat { background: #e2e8f0 !important; font-weight: 700; font-size: 0.8rem; color: #1e3a5f; text-transform: uppercase; letter-spacing: 0.05em; }
-    .cat td { text-align: left; }
+    td:first-child { text-align: left; font-weight: 500; color: #374151; padding-left: 18px; }
+    td.truss { background: #eff6ff; font-weight: 600; }
     .yes { color: #16a34a; font-size: 1rem; }
     .no  { color: #dc2626; font-size: 1rem; }
-    .par { color: #d97706; font-size: 0.75rem; font-weight: 600; }
+    .par { color: #d97706; font-size: 0.74rem; font-weight: 600; }
     .price { font-weight: 600; }
-    tfoot td { text-align: center; font-size: 0.72rem; color: #6b7280; padding-top: 12px; }
+    .legend { text-align: center; font-size: 0.72rem; color: #6b7280; padding: 14px; }
   </style>
 </head>
 <body>
   <h1>TrussCTR — Roofing CRM Feature Comparison</h1>
   <p class="sub">614 Restore LLC · March 2026 · All competitor data based on publicly available information</p>
-  <button class="print-btn" onclick="window.print()">🖨 Print / Save as PDF</button>
-  <table>
-    <thead>
-      <tr>
-        <th>Feature</th>
-        <th class="highlight">TrussCTR</th>
-        <th>AccuLynx</th>
-        <th>JobNimbus</th>
-        <th>Roofr</th>
-        <th>Leap CRM</th>
-        <th>Salesforce</th>
-        <th>HubSpot</th>
-      </tr>
-    </thead>
-    <tbody>
 
-      <!-- PRICING -->
-      <tr class="cat"><td colspan="8">Pricing</td></tr>
-      <tr>
-        <td>Starting Price / mo</td>
-        <td class="price highlight">TBD (Low)</td>
-        <td class="price">~$250+</td>
-        <td class="price">~$149+</td>
-        <td class="price">~$149+</td>
-        <td class="price">~$79+/user</td>
-        <td class="price">~$25+/user</td>
-        <td class="price">Free / $45+</td>
-      </tr>
-      <tr>
-        <td>Roofing-Specific Pricing</td>
-        <td class="highlight"><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="no">✘</span></td>
-        <td><span class="no">✘</span></td>
-      </tr>
+  <div class="controls">
+    <button class="btn secondary" onclick="toggleAll(true)">▼ Expand All</button>
+    <button class="btn secondary" onclick="toggleAll(false)">▲ Collapse All</button>
+    <button class="btn" onclick="window.print()">🖨 Print / Save as PDF</button>
+  </div>
 
-      <!-- CORE CRM -->
-      <tr class="cat"><td colspan="8">Core CRM</td></tr>
-      <tr>
-        <td>Contact Management</td>
-        <td class="highlight"><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-      </tr>
-      <tr>
-        <td>Kanban Pipeline Board</td>
-        <td class="highlight"><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="par">Partial</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-      </tr>
-      <tr>
-        <td>Calendar / Scheduling</td>
-        <td class="highlight"><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-      </tr>
-      <tr>
-        <td>Communication Hub (SMS/Email/Calls)</td>
-        <td class="highlight"><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="par">Email only</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-      </tr>
-      <tr>
-        <td>Team Management</td>
-        <td class="highlight"><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-      </tr>
-      <tr>
-        <td>Reports &amp; Analytics</td>
-        <td class="highlight"><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="par">Basic</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-      </tr>
+  <!-- SHARED HEADER TEMPLATE via JS -->
+  <div id="accordion"></div>
 
-      <!-- ROOFING-SPECIFIC -->
-      <tr class="cat"><td colspan="8">Roofing-Specific Features</td></tr>
-      <tr>
-        <td>Insurance Claim Tracking</td>
-        <td class="highlight"><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="par">Partial</span></td>
-        <td><span class="no">✘</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="no">✘</span></td>
-        <td><span class="no">✘</span></td>
-      </tr>
-      <tr>
-        <td>Supplement Tracking (linked to claims)</td>
-        <td class="highlight"><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="no">✘</span></td>
-        <td><span class="no">✘</span></td>
-        <td><span class="par">Partial</span></td>
-        <td><span class="no">✘</span></td>
-        <td><span class="no">✘</span></td>
-      </tr>
-      <tr>
-        <td>Work Orders</td>
-        <td class="highlight"><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="par">Basic</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="par">Add-on</span></td>
-        <td><span class="no">✘</span></td>
-      </tr>
-      <tr>
-        <td>Material Orders (w/ roofing templates)</td>
-        <td class="highlight"><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="par">Partial</span></td>
-        <td><span class="no">✘</span></td>
-        <td><span class="par">Partial</span></td>
-        <td><span class="no">✘</span></td>
-        <td><span class="no">✘</span></td>
-      </tr>
-      <tr>
-        <td>Job / Project Tracking</td>
-        <td class="highlight"><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="par">Partial</span></td>
-      </tr>
-      <tr>
-        <td>HailTrace / Storm Tracking Integration</td>
-        <td class="highlight"><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="par">3rd-party</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="par">3rd-party</span></td>
-        <td><span class="no">✘</span></td>
-        <td><span class="no">✘</span></td>
-      </tr>
+  <p class="legend">
+    ✔ = Full support &nbsp;|&nbsp; <span style="color:#d97706">Partial</span> = Partial / limited &nbsp;|&nbsp; ✘ = Not available &nbsp;|&nbsp;
+    Competitor data based on publicly available information as of March 2026. Pricing subject to change.
+  </p>
 
-      <!-- DOCUMENTS -->
-      <tr class="cat"><td colspan="8">Documents &amp; Contracts</td></tr>
-      <tr>
-        <td>Document Center</td>
-        <td class="highlight"><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="par">Partial</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="par">Add-on</span></td>
-        <td><span class="par">Add-on</span></td>
-      </tr>
-      <tr>
-        <td>Proposal Template</td>
-        <td class="highlight"><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="par">Custom</span></td>
-        <td><span class="par">Custom</span></td>
-      </tr>
-      <tr>
-        <td>Contract Template</td>
-        <td class="highlight"><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="par">Custom</span></td>
-        <td><span class="par">Custom</span></td>
-      </tr>
-      <tr>
-        <td>3-Day Right to Cancel Document</td>
-        <td class="highlight"><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="no">✘</span></td>
-        <td><span class="no">✘</span></td>
-        <td><span class="par">Partial</span></td>
-        <td><span class="no">✘</span></td>
-        <td><span class="no">✘</span></td>
-      </tr>
-      <tr>
-        <td>Digital Signature (e-Sign)</td>
-        <td class="highlight"><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="par">Add-on</span></td>
-        <td><span class="par">Add-on</span></td>
-      </tr>
-      <tr>
-        <td>Per-Customer Template Editing</td>
-        <td class="highlight"><span class="yes">✔</span></td>
-        <td><span class="par">Limited</span></td>
-        <td><span class="par">Limited</span></td>
-        <td><span class="no">✘</span></td>
-        <td><span class="par">Limited</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-      </tr>
-      <tr>
-        <td>Auto-Fill Company &amp; Customer Info</td>
-        <td class="highlight"><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-      </tr>
-      <tr>
-        <td>Document Duplication &amp; Delete</td>
-        <td class="highlight"><span class="yes">✔</span></td>
-        <td><span class="par">Partial</span></td>
-        <td><span class="par">Partial</span></td>
-        <td><span class="no">✘</span></td>
-        <td><span class="par">Partial</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-      </tr>
+  <script>
+    const COLS = ['TrussCTR','AccuLynx','JobNimbus','Roofr','Leap CRM','Salesforce','HubSpot'];
+    const Y = '<span class="yes">✔</span>';
+    const N = '<span class="no">✘</span>';
+    const P = (t) => `<span class="par">${t}</span>`;
 
-      <!-- FINANCIALS -->
-      <tr class="cat"><td colspan="8">Financials</td></tr>
-      <tr>
-        <td>Estimates / Invoicing</td>
-        <td class="highlight"><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="par">Add-on</span></td>
-        <td><span class="par">Add-on</span></td>
-      </tr>
-      <tr>
-        <td>Expense Tracking</td>
-        <td class="highlight"><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="par">Partial</span></td>
-        <td><span class="no">✘</span></td>
-        <td><span class="par">Partial</span></td>
-        <td><span class="par">Add-on</span></td>
-        <td><span class="par">Add-on</span></td>
-      </tr>
-      <tr>
-        <td>QuickBooks Integration</td>
-        <td class="highlight"><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="par">Partial</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="par">Add-on</span></td>
-        <td><span class="par">Add-on</span></td>
-      </tr>
-      <tr>
-        <td>Financial Dashboard</td>
-        <td class="highlight"><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="par">Basic</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-      </tr>
-      <tr>
-        <td>Supplier Management</td>
-        <td class="highlight"><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="par">Partial</span></td>
-        <td><span class="no">✘</span></td>
-        <td><span class="par">Partial</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="par">Partial</span></td>
-      </tr>
+    const sections = [
+      {
+        title: '💰 Pricing',
+        open: true,
+        rows: [
+          ['Starting Price / mo', '<span class="price">TBD (Low)</span>', P('~$250+'), P('~$149+'), P('~$149+'), P('~$79+/user'), P('~$25+/user'), 'Free / $45+'],
+          ['Roofing-Specific Pricing', Y, Y, Y, Y, Y, N, N],
+        ]
+      },
+      {
+        title: '🏠 Core CRM',
+        rows: [
+          ['Contact Management', Y, Y, Y, Y, Y, Y, Y],
+          ['Kanban Pipeline Board', Y, Y, Y, P('Partial'), Y, Y, Y],
+          ['Calendar / Scheduling', Y, Y, Y, Y, Y, Y, Y],
+          ['Communication Hub (SMS/Email/Calls)', Y, Y, Y, P('Email only'), Y, Y, Y],
+          ['Team Management', Y, Y, Y, Y, Y, Y, Y],
+          ['Reports &amp; Analytics (Individual &amp; Team)', Y, Y, Y, P('Basic'), Y, Y, Y],
+          ['Sales Metrics Tracking', Y, P('Partial'), P('Partial'), N, P('Partial'), Y, Y],
+        ]
+      },
+      {
+        title: '🔨 Roofing-Specific Features',
+        rows: [
+          ['Insurance Claim Tracking (per customer)', Y, Y, P('Partial'), N, Y, N, N],
+          ['Supplement Tracking (linked to claims)', Y, Y, N, N, P('Partial'), N, N],
+          ['Work Orders', Y, Y, Y, P('Basic'), Y, P('Add-on'), N],
+          ['Material Orders (w/ roofing templates)', Y, Y, P('Partial'), N, P('Partial'), N, N],
+          ['Job / Project Tracking', Y, Y, Y, Y, Y, Y, P('Partial')],
+          ['Job Status Progression (Lead → Complete)', Y, Y, Y, P('Basic'), Y, P('Custom'), P('Custom')],
+          ['HailTrace / Storm Tracking Integration', Y, Y, P('3rd-party'), Y, P('3rd-party'), N, N],
+        ]
+      },
+      {
+        title: '📄 Documents &amp; Contracts',
+        rows: [
+          ['Document Center', Y, Y, Y, P('Partial'), Y, P('Add-on'), P('Add-on')],
+          ['Proposal Template (auto-fill)', Y, Y, Y, Y, Y, P('Custom'), P('Custom')],
+          ['Contract Template (auto-fill)', Y, Y, Y, Y, Y, P('Custom'), P('Custom')],
+          ['3-Day Right to Cancel Document', Y, Y, N, N, P('Partial'), N, N],
+          ['Digital Signature (e-Sign)', Y, Y, Y, Y, Y, P('Add-on'), P('Add-on')],
+          ['Per-Customer Template Editing', Y, P('Limited'), P('Limited'), N, P('Limited'), Y, Y],
+          ['Auto-Fill Company &amp; Customer Info', Y, Y, Y, Y, Y, Y, Y],
+          ['Document Duplication &amp; Delete', Y, P('Partial'), P('Partial'), N, P('Partial'), Y, Y],
+          ['File Upload (work orders, materials, etc.)', Y, Y, Y, P('Partial'), Y, Y, Y],
+        ]
+      },
+      {
+        title: '💵 Financials',
+        rows: [
+          ['Estimates / Invoicing', Y, Y, Y, Y, Y, P('Add-on'), P('Add-on')],
+          ['Expense Tracking', Y, Y, P('Partial'), N, P('Partial'), P('Add-on'), P('Add-on')],
+          ['Financial Dashboard', Y, Y, Y, P('Basic'), Y, Y, Y],
+          ['Supplier Management', Y, Y, P('Partial'), N, P('Partial'), Y, P('Partial')],
+          ['QuickBooks Integration', Y, Y, Y, P('Partial'), Y, P('Add-on'), P('Add-on')],
+          ['PDF Export for Reports', Y, P('Partial'), P('Partial'), N, P('Partial'), Y, Y],
+        ]
+      },
+      {
+        title: '🤖 AI &amp; Automation',
+        rows: [
+          ['AI Assistant (built-in)', Y, N, N, N, N, P('Einstein (add-on)'), P('Breeze (add-on)')],
+          ['Workflow Automations', Y, Y, Y, P('Basic'), Y, Y, Y],
+          ['Google Review Automation', Y, P('3rd-party'), P('3rd-party'), N, P('3rd-party'), P('3rd-party'), P('3rd-party')],
+          ['Customer Survey (built-in)', Y, P('3rd-party'), P('3rd-party'), N, P('3rd-party'), P('3rd-party'), P('3rd-party')],
+        ]
+      },
+      {
+        title: '⚙️ Setup &amp; Support',
+        rows: [
+          ['Built for Roofing Contractors', Y, Y, Y, Y, Y, N, N],
+          ['Multi-Company / Team Isolation', Y, Y, Y, P('Partial'), Y, Y, Y],
+          ['Role-Based Permissions (RLS)', Y, Y, Y, P('Basic'), Y, Y, Y],
+          ['Mobile-Friendly (PWA/Responsive)', Y, Y, Y, Y, Y, Y, Y],
+          ['Subscription Management (built-in)', Y, N, N, N, N, P('Add-on'), P('Add-on')],
+          ['API Access', Y, P('Limited'), Y, P('Limited'), P('Limited'), Y, Y],
+          ['Webhook Support', Y, N, P('Limited'), N, N, Y, Y],
+          ['EULA / Terms / Privacy Built-In', Y, Y, Y, Y, Y, Y, Y],
+          ['Phone Number Formatting (consistent)', Y, P('Partial'), P('Partial'), P('Partial'), P('Partial'), Y, Y],
+        ]
+      },
+    ];
 
-      <!-- AI / AUTOMATION -->
-      <tr class="cat"><td colspan="8">AI &amp; Automation</td></tr>
-      <tr>
-        <td>AI Assistant (built-in)</td>
-        <td class="highlight"><span class="yes">✔</span></td>
-        <td><span class="no">✘</span></td>
-        <td><span class="no">✘</span></td>
-        <td><span class="no">✘</span></td>
-        <td><span class="no">✘</span></td>
-        <td><span class="par">Einstein (add-on)</span></td>
-        <td><span class="par">Breeze (add-on)</span></td>
-      </tr>
-      <tr>
-        <td>Workflow Automations</td>
-        <td class="highlight"><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="par">Basic</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-      </tr>
-      <tr>
-        <td>Google Review Automation</td>
-        <td class="highlight"><span class="yes">✔</span></td>
-        <td><span class="par">3rd-party</span></td>
-        <td><span class="par">3rd-party</span></td>
-        <td><span class="no">✘</span></td>
-        <td><span class="par">3rd-party</span></td>
-        <td><span class="par">3rd-party</span></td>
-        <td><span class="par">3rd-party</span></td>
-      </tr>
-      <tr>
-        <td>Customer Survey (built-in)</td>
-        <td class="highlight"><span class="yes">✔</span></td>
-        <td><span class="par">3rd-party</span></td>
-        <td><span class="par">3rd-party</span></td>
-        <td><span class="no">✘</span></td>
-        <td><span class="par">3rd-party</span></td>
-        <td><span class="par">3rd-party</span></td>
-        <td><span class="par">3rd-party</span></td>
-      </tr>
+    function renderCell(val) {
+      if (val === Y || val === N) return val;
+      if (typeof val === 'string') return val;
+      return val;
+    }
 
-      <!-- SETUP & SUPPORT -->
-      <tr class="cat"><td colspan="8">Setup &amp; Support</td></tr>
-      <tr>
-        <td>Built for Roofing Contractors</td>
-        <td class="highlight"><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="no">✘</span></td>
-        <td><span class="no">✘</span></td>
-      </tr>
-      <tr>
-        <td>Multi-Company / Team Isolation</td>
-        <td class="highlight"><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="par">Partial</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-      </tr>
-      <tr>
-        <td>Role-Based Permissions (RLS)</td>
-        <td class="highlight"><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="par">Basic</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-      </tr>
-      <tr>
-        <td>Mobile-Friendly (PWA/Responsive)</td>
-        <td class="highlight"><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-      </tr>
-      <tr>
-        <td>API Access</td>
-        <td class="highlight"><span class="yes">✔</span></td>
-        <td><span class="par">Limited</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="par">Limited</span></td>
-        <td><span class="par">Limited</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-      </tr>
-      <tr>
-        <td>Webhook Support</td>
-        <td class="highlight"><span class="yes">✔</span></td>
-        <td><span class="no">✘</span></td>
-        <td><span class="par">Limited</span></td>
-        <td><span class="no">✘</span></td>
-        <td><span class="no">✘</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-      </tr>
-      <tr>
-        <td>EULA / Terms / Privacy Built-In</td>
-        <td class="highlight"><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-        <td><span class="yes">✔</span></td>
-      </tr>
+    const container = document.getElementById('accordion');
+    sections.forEach((sec, i) => {
+      const detailsEl = document.createElement('details');
+      detailsEl.className = 'section';
+      if (sec.open) detailsEl.open = true;
 
-    </tbody>
-    <tfoot>
-      <tr>
-        <td colspan="8">
-          ✔ = Full support &nbsp;|&nbsp; <span style="color:#d97706">Partial</span> = Partial/limited &nbsp;|&nbsp; ✘ = Not available &nbsp;|&nbsp;
-          Competitor data based on publicly available information as of March 2026. Pricing subject to change.
-        </td>
-      </tr>
-    </tfoot>
-  </table>
+      const headerHTML = `
+        <summary>
+          <div class="section-header">
+            <span class="section-title">${sec.title}</span>
+            <span class="section-arrow">▼</span>
+          </div>
+        </summary>`;
+
+      const colHeaders = COLS.map((c,idx) => `<th${idx===0?' class="truss"':''}>${c}</th>`).join('');
+      let rowsHTML = sec.rows.map(row => {
+        const feature = row[0];
+        const cells = row.slice(1).map((v,idx) => `<td${idx===0?' class="truss"':''}>${renderCell(v)}</td>`).join('');
+        return `<tr><td>${feature}</td>${cells}</tr>`;
+      }).join('');
+
+      const bodyHTML = `
+        <div class="section-body">
+          <table>
+            <thead><tr><th>Feature</th>${colHeaders}</tr></thead>
+            <tbody>${rowsHTML}</tbody>
+          </table>
+        </div>`;
+
+      detailsEl.innerHTML = headerHTML + bodyHTML;
+      container.appendChild(detailsEl);
+    });
+
+    function toggleAll(open) {
+      document.querySelectorAll('details').forEach(d => d.open = open);
+    }
+  </script>
 </body>
 </html>
