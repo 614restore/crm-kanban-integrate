@@ -108,16 +108,8 @@ export default function SubscriptionView() {
 
   const currentPlanIndex = PLANS.findIndex((p) => p.key === plan);
 
-  async function handleManageBilling() {
-    try {
-      const apiBase = import.meta.env.VITE_EMAIL_API_BASE_URL || '';
-      const res = await fetch(`${apiBase}/api/stripe-portal`, { method: 'POST' });
-      const data = await res.json();
-      if (data.url) window.location.href = data.url;
-      else toast.error('Could not open billing portal.');
-    } catch {
-      toast.error('Could not open billing portal.');
-    }
+  function handleManageBilling() {
+    window.open('https://billing.stripe.com/p/login/aFa9AVb73faq5vsfmw6Na00', '_blank');
   }
 
   function handlePlanAction(_planKey: string) {
