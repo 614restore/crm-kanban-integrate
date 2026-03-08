@@ -1582,6 +1582,589 @@ const DocumentTemplates: React.FC = () => {
       lastModified: '2026-03-03',
       usageCount: 0,
       fileType: 'html'
+    },
+    {
+      id: '8',
+      name: 'Professional Roofing Proposal',
+      description: 'Full-featured proposal with scope, pricing, timeline, terms, and dual signature blocks',
+      category: 'proposal',
+      content: `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Proposal – {{PROPOSAL_NUMBER}}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; color: #1f2937; background: #fff; max-width: 820px; margin: 0 auto; padding: 30px; line-height: 1.6; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 4px solid #2563eb; padding-bottom: 18px; margin-bottom: 20px; }
+    .company-name { font-size: 26px; font-weight: 800; color: #2563eb; }
+    .company-tagline { font-size: 12px; color: #6b7280; font-style: italic; margin: 3px 0 8px; }
+    .company-contact { font-size: 12px; color: #4b5563; line-height: 1.6; }
+    .logo-box { width: 110px; height: 65px; background: #eff6ff; border: 2px dashed #93c5fd; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #2563eb; border-radius: 6px; }
+    .title-bar { background: linear-gradient(135deg, #1e40af, #2563eb); color: #fff; padding: 16px 24px; border-radius: 8px; text-align: center; margin-bottom: 22px; }
+    .title-bar h1 { font-size: 22px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; }
+    .title-bar p { font-size: 12px; opacity: 0.9; margin-top: 4px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 22px; }
+    .meta-item { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 10px; text-align: center; }
+    .meta-item .mlbl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.7px; color: #1d4ed8; font-weight: 700; }
+    .meta-item .mval { font-size: 13px; font-weight: 700; color: #1f2937; margin-top: 3px; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 22px; }
+    .info-card { padding: 16px; border-radius: 8px; border-left: 4px solid #2563eb; background: #f8fafc; }
+    .info-card.accent { border-color: #7c3aed; background: #faf5ff; }
+    .info-card h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; font-weight: 700; color: #1d4ed8; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid #e5e7eb; }
+    .info-card.accent h3 { color: #5b21b6; }
+    .info-card .row { display: flex; font-size: 13px; margin-bottom: 5px; }
+    .info-card .row .lbl { min-width: 130px; color: #6b7280; font-weight: 600; }
+    .info-card .row .val { color: #1f2937; }
+    .section { margin: 22px 0; }
+    .section-title { font-size: 16px; font-weight: 700; color: #1f2937; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #2563eb; display: flex; align-items: center; gap: 8px; }
+    .scope-box { background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 8px; padding: 18px; font-size: 14px; color: #374151; line-height: 1.9; }
+    .price-table { width: 100%; border-collapse: separate; border-spacing: 0; border-radius: 8px; overflow: hidden; border: 1px solid #e5e7eb; }
+    .price-table th { background: linear-gradient(135deg, #1e3a8a, #2563eb); color: #fff; padding: 10px 14px; text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .price-table td { padding: 11px 14px; border-bottom: 1px solid #f3f4f6; font-size: 13px; color: #374151; }
+    .price-table tr:last-child td { border-bottom: none; }
+    .price-table tr:nth-child(even) td { background: #f9fafb; }
+    .price-table td.amount { text-align: right; font-weight: 600; color: #111827; }
+    .totals-box { margin-top: 14px; display: flex; justify-content: flex-end; }
+    .totals-inner { min-width: 280px; }
+    .totals-inner .t-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #e5e7eb; font-size: 13px; }
+    .totals-inner .t-row.grand { font-size: 15px; font-weight: 800; color: #1e40af; border-top: 2px solid #2563eb; border-bottom: none; margin-top: 4px; padding-top: 8px; }
+    .total-banner { background: linear-gradient(135deg, #1e40af, #2563eb); color: #fff; border-radius: 8px; padding: 18px 24px; text-align: center; margin: 22px 0; }
+    .total-banner .tb-label { font-size: 13px; opacity: 0.9; text-transform: uppercase; letter-spacing: 1px; }
+    .total-banner .tb-amount { font-size: 34px; font-weight: 900; margin: 6px 0; }
+    .total-banner .tb-note { font-size: 12px; opacity: 0.85; }
+    .timeline-list { list-style: none; counter-reset: step; }
+    .timeline-list li { counter-increment: step; display: flex; align-items: flex-start; gap: 14px; padding: 10px 0; border-bottom: 1px solid #f3f4f6; font-size: 13px; }
+    .timeline-list li::before { content: counter(step); background: #2563eb; color: #fff; min-width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; margin-top: 1px; }
+    .terms-box { background: #fefce8; border-left: 4px solid #f59e0b; border-radius: 0 8px 8px 0; padding: 16px 20px; font-size: 13px; color: #78350f; line-height: 1.9; }
+    .acceptance-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 18px; margin: 22px 0; font-size: 13px; color: #166534; }
+    .acceptance-box strong { color: #14532d; }
+    .sig-section { margin-top: 30px; }
+    .sig-section h3 { font-size: 14px; font-weight: 700; color: #1f2937; margin-bottom: 18px; padding-bottom: 8px; border-bottom: 2px solid #2563eb; }
+    .sig-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
+    .sig-block { }
+    .sig-line { border-bottom: 2px solid #374151; height: 48px; margin-bottom: 6px; }
+    .sig-meta { font-size: 12px; color: #6b7280; }
+    .sig-meta strong { color: #1f2937; display: block; font-size: 13px; margin-bottom: 2px; }
+    .date-line { border-bottom: 1px solid #9ca3af; height: 30px; margin: 16px 0 4px; }
+    .date-label { font-size: 11px; color: #9ca3af; }
+    .footer { margin-top: 30px; text-align: center; font-size: 11px; color: #9ca3af; border-top: 1px solid #e5e7eb; padding-top: 14px; line-height: 1.8; }
+    @media print { body { padding: 15px; } }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <div class="header">
+    <div>
+      <div class="company-name">{{COMPANY_NAME}}</div>
+      <div class="company-tagline">{{COMPANY_TAGLINE}}</div>
+      <div class="company-contact">
+        <strong>{{REP_NAME}}</strong> – Licensed Contractor<br>
+        {{COMPANY_ADDRESS}}, {{COMPANY_CITY}}, {{COMPANY_STATE}} {{COMPANY_ZIP}}<br>
+        Phone: {{COMPANY_PHONE}} | Email: {{COMPANY_EMAIL}}<br>
+        License #: {{CONTRACTOR_LICENSE}} | ROC #: {{ROC_NUMBER}}
+      </div>
+    </div>
+    <div class="logo-box">{{COMPANY_LOGO}}</div>
+  </div>
+
+  <!-- TITLE BAR -->
+  <div class="title-bar">
+    <h1>&#128196; Project Proposal</h1>
+    <p>Prepared exclusively for {{CUSTOMER_NAME}} – Confidential</p>
+  </div>
+
+  <!-- META -->
+  <div class="meta-grid">
+    <div class="meta-item"><div class="mlbl">Proposal #</div><div class="mval">{{PROPOSAL_NUMBER}}</div></div>
+    <div class="meta-item"><div class="mlbl">Date Issued</div><div class="mval">{{PROPOSAL_DATE}}</div></div>
+    <div class="meta-item"><div class="mlbl">Valid Until</div><div class="mval">{{EXPIRATION_DATE}}</div></div>
+    <div class="meta-item"><div class="mlbl">Rep / Estimator</div><div class="mval">{{REP_NAME}}</div></div>
+  </div>
+
+  <!-- CUSTOMER & PROJECT INFO -->
+  <div class="two-col">
+    <div class="info-card">
+      <h3>Customer Information</h3>
+      <div class="row"><span class="lbl">Name:</span><span class="val">{{CUSTOMER_NAME}}</span></div>
+      <div class="row"><span class="lbl">Phone:</span><span class="val">{{CUSTOMER_PHONE}}</span></div>
+      <div class="row"><span class="lbl">Email:</span><span class="val">{{CUSTOMER_EMAIL}}</span></div>
+      <div class="row"><span class="lbl">Property Address:</span><span class="val">{{PROPERTY_ADDRESS}}</span></div>
+      <div class="row"><span class="lbl">City / State / ZIP:</span><span class="val">{{PROPERTY_CITY}}, {{PROPERTY_STATE}} {{PROPERTY_ZIP}}</span></div>
+      <div class="row"><span class="lbl">Property Type:</span><span class="val">{{PROPERTY_TYPE}}</span></div>
+    </div>
+    <div class="info-card accent">
+      <h3>Project Details</h3>
+      <div class="row"><span class="lbl">Project Type:</span><span class="val">{{PROJECT_TYPE}}</span></div>
+      <div class="row"><span class="lbl">Proposed Start:</span><span class="val">{{PROPOSED_START_DATE}}</span></div>
+      <div class="row"><span class="lbl">Est. Duration:</span><span class="val">{{ESTIMATED_DURATION}}</span></div>
+      <div class="row"><span class="lbl">Insurance Carrier:</span><span class="val">{{INSURANCE_COMPANY}}</span></div>
+      <div class="row"><span class="lbl">Claim Number:</span><span class="val">{{CLAIM_NUMBER}}</span></div>
+      <div class="row"><span class="lbl">Deductible:</span><span class="val">{{DEDUCTIBLE_AMOUNT}}</span></div>
+    </div>
+  </div>
+
+  <!-- EXECUTIVE SUMMARY -->
+  <div class="section">
+    <div class="section-title">&#x1F4CB; Executive Summary</div>
+    <div class="scope-box">{{EXECUTIVE_SUMMARY}}</div>
+  </div>
+
+  <!-- SCOPE OF WORK -->
+  <div class="section">
+    <div class="section-title">&#x1F6E0;&#xFE0F; Scope of Work</div>
+    <div class="scope-box">{{SCOPE_OF_WORK}}</div>
+  </div>
+
+  <!-- MATERIALS & SPECIFICATIONS -->
+  <div class="section">
+    <div class="section-title">&#x1F4E6; Materials &amp; Specifications</div>
+    <div class="scope-box">{{MATERIALS_SPECS}}</div>
+  </div>
+
+  <!-- PRICING BREAKDOWN -->
+  <div class="section">
+    <div class="section-title">&#x1F4B0; Pricing Breakdown</div>
+    <table class="price-table">
+      <thead>
+        <tr>
+          <th style="width:40%">Description</th>
+          <th style="width:15%">Qty / Unit</th>
+          <th style="width:15%">Unit Price</th>
+          <th style="width:15%" class="amount">Subtotal</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{PRICING_BREAKDOWN_ROWS}}
+      </tbody>
+    </table>
+    <div class="totals-box">
+      <div class="totals-inner">
+        <div class="t-row"><span>Subtotal</span><span>{{SUBTOTAL}}</span></div>
+        <div class="t-row"><span>Tax ({{TAX_RATE}}%)</span><span>{{TAX_AMOUNT}}</span></div>
+        <div class="t-row"><span>Insurance Deductible (–)</span><span>–{{DEDUCTIBLE_AMOUNT}}</span></div>
+        <div class="t-row grand"><span>TOTAL DUE</span><span>{{TOTAL_AMOUNT}}</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOTAL BANNER -->
+  <div class="total-banner">
+    <div class="tb-label">Total Investment</div>
+    <div class="tb-amount">{{TOTAL_AMOUNT}}</div>
+    <div class="tb-note">Final amount due upon project completion and customer approval</div>
+  </div>
+
+  <!-- PROJECT TIMELINE -->
+  <div class="section">
+    <div class="section-title">&#x1F4C5; Project Timeline</div>
+    <ul class="timeline-list">
+      <li><span><strong>Initial Inspection &amp; Documentation</strong> – Damage assessment, photos, and insurance coordination ({{TIMELINE_STEP1_DURATION}})</span></li>
+      <li><span><strong>Material Procurement</strong> – Ordering and delivery of approved materials ({{TIMELINE_STEP2_DURATION}})</span></li>
+      <li><span><strong>Project Mobilization</strong> – Crew scheduling, permits if required, site preparation</span></li>
+      <li><span><strong>Installation / Restoration</strong> – {{PROJECT_TYPE}} work per approved scope ({{TIMELINE_STEP4_DURATION}})</span></li>
+      <li><span><strong>Quality Inspection</strong> – Final walkthrough with homeowner and punch-list completion</span></li>
+      <li><span><strong>Final Cleanup &amp; Completion</strong> – Site restoration, debris removal, final invoice</span></li>
+    </ul>
+  </div>
+
+  <!-- WARRANTY -->
+  <div class="section">
+    <div class="section-title">&#x1F6E1;&#xFE0F; Warranty &amp; Guarantees</div>
+    <div class="scope-box">
+      <strong>Workmanship Warranty:</strong> {{WORKMANSHIP_WARRANTY}} on all labor performed by {{COMPANY_NAME}}.<br>
+      <strong>Manufacturer Warranty:</strong> {{MANUFACTURER_WARRANTY}} on materials (transferred to homeowner upon completion).<br>
+      <strong>Satisfaction Guarantee:</strong> We stand behind every project. Any defects in workmanship will be corrected at no charge within the warranty period.<br>
+      <strong>Warranty Registration:</strong> {{COMPANY_NAME}} will handle all manufacturer warranty registration on your behalf.
+    </div>
+  </div>
+
+  <!-- TERMS & CONDITIONS -->
+  <div class="section">
+    <div class="section-title">&#x1F4DC; Terms &amp; Conditions</div>
+    <div class="terms-box">
+      1. This proposal is valid for <strong>30 days</strong> from the date of issue.<br>
+      2. A signed copy of this proposal constitutes a legally binding agreement between the customer and {{COMPANY_NAME}}.<br>
+      3. Any changes to the scope of work must be agreed upon in writing via a signed Change Order.<br>
+      4. Payment terms: {{PAYMENT_TERMS}}.<br>
+      5. {{COMPANY_NAME}} carries general liability insurance and workers' compensation coverage. Certificates available upon request.<br>
+      6. Proposal is contingent upon insurance approval where applicable. Final pricing may be adjusted per insurance settlement.<br>
+      7. Homeowner is responsible for ensuring clear access to the work area on scheduled start date.<br>
+      8. {{COMPANY_NAME}} is not responsible for pre-existing conditions unless specifically included in this scope.<br>
+      9. Disputes shall be resolved by binding arbitration under the rules of the American Arbitration Association.<br>
+      10. Governing law: State of {{COMPANY_STATE}}.
+    </div>
+  </div>
+
+  <!-- ACCEPTANCE BOX -->
+  <div class="acceptance-box">
+    <strong>&#x2705; To Accept This Proposal:</strong><br>
+    Please sign below and return a copy to {{COMPANY_NAME}} via email to <strong>{{COMPANY_EMAIL}}</strong> or in person.
+    Your signature authorizes {{COMPANY_NAME}} to proceed with the work described above under the stated terms and conditions.
+  </div>
+
+  <!-- SIGNATURES -->
+  <div class="sig-section">
+    <h3>Authorization &amp; Signatures</h3>
+    <div class="sig-grid">
+      <div class="sig-block">
+        <div class="sig-line"></div>
+        <div class="sig-meta">
+          <strong>Customer / Property Owner</strong>
+          Print Name: {{CUSTOMER_NAME}}<br>
+          Address: {{PROPERTY_ADDRESS}}<br>
+          Phone: {{CUSTOMER_PHONE}}
+        </div>
+        <div class="date-line"></div>
+        <div class="date-label">Date</div>
+      </div>
+      <div class="sig-block">
+        <div class="sig-line"></div>
+        <div class="sig-meta">
+          <strong>{{COMPANY_NAME}} – Authorized Representative</strong>
+          Print Name: {{REP_NAME}}<br>
+          Title: {{REP_TITLE}}<br>
+          License #: {{CONTRACTOR_LICENSE}}
+        </div>
+        <div class="date-line"></div>
+        <div class="date-label">Date</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    {{COMPANY_NAME}} | {{COMPANY_ADDRESS}}, {{COMPANY_CITY}}, {{COMPANY_STATE}} {{COMPANY_ZIP}}<br>
+    {{COMPANY_PHONE}} | {{COMPANY_EMAIL}} | License #{{CONTRACTOR_LICENSE}}<br>
+    Thank you for the opportunity to serve you!
+  </div>
+
+</body>
+</html>`,
+      variables: ['COMPANY_NAME','COMPANY_TAGLINE','REP_NAME','REP_TITLE','COMPANY_ADDRESS','COMPANY_CITY','COMPANY_STATE','COMPANY_ZIP','COMPANY_PHONE','COMPANY_EMAIL','CONTRACTOR_LICENSE','ROC_NUMBER','COMPANY_LOGO','PROPOSAL_NUMBER','PROPOSAL_DATE','EXPIRATION_DATE','CUSTOMER_NAME','CUSTOMER_PHONE','CUSTOMER_EMAIL','PROPERTY_ADDRESS','PROPERTY_CITY','PROPERTY_STATE','PROPERTY_ZIP','PROPERTY_TYPE','PROJECT_TYPE','PROPOSED_START_DATE','ESTIMATED_DURATION','INSURANCE_COMPANY','CLAIM_NUMBER','DEDUCTIBLE_AMOUNT','EXECUTIVE_SUMMARY','SCOPE_OF_WORK','MATERIALS_SPECS','PRICING_BREAKDOWN_ROWS','SUBTOTAL','TAX_RATE','TAX_AMOUNT','TOTAL_AMOUNT','TIMELINE_STEP1_DURATION','TIMELINE_STEP2_DURATION','TIMELINE_STEP4_DURATION','WORKMANSHIP_WARRANTY','MANUFACTURER_WARRANTY','PAYMENT_TERMS'],
+      favorite: true,
+      isDefault: true,
+      tags: ['proposal', 'roofing', 'restoration', 'professional', 'insurance'],
+      createdAt: '2026-03-07',
+      lastModified: '2026-03-07',
+      usageCount: 0,
+      fileType: 'html'
+    },
+    {
+      id: '9',
+      name: 'Roofing & Restoration Contract',
+      description: 'Legally complete contractor agreement with scope, payment schedule, liability clauses, and dual signature blocks',
+      category: 'contract',
+      content: `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Contract – {{CONTRACT_NUMBER}}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; color: #1f2937; background: #fff; max-width: 820px; margin: 0 auto; padding: 30px; line-height: 1.6; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 4px solid #059669; padding-bottom: 18px; margin-bottom: 20px; }
+    .company-name { font-size: 26px; font-weight: 800; color: #059669; }
+    .company-tagline { font-size: 12px; color: #6b7280; font-style: italic; margin: 3px 0 8px; }
+    .company-contact { font-size: 12px; color: #4b5563; line-height: 1.6; }
+    .logo-box { width: 110px; height: 65px; background: #ecfdf5; border: 2px dashed #6ee7b7; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #059669; border-radius: 6px; }
+    .title-bar { background: linear-gradient(135deg, #065f46, #059669); color: #fff; padding: 16px 24px; border-radius: 8px; text-align: center; margin-bottom: 22px; }
+    .title-bar h1 { font-size: 22px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; }
+    .title-bar p { font-size: 12px; opacity: 0.9; margin-top: 4px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 22px; }
+    .meta-item { background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 6px; padding: 10px; text-align: center; }
+    .meta-item .mlbl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.7px; color: #065f46; font-weight: 700; }
+    .meta-item .mval { font-size: 13px; font-weight: 700; color: #1f2937; margin-top: 3px; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 22px; }
+    .info-card { padding: 16px; border-radius: 8px; border-left: 4px solid #059669; background: #f0fdf4; }
+    .info-card.accent { border-color: #2563eb; background: #eff6ff; }
+    .info-card h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; font-weight: 700; color: #065f46; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid #d1fae5; }
+    .info-card.accent h3 { color: #1d4ed8; border-color: #bfdbfe; }
+    .info-card .row { display: flex; font-size: 13px; margin-bottom: 5px; }
+    .info-card .row .lbl { min-width: 130px; color: #6b7280; font-weight: 600; }
+    .info-card .row .val { color: #1f2937; }
+    .section { margin: 22px 0; }
+    .section-title { font-size: 15px; font-weight: 700; color: #1f2937; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #059669; }
+    .scope-box { background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 8px; padding: 18px; font-size: 13px; color: #374151; line-height: 1.9; }
+    .price-table { width: 100%; border-collapse: separate; border-spacing: 0; border-radius: 8px; overflow: hidden; border: 1px solid #e5e7eb; }
+    .price-table th { background: linear-gradient(135deg, #064e3b, #059669); color: #fff; padding: 10px 14px; text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .price-table td { padding: 11px 14px; border-bottom: 1px solid #f3f4f6; font-size: 13px; color: #374151; }
+    .price-table tr:last-child td { border-bottom: none; }
+    .price-table tr:nth-child(even) td { background: #f9fafb; }
+    .price-table td.amount { text-align: right; font-weight: 600; }
+    .totals-box { margin-top: 14px; display: flex; justify-content: flex-end; }
+    .totals-inner { min-width: 300px; }
+    .totals-inner .t-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #e5e7eb; font-size: 13px; }
+    .totals-inner .t-row.grand { font-size: 15px; font-weight: 800; color: #065f46; border-top: 2px solid #059669; border-bottom: none; margin-top: 4px; padding-top: 8px; }
+    .pay-schedule { width: 100%; border-collapse: separate; border-spacing: 0; border-radius: 8px; overflow: hidden; border: 1px solid #e5e7eb; }
+    .pay-schedule th { background: linear-gradient(135deg, #1e3a8a, #2563eb); color: #fff; padding: 10px 14px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .pay-schedule td { padding: 10px 14px; border-bottom: 1px solid #f3f4f6; font-size: 13px; }
+    .pay-schedule tr:last-child td { border-bottom: none; }
+    .total-banner { background: linear-gradient(135deg, #064e3b, #059669); color: #fff; border-radius: 8px; padding: 18px 24px; text-align: center; margin: 22px 0; }
+    .total-banner .tb-label { font-size: 13px; opacity: 0.9; text-transform: uppercase; letter-spacing: 1px; }
+    .total-banner .tb-amount { font-size: 34px; font-weight: 900; margin: 6px 0; }
+    .total-banner .tb-note { font-size: 12px; opacity: 0.85; }
+    .terms-box { background: #fefce8; border-left: 4px solid #f59e0b; border-radius: 0 8px 8px 0; padding: 16px 20px; font-size: 12.5px; color: #78350f; line-height: 2; }
+    .legal-section { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 18px; font-size: 12px; color: #4b5563; line-height: 1.9; margin-bottom: 16px; }
+    .legal-section strong { color: #1f2937; }
+    .notice-box { background: #fef2f2; border-left: 4px solid #ef4444; border-radius: 0 8px 8px 0; padding: 14px 18px; font-size: 12px; color: #991b1b; margin: 18px 0; }
+    .sig-section { margin-top: 30px; }
+    .sig-section h3 { font-size: 14px; font-weight: 700; color: #1f2937; margin-bottom: 18px; padding-bottom: 8px; border-bottom: 2px solid #059669; }
+    .sig-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
+    .sig-block { }
+    .sig-line { border-bottom: 2px solid #374151; height: 50px; margin-bottom: 6px; }
+    .sig-meta { font-size: 12px; color: #6b7280; line-height: 1.8; }
+    .sig-meta strong { color: #1f2937; display: block; font-size: 13px; margin-bottom: 2px; }
+    .date-line { border-bottom: 1px solid #9ca3af; height: 30px; margin: 16px 0 4px; }
+    .date-label { font-size: 11px; color: #9ca3af; }
+    .initials-row { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 20px; }
+    .initials-box { text-align: center; }
+    .initials-line { border-bottom: 2px solid #374151; height: 35px; margin-bottom: 5px; }
+    .initials-label { font-size: 11px; color: #6b7280; }
+    .footer { margin-top: 30px; text-align: center; font-size: 11px; color: #9ca3af; border-top: 1px solid #e5e7eb; padding-top: 14px; line-height: 1.8; }
+    @media print { body { padding: 15px; } }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <div class="header">
+    <div>
+      <div class="company-name">{{COMPANY_NAME}}</div>
+      <div class="company-tagline">{{COMPANY_TAGLINE}}</div>
+      <div class="company-contact">
+        <strong>{{REP_NAME}}</strong> – {{REP_TITLE}}<br>
+        {{COMPANY_ADDRESS}}, {{COMPANY_CITY}}, {{COMPANY_STATE}} {{COMPANY_ZIP}}<br>
+        Phone: {{COMPANY_PHONE}} | Email: {{COMPANY_EMAIL}}<br>
+        License #: {{CONTRACTOR_LICENSE}} | ROC #: {{ROC_NUMBER}} | Insurance Policy: {{INSURANCE_POLICY_NUMBER}}
+      </div>
+    </div>
+    <div class="logo-box">{{COMPANY_LOGO}}</div>
+  </div>
+
+  <!-- TITLE BAR -->
+  <div class="title-bar">
+    <h1>&#x1F4DC; Roofing &amp; Restoration Contract</h1>
+    <p>This is a legally binding agreement – Please read all terms carefully before signing</p>
+  </div>
+
+  <!-- META -->
+  <div class="meta-grid">
+    <div class="meta-item"><div class="mlbl">Contract #</div><div class="mval">{{CONTRACT_NUMBER}}</div></div>
+    <div class="meta-item"><div class="mlbl">Date</div><div class="mval">{{CONTRACT_DATE}}</div></div>
+    <div class="meta-item"><div class="mlbl">Project Start</div><div class="mval">{{PROJECT_START_DATE}}</div></div>
+    <div class="meta-item"><div class="mlbl">Est. Completion</div><div class="mval">{{ESTIMATED_COMPLETION}}</div></div>
+  </div>
+
+  <!-- PARTIES -->
+  <div class="two-col">
+    <div class="info-card">
+      <h3>Contractor (Party A)</h3>
+      <div class="row"><span class="lbl">Company:</span><span class="val">{{COMPANY_NAME}}</span></div>
+      <div class="row"><span class="lbl">Representative:</span><span class="val">{{REP_NAME}}</span></div>
+      <div class="row"><span class="lbl">Title:</span><span class="val">{{REP_TITLE}}</span></div>
+      <div class="row"><span class="lbl">Address:</span><span class="val">{{COMPANY_ADDRESS}}</span></div>
+      <div class="row"><span class="lbl">City/State/ZIP:</span><span class="val">{{COMPANY_CITY}}, {{COMPANY_STATE}} {{COMPANY_ZIP}}</span></div>
+      <div class="row"><span class="lbl">Phone:</span><span class="val">{{COMPANY_PHONE}}</span></div>
+      <div class="row"><span class="lbl">License #:</span><span class="val">{{CONTRACTOR_LICENSE}}</span></div>
+    </div>
+    <div class="info-card accent">
+      <h3>Customer / Property Owner (Party B)</h3>
+      <div class="row"><span class="lbl">Name:</span><span class="val">{{CUSTOMER_NAME}}</span></div>
+      <div class="row"><span class="lbl">Phone:</span><span class="val">{{CUSTOMER_PHONE}}</span></div>
+      <div class="row"><span class="lbl">Email:</span><span class="val">{{CUSTOMER_EMAIL}}</span></div>
+      <div class="row"><span class="lbl">Property Address:</span><span class="val">{{PROPERTY_ADDRESS}}</span></div>
+      <div class="row"><span class="lbl">City/State/ZIP:</span><span class="val">{{PROPERTY_CITY}}, {{PROPERTY_STATE}} {{PROPERTY_ZIP}}</span></div>
+      <div class="row"><span class="lbl">Insurance Carrier:</span><span class="val">{{INSURANCE_COMPANY}}</span></div>
+      <div class="row"><span class="lbl">Claim #:</span><span class="val">{{CLAIM_NUMBER}}</span></div>
+    </div>
+  </div>
+
+  <!-- SCOPE OF WORK -->
+  <div class="section">
+    <div class="section-title">1. Scope of Work</div>
+    <div class="scope-box">{{SCOPE_OF_WORK}}</div>
+  </div>
+
+  <!-- MATERIALS -->
+  <div class="section">
+    <div class="section-title">2. Materials &amp; Specifications</div>
+    <div class="scope-box">{{MATERIALS_SPECS}}</div>
+  </div>
+
+  <!-- CONTRACT PRICE -->
+  <div class="section">
+    <div class="section-title">3. Contract Price &amp; Breakdown</div>
+    <table class="price-table">
+      <thead>
+        <tr>
+          <th style="width:40%">Item / Description</th>
+          <th style="width:15%">Qty / Unit</th>
+          <th style="width:15%">Unit Price</th>
+          <th style="width:15%" class="amount">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{PRICING_BREAKDOWN_ROWS}}
+      </tbody>
+    </table>
+    <div class="totals-box">
+      <div class="totals-inner">
+        <div class="t-row"><span>Subtotal</span><span>{{SUBTOTAL}}</span></div>
+        <div class="t-row"><span>Sales Tax ({{TAX_RATE}}%)</span><span>{{TAX_AMOUNT}}</span></div>
+        <div class="t-row"><span>Insurance Deductible (–)</span><span>–{{DEDUCTIBLE_AMOUNT}}</span></div>
+        <div class="t-row grand"><span>TOTAL CONTRACT AMOUNT</span><span>{{TOTAL_AMOUNT}}</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="total-banner">
+    <div class="tb-label">Total Contract Amount</div>
+    <div class="tb-amount">{{TOTAL_AMOUNT}}</div>
+    <div class="tb-note">This amount is the agreed total compensation for all work described herein</div>
+  </div>
+
+  <!-- PAYMENT SCHEDULE -->
+  <div class="section">
+    <div class="section-title">4. Payment Schedule</div>
+    <table class="pay-schedule">
+      <thead>
+        <tr>
+          <th>Milestone</th>
+          <th>Amount Due</th>
+          <th>Due Date / Trigger</th>
+          <th>Payment Method</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Deposit / Mobilization</td><td>{{DEPOSIT_AMOUNT}}</td><td>Upon contract signing</td><td>{{PAYMENT_METHOD}}</td></tr>
+        <tr><td>Materials Delivery</td><td>{{MATERIALS_PAYMENT}}</td><td>Upon material delivery confirmation</td><td>{{PAYMENT_METHOD}}</td></tr>
+        <tr><td>Substantial Completion</td><td>{{PROGRESS_PAYMENT}}</td><td>Upon 80% completion</td><td>{{PAYMENT_METHOD}}</td></tr>
+        <tr><td>Final Balance</td><td>{{FINAL_PAYMENT}}</td><td>Upon final inspection and customer sign-off</td><td>{{PAYMENT_METHOD}}</td></tr>
+      </tbody>
+    </table>
+    <div class="scope-box" style="margin-top:12px;">
+      <strong>Late Payment:</strong> Balances not paid within {{LATE_PAYMENT_DAYS}} days of invoice date will be subject to a {{LATE_FEE_RATE}}% per month finance charge. Customer is responsible for all collection costs including attorney's fees.<br>
+      <strong>Returned Checks:</strong> A ${{RETURNED_CHECK_FEE}} fee will be charged for any returned checks.
+    </div>
+  </div>
+
+  <!-- WARRANTIES -->
+  <div class="section">
+    <div class="section-title">5. Warranties</div>
+    <div class="scope-box">
+      <strong>Workmanship Warranty:</strong> {{COMPANY_NAME}} warrants all labor and workmanship for a period of {{WORKMANSHIP_WARRANTY}} from the date of substantial completion.<br><br>
+      <strong>Manufacturer's Warranty:</strong> All materials carry the manufacturer's standard warranty of {{MANUFACTURER_WARRANTY}}. Warranty documents will be provided upon project completion.<br><br>
+      <strong>Exclusions:</strong> Warranties do not cover damage caused by acts of God, extreme weather events, vandalism, misuse, unauthorized modifications, or failure to maintain the property. Pre-existing conditions are excluded unless specifically addressed in this contract.
+    </div>
+  </div>
+
+  <!-- TERMS & CONDITIONS -->
+  <div class="section">
+    <div class="section-title">6. General Terms &amp; Conditions</div>
+    <div class="legal-section">
+      <strong>6.1 Change Orders:</strong> Any additions or alterations to the agreed scope of work must be documented in a written Change Order signed by both parties prior to commencement of the additional work. Change Orders may affect the contract price and timeline.
+    </div>
+    <div class="legal-section">
+      <strong>6.2 Access &amp; Permits:</strong> Customer agrees to provide {{COMPANY_NAME}} with reasonable access to the property during normal working hours. {{COMPANY_NAME}} will obtain all required permits unless otherwise agreed. Permit fees are included in the contract price unless otherwise noted.
+    </div>
+    <div class="legal-section">
+      <strong>6.3 Unforeseen Conditions:</strong> If hidden or unforeseen conditions are discovered during the project that require additional work not included in this contract, {{COMPANY_NAME}} will notify the customer prior to proceeding. A Change Order will be required for any additional costs.
+    </div>
+    <div class="legal-section">
+      <strong>6.4 Insurance &amp; Liability:</strong> {{COMPANY_NAME}} carries general liability insurance (policy #{{INSURANCE_POLICY_NUMBER}}) and workers' compensation coverage. Customer is advised to maintain their homeowner's insurance during the project. {{COMPANY_NAME}} is not liable for pre-existing conditions, interior damage from roof leaks unless caused by {{COMPANY_NAME}}'s negligence, or incidental/consequential damages.
+    </div>
+    <div class="legal-section">
+      <strong>6.5 Cancellation:</strong> Customer may cancel this contract within 3 business days of signing without penalty (Right of Rescission, where applicable). Cancellations after materials have been ordered or work has commenced will be subject to costs incurred by {{COMPANY_NAME}}, including restocking fees and labor costs.
+    </div>
+    <div class="legal-section">
+      <strong>6.6 Insurance Assignment:</strong> Customer authorizes {{COMPANY_NAME}} to communicate directly with the insurance company and adjuster regarding this claim. Customer agrees not to accept an insurance settlement check covering this project without first consulting {{COMPANY_NAME}}.
+    </div>
+    <div class="legal-section">
+      <strong>6.7 Lien Rights:</strong> {{COMPANY_NAME}} reserves the right to file a mechanic's lien on the property for any unpaid balance. Customer will receive a Preliminary Notice as required by state law.
+    </div>
+    <div class="legal-section">
+      <strong>6.8 Dispute Resolution:</strong> Any dispute arising from this contract shall first be addressed through good-faith mediation. If unresolved, disputes will be submitted to binding arbitration under the rules of the American Arbitration Association. The prevailing party is entitled to recover reasonable attorney's fees and costs. This contract is governed by the laws of the State of {{COMPANY_STATE}}.
+    </div>
+    <div class="legal-section">
+      <strong>6.9 Entire Agreement:</strong> This contract, together with any attached exhibits or Change Orders, constitutes the entire agreement between the parties. No verbal representations or prior agreements not incorporated herein are binding.
+    </div>
+    <div class="legal-section">
+      <strong>6.10 Severability:</strong> If any provision of this contract is found to be unenforceable, the remaining provisions shall remain in full force and effect.
+    </div>
+  </div>
+
+  <!-- NOTICE -->
+  <div class="notice-box">
+    <strong>&#x26A0;&#xFE0F; IMPORTANT LEGAL NOTICE:</strong> This is a legally binding contract. By signing below, both parties acknowledge that they have read, understand, and agree to all terms and conditions set forth in this agreement. If you have questions, consult a licensed attorney before signing.
+  </div>
+
+  <!-- SIGNATURES -->
+  <div class="sig-section">
+    <h3>Signatures &amp; Authorization</h3>
+    <div class="sig-grid">
+      <div class="sig-block">
+        <div class="sig-line"></div>
+        <div class="sig-meta">
+          <strong>Customer / Property Owner Signature</strong>
+          Print Name: {{CUSTOMER_NAME}}<br>
+          Property: {{PROPERTY_ADDRESS}}<br>
+          Phone: {{CUSTOMER_PHONE}}<br>
+          Email: {{CUSTOMER_EMAIL}}
+        </div>
+        <div class="date-line"></div>
+        <div class="date-label">Date Signed</div>
+      </div>
+      <div class="sig-block">
+        <div class="sig-line"></div>
+        <div class="sig-meta">
+          <strong>{{COMPANY_NAME}} – Authorized Representative</strong>
+          Print Name: {{REP_NAME}}<br>
+          Title: {{REP_TITLE}}<br>
+          License #: {{CONTRACTOR_LICENSE}}<br>
+          Company: {{COMPANY_NAME}}
+        </div>
+        <div class="date-line"></div>
+        <div class="date-label">Date Signed</div>
+      </div>
+    </div>
+
+    <!-- INITIALS ROW -->
+    <div style="margin-top: 24px; padding: 16px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">
+      <p style="font-size: 12px; color: #6b7280; margin-bottom: 14px; text-align: center;">
+        By initialing below, both parties confirm they have read and agree to Sections 4 (Payment), 5 (Warranties), and 6 (Terms &amp; Conditions).
+      </p>
+      <div class="initials-row">
+        <div class="initials-box">
+          <div class="initials-line"></div>
+          <div class="initials-label">Customer Initials</div>
+        </div>
+        <div class="initials-box">
+          <div class="initials-line"></div>
+          <div class="initials-label">Contractor Initials</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    {{COMPANY_NAME}} | {{COMPANY_ADDRESS}}, {{COMPANY_CITY}}, {{COMPANY_STATE}} {{COMPANY_ZIP}}<br>
+    {{COMPANY_PHONE}} | {{COMPANY_EMAIL}} | License #{{CONTRACTOR_LICENSE}}<br>
+    Contract #{{CONTRACT_NUMBER}} – Generated {{CONTRACT_DATE}}
+  </div>
+
+</body>
+</html>`,
+      variables: ['COMPANY_NAME','COMPANY_TAGLINE','REP_NAME','REP_TITLE','COMPANY_ADDRESS','COMPANY_CITY','COMPANY_STATE','COMPANY_ZIP','COMPANY_PHONE','COMPANY_EMAIL','CONTRACTOR_LICENSE','ROC_NUMBER','INSURANCE_POLICY_NUMBER','COMPANY_LOGO','CONTRACT_NUMBER','CONTRACT_DATE','PROJECT_START_DATE','ESTIMATED_COMPLETION','CUSTOMER_NAME','CUSTOMER_PHONE','CUSTOMER_EMAIL','PROPERTY_ADDRESS','PROPERTY_CITY','PROPERTY_STATE','PROPERTY_ZIP','INSURANCE_COMPANY','CLAIM_NUMBER','SCOPE_OF_WORK','MATERIALS_SPECS','PRICING_BREAKDOWN_ROWS','SUBTOTAL','TAX_RATE','TAX_AMOUNT','DEDUCTIBLE_AMOUNT','TOTAL_AMOUNT','DEPOSIT_AMOUNT','MATERIALS_PAYMENT','PROGRESS_PAYMENT','FINAL_PAYMENT','PAYMENT_METHOD','LATE_PAYMENT_DAYS','LATE_FEE_RATE','RETURNED_CHECK_FEE','WORKMANSHIP_WARRANTY','MANUFACTURER_WARRANTY'],
+      favorite: true,
+      isDefault: true,
+      tags: ['contract', 'roofing', 'restoration', 'legal', 'insurance', 'professional'],
+      createdAt: '2026-03-07',
+      lastModified: '2026-03-07',
+      usageCount: 0,
+      fileType: 'html'
     }
       ];
       setTemplates(mockTemplates);
