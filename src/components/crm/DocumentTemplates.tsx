@@ -2289,12 +2289,12 @@ const DocumentTemplates: React.FC = () => {
       'POLICY_NUMBER': (contact as any).policy_number || '',
       'CLAIM_NUMBER': (contact as any).claim_number || '',
     };
-    // First apply company/default values
-    content = getPreviewContent({ ...template, content });
-    // Then override with real contact values
+    // Apply contact overrides FIRST (using {{KEY}} pattern) before company/sample fill
     Object.entries(overrides).forEach(([key, val]) => {
-      if (val) content = content.replace(new RegExp(`\\[${key}\\]`, 'g'), val);
+      if (val) content = content.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), val);
     });
+    // Then fill remaining variables (company info, dates, etc.) with real company + sample data
+    content = getPreviewContent({ ...template, content });
     return content;
   };
 
@@ -2326,7 +2326,10 @@ const DocumentTemplates: React.FC = () => {
         ? `<img src="${companyProfile.logo_url}" alt="${companyProfile.name || 'Company'} Logo" style="max-height:60px;max-width:180px;object-fit:contain;" />`
         : (companyProfile?.name || 'TrussCTR'),
       'TAX_ID': companyProfile?.tax_id || '31-1234567',
+      'ROC_NUMBER': companyProfile?.contractor_license || 'ROC-123456',
+      'INSURANCE_POLICY_NUMBER': (companyProfile as any)?.insurance_policy_number || '[INSURANCE_POLICY_NUMBER]',
       'REP_NAME': (profile?.first_name && profile?.last_name) ? `${profile.first_name} ${profile.last_name}` : 'David Mitchell',
+      'REP_TITLE': (profile as any)?.title || 'Project Manager',
       // Customer info
       'CUSTOMER_NAME': 'John & Mary Johnson',
       'CUSTOMER_PHONE': '(614) 555-0142',
