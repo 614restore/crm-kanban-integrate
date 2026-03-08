@@ -305,6 +305,7 @@ export interface MaterialOrder {
   total: number;
   items: MaterialOrderItem[];
   notes?: string;
+  attachments?: string[];
   createdBy: string;
   createdAt: string;
   updatedAt: string;

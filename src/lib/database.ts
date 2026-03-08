@@ -18,6 +18,12 @@ export interface DbCompany {
   tax_id?: string;
   from_email?: string;
   from_name?: string;
+  subscription_plan?: 'starter' | 'professional' | 'enterprise' | 'trial';
+  subscription_status?: 'active' | 'past_due' | 'canceled' | 'trialing';
+  trial_ends_at?: string;
+  subscription_ends_at?: string;
+  stripe_customer_id?: string;
+  stripe_subscription_id?: string;
   created_at: string;
   updated_at: string;
 }
@@ -257,6 +263,7 @@ export interface DbMaterialOrder {
   shipping: number;
   total: number;
   notes?: string;
+  attachments?: string[];
   created_by: string;
   created_at: string;
   updated_at: string;

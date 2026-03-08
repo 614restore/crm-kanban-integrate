@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useCRM, useFinancialStats } from '@/lib/crmStore';
 import { db, DbCompany } from '@/lib/database';
 import { sendEmail } from '@/lib/emailApi';
-import { exportToExcel } from '@/lib/exportUtils';
+import { exportToExcel, printDataAsPDF } from '@/lib/exportUtils';
 import { useAuth } from '@/lib/authContext';
 import { toast } from 'sonner';
 import {
@@ -64,6 +64,33 @@ export default function FinancialDashboard() {
 
     exportToExcel(allInvoices);
     toast.success('Invoice export started');
+  };
+
+  const handleExportPDF = () => {
+    printDataAsPDF('Financial Dashboard Report', [
+      {
+        heading: 'Invoice Summary',
+        rows: filteredInvoices.map(inv => ({
+          Customer: inv.contactName,
+          Amount: formatCurrency(inv.amount),
+          Status: inv.status,
+          Due_Date: inv.dueDate ? formatDate(inv.dueDate) : '—',
+          Paid_Date: inv.paidAt ? formatDate(inv.paidAt) : '—',
+        }))
+      },
+      {
+        heading: 'Financial KPIs',
+        rows: [
+          { Metric: 'Total Revenue', Value: formatCurrency(financialStats.totalRevenue) },
+          { Metric: 'Outstanding Invoices', Value: formatCurrency(financialStats.outstandingInvoices) },
+          { Metric: 'Overdue Invoices', Value: formatCurrency(financialStats.overdueInvoices) },
+          { Metric: 'Paid Invoices', Value: formatCurrency(financialStats.paidInvoices) },
+          { Metric: 'Deposits Collected', Value: formatCurrency(financialStats.depositsCollected) },
+          { Metric: 'Pending Payments', Value: formatCurrency(financialStats.pendingPayments) },
+        ]
+      }
+    ]);
+    toast.success('PDF print dialog opened');
   };
 
   const handleConnectQuickBooks = () => {
@@ -247,7 +274,14 @@ export default function FinancialDashboard() {
             className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
           >
             <Download size={18} />
-            <span className="font-medium">Export</span>
+            <span className="font-medium">Export CSV</span>
+          </button>
+          <button
+            onClick={handleExportPDF}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <Printer size={18} />
+            <span className="font-medium">Export PDF</span>
           </button>
           <button
             onClick={() => dispatch({ type: 'TOGGLE_INVOICE_MODAL' })}

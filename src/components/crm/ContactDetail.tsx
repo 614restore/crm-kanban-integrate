@@ -1908,6 +1908,9 @@ export default function ContactDetail() {
                 materials: [], // Add materials logic if available  
                 notes: wo.notes
               }))}
+              onStatusChange={handleStatusChange}
+              onScheduleInspection={() => setShowAppointmentModal(true)}
+              onSendEstimate={() => setShowEstimateModal(true)}
             />
           </div>
         )}

@@ -18,6 +18,9 @@ import {
 interface JobStatusTimelineProps {
   contact: Contact;
   jobs?: Job[];
+  onStatusChange?: (newStatus: CustomerStatus) => void;
+  onScheduleInspection?: () => void;
+  onSendEstimate?: () => void;
 }
 
 const statusSteps: { 
@@ -41,7 +44,7 @@ const statusSteps: {
   { status: 'completed', label: 'Completed', description: 'Project finished successfully', icon: CheckCircle, color: 'emerald' },
 ];
 
-const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({ contact, jobs = [] }) => {
+const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({ contact, jobs = [], onStatusChange, onScheduleInspection, onSendEstimate }) => {
   const currentStatusIndex = statusSteps.findIndex(step => step.status === contact.status);
   
   const getStatusColor = (index: number) => {
@@ -247,20 +250,72 @@ const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({ contact, jobs = [
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {contact.status === 'lead' && (
-            <button className="p-3 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors text-sm font-medium">
+            <button
+              onClick={onScheduleInspection}
+              className="p-3 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors text-sm font-medium disabled:opacity-50"
+              disabled={!onScheduleInspection}
+            >
               Schedule Inspection
             </button>
           )}
           
           {contact.status === 'inspection_completed' && (
-            <button className="p-3 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm font-medium">
+            <button
+              onClick={onSendEstimate}
+              className="p-3 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm font-medium disabled:opacity-50"
+              disabled={!onSendEstimate}
+            >
               Send Estimate
             </button>
           )}
           
           {contact.status === 'estimate_sent' && (
-            <button className="p-3 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors text-sm font-medium">
-              Follow Up
+            <button
+              onClick={() => onStatusChange?.('contingency')}
+              className="p-3 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 transition-colors text-sm font-medium disabled:opacity-50"
+              disabled={!onStatusChange}
+            >
+              Mark Contingency
+            </button>
+          )}
+
+          {contact.status === 'contingency' && (
+            <button
+              onClick={() => onStatusChange?.('signed')}
+              className="p-3 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors text-sm font-medium disabled:opacity-50"
+              disabled={!onStatusChange}
+            >
+              Mark Signed
+            </button>
+          )}
+
+          {contact.status === 'signed' && (
+            <button
+              onClick={() => onStatusChange?.('in_progress')}
+              className="p-3 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors text-sm font-medium disabled:opacity-50"
+              disabled={!onStatusChange}
+            >
+              Start Work
+            </button>
+          )}
+
+          {contact.status === 'in_progress' && (
+            <button
+              onClick={() => onStatusChange?.('invoicing')}
+              className="p-3 bg-rose-100 text-rose-700 rounded-lg hover:bg-rose-200 transition-colors text-sm font-medium disabled:opacity-50"
+              disabled={!onStatusChange}
+            >
+              Move to Invoicing
+            </button>
+          )}
+
+          {contact.status === 'invoicing' && (
+            <button
+              onClick={() => onStatusChange?.('completed')}
+              className="p-3 bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200 transition-colors text-sm font-medium disabled:opacity-50"
+              disabled={!onStatusChange}
+            >
+              Mark Completed
             </button>
           )}
           
