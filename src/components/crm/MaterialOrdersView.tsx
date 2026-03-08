@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
 import { MaterialOrder, MaterialOrderItem } from '@/lib/crmData';
 import { exportMaterialOrdersToExcel } from '@/lib/exportUtils';
+import { uploadDocument, getDocumentSignedUrl } from '@/lib/storage';
 import {
   Package,
   Plus,
@@ -22,6 +23,8 @@ import {
   FileText,
   Download,
   ChevronDown,
+  Upload,
+  Eye,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -139,6 +142,9 @@ export default function MaterialOrdersView() {
   const [shipping, setShipping] = useState('0');
   const [total, setTotal] = useState('0');
   const [notes, setNotes] = useState('');
+  const [attachments, setAttachments] = useState<string[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [items, setItems] = useState<MaterialOrder['items']>([]);
 
   // Load material orders on mount
@@ -169,6 +175,7 @@ export default function MaterialOrdersView() {
         total: Number(mo.total || 0),
         items: [], // Items loaded separately if needed
         notes: mo.notes,
+        attachments: mo.attachments || [],
         createdBy: mo.created_by,
         createdAt: mo.created_at,
         updatedAt: mo.updated_at,
@@ -197,6 +204,7 @@ export default function MaterialOrdersView() {
       setShipping(order.shipping.toString());
       setTotal(order.total.toString());
       setNotes(order.notes || '');
+      setAttachments(order.attachments || []);
       setItems(order.items || []);
     } else {
       // Generate order number
@@ -224,6 +232,7 @@ export default function MaterialOrdersView() {
     setShipping('0');
     setTotal('0');
     setNotes('');
+    setAttachments([]);
     setItems([]);
   };
 
@@ -307,6 +316,7 @@ export default function MaterialOrdersView() {
         shipping: parseFloat(shipping) || 0,
         total: parseFloat(total) || 0,
         notes: notes.trim() || undefined,
+        attachments: attachments.length > 0 ? attachments : undefined,
         created_by: profile.id,
       };
 
@@ -330,6 +340,7 @@ export default function MaterialOrdersView() {
             total: Number(updated.total || 0),
             items: items || [],
             notes: updated.notes,
+            attachments: updated.attachments || [],
             createdBy: updated.created_by,
             createdAt: updated.created_at,
             updatedAt: updated.updated_at,
@@ -357,6 +368,7 @@ export default function MaterialOrdersView() {
             total: Number(created.total || 0),
             items: items || [],
             notes: created.notes,
+            attachments: created.attachments || [],
             createdBy: created.created_by,
             createdAt: created.created_at,
             updatedAt: created.updated_at,
@@ -385,6 +397,35 @@ export default function MaterialOrdersView() {
       console.error('Error deleting material order:', error);
       toast.error('Failed to delete material order');
     }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || !profile?.company_id) return;
+    setIsUploading(true);
+    const newUrls: string[] = [];
+    for (const file of Array.from(files)) {
+      const result = await uploadDocument(file, profile.company_id, selectedContactId || undefined);
+      if (result.error) {
+        toast.error(`Failed to upload ${file.name}: ${result.error}`);
+      } else {
+        newUrls.push(result.path || result.url);
+        toast.success(`Uploaded ${file.name}`);
+      }
+    }
+    setAttachments(prev => [...prev, ...newUrls]);
+    setIsUploading(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleViewAttachment = async (pathOrUrl: string) => {
+    const url = await getDocumentSignedUrl(pathOrUrl);
+    if (url) window.open(url, '_blank');
+    else toast.error('Could not open file');
+  };
+
+  const handleRemoveAttachment = (idx: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== idx));
   };
 
   const handleExport = () => {
@@ -1060,6 +1101,49 @@ export default function MaterialOrdersView() {
                   rows={3}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
                 />
+              </div>
+
+              {/* Attachments */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Attachments
+                </label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.txt"
+                  className="hidden"
+                  onChange={handleFileUpload}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploading}
+                  className="flex items-center gap-2 px-3 py-2 border border-dashed border-gray-300 rounded-lg text-sm text-gray-600 hover:border-purple-400 hover:text-purple-600 transition-colors disabled:opacity-50"
+                >
+                  <Upload size={16} />
+                  {isUploading ? 'Uploading...' : 'Upload Files'}
+                </button>
+                {attachments.length > 0 && (
+                  <ul className="mt-2 space-y-1">
+                    {attachments.map((att, idx) => {
+                      const name = att.split('/').pop() || att;
+                      return (
+                        <li key={idx} className="flex items-center gap-2 text-sm bg-gray-50 rounded px-2 py-1">
+                          <FileText size={14} className="text-gray-400 shrink-0" />
+                          <span className="flex-1 truncate text-gray-700">{decodeURIComponent(name)}</span>
+                          <button type="button" onClick={() => handleViewAttachment(att)} className="text-blue-500 hover:text-blue-700">
+                            <Eye size={14} />
+                          </button>
+                          <button type="button" onClick={() => handleRemoveAttachment(idx)} className="text-red-400 hover:text-red-600">
+                            <X size={14} />
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
               </div>
             </div>
 

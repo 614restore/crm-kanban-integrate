@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
 import { WorkOrder } from '@/lib/crmData';
 import { exportWorkOrdersToExcel } from '@/lib/exportUtils';
 import { SignaturePad } from './SignaturePad';
+import { uploadDocument, getDocumentSignedUrl, formatFileSize } from '@/lib/storage';
 import {
   Clipboard,
   Plus,
@@ -27,6 +28,9 @@ import {
   FolderKanban,
   Download,
   PenLine,
+  Upload,
+  FileText,
+  Eye,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -97,6 +101,9 @@ export default function WorkOrdersView() {
   const [workOrderState, setWorkOrderState] = useState('');
   const [zip, setZip] = useState('');
   const [notes, setNotes] = useState('');
+  const [attachments, setAttachments] = useState<string[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Load work orders on mount
   useEffect(() => {
@@ -185,7 +192,7 @@ export default function WorkOrdersView() {
       setWorkOrderState(workOrder.state || '');
       setZip(workOrder.zip || '');
       setNotes(workOrder.notes || '');
-    } else {
+      setAttachments(workOrder.attachments || []);
       // Generate work order number
       const nextNumber = `WO-${Date.now().toString().slice(-6)}`;
       setWorkOrderNumber(nextNumber);
@@ -214,6 +221,7 @@ export default function WorkOrdersView() {
     setWorkOrderState('');
     setZip('');
     setNotes('');
+    setAttachments([]);
   };
 
   const handleSave = async () => {
@@ -254,6 +262,7 @@ export default function WorkOrdersView() {
         state: workOrderState.trim() || undefined,
         zip: zip.trim() || undefined,
         notes: notes.trim() || undefined,
+        attachments: attachments.length > 0 ? attachments : undefined,
         created_by: profile.id,
       };
 
@@ -499,6 +508,35 @@ export default function WorkOrdersView() {
     } catch (err: any) {
       toast.error(`Failed to save signature: ${err.message}`);
     }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || !profile?.company_id) return;
+    setIsUploading(true);
+    const newUrls: string[] = [];
+    for (const file of Array.from(files)) {
+      const result = await uploadDocument(file, profile.company_id, selectedContactId || undefined);
+      if (result.error) {
+        toast.error(`Failed to upload ${file.name}: ${result.error}`);
+      } else {
+        newUrls.push(result.path || result.url);
+        toast.success(`Uploaded ${file.name}`);
+      }
+    }
+    setAttachments(prev => [...prev, ...newUrls]);
+    setIsUploading(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleViewAttachment = async (pathOrUrl: string) => {
+    const url = await getDocumentSignedUrl(pathOrUrl);
+    if (url) window.open(url, '_blank');
+    else toast.error('Could not open file');
+  };
+
+  const handleRemoveAttachment = (idx: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== idx));
   };
 
   const handleExport = () => {
@@ -1164,6 +1202,49 @@ export default function WorkOrdersView() {
                   rows={2}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
                 />
+              </div>
+
+              {/* Attachments */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Attachments
+                </label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.txt"
+                  className="hidden"
+                  onChange={handleFileUpload}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploading}
+                  className="flex items-center gap-2 px-3 py-2 border border-dashed border-gray-300 rounded-lg text-sm text-gray-600 hover:border-green-400 hover:text-green-600 transition-colors disabled:opacity-50"
+                >
+                  <Upload size={16} />
+                  {isUploading ? 'Uploading...' : 'Upload Files'}
+                </button>
+                {attachments.length > 0 && (
+                  <ul className="mt-2 space-y-1">
+                    {attachments.map((att, idx) => {
+                      const name = att.split('/').pop() || att;
+                      return (
+                        <li key={idx} className="flex items-center gap-2 text-sm bg-gray-50 rounded px-2 py-1">
+                          <FileText size={14} className="text-gray-400 shrink-0" />
+                          <span className="flex-1 truncate text-gray-700">{decodeURIComponent(name)}</span>
+                          <button type="button" onClick={() => handleViewAttachment(att)} className="text-blue-500 hover:text-blue-700">
+                            <Eye size={14} />
+                          </button>
+                          <button type="button" onClick={() => handleRemoveAttachment(idx)} className="text-red-400 hover:text-red-600">
+                            <X size={14} />
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
               </div>
             </div>
 

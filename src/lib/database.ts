@@ -257,6 +257,7 @@ export interface DbMaterialOrder {
   shipping: number;
   total: number;
   notes?: string;
+  attachments?: string[];
   created_by: string;
   created_at: string;
   updated_at: string;
