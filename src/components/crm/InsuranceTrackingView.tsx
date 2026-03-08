@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { supabase } from '@/lib/supabase';
+import { formatPhoneNumber } from '@/lib/utils';
 import {
   Shield,
   Plus,
@@ -468,7 +469,7 @@ export default function InsuranceTrackingView() {
                 <input
                   type="tel"
                   value={form.adjuster_phone}
-                  onChange={e => setForm(f => ({ ...f, adjuster_phone: e.target.value }))}
+                  onChange={e => setForm(f => ({ ...f, adjuster_phone: formatPhoneNumber(e.target.value) }))}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="(555) 000-0000"
                 />

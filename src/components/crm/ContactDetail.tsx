@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useCRM, useCurrentContact } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
+import { formatPhoneNumber } from '@/lib/utils';
 import JobStatusTimeline from './JobStatusTimeline';
 import CustomerSurvey from './CustomerSurvey';
 import AppointmentModal from './AppointmentModal';
@@ -769,7 +770,7 @@ export default function ContactDetail() {
                         type="tel"
                         value={currentData.phone1}
                         onChange={(e) =>
-                          setEditedContact({ ...currentData, phone1: e.target.value })
+                          setEditedContact({ ...currentData, phone1: formatPhoneNumber(e.target.value) })
                         }
                         className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                       />
@@ -791,7 +792,7 @@ export default function ContactDetail() {
                         type="tel"
                         value={currentData.phone2 || ''}
                         onChange={(e) =>
-                          setEditedContact({ ...currentData, phone2: e.target.value })
+                          setEditedContact({ ...currentData, phone2: formatPhoneNumber(e.target.value) })
                         }
                         className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                       />
@@ -1017,7 +1018,7 @@ export default function ContactDetail() {
                               type="tel"
                               value={currentData.adjusterPhone || ''}
                               onChange={(e) =>
-                                setEditedContact({ ...currentData, adjusterPhone: e.target.value })
+                                setEditedContact({ ...currentData, adjusterPhone: formatPhoneNumber(e.target.value) })
                               }
                               className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                             />

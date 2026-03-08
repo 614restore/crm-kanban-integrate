@@ -5,6 +5,7 @@ import { db } from '@/lib/database';
 import { toast } from 'sonner';
 import { Supplier } from '@/lib/crmData';
 import { exportSuppliersToExcel } from '@/lib/exportUtils';
+import { formatPhoneNumber } from '@/lib/utils';
 import {
   Store,
   Plus,
@@ -646,7 +647,7 @@ export default function SuppliersView() {
                   <input
                     type="tel"
                     value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, phone: formatPhoneNumber(e.target.value) })}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                     placeholder="(555) 123-4567"
                   />
