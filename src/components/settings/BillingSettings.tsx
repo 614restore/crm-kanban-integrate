@@ -1,5 +1,5 @@
-import React from 'react';
-import { CreditCard, Plus, Zap, Rocket, Building2, Star } from 'lucide-react';
+import React, { useState } from 'react';
+import { CreditCard, Plus, Zap, Rocket, Building2, Star, ChevronDown, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 // Tell TypeScript about the Stripe custom element
@@ -145,6 +145,139 @@ const buttonColorMap: Record<string, string> = {
   orange: 'bg-orange-600 hover:bg-orange-700',
 };
 
+const COMPARISON_SECTIONS = [
+  {
+    category: '📋 CRM & Contact Management',
+    rows: [
+      { feature: 'Contact Management', trussctr: '✅ Full', jobNimbus: '✅ Full', acculynx: '✅ Full', hatch: '✅ Full', serviceTitan: '✅ Full', roofr: '⚠️ Limited' },
+      { feature: 'Custom Pipeline / Kanban Board', trussctr: '✅', jobNimbus: '✅', acculynx: '✅', hatch: '❌', serviceTitan: '✅', roofr: '⚠️' },
+      { feature: 'Lead & Opportunity Tracking', trussctr: '✅', jobNimbus: '✅', acculynx: '✅', hatch: '✅', serviceTitan: '✅', roofr: '✅' },
+      { feature: 'Job Status Progression', trussctr: '✅', jobNimbus: '✅', acculynx: '✅', hatch: '❌', serviceTitan: '✅', roofr: '⚠️' },
+    ],
+  },
+  {
+    category: '📄 Documents & Contracts',
+    rows: [
+      { feature: 'Proposal Templates', trussctr: '✅', jobNimbus: '✅', acculynx: '✅', hatch: '❌', serviceTitan: '✅', roofr: '✅' },
+      { feature: 'Contract w/ Signature Fields', trussctr: '✅', jobNimbus: '✅', acculynx: '✅', hatch: '❌', serviceTitan: '✅', roofr: '✅' },
+      { feature: '3-Day Right to Cancel Notice', trussctr: '✅', jobNimbus: '❌', acculynx: '❌', hatch: '❌', serviceTitan: '❌', roofr: '❌' },
+      { feature: 'Per-Customer Editable Templates', trussctr: '✅', jobNimbus: '⚠️', acculynx: '⚠️', hatch: '❌', serviceTitan: '✅', roofr: '⚠️' },
+      { feature: 'Document Upload (WO, MO, etc.)', trussctr: '✅', jobNimbus: '✅', acculynx: '✅', hatch: '❌', serviceTitan: '✅', roofr: '⚠️' },
+    ],
+  },
+  {
+    category: '🏦 Insurance & Supplements',
+    rows: [
+      { feature: 'Insurance Claim Tracking', trussctr: '✅', jobNimbus: '✅', acculynx: '✅', hatch: '❌', serviceTitan: '❌', roofr: '⚠️' },
+      { feature: 'Supplement Tracking', trussctr: '✅', jobNimbus: '✅', acculynx: '✅', hatch: '❌', serviceTitan: '❌', roofr: '❌' },
+      { feature: 'Claims Linked to Customer Profile', trussctr: '✅', jobNimbus: '⚠️', acculynx: '✅', hatch: '❌', serviceTitan: '❌', roofr: '❌' },
+    ],
+  },
+  {
+    category: '📊 Sales Metrics & Reporting',
+    rows: [
+      { feature: 'Individual Sales Rep Metrics', trussctr: '✅', jobNimbus: '✅', acculynx: '✅', hatch: '✅', serviceTitan: '✅', roofr: '❌' },
+      { feature: 'Team Performance Dashboard', trussctr: '✅', jobNimbus: '✅', acculynx: '✅', hatch: '⚠️', serviceTitan: '✅', roofr: '❌' },
+      { feature: 'PDF Export for Reports', trussctr: '✅', jobNimbus: '✅', acculynx: '✅', hatch: '❌', serviceTitan: '✅', roofr: '⚠️' },
+    ],
+  },
+  {
+    category: '🔧 Material & Work Orders',
+    rows: [
+      { feature: 'Material Order Management', trussctr: '✅', jobNimbus: '⚠️', acculynx: '✅', hatch: '❌', serviceTitan: '✅', roofr: '✅' },
+      { feature: 'Material Templates (Asphalt, Metal, etc.)', trussctr: '✅', jobNimbus: '❌', acculynx: '⚠️', hatch: '❌', serviceTitan: '⚠️', roofr: '✅' },
+      { feature: 'Work Order Tracking', trussctr: '✅', jobNimbus: '✅', acculynx: '✅', hatch: '❌', serviceTitan: '✅', roofr: '⚠️' },
+    ],
+  },
+  {
+    category: '💳 Billing & Payments',
+    rows: [
+      { feature: 'Invoicing & Payment Tracking', trussctr: '✅', jobNimbus: '✅', acculynx: '✅', hatch: '❌', serviceTitan: '✅', roofr: '✅' },
+      { feature: 'QuickBooks Integration', trussctr: '✅', jobNimbus: '✅', acculynx: '✅', hatch: '❌', serviceTitan: '✅', roofr: '❌' },
+      { feature: 'Subscription Billing (Stripe)', trussctr: '✅', jobNimbus: '❌', acculynx: '❌', hatch: '❌', serviceTitan: '❌', roofr: '❌' },
+    ],
+  },
+  {
+    category: '🤖 AI & Automation',
+    rows: [
+      { feature: 'AI Assistant (built-in)', trussctr: '✅', jobNimbus: '❌', acculynx: '❌', hatch: '✅', serviceTitan: '⚠️', roofr: '❌' },
+      { feature: 'Weather / HailTrace Integration', trussctr: '✅', jobNimbus: '✅', acculynx: '✅', hatch: '❌', serviceTitan: '❌', roofr: '⚠️' },
+      { feature: 'Automated Notifications', trussctr: '✅', jobNimbus: '✅', acculynx: '✅', hatch: '✅', serviceTitan: '✅', roofr: '⚠️' },
+    ],
+  },
+  {
+    category: '💰 Pricing',
+    rows: [
+      { feature: 'Starting Monthly Price', trussctr: '$29/mo', jobNimbus: '$74/mo', acculynx: '$79/mo', hatch: '$59/mo', serviceTitan: '$398/mo', roofr: '$89/mo' },
+      { feature: 'All Features in Base Plan', trussctr: '✅', jobNimbus: '❌', acculynx: '❌', hatch: '❌', serviceTitan: '❌', roofr: '❌' },
+      { feature: 'No Per-Feature Upsells', trussctr: '✅', jobNimbus: '❌', acculynx: '❌', hatch: '❌', serviceTitan: '❌', roofr: '❌' },
+      { feature: 'Free Trial', trussctr: '14 days', jobNimbus: '14 days', acculynx: 'Demo only', hatch: '14 days', serviceTitan: 'Demo only', roofr: '14 days' },
+    ],
+  },
+];
+
+const ComparisonTable: React.FC = () => {
+  const [openSections, setOpenSections] = useState<Set<number>>(new Set());
+
+  const toggle = (i: number) => {
+    setOpenSections(prev => {
+      const next = new Set(prev);
+      next.has(i) ? next.delete(i) : next.add(i);
+      return next;
+    });
+  };
+
+  const headers = ['Feature', 'TrussCTR', 'JobNimbus', 'AccuLynx', 'Hatch', 'ServiceTitan', 'Roofr'];
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="px-5 py-4 border-b border-gray-100">
+        <h2 className="text-base font-semibold text-gray-900">TrussCTR vs. The Competition</h2>
+        <p className="text-xs text-gray-500 mt-0.5">Click a category to expand the comparison</p>
+      </div>
+      {COMPARISON_SECTIONS.map((section, i) => (
+        <div key={i} className="border-b border-gray-100 last:border-0">
+          <button
+            onClick={() => toggle(i)}
+            className="w-full flex items-center justify-between px-5 py-3 text-left hover:bg-gray-50 transition-colors"
+          >
+            <span className="text-sm font-medium text-gray-800">{section.category}</span>
+            {openSections.has(i) ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+          </button>
+          {openSections.has(i) && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-gray-50">
+                    {headers.map((h, hi) => (
+                      <th key={hi} className={`px-4 py-2 text-left font-semibold ${hi === 1 ? 'text-blue-700 bg-blue-50' : 'text-gray-600'}`}>
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {section.rows.map((row, ri) => (
+                    <tr key={ri} className="border-t border-gray-100 hover:bg-gray-50">
+                      <td className="px-4 py-2 font-medium text-gray-700">{row.feature}</td>
+                      <td className="px-4 py-2 font-semibold text-blue-700 bg-blue-50/40">{row.trussctr}</td>
+                      <td className="px-4 py-2 text-gray-600">{row.jobNimbus}</td>
+                      <td className="px-4 py-2 text-gray-600">{row.acculynx}</td>
+                      <td className="px-4 py-2 text-gray-600">{row.hatch}</td>
+                      <td className="px-4 py-2 text-gray-600">{row.serviceTitan}</td>
+                      <td className="px-4 py-2 text-gray-600">{row.roofr}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+};
+
 const BillingSettings: React.FC = () => {
 
   const handleManageBilling = () => {
@@ -189,6 +322,11 @@ const BillingSettings: React.FC = () => {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Competitor Comparison */}
+      <div className="mt-8">
+        <ComparisonTable />
       </div>
 
       {/* 14-day trial note */}
