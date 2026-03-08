@@ -2046,7 +2046,7 @@ const DocumentTemplates: React.FC = () => {
     </table>
     <div class="scope-box" style="margin-top:12px;">
       <strong>Late Payment:</strong> Balances not paid within {{LATE_PAYMENT_DAYS}} days of invoice date will be subject to a {{LATE_FEE_RATE}}% per month finance charge. Customer is responsible for all collection costs including attorney's fees.<br>
-      <strong>Returned Checks:</strong> A ${{RETURNED_CHECK_FEE}} fee will be charged for any returned checks.
+      <strong>Returned Checks:</strong> A \${{RETURNED_CHECK_FEE}} fee will be charged for any returned checks.
     </div>
   </div>
 
