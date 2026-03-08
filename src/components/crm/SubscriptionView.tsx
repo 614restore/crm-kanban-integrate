@@ -109,16 +109,14 @@ export default function SubscriptionView() {
   const currentPlanIndex = PLANS.findIndex((p) => p.key === plan);
 
   function handleManageBilling() {
-    toast.info('Stripe customer portal coming soon. Contact support to manage your billing.');
+    window.location.href = 'mailto:scopemgr@614restore.com?subject=CONTACT%20TrussCTR%20-%20Billing%20Management';
   }
 
   function handlePlanAction(planKey: string) {
     const idx = PLANS.findIndex((p) => p.key === planKey);
-    if (idx > currentPlanIndex) {
-      toast.info(`Upgrade to ${PLANS[idx].name} coming soon. Contact support to upgrade.`);
-    } else {
-      toast.info(`Downgrade to ${PLANS[idx].name} coming soon. Contact support to change plans.`);
-    }
+    const action = idx > currentPlanIndex ? 'Upgrade' : 'Downgrade';
+    const subject = encodeURIComponent(`CONTACT TrussCTR - ${action} to ${PLANS[idx].name}`);
+    window.location.href = `mailto:scopemgr@614restore.com?subject=${subject}`;
   }
 
   return (

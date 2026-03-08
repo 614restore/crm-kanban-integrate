@@ -52,6 +52,8 @@ const DocumentTemplates = lazy(() => import('./crm/DocumentTemplates'));
 const ReportsAnalytics = lazy(() => import('./crm/ReportsAnalytics'));
 const InsuranceTrackingView = lazy(() => import('./crm/InsuranceTrackingView'));
 const SupplementTrackingView = lazy(() => import('./crm/SupplementTrackingView'));
+const CrewScheduleView = lazy(() => import('./crm/CrewScheduleView'));
+const EquipmentView = lazy(() => import('./crm/EquipmentView'));
 
 // Initial CRM state (completely empty)
 const getInitialView = (): ViewType => {
@@ -147,6 +149,10 @@ function ViewRouter() {
         return <InsuranceTrackingView />;
       case 'supplement-tracking':
         return <SupplementTrackingView />;
+      case 'crew-schedule':
+        return <CrewScheduleView />;
+      case 'equipment':
+        return <EquipmentView />;
       case 'settings':
         return <SettingsView />;
       case 'ai-assistant':
