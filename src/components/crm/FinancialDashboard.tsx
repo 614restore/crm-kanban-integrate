@@ -43,61 +43,39 @@ export default function FinancialDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [companyProfile, setCompanyProfile] = useState<DbCompany | null>(null);
   const [statusMenuId, setStatusMenuId] = useState<string | null>(null);
-  const [isSyncingQB, setIsSyncingQB] = useState(false);
-  const [qbConnected, setQbConnected] = useState(false);
 
-  // Load company profile and check QB connection status
+  // Load company profile for sender email
   useEffect(() => {
     const loadCompany = async () => {
       if (!profile?.company_id) return;
       try {
         const company = await db.getCompany(profile.company_id);
-        if (company) {
-          setCompanyProfile(company);
-          setQbConnected(!!(company as any).qb_access_token);
-        }
+        if (company) setCompanyProfile(company);
       } catch { /* ignore */ }
     };
     loadCompany();
-    // Check for QB connection success redirect
-    if (window.location.hash.includes('qb_connected=1')) {
-      toast.success('QuickBooks connected successfully!');
-      loadCompany();
-    } else if (window.location.hash.includes('qb_error=')) {
-      const match = window.location.hash.match(/qb_error=([^&]+)/);
-      if (match) toast.error(`QuickBooks error: ${decodeURIComponent(match[1])}`);
-    }
   }, [profile?.company_id]);
 
-  const handleConnectQuickBooks = () => {
-    if (!profile?.company_id) { toast.error('No company found'); return; }
-    // Redirect to Vercel OAuth endpoint
-    window.location.href = `https://crm-kanban-integrate.vercel.app/api/quickbooks-auth?company_id=${profile.company_id}`;
-  };
-
-  const handleSyncQuickBooks = async () => {
-    if (!profile?.company_id) return;
-    setIsSyncingQB(true);
-    try {
-      const res = await fetch('https://crm-kanban-integrate.vercel.app/api/quickbooks-sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ company_id: profile.company_id, sync_type: 'all' }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      toast.success(data.message);
-    } catch (err: any) {
-      toast.error(err.message || 'Sync failed');
-    } finally {
-      setIsSyncingQB(false);
-    }
-  };
-
   const handleExport = () => {
-    if (allInvoices.length === 0) { toast.error('No invoices available to export'); return; }
+    if (allInvoices.length === 0) {
+      toast.error('No invoices available to export');
+      return;
+    }
+
     exportToExcel(allInvoices);
     toast.success('Invoice export started');
+  };
+
+  const handleConnectQuickBooks = () => {
+    dispatch({ type: 'SET_VIEW', payload: 'settings' });
+    // Delay so SettingsView mounts and attaches its event listener before we fire
+    setTimeout(() => {
+      window.dispatchEvent(
+        new CustomEvent('crm-open-settings-tab', {
+          detail: { tab: 'integrations' },
+        })
+      );
+    }, 150);
   };
 
   const handleViewInvoiceContact = (contactId: string) => {
@@ -382,7 +360,7 @@ export default function FinancialDashboard() {
               <p className="text-2xl font-bold text-gray-900 mt-1">
                 {formatCurrency(
                   state.contacts
-                    .filter((c) => c.stage === 'production' || c.stage === 'completed')
+                    .filter((c) => c.status === 'in_progress' || c.status === 'build_phase' || c.status === 'completed')
                     .reduce((sum, c) => sum + ((c as any).materialCost || 0), 0)
                 )}
               </p>
@@ -393,7 +371,7 @@ export default function FinancialDashboard() {
               <p className="text-2xl font-bold text-gray-900 mt-1">
                 {formatCurrency(
                   state.contacts
-                    .filter((c) => c.stage === 'production' || c.stage === 'completed')
+                    .filter((c) => c.status === 'in_progress' || c.status === 'build_phase' || c.status === 'completed')
                     .reduce((sum, c) => sum + ((c as any).subContractorCost || 0), 0)
                 )}
               </p>
@@ -404,7 +382,7 @@ export default function FinancialDashboard() {
               <p className="text-2xl font-bold text-gray-900 mt-1">
                 {formatCurrency(
                   state.contacts
-                    .filter((c) => c.stage === 'production' || c.stage === 'completed')
+                    .filter((c) => c.status === 'in_progress' || c.status === 'build_phase' || c.status === 'completed')
                     .reduce((sum, c) => sum + ((c as any).payrollCost || 0), 0)
                 )}
               </p>
@@ -416,7 +394,7 @@ export default function FinancialDashboard() {
                 {(() => {
                   const revenue = financialStats.totalRevenue;
                   const costs = state.contacts
-                    .filter((c) => c.stage === 'production' || c.stage === 'completed')
+                    .filter((c) => c.status === 'in_progress' || c.status === 'build_phase' || c.status === 'completed')
                     .reduce(
                       (sum, c) =>
                         sum +
@@ -436,7 +414,7 @@ export default function FinancialDashboard() {
       )}
 
       {/* QuickBooks Integration Banner */}
-      <div className={`rounded-xl p-6 text-white ${qbConnected ? 'bg-gradient-to-r from-emerald-600 to-teal-600' : 'bg-gradient-to-r from-green-600 to-emerald-600'}`}>
+      <div className="bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl p-6 text-white">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
@@ -445,47 +423,18 @@ export default function FinancialDashboard() {
               </svg>
             </div>
             <div>
-              <h3 className="text-lg font-semibold flex items-center gap-2">
-                QuickBooks Integration
-                {qbConnected && <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full">✓ Connected</span>}
-              </h3>
+              <h3 className="text-lg font-semibold">QuickBooks Integration</h3>
               <p className="text-green-100 text-sm mt-1">
-                {qbConnected
-                  ? 'Sync customers and invoices to QuickBooks with one click'
-                  : 'Connect your QuickBooks account to sync invoices and payments automatically'}
+                Connect your QuickBooks account to sync invoices and payments automatically
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            {qbConnected ? (
-              <>
-                <button
-                  onClick={() => void handleSyncQuickBooks()}
-                  disabled={isSyncingQB}
-                  className="px-6 py-3 bg-white text-green-700 rounded-lg font-semibold hover:bg-green-50 transition-colors disabled:opacity-60 flex items-center gap-2"
-                >
-                  {isSyncingQB ? (
-                    <><span className="animate-spin">⟳</span> Syncing...</>
-                  ) : (
-                    '⟳ Sync to QuickBooks'
-                  )}
-                </button>
-                <button
-                  onClick={handleConnectQuickBooks}
-                  className="px-4 py-3 bg-white/20 text-white rounded-lg font-medium hover:bg-white/30 transition-colors text-sm"
-                >
-                  Reconnect
-                </button>
-              </>
-            ) : (
-              <button
-                onClick={handleConnectQuickBooks}
-                className="px-6 py-3 bg-white text-green-600 rounded-lg font-semibold hover:bg-green-50 transition-colors"
-              >
-                Connect QuickBooks
-              </button>
-            )}
-          </div>
+          <button
+            onClick={handleConnectQuickBooks}
+            className="px-6 py-3 bg-white text-green-600 rounded-lg font-semibold hover:bg-green-50 transition-colors"
+          >
+            Connect QuickBooks
+          </button>
         </div>
       </div>
 

@@ -8,6 +8,7 @@ import { uploadCompanyLogo, uploadUserAvatar, validateImageFile } from '@/lib/st
 import useIntegrations from '@/hooks/useIntegrations';
 import IntegrationConfigDialog from '@/components/IntegrationConfigDialog';
 import AIConfigDialog from '@/components/AIConfigDialog';
+import { formatPhoneNumber } from '@/lib/utils';
 import AIApprovalPanel from '@/components/AIApprovalPanel';
 import {
   Settings,
@@ -1243,7 +1244,7 @@ export default function SettingsView() {
   }, []);
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '256px 1fr', width: '100%', height: '100%' }}>
+    <div className="flex flex-col w-full h-full">
       {/* Hidden file inputs */}
       <input
         ref={companyLogoInputRef}
@@ -1262,8 +1263,11 @@ export default function SettingsView() {
         disabled={isUploadingAvatar}
       />
 
+      {/* Main content row */}
+      <div className="flex flex-1 overflow-hidden">
+
       {/* Sidebar */}
-      <div className="bg-white border-r border-gray-200 p-4 overflow-y-auto">
+      <div className="w-64 flex-shrink-0 bg-white border-r border-gray-200 p-4 overflow-y-auto">
         <h2 className="text-lg font-semibold text-gray-900 mb-4 px-3">Settings</h2>
         <nav className="space-y-1">
           {tabs.map((tab) => (
@@ -1284,7 +1288,7 @@ export default function SettingsView() {
       </div>
 
       {/* Content */}
-      <div className="overflow-auto p-8">
+      <div className="flex-1 overflow-auto p-8">
         {activeTab === 'company' && (
           <div className="max-w-3xl space-y-8">
             <div>
@@ -1380,7 +1384,7 @@ export default function SettingsView() {
                     <input
                       type="tel"
                       value={companyForm.phone}
-                      onChange={(e) => setCompanyForm({ ...companyForm, phone: e.target.value })}
+                      onChange={(e) => setCompanyForm({ ...companyForm, phone: formatPhoneNumber(e.target.value) })}
                       className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                     />
                   </div>
@@ -2274,6 +2278,7 @@ export default function SettingsView() {
         }}
       />
 
+      </div>{/* end main content row */}
     </div>
   );
 }

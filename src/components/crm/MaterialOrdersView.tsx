@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
-import { MaterialOrder } from '@/lib/crmData';
+import { MaterialOrder, MaterialOrderItem } from '@/lib/crmData';
 import { exportMaterialOrdersToExcel } from '@/lib/exportUtils';
 import {
   Package,
@@ -21,8 +21,79 @@ import {
   Building2,
   FileText,
   Download,
+  ChevronDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
+
+// ─── Roofing Material Templates ──────────────────────────────────────────────
+interface MaterialTemplate {
+  name: string;
+  items: Omit<MaterialOrderItem, 'id'>[];
+}
+
+const ROOFING_TEMPLATES: MaterialTemplate[] = [
+  {
+    name: 'Roof Replacement – Asphalt Shingle',
+    items: [
+      { description: 'Asphalt Shingles (30-yr architectural)', quantity: 30, unit: 'square', unitPrice: 120, total: 3600 },
+      { description: 'Synthetic Underlayment (15 sq rolls)', quantity: 3, unit: 'roll', unitPrice: 85, total: 255 },
+      { description: 'Ice & Water Shield', quantity: 2, unit: 'square', unitPrice: 95, total: 190 },
+      { description: 'Ridge Cap Shingles', quantity: 2, unit: 'bundle', unitPrice: 55, total: 110 },
+      { description: 'Starter Strip', quantity: 3, unit: 'bundle', unitPrice: 40, total: 120 },
+      { description: 'Roofing Nails (1-3/4")', quantity: 5, unit: 'box', unitPrice: 18, total: 90 },
+      { description: 'Drip Edge (10 ft)', quantity: 20, unit: 'piece', unitPrice: 6, total: 120 },
+      { description: 'Pipe Boot Flashing (3")', quantity: 2, unit: 'each', unitPrice: 22, total: 44 },
+      { description: 'Ventilation – Ridge Vent (10 ft)', quantity: 4, unit: 'piece', unitPrice: 28, total: 112 },
+    ],
+  },
+  {
+    name: 'Roof Replacement – Standing Seam Metal',
+    items: [
+      { description: 'Standing Seam Panels (24 ga, 16" wide)', quantity: 35, unit: 'square', unitPrice: 350, total: 12250 },
+      { description: 'Metal Roofing Underlayment', quantity: 4, unit: 'roll', unitPrice: 110, total: 440 },
+      { description: 'Ridge Cap (metal)', quantity: 5, unit: 'piece', unitPrice: 65, total: 325 },
+      { description: 'Eave Trim', quantity: 10, unit: 'piece', unitPrice: 40, total: 400 },
+      { description: 'Gable Trim', quantity: 8, unit: 'piece', unitPrice: 40, total: 320 },
+      { description: 'Concealed Fastener Clips', quantity: 500, unit: 'each', unitPrice: 0.75, total: 375 },
+      { description: 'Screws / Fasteners (box)', quantity: 3, unit: 'box', unitPrice: 28, total: 84 },
+      { description: 'Sealant / Butyl Tape', quantity: 4, unit: 'roll', unitPrice: 22, total: 88 },
+    ],
+  },
+  {
+    name: 'Roof Replacement – Corrugated Metal',
+    items: [
+      { description: 'Corrugated Metal Panels (26 ga)', quantity: 35, unit: 'square', unitPrice: 180, total: 6300 },
+      { description: 'Metal Roofing Underlayment', quantity: 4, unit: 'roll', unitPrice: 110, total: 440 },
+      { description: 'Ridge Cap', quantity: 5, unit: 'piece', unitPrice: 45, total: 225 },
+      { description: 'Eave Trim', quantity: 10, unit: 'piece', unitPrice: 30, total: 300 },
+      { description: 'Exposed Screws w/ Neoprene Washer (250 ct)', quantity: 4, unit: 'box', unitPrice: 35, total: 140 },
+      { description: 'Foam Closure Strips', quantity: 20, unit: 'each', unitPrice: 4, total: 80 },
+      { description: 'Sealant', quantity: 2, unit: 'tube', unitPrice: 18, total: 36 },
+    ],
+  },
+  {
+    name: 'Roof Replacement – TPO Flat Roof',
+    items: [
+      { description: 'TPO Membrane (60 mil, 10 ft wide)', quantity: 4, unit: 'roll', unitPrice: 280, total: 1120 },
+      { description: 'ISO Insulation Board (2")', quantity: 35, unit: 'square', unitPrice: 65, total: 2275 },
+      { description: 'Cover Board (1/2" DensDeck)', quantity: 35, unit: 'square', unitPrice: 45, total: 1575 },
+      { description: 'TPO Membrane Adhesive', quantity: 6, unit: 'gallon', unitPrice: 55, total: 330 },
+      { description: 'TPO Edge Metal / Coping', quantity: 20, unit: 'piece', unitPrice: 30, total: 600 },
+      { description: 'Drain Clamp / Drain Cover', quantity: 3, unit: 'each', unitPrice: 35, total: 105 },
+      { description: 'Fasteners / Screws (box)', quantity: 2, unit: 'box', unitPrice: 28, total: 56 },
+    ],
+  },
+  {
+    name: 'Roof Replacement – Modified Bitumen',
+    items: [
+      { description: 'Mod-Bit Base Sheet (2 sq/roll)', quantity: 18, unit: 'roll', unitPrice: 65, total: 1170 },
+      { description: 'Mod-Bit Cap Sheet (granulated)', quantity: 18, unit: 'roll', unitPrice: 90, total: 1620 },
+      { description: 'Primer (gallon)', quantity: 4, unit: 'gallon', unitPrice: 50, total: 200 },
+      { description: 'Roofing Nails', quantity: 2, unit: 'box', unitPrice: 18, total: 36 },
+      { description: 'Drip Edge', quantity: 20, unit: 'piece', unitPrice: 6, total: 120 },
+    ],
+  },
+];
 
 // Status badge component
 function StatusBadge({ status }: { status: MaterialOrder['status'] }) {
@@ -154,6 +225,59 @@ export default function MaterialOrdersView() {
     setTotal('0');
     setNotes('');
     setItems([]);
+  };
+
+  const recalcTotals = (newItems: MaterialOrderItem[]) => {
+    const newSubtotal = newItems.reduce((sum, i) => sum + i.total, 0);
+    setSubtotal(newSubtotal.toFixed(2));
+    const newTotal = newSubtotal + parseFloat(tax || '0') + parseFloat(shipping || '0');
+    setTotal(newTotal.toFixed(2));
+  };
+
+  const handleAddItem = () => {
+    const newItem: MaterialOrderItem = {
+      id: `item-${Date.now()}`,
+      description: '',
+      quantity: 1,
+      unit: 'each',
+      unitPrice: 0,
+      total: 0,
+    };
+    const updated = [...items, newItem];
+    setItems(updated);
+    recalcTotals(updated);
+  };
+
+  const handleUpdateItem = (idx: number, field: keyof MaterialOrderItem, value: string | number) => {
+    const updated = items.map((item, i) => {
+      if (i !== idx) return item;
+      const next = { ...item, [field]: value };
+      if (field === 'quantity' || field === 'unitPrice') {
+        next.total = Number(next.quantity) * Number(next.unitPrice);
+      }
+      return next;
+    });
+    setItems(updated);
+    recalcTotals(updated);
+  };
+
+  const handleRemoveItem = (idx: number) => {
+    const updated = items.filter((_, i) => i !== idx);
+    setItems(updated);
+    recalcTotals(updated);
+  };
+
+  const handleLoadTemplate = (templateName: string) => {
+    if (!templateName) return;
+    const tpl = ROOFING_TEMPLATES.find(t => t.name === templateName);
+    if (!tpl) return;
+    const newItems: MaterialOrderItem[] = tpl.items.map((item, i) => ({
+      ...item,
+      id: `item-${Date.now()}-${i}`,
+    }));
+    setItems(newItems);
+    recalcTotals(newItems);
+    toast.success(`Loaded template: ${tpl.name}`);
   };
 
   const handleSave = async () => {
@@ -503,6 +627,9 @@ export default function MaterialOrdersView() {
                   </div>
                   <div className="flex items-center gap-4 text-sm text-gray-600 mb-2">
                     <span className="font-mono">{order.orderNumber}</span>
+                    {order.items && order.items.length > 0 && (
+                      <span className="text-purple-600 font-medium">{order.items.length} line item{order.items.length !== 1 ? 's' : ''}</span>
+                    )}
                   </div>
                   {order.notes && (
                     <p className="text-sm text-gray-600">{order.notes}</p>
@@ -610,9 +737,26 @@ export default function MaterialOrdersView() {
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
             {/* Modal Header */}
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h2 className="text-xl font-bold text-gray-900">
-                {editingOrder ? 'Edit Material Order' : 'New Material Order'}
-              </h2>
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">
+                  {editingOrder ? 'Edit Material Order' : 'New Material Order'}
+                </h2>
+                {!editingOrder && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <ChevronDown size={14} className="text-gray-400" />
+                    <select
+                      onChange={(e) => handleLoadTemplate(e.target.value)}
+                      defaultValue=""
+                      className="text-sm border border-purple-300 rounded-lg px-3 py-1.5 text-purple-700 bg-purple-50 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    >
+                      <option value="">Load roofing template…</option>
+                      {ROOFING_TEMPLATES.map(t => (
+                        <option key={t.name} value={t.name}>{t.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
               <button
                 onClick={handleCloseModal}
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -800,16 +944,120 @@ export default function MaterialOrdersView() {
                 )}
               </div>
 
+              {/* Line Items */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Material Line Items
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleAddItem}
+                    className="inline-flex items-center gap-1 text-sm text-purple-600 hover:text-purple-800 font-medium"
+                  >
+                    <Plus size={14} /> Add Item
+                  </button>
+                </div>
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="text-left px-3 py-2 font-medium text-gray-600 w-1/2">Description</th>
+                        <th className="text-right px-3 py-2 font-medium text-gray-600 w-16">Qty</th>
+                        <th className="text-left px-3 py-2 font-medium text-gray-600 w-20">Unit</th>
+                        <th className="text-right px-3 py-2 font-medium text-gray-600 w-24">Unit Price</th>
+                        <th className="text-right px-3 py-2 font-medium text-gray-600 w-24">Total</th>
+                        <th className="w-8"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {items.length === 0 && (
+                        <tr>
+                          <td colSpan={6} className="text-center py-6 text-gray-400">
+                            No items yet. Load a template or add items manually.
+                          </td>
+                        </tr>
+                      )}
+                      {items.map((item, idx) => (
+                        <tr key={item.id} className="border-t border-gray-100">
+                          <td className="px-2 py-1.5">
+                            <input
+                              type="text"
+                              value={item.description}
+                              onChange={(e) => handleUpdateItem(idx, 'description', e.target.value)}
+                              placeholder="Material description"
+                              className="w-full px-2 py-1 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-purple-500 text-sm"
+                            />
+                          </td>
+                          <td className="px-2 py-1.5">
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={item.quantity}
+                              onChange={(e) => handleUpdateItem(idx, 'quantity', parseFloat(e.target.value) || 0)}
+                              className="w-full px-2 py-1 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-purple-500 text-sm text-right"
+                            />
+                          </td>
+                          <td className="px-2 py-1.5">
+                            <select
+                              value={item.unit}
+                              onChange={(e) => handleUpdateItem(idx, 'unit', e.target.value)}
+                              className="w-full px-1 py-1 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-purple-500 text-sm"
+                            >
+                              {['each','square','bundle','roll','sheet','box','piece','gallon','tube','bag','pallet','linear ft','sq ft'].map(u => (
+                                <option key={u} value={u}>{u}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="px-2 py-1.5">
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={item.unitPrice}
+                              onChange={(e) => handleUpdateItem(idx, 'unitPrice', parseFloat(e.target.value) || 0)}
+                              className="w-full px-2 py-1 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-purple-500 text-sm text-right"
+                            />
+                          </td>
+                          <td className="px-2 py-1.5 text-right font-medium text-gray-800">
+                            ${item.total.toFixed(2)}
+                          </td>
+                          <td className="px-1 py-1.5 text-center">
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveItem(idx)}
+                              className="text-red-400 hover:text-red-600"
+                            >
+                              <X size={14} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    {items.length > 0 && (
+                      <tfoot className="border-t-2 border-gray-200 bg-gray-50">
+                        <tr>
+                          <td colSpan={4} className="px-3 py-2 text-right text-sm font-medium text-gray-600">Subtotal</td>
+                          <td className="px-2 py-2 text-right font-semibold text-gray-900">${parseFloat(subtotal || '0').toFixed(2)}</td>
+                          <td></td>
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </div>
+              </div>
+
               {/* Notes */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Notes / Items Ordered
+                  Notes / Special Instructions
                 </label>
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="List materials ordered, quantities, specifications, tracking numbers, special instructions..."
-                  rows={4}
+                  placeholder="Tracking numbers, delivery instructions, color choices, special notes..."
+                  rows={3}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
                 />
               </div>

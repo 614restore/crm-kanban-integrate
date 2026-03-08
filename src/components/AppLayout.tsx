@@ -1,5 +1,5 @@
 import React, { useReducer, useEffect, useCallback, useRef, Suspense, lazy } from 'react';
-import { CRMContext, crmReducer, CRMState } from '@/lib/crmStore';
+import { CRMContext, crmReducer, CRMState, ViewType } from '@/lib/crmStore';
 import { AuthProvider, useAuth } from '@/lib/authContext';
 import { PermissionProvider } from '@/lib/permissions/PermissionProvider';
 import { db } from '@/lib/database';
@@ -91,6 +91,8 @@ const initialState: CRMState = {
   isLoading: true,
   isInitialized: false,
   notifications: [],
+  documentTemplates: [],
+  companyGoals: [],
 };
 
 function buildFallbackAvatar(firstName?: string, lastName?: string, email?: string) {
@@ -444,6 +446,7 @@ function CRMApp() {
         ? dbLeadSources.map(ls => ({
             id: ls.id,
             name: ls.name,
+            isActive: true,
             isCustom: ls.is_custom,
             createdBy: ls.created_by,
           }))
@@ -822,7 +825,7 @@ function CRMApp() {
           </div>
           
           {/* Main content area */}
-          <main className="flex-1 overflow-auto">
+          <main className="flex-1 min-h-0 overflow-auto">
             <ViewRouter />
           </main>
         </div>
