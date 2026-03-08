@@ -46,6 +46,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { useCRM, useFinancialStats } from '@/lib/crmStore';
 import { formatCurrency, getContactFullName } from '@/lib/crmData';
+import { printDataAsPDF } from '@/lib/exportUtils';
 
 interface RevenueData {
   month: string;
@@ -271,6 +272,44 @@ const ReportsAnalytics: React.FC = () => {
     });
   };
 
+  // Export report as PDF
+  const handleExportPDF = () => {
+    printDataAsPDF(`Sales & Analytics Report — ${selectedPeriod}`, [
+      {
+        heading: 'Revenue Summary',
+        rows: revenueData.map(r => ({
+          Month: r.month,
+          Revenue: `$${r.revenue.toLocaleString()}`,
+          Expenses: `$${r.expenses.toLocaleString()}`,
+          Profit: `$${r.profit.toLocaleString()}`,
+          Projects: r.projects,
+        }))
+      },
+      {
+        heading: 'Key Metrics',
+        rows: [
+          { Metric: 'Total Revenue', Value: formatCurrency(metrics.totalRevenue) },
+          { Metric: 'Total Expenses', Value: formatCurrency(metrics.totalExpenses) },
+          { Metric: 'Net Profit', Value: formatCurrency(metrics.netProfit) },
+          { Metric: 'Total Projects', Value: metrics.totalProjects },
+          { Metric: 'Avg Project Value', Value: formatCurrency(metrics.avgProjectValue) },
+          { Metric: 'Conversion Rate', Value: `${metrics.conversionRate}%` },
+          { Metric: 'Customer Satisfaction', Value: `${metrics.customerSatisfaction}/5` },
+        ]
+      },
+      {
+        heading: 'Team Performance',
+        rows: teamPerformanceData.map(t => ({
+          Team_Member: t.name,
+          Projects: t.projects,
+          Revenue: `$${t.revenue.toLocaleString()}`,
+          Satisfaction: `${t.satisfaction}/5`,
+        }))
+      }
+    ]);
+    toast({ title: "PDF Ready", description: "Print dialog opened for PDF export" });
+  };
+
   // Chart colors
   const colors = {
     primary: '#3b82f6',
@@ -311,9 +350,13 @@ const ReportsAnalytics: React.FC = () => {
             <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
-          <Button onClick={handleExport}>
+          <Button onClick={handleExport} variant="outline">
             <Download className="w-4 h-4 mr-2" />
-            Export
+            Export CSV
+          </Button>
+          <Button onClick={handleExportPDF} variant="outline">
+            <FileText className="w-4 h-4 mr-2" />
+            Export PDF
           </Button>
         </div>
       </div>

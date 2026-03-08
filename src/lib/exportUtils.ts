@@ -416,6 +416,123 @@ export function exportAllData(
   XLSX.writeFile(workbook, filename);
 }
 
+/**
+ * Prints a DOM element as a PDF using the browser's native print dialog.
+ * Opens a new window with the element's HTML and a clean print stylesheet.
+ */
+export function printElementAsPDF(elementId: string, title: string) {
+  const el = document.getElementById(elementId);
+  if (!el) {
+    console.error(`Element with id "${elementId}" not found`);
+    return;
+  }
+  const win = window.open('', '_blank', 'width=900,height=700');
+  if (!win) return;
+  win.document.write(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>${title}</title>
+      <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 12px; color: #111; padding: 24px; }
+        h1, h2, h3 { font-weight: 700; margin-bottom: 8px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+        th { background: #f3f4f6; text-align: left; padding: 6px 10px; border: 1px solid #e5e7eb; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+        td { padding: 6px 10px; border: 1px solid #e5e7eb; }
+        tr:nth-child(even) td { background: #f9fafb; }
+        .card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 9999px; font-size: 10px; font-weight: 600; }
+        .print-header { border-bottom: 2px solid #2563eb; padding-bottom: 12px; margin-bottom: 20px; }
+        .print-header h1 { font-size: 22px; color: #1e3a5f; }
+        .print-header p { color: #6b7280; font-size: 11px; margin-top: 4px; }
+        .no-print { display: none !important; }
+        @media print {
+          body { padding: 0; }
+          button, .no-print { display: none !important; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="print-header">
+        <h1>${title}</h1>
+        <p>Generated ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+      </div>
+      ${el.innerHTML}
+    </body>
+    </html>
+  `);
+  win.document.close();
+  win.focus();
+  setTimeout(() => {
+    win.print();
+  }, 500);
+}
+
+/**
+ * Generates a printable HTML report from structured data and opens print dialog.
+ */
+export function printDataAsPDF(
+  title: string,
+  sections: Array<{
+    heading: string;
+    rows: Record<string, string | number>[];
+  }>
+) {
+  const win = window.open('', '_blank', 'width=900,height=700');
+  if (!win) return;
+
+  const tableHtml = sections.map(section => {
+    if (!section.rows.length) return '';
+    const headers = Object.keys(section.rows[0]);
+    return `
+      <h2 style="font-size:15px;font-weight:700;margin:20px 0 8px;color:#1e3a5f;">${section.heading}</h2>
+      <table>
+        <thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
+        <tbody>${section.rows.map(row =>
+          `<tr>${headers.map(h => `<td>${row[h] ?? ''}</td>`).join('')}</tr>`
+        ).join('')}</tbody>
+      </table>
+    `;
+  }).join('');
+
+  win.document.write(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>${title}</title>
+      <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 12px; color: #111; padding: 24px; }
+        h1 { font-size: 22px; font-weight: 800; color: #1e3a5f; }
+        h2 { font-size: 15px; font-weight: 700; color: #1e3a5f; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+        th { background: #eff6ff; text-align: left; padding: 7px 10px; border: 1px solid #bfdbfe; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: #1d4ed8; }
+        td { padding: 6px 10px; border: 1px solid #e5e7eb; }
+        tr:nth-child(even) td { background: #f9fafb; }
+        .print-header { border-bottom: 3px solid #2563eb; padding-bottom: 12px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-end; }
+        .print-header p { color: #6b7280; font-size: 11px; margin-top: 4px; }
+        .brand { font-size: 11px; color: #9ca3af; text-align: right; }
+        @media print { button { display: none !important; } }
+      </style>
+    </head>
+    <body>
+      <div class="print-header">
+        <div>
+          <h1>${title}</h1>
+          <p>Generated ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+        </div>
+        <div class="brand">TrussCTR by 614 Restore LLC</div>
+      </div>
+      ${tableHtml}
+    </body>
+    </html>
+  `);
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 500);
+}
+
 // Export financial data only
 export function exportFinancialData(
   invoices: Invoice[],
