@@ -1244,7 +1244,7 @@ export default function SettingsView() {
   }, []);
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '256px 1fr', gridTemplateRows: '1fr auto', width: '100%', height: '100%' }}>
+    <div className="flex flex-col w-full h-full">
       {/* Hidden file inputs */}
       <input
         ref={companyLogoInputRef}
@@ -1263,8 +1263,11 @@ export default function SettingsView() {
         disabled={isUploadingAvatar}
       />
 
+      {/* Main content row */}
+      <div className="flex flex-1 overflow-hidden">
+
       {/* Sidebar */}
-      <div className="bg-white border-r border-gray-200 p-4 overflow-y-auto">
+      <div className="w-64 flex-shrink-0 bg-white border-r border-gray-200 p-4 overflow-y-auto">
         <h2 className="text-lg font-semibold text-gray-900 mb-4 px-3">Settings</h2>
         <nav className="space-y-1">
           {tabs.map((tab) => (
@@ -1285,7 +1288,7 @@ export default function SettingsView() {
       </div>
 
       {/* Content */}
-      <div className="overflow-auto p-8">
+      <div className="flex-1 overflow-auto p-8">
         {activeTab === 'company' && (
           <div className="max-w-3xl space-y-8">
             <div>
@@ -2276,17 +2279,18 @@ export default function SettingsView() {
       />
 
       {/* Legal Footer */}
-      <div style={{ gridColumn: '1 / -1' }} className="py-2 px-4 border-t border-gray-200 bg-white overflow-x-auto">
-        <div className="flex flex-row items-center justify-center gap-1 text-xs text-gray-400 whitespace-nowrap min-w-0">
-          <span>© {new Date().getFullYear()} TrussCTR by 614 Restore LLC</span>
+      </div>{/* end main content row */}
+      <div className="py-2 px-4 border-t border-gray-200 bg-white">
+        <div className="flex flex-row flex-wrap items-center justify-center gap-x-2 gap-y-0 text-xs text-gray-400">
+          <span className="whitespace-nowrap">© {new Date().getFullYear()} TrussCTR by 614 Restore LLC</span>
           <span>·</span>
-          <a href="/crm-kanban-integrate/terms" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 transition-colors">Terms of Service</a>
+          <a href="/crm-kanban-integrate/terms" target="_blank" rel="noopener noreferrer" className="whitespace-nowrap hover:text-blue-600 transition-colors">Terms of Service</a>
           <span>·</span>
-          <a href="/crm-kanban-integrate/privacy" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 transition-colors">Privacy Policy</a>
+          <a href="/crm-kanban-integrate/privacy" target="_blank" rel="noopener noreferrer" className="whitespace-nowrap hover:text-blue-600 transition-colors">Privacy Policy</a>
           <span>·</span>
-          <a href="/crm-kanban-integrate/eula" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 transition-colors">EULA</a>
+          <a href="/crm-kanban-integrate/eula" target="_blank" rel="noopener noreferrer" className="whitespace-nowrap hover:text-blue-600 transition-colors">EULA</a>
           <span>·</span>
-          <a href="mailto:scopemgr@614restore.com?subject=CONTACT%20TrussCTR" className="hover:text-blue-600 transition-colors">Contact Support</a>
+          <a href="mailto:scopemgr@614restore.com?subject=CONTACT%20TrussCTR" className="whitespace-nowrap hover:text-blue-600 transition-colors">Contact Support</a>
         </div>
       </div>
     </div>
