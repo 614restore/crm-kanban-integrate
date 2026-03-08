@@ -235,26 +235,26 @@ export default function ContactList() {
         break;
       }
 
-      const created = await db.createContact({
-        company_id: state.companyId,
-        first_name: newContact.firstName,
-        last_name: newContact.lastName,
-        email: newContact.email || undefined,
-        phone1: newContact.phone1 || undefined,
-        city: newContact.city || undefined,
-        state: newContact.state || undefined,
-        status: newContact.status,
-        lead_source: newContact.leadSource,
-        assigned_to: newContact.assignedTo || undefined,
-        tags: [],
-      });
-
-      if (!created) {
+      try {
+        await db.createContact({
+          company_id: state.companyId,
+          first_name: newContact.firstName,
+          last_name: newContact.lastName,
+          email: newContact.email || undefined,
+          phone1: newContact.phone1 || undefined,
+          city: newContact.city || undefined,
+          state: newContact.state || undefined,
+          status: newContact.status,
+          lead_source: newContact.leadSource,
+          assigned_to: newContact.assignedTo || undefined,
+          tags: [],
+        });
+        imported += 1;
+      } catch (err) {
+        console.error('Failed to import contact:', err);
         toast.error(`Failed to import contact: ${newContact.firstName} ${newContact.lastName}`);
         continue;
       }
-
-      imported += 1;
     }
 
     toast.success(`Imported ${imported} contacts`);

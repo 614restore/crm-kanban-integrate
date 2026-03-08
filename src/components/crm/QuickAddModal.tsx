@@ -223,11 +223,6 @@ export default function QuickAddModal() {
         15000,
         'Create contact'
       );
-      
-      if (!dbContact) {
-        console.error('[QuickAdd] Database returned null for created contact');
-        throw new Error('Database operation failed. Please check your connection and try again.');
-      }
 
 
         const createdContact: Contact = {
@@ -280,20 +275,13 @@ export default function QuickAddModal() {
     } catch (error) {
       console.error('Error creating contact:', error);
       let message = 'Failed to create contact. Please try again.';
-      
+
       if (error instanceof Error) {
         message = error.message;
       } else if (typeof error === 'string') {
         message = error;
       }
-      
-      // Show more specific error messages to help user understand the issue
-      if (message.includes('company')) {
-        message += ' Please ensure you are properly logged in and have a valid company account.';
-      } else if (message.includes('database') || message.includes('connection')) {
-        message += ' Please check your internet connection and try again.';
-      }
-      
+
       toast.error(message);
       dispatch({
         type: 'ADD_NOTIFICATION',

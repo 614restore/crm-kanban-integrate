@@ -666,12 +666,12 @@ class DatabaseService {
       );
       if (error) {
         console.error('Error creating contact:', error);
-        return null;
+        throw new Error(error.message || 'Failed to save contact to database');
       }
       return data;
     } catch (err) {
       console.error('createContact timed out or failed:', err);
-      return null;
+      throw err instanceof Error ? err : new Error('Failed to create contact');
     }
   }
 
@@ -690,12 +690,12 @@ class DatabaseService {
 
       if (error) {
         console.error('Error updating contact:', error);
-        return null;
+        throw new Error(error.message || 'Failed to update contact');
       }
       return data;
     } catch (err) {
       console.error('updateContact timed out or failed:', err);
-      return null;
+      throw err instanceof Error ? err : new Error('Failed to update contact');
     }
   }
 
@@ -844,63 +844,38 @@ class DatabaseService {
   }
 
   async createAppointment(appointment: Partial<DbAppointment>): Promise<DbAppointment | null> {
-    const toStartAndEnd = () => {
-      const date = appointment.date || new Date().toISOString().split('T')[0];
-      const time = appointment.time || '09:00';
-      const duration = appointment.duration || 60;
-      const start = new Date(`${date}T${time}:00`);
-      const end = new Date(start.getTime() + duration * 60 * 1000);
+    const date = appointment.date || new Date().toISOString().split('T')[0];
+    const time = appointment.time || '09:00';
+    const duration = appointment.duration || 60;
+    const start = new Date(`${date}T${time}:00`);
+    const end = new Date(start.getTime() + duration * 60 * 1000);
 
-      return {
-        company_id: appointment.company_id,
-        contact_id: appointment.contact_id,
-        title: appointment.title,
-        type: appointment.type,
-        start_time: start.toISOString(),
-        end_time: end.toISOString(),
-        assigned_to: appointment.assigned_to,
-        location: appointment.location,
-        notes: appointment.notes,
-        status: appointment.status,
-      };
-    };
-
-    const toDateTime = () => ({
+    const payload = {
       company_id: appointment.company_id,
       contact_id: appointment.contact_id,
       title: appointment.title,
       type: appointment.type,
-      date: appointment.date,
-      time: appointment.time,
-      duration: appointment.duration,
+      start_time: start.toISOString(),
+      end_time: end.toISOString(),
       assigned_to: appointment.assigned_to,
       location: appointment.location,
       notes: appointment.notes,
       status: appointment.status,
-    });
-
-    const firstAttempt = await this.raceTimeout(
-      supabase.from('appointments').insert(toStartAndEnd()).select().single(),
-      10000, 'createAppointment-v1'
-    ).catch(() => ({ data: null, error: new Error('timeout') }));
-
-    if (firstAttempt.data && !(firstAttempt as any).error) {
-      return firstAttempt.data as DbAppointment;
-    }
+    };
 
     try {
-      const secondAttempt = await this.raceTimeout(
-        supabase.from('appointments').insert(toDateTime()).select().single(),
-        10000, 'createAppointment-v2'
+      const { data, error } = await this.raceTimeout(
+        supabase.from('appointments').insert(payload).select().single(),
+        10000, 'createAppointment'
       );
-      if ((secondAttempt as any).error) {
-        console.error('Error creating appointment:', (secondAttempt as any).error);
-        return null;
+      if (error) {
+        console.error('Error creating appointment:', error);
+        throw new Error(error.message || 'Failed to save appointment');
       }
-      return secondAttempt.data as DbAppointment;
+      return data as DbAppointment;
     } catch (err) {
       console.error('createAppointment timed out or failed:', err);
-      return null;
+      throw err instanceof Error ? err : new Error('Failed to create appointment');
     }
   }
 
@@ -975,7 +950,10 @@ class DatabaseService {
         supabase.from('invoices').insert(invoice).select().single(),
         10000, 'createInvoice'
       );
-      if (invoiceError) { console.error('Error creating invoice:', invoiceError); return null; }
+      if (invoiceError) {
+        console.error('Error creating invoice:', invoiceError);
+        throw new Error(invoiceError.message || 'Failed to save invoice');
+      }
 
       if (items.length > 0) {
         const itemsWithInvoiceId = items.map(item => ({ ...item, invoice_id: newInvoice.id }));
@@ -983,7 +961,10 @@ class DatabaseService {
         if (itemsError) { console.error('Error creating invoice items:', itemsError); }
       }
       return newInvoice;
-    } catch (err) { console.error('createInvoice timed out or failed:', err); return null; }
+    } catch (err) {
+      console.error('createInvoice timed out or failed:', err);
+      throw err instanceof Error ? err : new Error('Failed to create invoice');
+    }
   }
 
   async updateInvoice(invoiceId: string, updates: Partial<DbInvoice>): Promise<DbInvoice | null> {
@@ -1603,9 +1584,15 @@ class DatabaseService {
         supabase.from('suppliers').insert(supplier).select().single(),
         10000, 'createSupplier'
       );
-      if (error) { console.error('Error creating supplier:', error); return null; }
+      if (error) {
+        console.error('Error creating supplier:', error);
+        throw new Error(error.message || 'Failed to save supplier');
+      }
       return data;
-    } catch (err) { console.error('createSupplier timed out or failed:', err); return null; }
+    } catch (err) {
+      console.error('createSupplier timed out or failed:', err);
+      throw err instanceof Error ? err : new Error('Failed to create supplier');
+    }
   }
 
   async updateSupplier(supplierId: string, updates: Partial<DbSupplier>): Promise<DbSupplier | null> {
@@ -1614,9 +1601,12 @@ class DatabaseService {
         supabase.from('suppliers').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', supplierId).select().single(),
         10000, 'updateSupplier'
       );
-      if (error) { console.error('Error updating supplier:', error); return null; }
+      if (error) {
+        console.error('Error updating supplier:', error);
+        throw new Error(error.message || 'Failed to update supplier');
+      }
       return data;
-    } catch (err) { console.error('updateSupplier timed out or failed:', err); return null; }
+    } catch (err) { console.error('updateSupplier timed out or failed:', err); throw err instanceof Error ? err : new Error('Failed to update supplier'); }
   }
 
   async deleteSupplier(supplierId: string): Promise<boolean> {
@@ -2065,15 +2055,21 @@ class DatabaseService {
   }
 
   async createExpense(expense: Partial<DbExpense>): Promise<DbExpense | null> {
-    if (this.inDemoMode()) return null;
+    if (this.inDemoMode()) throw new Error('Expenses are not available in demo mode');
     try {
       const { data, error } = await this.raceTimeout(
         supabase.from('expenses').insert(expense).select().single(),
         10000, 'createExpense'
       );
-      if (error) { console.error('Error creating expense:', error); return null; }
+      if (error) {
+        console.error('Error creating expense:', error);
+        throw new Error(error.message || 'Failed to save expense');
+      }
       return data as DbExpense;
-    } catch (err) { console.error('createExpense timed out or failed:', err); return null; }
+    } catch (err) {
+      console.error('createExpense timed out or failed:', err);
+      throw err instanceof Error ? err : new Error('Failed to create expense');
+    }
   }
 
   async updateExpense(expenseId: string, updates: Partial<DbExpense>): Promise<DbExpense | null> {

@@ -347,6 +347,9 @@ export default function MaterialOrdersView() {
           };
           dispatch({ type: 'UPDATE_MATERIAL_ORDER', payload: appOrder });
           toast.success('Material order updated');
+          handleCloseModal();
+        } else {
+          toast.error('Failed to update order. Please try again.');
         }
       } else {
         const created = await db.createMaterialOrder(orderData);
@@ -375,10 +378,11 @@ export default function MaterialOrdersView() {
           };
           dispatch({ type: 'ADD_MATERIAL_ORDER', payload: appOrder });
           toast.success('Material order created');
+          handleCloseModal();
+        } else {
+          toast.error('Failed to create order. Please try again.');
         }
       }
-
-      handleCloseModal();
     } catch (error) {
       console.error('Error saving material order:', error);
       toast.error('Failed to save material order');

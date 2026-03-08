@@ -303,6 +303,9 @@ export default function WorkOrdersView() {
           };
           dispatch({ type: 'UPDATE_WORK_ORDER', payload: appWorkOrder });
           toast.success('Work order updated');
+          handleCloseModal();
+        } else {
+          toast.error('Failed to update work order. Please try again.');
         }
       } else {
         const created = await db.createWorkOrder(workOrderData);
@@ -341,10 +344,11 @@ export default function WorkOrdersView() {
           };
           dispatch({ type: 'ADD_WORK_ORDER', payload: appWorkOrder });
           toast.success('Work order created');
+          handleCloseModal();
+        } else {
+          toast.error('Failed to create work order. Please try again.');
         }
       }
-
-      handleCloseModal();
     } catch (error) {
       console.error('Error saving work order:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to save work order');

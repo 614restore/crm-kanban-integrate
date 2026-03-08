@@ -321,6 +321,9 @@ export default function ProjectsView() {
           };
           dispatch({ type: 'UPDATE_PROJECT', payload: appProject });
           toast.success('Project updated');
+          handleCloseModal();
+        } else {
+          toast.error('Failed to update project. Please try again.');
         }
       } else {
         const created = await db.createProject(projectData);
@@ -362,10 +365,11 @@ export default function ProjectsView() {
           };
           dispatch({ type: 'ADD_PROJECT', payload: appProject });
           toast.success('Project created');
+          handleCloseModal();
+        } else {
+          toast.error('Failed to create project. Please try again.');
         }
       }
-
-      handleCloseModal();
     } catch (error) {
       console.error('Error saving project:', error);
       toast.error('Failed to save project');

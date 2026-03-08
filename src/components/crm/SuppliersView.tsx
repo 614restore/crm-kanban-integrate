@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
+import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { Supplier } from '@/lib/crmData';
 import { exportSuppliersToExcel } from '@/lib/exportUtils';
@@ -96,7 +97,7 @@ const POPULAR_SUPPLIERS = [
 
 export default function SuppliersView() {
   const { state, dispatch } = useCRM();
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showQuickAddModal, setShowQuickAddModal] = useState(false);
@@ -121,6 +122,23 @@ export default function SuppliersView() {
   });
 
   const effectiveCompanyId = profile?.company_id || state.companyId || null;
+
+  // Resolve company ID with DB fallback for timing edge cases
+  const resolveCompanyId = async (): Promise<string | null> => {
+    if (effectiveCompanyId) return effectiveCompanyId;
+    const userId = profile?.id || user?.id;
+    if (!userId) return null;
+    const { data } = await supabase
+      .from('profiles')
+      .select('company_id')
+      .eq('id', userId)
+      .single();
+    if (data?.company_id) {
+      dispatch({ type: 'SET_COMPANY_ID', payload: data.company_id });
+      return data.company_id;
+    }
+    return null;
+  };
 
   // Load suppliers on mount
   useEffect(() => {
@@ -206,8 +224,9 @@ export default function SuppliersView() {
       return;
     }
 
-    if (!effectiveCompanyId) {
-      toast.error('No company context');
+    const companyId = await resolveCompanyId();
+    if (!companyId) {
+      toast.error('No company context. Please refresh and sign in again.');
       return;
     }
 
@@ -260,7 +279,7 @@ export default function SuppliersView() {
       } else {
         // Create new supplier
         const created = await db.createSupplier({
-          company_id: effectiveCompanyId,
+          company_id: companyId,
           name: formData.name,
           contact_name: formData.contactName || null,
           email: formData.email || null,
@@ -364,8 +383,9 @@ export default function SuppliersView() {
       return;
     }
 
-    if (!effectiveCompanyId) {
-      toast.error('No company context');
+    const companyId = await resolveCompanyId();
+    if (!companyId) {
+      toast.error('No company context. Please refresh and sign in again.');
       return;
     }
 
@@ -374,7 +394,7 @@ export default function SuppliersView() {
     try {
       const suppliersToAdd = POPULAR_SUPPLIERS.filter(s => selectedSuppliers.has(s.name));
       const existingNames = new Set(state.suppliers.map(s => s.name.toLowerCase()));
-      
+
       let addedCount = 0;
       let skippedCount = 0;
 
@@ -386,7 +406,7 @@ export default function SuppliersView() {
         }
 
         const created = await db.createSupplier({
-          company_id: effectiveCompanyId,
+          company_id: companyId,
           name: supplierTemplate.name,
           contact_name: null,
           email: supplierTemplate.email || null,

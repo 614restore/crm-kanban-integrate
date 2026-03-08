@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/authContext';
-import { supabase } from '@/lib/supabase';
+import { supabase, isDemoMode } from '@/lib/supabase';
 import { roleLabels, UserRole } from '@/lib/crmData';
 import {
   Building2,
@@ -16,8 +16,6 @@ import {
 } from 'lucide-react';
 
 type AuthMode = 'login' | 'signup' | 'reset';
-
-const isDemoMode = import.meta.env.VITE_DEMO_MODE === 'true';
 
 export default function AuthPage() {
   const { signIn, signUp, resetPassword } = useAuth();

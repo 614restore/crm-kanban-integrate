@@ -450,24 +450,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     try {
-      
       // Clear all state immediately to provide instant feedback
       setSession(null);
       setUser(null);
       setProfile(null);
-      
-      // Clear localStorage and sessionStorage
+
+      // Revoke the server-side session first (needs the token still in localStorage)
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('[Auth] Sign out error:', error);
+      }
+
+      // Clear storage after revoking the server session
       try {
         localStorage.clear();
         sessionStorage.clear();
       } catch (storageError) {
         console.warn('[Auth] Failed to clear storage:', storageError);
-      }
-      
-      // Call Supabase signOut (don't wait for it if it fails)
-      const { error } = await supabase.auth.signOut();
-      if (error) {
-        console.error('[Auth] Sign out error:', error);
       }
     } catch (err) {
       console.error('[Auth] Sign out failed:', err);
@@ -475,7 +474,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Always redirect and reload, regardless of success/failure
       // Use correct base path for GitHub Pages
       const basePath = import.meta.env.BASE_URL || '/';
-      
+
       // Force a hard reload to the base path to ensure clean state
       window.location.replace(basePath);
     }

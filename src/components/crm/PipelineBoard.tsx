@@ -68,11 +68,7 @@ export default function PipelineBoard() {
     if (draggedContact && draggedContact.status !== column.status) {
       try {
         if (effectiveCompanyId) {
-          const updated = await db.updateContact(draggedContact.id, { status: column.status });
-          if (!updated) {
-            toast.error('Failed to move contact');
-            return;
-          }
+          await db.updateContact(draggedContact.id, { status: column.status });
         }
 
         dispatch({
@@ -93,7 +89,8 @@ export default function PipelineBoard() {
         });
       } catch (error) {
         console.error('Error updating contact status:', error);
-        toast.error('Failed to move contact');
+        const msg = error instanceof Error ? error.message : 'Failed to move contact';
+        toast.error(msg);
       }
     }
 

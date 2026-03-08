@@ -194,7 +194,10 @@ const ExpenseTracker: React.FC = () => {
 
   // Add new expense
   const handleAddExpense = async (expense: Omit<Expense, 'id' | 'submittedAt'>) => {
-    if (!companyId) return;
+    if (!companyId) {
+      toast({ title: 'Error', description: 'No company context. Please refresh and sign in again.', variant: 'destructive' });
+      throw new Error('No company context');
+    }
 
     const row = await db.createExpense({
       company_id: companyId,
@@ -218,17 +221,13 @@ const ExpenseTracker: React.FC = () => {
       reimbursable: expense.reimbursable,
     });
 
-    if (row) {
-      setExpenses(prev => [dbToExpense(row), ...prev]);
-      setShowAddExpense(false);
-      toast({
-        title: "Expense Added",
-        description: `$${expense.amount.toFixed(2)} expense has been submitted`,
-        variant: "default"
-      });
-    } else {
-      toast({ title: "Error", description: "Failed to save expense", variant: "destructive" });
-    }
+    setExpenses(prev => [dbToExpense(row!), ...prev]);
+    setShowAddExpense(false);
+    toast({
+      title: "Expense Added",
+      description: `$${expense.amount.toFixed(2)} expense has been submitted`,
+      variant: "default"
+    });
   };
 
   // Export expenses to CSV
@@ -607,7 +606,7 @@ const ExpenseTracker: React.FC = () => {
 const AddExpenseModal: React.FC<{
   open: boolean;
   onClose: () => void;
-  onSubmit: (expense: Omit<Expense, 'id' | 'submittedAt'>) => void;
+  onSubmit: (expense: Omit<Expense, 'id' | 'submittedAt'>) => Promise<void>;
   categories: string[];
 }> = ({ open, onClose, onSubmit, categories }) => {
   const [formData, setFormData] = useState({
@@ -625,6 +624,8 @@ const AddExpenseModal: React.FC<{
     notes: '',
     receipt: '' as string,
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const receiptInputRef = React.useRef<HTMLInputElement>(null);
 
   const handleReceiptUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -641,9 +642,15 @@ const AddExpenseModal: React.FC<{
     reader.readAsDataURL(file);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    setSubmitError(null);
+
+    if (!formData.category) {
+      setSubmitError('Please select a category');
+      return;
+    }
+
     const expense: Omit<Expense, 'id' | 'submittedAt'> = {
       amount: parseFloat(formData.amount),
       description: formData.description,
@@ -662,24 +669,31 @@ const AddExpenseModal: React.FC<{
       submittedBy: 'Current User' // name resolved in handleAddExpense via profile
     };
 
-    onSubmit(expense);
-    
-    // Reset form
-    setFormData({
-      amount: '',
-      description: '',
-      category: '',
-      date: new Date().toISOString().split('T')[0],
-      vendor: '',
-      location: '',
-      paymentMethod: 'cash',
-      reimbursable: true,
-      mileage: '',
-      jobId: '',
-      jobName: '',
-      notes: '',
-      receipt: '',
-    });
+    setIsSubmitting(true);
+    try {
+      await onSubmit(expense);
+      // Reset form only on success
+      setFormData({
+        amount: '',
+        description: '',
+        category: '',
+        date: new Date().toISOString().split('T')[0],
+        vendor: '',
+        location: '',
+        paymentMethod: 'cash',
+        reimbursable: true,
+        mileage: '',
+        jobId: '',
+        jobName: '',
+        notes: '',
+        receipt: '',
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to save expense';
+      setSubmitError(msg);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -821,11 +835,14 @@ const AddExpenseModal: React.FC<{
           </div>
           
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={onClose}>
+            {submitError && (
+              <p className="text-sm text-red-600 self-center mr-auto">{submitError}</p>
+            )}
+            <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </Button>
-            <Button type="submit">
-              Add Expense
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? 'Saving...' : 'Add Expense'}
             </Button>
           </div>
         </form>

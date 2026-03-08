@@ -157,10 +157,6 @@ function ViewRouter() {
         return <SettingsView />;
       case 'ai-assistant':
         return <AIAssistant />;
-      case 'crew-schedule':
-        return <CrewScheduleView />;
-      case 'equipment':
-        return <EquipmentView />;
       default:
         return <Dashboard />;
     }
@@ -670,6 +666,8 @@ function CRMApp() {
           estimates,
           projects,
           workOrders,
+          documentTemplates: [],
+          companyGoals: [],
         },
       });
 
@@ -691,6 +689,8 @@ function CRMApp() {
           estimates: [],
           projects: [],
           workOrders: [],
+          documentTemplates: [],
+          companyGoals: [],
         },
       });
     }
@@ -830,6 +830,13 @@ function CRMApp() {
           leadSources: defaultLeadSources,
           automations: [],
           teamMembers: [],
+          suppliers: [],
+          materialOrders: [],
+          estimates: [],
+          projects: [],
+          workOrders: [],
+          documentTemplates: [],
+          companyGoals: [],
         },
       });
     }, 20000);

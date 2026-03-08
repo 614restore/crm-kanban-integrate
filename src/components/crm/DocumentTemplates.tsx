@@ -81,7 +81,7 @@ const DocumentTemplates: React.FC = () => {
   
   const { toast } = useToast();
   const { profile } = useAuth();
-  const { state: crmState } = useCRM();
+  const { state: crmState, dispatch } = useCRM();
 
   // Load company profile for template variable replacement
   useEffect(() => {
@@ -2567,8 +2567,8 @@ const DocumentTemplates: React.FC = () => {
       'COMPANY_EMAIL': companyProfile?.email || 'info@614restore.com',
       'CONTRACTOR_LICENSE': companyProfile?.contractor_license || 'OH-RC-2024-8812',
       'COMPANY_LOGO': companyProfile?.logo_url
-        ? `<img src="${companyProfile.logo_url}" alt="${companyProfile.name || 'Company'} Logo" style="max-height:60px;max-width:180px;object-fit:contain;" />`
-        : (companyProfile?.name || 'TrussCTR'),
+        ? `<style>.logo-placeholder{background:transparent!important;border:none!important;width:auto!important;height:auto!important;display:block!important;}</style><img src="${companyProfile.logo_url}" alt="${companyProfile.name || 'Company'} Logo" style="max-height:80px;max-width:200px;object-fit:contain;display:block;" />`
+        : `<span style="font-size:11px;color:#9ca3af;font-style:italic;">[No logo — upload in Settings &rsaquo; Company Profile]</span>`,
       'TAX_ID': companyProfile?.tax_id || '31-1234567',
       'ROC_NUMBER': companyProfile?.contractor_license || 'ROC-123456',
       'INSURANCE_POLICY_NUMBER': (companyProfile as any)?.insurance_policy_number || '[INSURANCE_POLICY_NUMBER]',
@@ -2725,6 +2725,22 @@ const DocumentTemplates: React.FC = () => {
           New Template
         </Button>
       </div>
+
+      {/* Company logo notice */}
+      {!companyProfile?.logo_url && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+          <Upload className="w-4 h-4 shrink-0" />
+          <span>
+            Your company logo is not set. Templates will show a placeholder.{' '}
+            <button
+              onClick={() => dispatch({ type: 'SET_VIEW', payload: 'settings' })}
+              className="font-medium underline underline-offset-2 hover:text-amber-900"
+            >
+              Go to Settings &rsaquo; Company Profile to upload your logo
+            </button>
+          </span>
+        </div>
+      )}
 
       {/* Category Overview */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

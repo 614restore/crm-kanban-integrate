@@ -24,6 +24,7 @@ export default function InvoiceModal() {
       : [{ description: '', quantity: 1, unitPrice: 0, total: 0 }]
   );
   const [notes, setNotes] = useState(prefill?.notes || '');
+  const [isSaving, setIsSaving] = useState(false);
 
   // Re-initialize if prefill changes (new conversion)
   useEffect(() => {
@@ -84,61 +85,70 @@ export default function InvoiceModal() {
       return;
     }
 
-    const createdInvoice = await db.createInvoice(
-      {
-        company_id: effectiveCompanyId,
-        contact_id: selectedContactId,
-        amount: total,
-        tax_amount: tax,
-        status,
-        due_date: dueDate,
-        notes: notes || undefined,
-      },
-      validItems.map((item) => ({
-        description: item.description,
-        quantity: item.quantity,
-        unit_price: item.unitPrice,
-        total: item.total,
-      }))
-    );
+    setIsSaving(true);
+    try {
+      const createdInvoice = await db.createInvoice(
+        {
+          company_id: effectiveCompanyId,
+          contact_id: selectedContactId,
+          amount: total,
+          tax_amount: tax,
+          status,
+          due_date: dueDate,
+          notes: notes || undefined,
+        },
+        validItems.map((item) => ({
+          description: item.description,
+          quantity: item.quantity,
+          unit_price: item.unitPrice,
+          total: item.total,
+        }))
+      );
 
-    if (!createdInvoice) {
-      toast.error('Failed to save invoice');
-      return;
+      if (!createdInvoice) {
+        toast.error('Failed to save invoice');
+        return;
+      }
+
+      const newInvoice: Invoice = {
+        id: createdInvoice.id,
+        contactId: selectedContactId,
+        contactName: selectedContact ? getContactFullName(selectedContact) : '',
+        jobId: createdInvoice.job_id || '',
+        amount: createdInvoice.amount,
+        status: createdInvoice.status as Invoice['status'],
+        dueDate: createdInvoice.due_date || dueDate,
+        createdAt: createdInvoice.created_at,
+        items: validItems,
+      };
+
+      dispatch({ type: 'ADD_INVOICE', payload: newInvoice });
+
+      fireAutomationEvent('invoice_created', effectiveCompanyId, {
+        contactId: selectedContactId,
+        contactName: newInvoice.contactName,
+        amount: newInvoice.amount,
+      }).catch(() => {});
+
+      dispatch({
+        type: 'ADD_NOTIFICATION',
+        payload: {
+          id: `notif-${Date.now()}`,
+          type: 'success',
+          title: status === 'sent' ? 'Invoice Sent' : 'Invoice Saved',
+          message: `Invoice has been ${status === 'sent' ? 'sent to' : 'saved for'} ${newInvoice.contactName}`,
+          timestamp: new Date().toISOString(),
+          read: false,
+        },
+      });
+      dispatch({ type: 'TOGGLE_INVOICE_MODAL' });
+    } catch (err) {
+      console.error('Error saving invoice:', err);
+      const msg = err instanceof Error ? err.message : 'Failed to save invoice';
+      toast.error(msg);
+    } finally {
+      setIsSaving(false);
     }
-
-    const newInvoice: Invoice = {
-      id: createdInvoice.id,
-      contactId: selectedContactId,
-      contactName: selectedContact ? getContactFullName(selectedContact) : '',
-      jobId: createdInvoice.job_id || '',
-      amount: createdInvoice.amount,
-      status: createdInvoice.status as Invoice['status'],
-      dueDate: createdInvoice.due_date || dueDate,
-      createdAt: createdInvoice.created_at,
-      items: validItems,
-    };
-
-    dispatch({ type: 'ADD_INVOICE', payload: newInvoice });
-
-    fireAutomationEvent('invoice_created', effectiveCompanyId, {
-      contactId: selectedContactId,
-      contactName: newInvoice.contactName,
-      amount: newInvoice.amount,
-    }).catch(() => {});
-
-    dispatch({
-      type: 'ADD_NOTIFICATION',
-      payload: {
-        id: `notif-${Date.now()}`,
-        type: 'success',
-        title: status === 'sent' ? 'Invoice Sent' : 'Invoice Saved',
-        message: `Invoice has been ${status === 'sent' ? 'sent to' : 'saved for'} ${newInvoice.contactName}`,
-        timestamp: new Date().toISOString(),
-        read: false,
-      },
-    });
-    dispatch({ type: 'TOGGLE_INVOICE_MODAL' });
   };
 
   const handleClose = () => {
@@ -307,19 +317,19 @@ export default function InvoiceModal() {
           </button>
           <button
             onClick={() => handleSave('draft')}
-            disabled={!selectedContactId}
+            disabled={!selectedContactId || isSaving}
             className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Save size={18} />
-            Save Draft
+            {isSaving ? 'Saving...' : 'Save Draft'}
           </button>
           <button
             onClick={() => handleSave('sent')}
-            disabled={!selectedContactId}
+            disabled={!selectedContactId || isSaving}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Send size={18} />
-            Send Invoice
+            {isSaving ? 'Sending...' : 'Send Invoice'}
           </button>
         </div>
       </div>

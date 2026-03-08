@@ -373,7 +373,8 @@ export default function AppointmentModal({
       onClose();
     } catch (err) {
       console.error('Error saving appointment:', err);
-      toast.error('Failed to save appointment');
+      const msg = err instanceof Error ? err.message : 'Failed to save appointment';
+      toast.error(msg);
     } finally {
       setIsSaving(false);
     }
