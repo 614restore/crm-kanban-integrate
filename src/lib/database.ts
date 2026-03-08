@@ -455,8 +455,8 @@ class DatabaseService {
     } catch { /* quota exceeded — ignore */ }
   }
 
-  /** Race a promise against a timeout (ms). Rejects with a clear message. */
-  private raceTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  /** Race a promise (or thenable) against a timeout (ms). Rejects with a clear message. */
+  private raceTimeout<T>(promise: PromiseLike<T>, ms: number, label: string): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
       promise.then(
