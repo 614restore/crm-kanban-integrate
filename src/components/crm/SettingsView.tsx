@@ -2278,21 +2278,7 @@ export default function SettingsView() {
         }}
       />
 
-      {/* Legal Footer */}
       </div>{/* end main content row */}
-      <div className="py-2 px-4 border-t border-gray-200 bg-white">
-        <div className="flex flex-row flex-nowrap items-center justify-center gap-x-2 text-xs text-gray-400 overflow-x-auto">
-          <span className="whitespace-nowrap">© {new Date().getFullYear()} TrussCTR by 614 Restore LLC</span>
-          <span>·</span>
-          <a href="/crm-kanban-integrate/terms" target="_blank" rel="noopener noreferrer" className="whitespace-nowrap hover:text-blue-600 transition-colors">Terms of Service</a>
-          <span>·</span>
-          <a href="/crm-kanban-integrate/privacy" target="_blank" rel="noopener noreferrer" className="whitespace-nowrap hover:text-blue-600 transition-colors">Privacy Policy</a>
-          <span>·</span>
-          <a href="/crm-kanban-integrate/eula" target="_blank" rel="noopener noreferrer" className="whitespace-nowrap hover:text-blue-600 transition-colors">EULA</a>
-          <span>·</span>
-          <a href="mailto:scopemgr@614restore.com?subject=CONTACT%20TrussCTR" className="whitespace-nowrap hover:text-blue-600 transition-colors">Contact Support</a>
-        </div>
-      </div>
     </div>
   );
 }

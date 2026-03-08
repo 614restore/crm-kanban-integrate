@@ -224,24 +224,14 @@ export default function Sidebar() {
 
       {/* Legal Links */}
       {!sidebarCollapsed && (
-        <div className="px-3 pb-2 flex gap-3 justify-center">
-          <a
-            href="/crm-kanban-integrate/terms"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
-          >
-            Terms
-          </a>
+        <div className="px-3 pb-2 flex flex-wrap gap-x-2 gap-y-1 justify-center">
+          <a href="/crm-kanban-integrate/terms" target="_blank" rel="noopener noreferrer" className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Terms</a>
           <span className="text-slate-600 text-xs">·</span>
-          <a
-            href="/crm-kanban-integrate/privacy"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
-          >
-            Privacy
-          </a>
+          <a href="/crm-kanban-integrate/privacy" target="_blank" rel="noopener noreferrer" className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Privacy</a>
+          <span className="text-slate-600 text-xs">·</span>
+          <a href="/crm-kanban-integrate/eula" target="_blank" rel="noopener noreferrer" className="text-xs text-slate-500 hover:text-slate-300 transition-colors">EULA</a>
+          <span className="text-slate-600 text-xs">·</span>
+          <a href="mailto:scopemgr@614restore.com?subject=CONTACT%20TrussCTR" className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Support</a>
         </div>
       )}
 
