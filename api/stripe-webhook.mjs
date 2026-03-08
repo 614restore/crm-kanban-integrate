@@ -117,6 +117,27 @@ export default async function handler(req, res) {
         break;
       }
 
+      case 'invoice.payment_succeeded': {
+        const invoice = event.data.object;
+        if (invoice.subscription) {
+          await supabase
+            .from('subscriptions')
+            .update({ status: 'active', updated_at: new Date().toISOString() })
+            .eq('stripe_subscription_id', invoice.subscription);
+        }
+        break;
+      }
+
+      case 'customer.subscription.trial_will_end': {
+        const sub = event.data.object;
+        // Mark trial ending soon — front-end can show a banner
+        await supabase
+          .from('subscriptions')
+          .update({ trial_ending_soon: true, updated_at: new Date().toISOString() })
+          .eq('stripe_subscription_id', sub.id);
+        break;
+      }
+
       default:
         // Ignore unhandled events
         break;
