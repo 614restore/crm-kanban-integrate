@@ -72,10 +72,21 @@ export default function InvoiceModal() {
   const tax = subtotal * 0.0825; // 8.25% tax
   const total = subtotal + tax;
 
+  const [validateError, setValidateError] = useState('');
+
   const handleSave = async (status: 'draft' | 'sent') => {
+    setValidateError('');
     const validItems = items.filter((item) => item.description && item.total > 0);
-    if (!selectedContactId || !dueDate || validItems.length === 0) {
-      toast.error('Please select a customer, due date, and at least one line item');
+    if (!selectedContactId) {
+      setValidateError('Please select a customer.');
+      return;
+    }
+    if (!dueDate) {
+      setValidateError('Please set a due date.');
+      return;
+    }
+    if (validItems.length === 0) {
+      setValidateError('Add at least one line item with a description and amount.');
       return;
     }
 
@@ -183,18 +194,24 @@ export default function InvoiceModal() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Customer</label>
-                <select
-                  value={selectedContactId}
-                  onChange={(e) => setSelectedContactId(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                >
-                  <option value="">Select a customer...</option>
-                  {state.contacts.map((contact) => (
-                    <option key={contact.id} value={contact.id}>
-                      {getContactFullName(contact)}
-                    </option>
-                  ))}
-                </select>
+                {state.contacts.length === 0 ? (
+                  <div className="flex items-center gap-2 px-4 py-2 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
+                    <span>No contacts yet — add a contact first.</span>
+                  </div>
+                ) : (
+                  <select
+                    value={selectedContactId}
+                    onChange={(e) => setSelectedContactId(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                  >
+                    <option value="">Select a customer...</option>
+                    {state.contacts.map((contact) => (
+                      <option key={contact.id} value={contact.id}>
+                        {getContactFullName(contact)}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
@@ -308,7 +325,13 @@ export default function InvoiceModal() {
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t border-gray-200 flex items-center justify-end gap-3 flex-shrink-0">
+        <div className="p-6 border-t border-gray-200 flex flex-col gap-3 flex-shrink-0">
+          {validateError && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              {validateError}
+            </div>
+          )}
+          <div className="flex items-center justify-end gap-3">
           <button
             onClick={handleClose}
             className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors font-medium"
@@ -317,7 +340,7 @@ export default function InvoiceModal() {
           </button>
           <button
             onClick={() => handleSave('draft')}
-            disabled={!selectedContactId || isSaving}
+            disabled={!selectedContactId || isSaving || state.contacts.length === 0}
             className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Save size={18} />
@@ -325,12 +348,13 @@ export default function InvoiceModal() {
           </button>
           <button
             onClick={() => handleSave('sent')}
-            disabled={!selectedContactId || isSaving}
+            disabled={!selectedContactId || isSaving || state.contacts.length === 0}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Send size={18} />
             {isSaving ? 'Sending...' : 'Send Invoice'}
           </button>
+          </div>
         </div>
       </div>
     </div>

@@ -128,15 +128,17 @@ export default function SuppliersView() {
     if (effectiveCompanyId) return effectiveCompanyId;
     const userId = profile?.id || user?.id;
     if (!userId) return null;
-    const { data } = await supabase
-      .from('profiles')
-      .select('company_id')
-      .eq('id', userId)
-      .single();
-    if (data?.company_id) {
-      dispatch({ type: 'SET_COMPANY_ID', payload: data.company_id });
-      return data.company_id;
-    }
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('company_id')
+        .eq('id', userId)
+        .single();
+      if (data?.company_id) {
+        dispatch({ type: 'SET_COMPANY_ID', payload: data.company_id });
+        return data.company_id;
+      }
+    } catch (_) { /* ignore network errors */ }
     return null;
   };
 
@@ -226,7 +228,7 @@ export default function SuppliersView() {
 
     const companyId = await resolveCompanyId();
     if (!companyId) {
-      toast.error('No company context. Please refresh and sign in again.');
+      toast.error('Unable to determine your company. Please sign out and sign back in.');
       return;
     }
 
@@ -385,7 +387,7 @@ export default function SuppliersView() {
 
     const companyId = await resolveCompanyId();
     if (!companyId) {
-      toast.error('No company context. Please refresh and sign in again.');
+      toast.error('Unable to determine your company. Please sign out and sign back in.');
       return;
     }
 

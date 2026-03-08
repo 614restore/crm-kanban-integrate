@@ -358,6 +358,11 @@ function CRMApp() {
   const isReloadingRef = useRef(false);
   const queuedReloadRef = useRef(false);
 
+  // Race a DB fetch against a per-query timeout; resolves to fallback on timeout instead of
+  // blocking the whole Promise.all. Prevents a single slow Supabase query from stalling the UI.
+  const withFetchTimeout = <T,>(p: Promise<T>, fallback: T, ms = 7000): Promise<T> =>
+    Promise.race([p, new Promise<T>(resolve => setTimeout(() => resolve(fallback), ms))]);
+
   // Load data from database
   const loadData = useCallback(async (options?: { silent?: boolean }) => {
     const silent = options?.silent ?? false;
@@ -376,6 +381,8 @@ function CRMApp() {
 
     try {
       // Load all data in parallel (including company to pre-warm cache for Sidebar)
+      // Each query is individually capped at 7 s to prevent a single slow call from
+      // blocking the entire load; timed-out queries fall back to their empty value.
       const [
         dbContacts,
         dbCommunications,
@@ -392,20 +399,20 @@ function CRMApp() {
         dbSuppliers,
         dbMaterialOrders,
       ] = await Promise.all([
-        db.getContacts(profile.company_id),
-        db.getCommunications(profile.company_id),
-        db.getAppointments(profile.company_id),
-        db.getInvoices(profile.company_id),
-        db.getKanbanBoards(profile.company_id),
-        db.getLeadSources(profile.company_id),
-        db.getAutomations(profile.company_id),
-        db.getTeamMembers(profile.company_id),
-        db.getCompany(profile.company_id), // pre-warm company cache for Sidebar
-        db.getEstimates(profile.company_id),
-        db.getProjects(profile.company_id),
-        db.getWorkOrders(profile.company_id),
-        db.getSuppliers(profile.company_id),
-        db.getMaterialOrders(profile.company_id),
+        withFetchTimeout(db.getContacts(profile.company_id), []),
+        withFetchTimeout(db.getCommunications(profile.company_id), []),
+        withFetchTimeout(db.getAppointments(profile.company_id), []),
+        withFetchTimeout(db.getInvoices(profile.company_id), []),
+        withFetchTimeout(db.getKanbanBoards(profile.company_id), []),
+        withFetchTimeout(db.getLeadSources(profile.company_id), []),
+        withFetchTimeout(db.getAutomations(profile.company_id), []),
+        withFetchTimeout(db.getTeamMembers(profile.company_id), []),
+        withFetchTimeout(db.getCompany(profile.company_id), null), // pre-warm company cache
+        withFetchTimeout(db.getEstimates(profile.company_id), []),
+        withFetchTimeout(db.getProjects(profile.company_id), []),
+        withFetchTimeout(db.getWorkOrders(profile.company_id), []),
+        withFetchTimeout(db.getSuppliers(profile.company_id), []),
+        withFetchTimeout(db.getMaterialOrders(profile.company_id), []),
       ]);
 
       // Convert DB contacts to app contacts
@@ -819,7 +826,7 @@ function CRMApp() {
     if (authLoading) return;
 
     const timer = window.setTimeout(() => {
-      console.warn('Initial CRM data load timed out; showing app shell with empty data.');
+      console.warn('Initial CRM data load timed out after 8 s; showing app shell with empty data.');
       dispatch({
         type: 'INITIALIZE_DATA',
         payload: {
@@ -839,7 +846,7 @@ function CRMApp() {
           companyGoals: [],
         },
       });
-    }, 20000);
+    }, 8000);
 
     return () => window.clearTimeout(timer);
   }, [state.isLoading, state.isInitialized, authLoading]);

@@ -151,7 +151,7 @@ const ExpenseTracker: React.FC = () => {
   useEffect(() => {
     loadExpenses();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [companyId]);
 
   // Apply filters and search
   useEffect(() => {
@@ -195,7 +195,7 @@ const ExpenseTracker: React.FC = () => {
   // Add new expense
   const handleAddExpense = async (expense: Omit<Expense, 'id' | 'submittedAt'>) => {
     if (!companyId) {
-      toast({ title: 'Error', description: 'No company context. Please refresh and sign in again.', variant: 'destructive' });
+      toast({ title: 'Error', description: 'No company context. Please sign out and sign back in.', variant: 'destructive' });
       throw new Error('No company context');
     }
 
@@ -221,7 +221,9 @@ const ExpenseTracker: React.FC = () => {
       reimbursable: expense.reimbursable,
     });
 
-    setExpenses(prev => [dbToExpense(row!), ...prev]);
+    if (!row) throw new Error('Failed to save expense — please try again.');
+
+    setExpenses(prev => [dbToExpense(row), ...prev]);
     setShowAddExpense(false);
     toast({
       title: "Expense Added",
@@ -834,10 +836,13 @@ const AddExpenseModal: React.FC<{
             </div>
           </div>
           
+          {submitError && (
+            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              {submitError}
+            </div>
+          )}
           <div className="flex justify-end gap-2">
-            {submitError && (
-              <p className="text-sm text-red-600 self-center mr-auto">{submitError}</p>
-            )}
             <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </Button>
