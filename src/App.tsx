@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -7,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/components/theme-provider";
 import { useServiceWorker } from "@/lib/serviceWorker";
 import { useEffect } from "react";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import Index from "./pages/Index";
 import Photos from "./pages/Photos";
 import NotFound from "./pages/NotFound";
@@ -66,29 +66,31 @@ const PWAUpdateNotification = () => {
 };
 
 const App = () => (
-  <ThemeProvider defaultTheme="light">
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <PWAUpdateNotification />
-        <Toaster />
-        <Sonner />
-        <BrowserRouter basename={basename}>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/photos" element={<Photos />} />
-            <Route path="/reset-password" element={<UpdatePassword />} />
-            <Route path="/terms" element={<TermsOfService />} />
-            <Route path="/privacy" element={<PrivacyPolicy />} />
-            <Route path="/eula" element={<EULA />} />
-            <Route path="/sign" element={<SignDocument />} />
-            <Route path="/sign-estimate" element={<SignEstimate />} />
-            <Route path="/sign-change-order" element={<SignChangeOrder />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
-    </QueryClientProvider>
-  </ThemeProvider>
+  <ErrorBoundary>
+    <ThemeProvider defaultTheme="light">
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <PWAUpdateNotification />
+          <Toaster />
+          <Sonner />
+          <BrowserRouter basename={basename}>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/photos" element={<Photos />} />
+              <Route path="/reset-password" element={<UpdatePassword />} />
+              <Route path="/terms" element={<TermsOfService />} />
+              <Route path="/privacy" element={<PrivacyPolicy />} />
+              <Route path="/eula" element={<EULA />} />
+              <Route path="/sign" element={<SignDocument />} />
+              <Route path="/sign-estimate" element={<SignEstimate />} />
+              <Route path="/sign-change-order" element={<SignChangeOrder />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
+  </ErrorBoundary>
 );
 
 export default App;

@@ -1,45 +1,63 @@
-import React from 'react';
+import { Component, ReactNode } from "react";
 
-interface ErrorBoundaryState {
+interface Props {
+  children: ReactNode;
+}
+
+interface State {
   hasError: boolean;
   error: Error | null;
 }
 
-class ErrorBoundary extends React.Component<React.PropsWithChildren, ErrorBoundaryState> {
-  constructor(props: React.PropsWithChildren) {
+export class ErrorBoundary extends Component<Props, State> {
+  constructor(props: Props) {
     super(props);
     this.state = { hasError: false, error: null };
   }
 
-  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+  static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('Application runtime error:', error, errorInfo);
+  componentDidCatch(error: Error, info: { componentStack: string }) {
+    // Log to console in dev; swap for Sentry/LogRocket in production
+    console.error("[ErrorBoundary] Uncaught error:", error, info.componentStack);
   }
+
+  handleReset = () => {
+    this.setState({ hasError: false, error: null });
+  };
 
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-background p-6">
-          <div className="max-w-md w-full rounded-lg border border-border bg-card p-6 text-center shadow-sm">
-            <h1 className="text-xl font-semibold text-card-foreground mb-2">Something went wrong</h1>
-            <p className="text-sm text-muted-foreground mb-3">
-              The app hit an unexpected error. Refresh to continue.
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
+          <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
+            <div className="text-5xl mb-4">⚠️</div>
+            <h1 className="text-xl font-bold text-gray-800 mb-2">Something went wrong</h1>
+            <p className="text-gray-500 text-sm mb-6">
+              The app ran into an unexpected error. Your data is safe — please
+              try refreshing or click below to recover.
             </p>
             {this.state.error && (
-              <p className="text-xs text-red-600 bg-red-50 rounded p-2 mb-4 text-left font-mono break-all">
+              <pre className="text-left bg-gray-100 text-red-600 text-xs rounded-lg p-3 mb-6 overflow-auto max-h-32">
                 {this.state.error.message}
-              </p>
+              </pre>
             )}
-            <button
-              type="button"
-              onClick={() => window.location.reload()}
-              className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
-            >
-              Refresh App
-            </button>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={this.handleReset}
+                className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+              >
+                Try Again
+              </button>
+              <button
+                onClick={() => window.location.reload()}
+                className="bg-gray-100 text-gray-700 px-5 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors"
+              >
+                Reload Page
+              </button>
+            </div>
           </div>
         </div>
       );
@@ -48,5 +66,3 @@ class ErrorBoundary extends React.Component<React.PropsWithChildren, ErrorBounda
     return this.props.children;
   }
 }
-
-export default ErrorBoundary;
