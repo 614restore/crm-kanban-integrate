@@ -2,6 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { AlertCircle, Check, ExternalLink, Loader2, X } from 'lucide-react';
 import { BaseIntegration } from '@/lib/integrations/apiTypes';
+import { useAuth } from '@/hooks/useAuth';
 
 interface IntegrationConfigDialogProps {
   integration: BaseIntegration & { credentialFields?: Record<string, any> };
@@ -114,6 +115,28 @@ export function IntegrationConfigDialog({
   const [testLoading, setTestLoading] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [qbConnecting, setQbConnecting] = useState(false);
+  const { session } = useAuth();
+
+  const handleQBConnect = async () => {
+    setQbConnecting(true);
+    try {
+      const res = await fetch('/api/quickbooks-auth', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to get QuickBooks auth URL');
+      window.open(data.authUri, '_blank', 'noopener,noreferrer');
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setQbConnecting(false);
+    }
+  };
 
   const configFields = useMemo(() => {
     return INTEGRATION_CONFIGS[integration.id] || [];
@@ -233,15 +256,14 @@ export function IntegrationConfigDialog({
                   <p className="text-sm text-green-700">QuickBooks is currently connected.</p>
                 </div>
               )}
-              <a
-                href={`${import.meta.env.VITE_API_URL || 'https://crm-kanban-integrate.vercel.app'}/api/quickbooks-auth`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-[#2CA01C] text-white rounded-lg hover:bg-[#239117] font-medium transition-colors"
+              <button
+                onClick={handleQBConnect}
+                disabled={qbConnecting}
+                className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-[#2CA01C] text-white rounded-lg hover:bg-[#239117] font-medium transition-colors disabled:opacity-60"
               >
-                <ExternalLink size={16} />
+                {qbConnecting ? <Loader2 size={16} className="animate-spin" /> : <ExternalLink size={16} />}
                 {integration.isConfigured ? 'Reconnect QuickBooks' : 'Connect QuickBooks'}
-              </a>
+              </button>
               <p className="text-xs text-gray-500 text-center">
                 After authorizing, close that window and refresh this page.
               </p>

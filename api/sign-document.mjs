@@ -20,8 +20,13 @@ export default async function handler(req, res) {
 
   const { estimateId, signedBy, signatureData, token } = req.body || {};
 
-  if (!estimateId || !signedBy || !signatureData) {
-    return res.status(400).json({ error: 'Missing required fields: estimateId, signedBy, signatureData' });
+  if (!estimateId || !signedBy || !signatureData || !token) {
+    return res.status(400).json({ error: 'Missing required fields: estimateId, signedBy, signatureData, token' });
+  }
+
+  // Sanitize estimateId — must be a UUID to prevent PostgREST parameter injection
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(estimateId)) {
+    return res.status(400).json({ error: 'Invalid estimateId' });
   }
 
   const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -46,8 +51,8 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: 'Estimate not found' });
     }
 
-    // Validate token if present on the estimate
-    if (estimate.sign_token && token !== estimate.sign_token) {
+    // Always require a valid sign_token — null tokens must never bypass validation
+    if (!estimate.sign_token || token !== estimate.sign_token) {
       return res.status(403).json({ error: 'Invalid signing token' });
     }
 

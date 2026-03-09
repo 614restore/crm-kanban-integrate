@@ -1,1090 +1,723 @@
 ---
 agent: fix-planner
 status: fail
-findings: 47
+findings: 44
 date: 2026-03-08
-sources: bug-audit.md, security-audit.md, ui-audit.md, db-audit.md, infra-audit.md
+sources: bug-audit-2.md, ui-audit-2.md, security-audit-2.md, db-audit-2.md, infra-audit-2.md
+previously-fixed: auth-middleware, stripe-webhook validation, stripe-portal IDOR, XSS, debug-env, detectSessionInUrl, APP_URL hard-fail, paywall gate (base), legal links
 ---
 
-# TrussCTR — Prioritized Fix List
-
-**Generated:** 2026-03-08  
-**Total findings consolidated:** 47 (from 5 audit agents — 11 bugs, 12 security, 24 UI/UX, 12 DB, 14 infra)
-
----
-
-## BLOCKER — Fix before the first paying customer
-
-These issues directly break billing, expose customer data, or create security holes that cannot be deferred.
-
----
-
-### B-01 — Stripe webhook writes to non-existent `subscriptions` table
-
-| | |
-|---|---|
-| **Source** | bug-audit BUG-01, db-audit FINDING-1 |
-| **Files** | `api/stripe-webhook.mjs` — all event handlers |
-| **Complexity** | M |
-
-Every Stripe webhook event (`checkout.session.completed`, `customer.subscription.updated`, `invoice.payment_failed`, `customer.subscription.deleted`) upserts/updates a table named `subscriptions` that does not exist. The schema puts subscription fields directly on `companies`. When a customer pays, their `companies.subscription_status` stays `'trialing'` forever — they are never activated.
-
-**Change needed:**  
-Replace all `supabase.from('subscriptions')` calls with updates to `companies`, using `stripe_customer_id` or `stripe_subscription_id` as the lookup key:
-
-```js
-// checkout.session.completed
-await supabase
-  .from('companies')
-  .update({
-    stripe_customer_id: customerId,
-    stripe_subscription_id: subscriptionId,
-    subscription_status: 'active',
-    subscription_plan: planId,
-  })
-  .eq('stripe_customer_id', customerId);
-
-// customer.subscription.updated / invoice.payment_failed / customer.subscription.deleted
-await supabase
-  .from('companies')
-  .update({ subscription_status: sub.status, subscription_plan: planId })
-  .eq('stripe_subscription_id', sub.id);
-```
-
----
-
-### B-02 — No JWT authentication on any API endpoint (open relay + IDOR + AI abuse)
-
-| | |
-|---|---|
-| **Source** | security-audit FINDING-01, FINDING-02, FINDING-03 |
-| **Files** | `api/ai-draft.mjs`, `api/send-email.mjs`, `api/send-invite.mjs`, `api/stripe-checkout.mjs`, `api/stripe-portal.mjs`, `api/quickbooks-sync.mjs`, `api/sign-document.mjs` |
-| **Complexity** | L |
-
-Every serverless function is reachable unauthenticated via `curl`. Impact: anyone can burn your OpenAI quota, spam from `scopemgr@614restore.com`, or open any Stripe billing portal by guessing a customer ID.
-
-**Change needed:**  
-Create `api/auth-middleware.mjs`:
-
-```js
-import { createClient } from '@supabase/supabase-js';
-
-export async function requireAuth(req, res) {
-  const token = req.headers['authorization']?.replace('Bearer ', '');
-  if (!token) { res.status(401).json({ error: 'Unauthorized' }); return null; }
-  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-  const { data: { user }, error } = await supabase.auth.getUser(token);
-  if (error || !user) { res.status(401).json({ error: 'Invalid session' }); return null; }
-  return user;
-}
-```
-
-Add `const user = await requireAuth(req, res); if (!user) return;` at the top of each handler listed above. (`sign-document.mjs` and `sign-change-order.mjs` are intentionally public — skip those.)
-
----
-
-### B-03 — Delete `debug-env.mjs` — publicly maps all secrets
-
-| | |
-|---|---|
-| **Source** | security-audit FINDING-05, infra-audit INFRA-08 |
-| **File** | `api/debug-env.mjs` |
-| **Complexity** | S |
-
-`GET /api/debug-env` reveals which secret keys are configured in Vercel (Stripe, Supabase service role, QuickBooks, Resend, OpenAI) and exposes `QBO_ENVIRONMENT` value in plaintext — all to unauthenticated callers.
-
-**Change needed:** Delete the file. No replacement needed.
-
-```bash
-rm api/debug-env.mjs
-```
-
----
-
-### B-04 — XSS via `?plan=` URL parameter in `Index.tsx` checkout banner
-
-| | |
-|---|---|
-| **Source** | security-audit FINDING-04 |
-| **File** | `src/pages/Index.tsx` lines 11–27 |
-| **Complexity** | S |
-
-`banner.innerHTML` interpolates the `?plan=` query param directly, allowing `/?checkout=success&plan=<img src=x onerror=alert(document.cookie)>` to execute JS.
-
-**Change needed:** Replace `innerHTML` with safe DOM construction:
-
-```tsx
-const strong = document.createElement('strong');
-strong.textContent = `Welcome to TrussCTR${planName ? ` ${planName}` : ''}!`;
-// Use appendChild() for all other banner elements — never innerHTML for user-controlled values
-```
-
----
-
-### B-05 — Stripe Customer Portal IDOR — any caller can open any billing portal
-
-| | |
-|---|---|
-| **Source** | security-audit FINDING-03 |
-| **File** | `api/stripe-portal.mjs` lines 24–28 |
-| **Complexity** | M |
-
-`customerId` is accepted from the request body with no validation. An attacker with any Stripe customer ID can cancel subscriptions, view invoices, or change payment methods for another company.
-
-**Change needed:** After adding auth (B-02), look up `stripe_customer_id` server-side:
-
-```js
-const user = await requireAuth(req, res);
-if (!user) return;
-const { data: company } = await supabase
-  .from('companies')
-  .select('stripe_customer_id')
-  .eq('id', user.user_metadata.company_id)
-  .single();
-const customerId = company?.stripe_customer_id;
-if (!customerId) return res.status(400).json({ error: 'No Stripe customer on file' });
-```
-
-Remove the `customerId` parameter from the request body entirely.
-
----
-
-### B-06 — `detectSessionInUrl: false` breaks email confirmation and password reset on Vercel
-
-| | |
-|---|---|
-| **Source** | infra-audit INFRA-03 |
-| **File** | `src/lib/supabase.ts` line 47 |
-| **Complexity** | S |
-
-The flag was set to work around GitHub Pages hash routing, but Vercel uses real paths. With it `false`, Supabase never exchanges the PKCE code from confirmation/reset emails — users land on a page that appears to do nothing.
-
-**Change needed:**
-
-```ts
-const isHashRouter = import.meta.env.VITE_HASH_ROUTING === 'true';
-// In createClient auth options:
-detectSessionInUrl: !isHashRouter,
-```
-
-Add to Vercel env vars: `VITE_HASH_ROUTING=false`. Add to GitHub Pages build: `VITE_HASH_ROUTING=true`.
-
----
-
-### B-07 — `APP_URL` missing → Stripe redirects to GitHub Pages after payment
-
-| | |
-|---|---|
-| **Source** | infra-audit INFRA-01 |
-| **Files** | `api/stripe-checkout.mjs` line 30, `api/stripe-portal.mjs` line 31 |
-| **Complexity** | S |
-
-Both files fall back to `'https://614restore.github.io/crm-kanban-integrate'` when `APP_URL` is unset, routing paying customers off the live product.
-
-**Change needed:**  
-1. Add `APP_URL=https://crm-kanban-integrate.vercel.app` to Vercel env vars immediately.  
-2. Replace the silent fallback with a hard fail in both files:
-
-```js
-const appUrl = process.env.APP_URL;
-if (!appUrl) return res.status(500).json({ error: 'APP_URL is not configured' });
-```
-
----
-
-### B-08 — No paywall enforcement when trial expires or subscription lapses
-
-| | |
-|---|---|
-| **Source** | db-audit FINDING-2 |
-| **Files** | `src/components/AppLayout.tsx`, `src/lib/authContext.tsx` |
-| **Complexity** | M |
-
-There is zero code that locks out users when `trial_ends_at` is past or `subscription_status` is `'canceled'`/`'past_due'`. After the 14-day trial, users retain full access free indefinitely.
-
-**Change needed:**  
-In `AppLayout.tsx` (or `authContext.tsx`), add a subscription gate:
-
-```tsx
-const trialExpired = company?.subscription_status === 'trialing'
-  && company?.trial_ends_at
-  && new Date(company.trial_ends_at) < new Date();
-
-const accessBlocked = trialExpired
-  || company?.subscription_status === 'canceled'
-  || company?.subscription_status === 'past_due';
-
-if (accessBlocked) {
-  return <SubscriptionRequiredModal />;
-}
-```
-
----
-
-### B-09 — Hardcoded GitHub Pages paths in `AuthPage.tsx` — legal links 404 on Vercel
-
-| | |
-|---|---|
-| **Source** | ui-audit FINDING-6 |
-| **File** | `src/components/crm/AuthPage.tsx` line 545 (legal links) |
-| **Complexity** | S |
-
-Terms, EULA, and Privacy Policy links hardcode `/crm-kanban-integrate/terms` etc., which 404 on Vercel.
-
-**Change needed:**
-
-```tsx
-// Replace all instances of:
-href="/crm-kanban-integrate/terms"
-// With:
-href={`${import.meta.env.BASE_URL}terms`}
-// Or simply:
-href="/terms"
-// (and ensure Vercel routes /terms → correct page)
-```
-
----
-
-## HIGH — Fix this week
-
-Customer-facing bugs, significant UX issues, and data correctness problems.
-
----
-
-### H-01 — Template injection with wrong contact's private insurance data
-
-| | |
-|---|---|
-| **Source** | bug-audit BUG-04 |
-| **File** | `src/components/crm/CommunicationHub.tsx` — `handleUseTemplate` |
-| **Complexity** | S |
-
-`const contact = selectedCommData?.contact || state.contacts[0]` silently falls back to a random customer when no communication is selected. A user could send another customer's claim number, deductible, and adjuster name to the wrong recipient.
-
-**Change needed:** Remove the silent fallback:
-
-```js
-if (!selectedCommData?.contact) {
-  toast.error('Select a communication first to use a template');
-  return;
-}
-const contact = selectedCommData.contact;
-```
-
----
-
-### H-02 — `trial_end` always `null` in webhook — trial dates never stored
-
-| | |
-|---|---|
-| **Source** | bug-audit BUG-02 |
-| **File** | `api/stripe-webhook.mjs` line ~72 |
-| **Complexity** | S |
-
-`trial_end: session.subscription ? null : null` — both branches are `null`. Trial end dates are silently lost.
-
-**Change needed:** Let the `customer.subscription.updated` event (which includes `trial_end` on the subscription object) handle trial dates, and remove the dead field from the `checkout.session.completed` handler. In the `customer.subscription.updated` handler, add:
-
-```js
-trial_ends_at: sub.trial_end
-  ? new Date(sub.trial_end * 1000).toISOString()
-  : null,
-```
-
----
-
-### H-03 — User stuck with empty CRM after setup failure (no error, no recovery)
-
-| | |
-|---|---|
-| **Source** | bug-audit BUG-03 |
-| **File** | `src/lib/authContext.tsx` lines ~98–115 |
-| **Complexity** | M |
-
-When `setupNewUser` succeeds but retry finds no `company_id`, the user sees a blank CRM with no message and no recovery path.
-
-**Change needed:** In `loadProfile`, after detecting `profile` exists but `company_id` is null:
-
-```tsx
-if (profile && !profile.company_id) {
-  dispatch({ type: 'SET_ERROR', payload: 'Account setup incomplete. Please refresh or contact support.' });
-  return;
-}
-```
-
-Add a visible error state and a "Retry" button in the shell component.
-
----
-
-### H-04 — RLS recursion bug reintroduced in 5 v2 PM tables
-
-| | |
-|---|---|
-| **Source** | db-audit FINDING-4 |
-| **Files** | New migration needed (fixes `supabase/migrations/20260307_v2_pm_features.sql`) |
-| **Complexity** | M |
-
-`crew_schedules`, `change_orders`, `permits`, `equipment`, `equipment_assignments` use the old recursive subquery pattern `company_id IN (SELECT company_id FROM profiles WHERE id = auth.uid())` which causes RLS hangs. The 20260305 fix migration doesn't cover tables created after it.
-
-**Change needed:** Create `supabase/migrations/20260308_fix_v2_rls_recursion.sql` replacing all 5 sets of policies with `get_my_company_id()` pattern. See db-audit FINDING-4 for the exact SQL.
-
----
-
-### H-05 — Expense receipt storage bucket allows cross-tenant reads
-
-| | |
-|---|---|
-| **Source** | db-audit FINDING-5 |
-| **Files** | New migration needed (fixes `supabase/migrations/20260308_expenses_table.sql`) |
-| **Complexity** | M |
-
-Storage policy for `expense-receipts` only checks `auth.uid() IS NOT NULL` — any authenticated user from any company can read any other company's receipts.
-
-**Change needed:** Create a follow-up migration scoping by company folder:
-
-```sql
-DROP POLICY "expense_receipts_select" ON storage.objects;
-CREATE POLICY "expense_receipts_select" ON storage.objects
-  FOR SELECT USING (
-    bucket_id = 'expense-receipts'
-    AND (storage.foldername(name))[1] = (get_my_company_id())::text
-  );
-```
-
-Ensure application code stores receipts under `{company_id}/{filename}` paths.
-
----
-
-### H-06 — `getContact`, `getJobsByContact`, etc. have no `company_id` defense-in-depth filter
-
-| | |
-|---|---|
-| **Source** | db-audit FINDING-3, security-audit FINDING-08 |
-| **File** | `src/lib/database.ts` |
-| **Complexity** | S |
-
-Four "get by ID" methods rely solely on RLS for tenant isolation. If RLS is ever misconfigured, these would expose cross-tenant data with no application-layer fallback.
-
-**Change needed:** Add `.eq('company_id', companyId)` to `getContact`, `getJobsByContact`, `getCommunicationsByContact`, `getDocumentsByContact`, and update callers to pass `companyId`.
-
----
-
-### H-07 — QuickBooks OAuth callback hardcoded to GitHub Pages URL
-
-| | |
-|---|---|
-| **Source** | infra-audit INFRA-02 |
-| **File** | `api/quickbooks-callback.mjs` line 12 |
-| **Complexity** | S |
-
-`const appBase = 'https://614restore.github.io/crm-kanban-integrate'` — always redirects to GitHub Pages after QBO auth, even on Vercel.
-
-**Change needed:**
-
-```js
-const appBase = process.env.APP_URL
-  || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null);
-if (!appBase) throw new Error('APP_URL not configured');
-```
-
----
-
-### H-08 — Wildcard CORS on email and document-signing endpoints
-
-| | |
-|---|---|
-| **Source** | infra-audit INFRA-09 |
-| **Files** | `api/send-email.mjs`, `api/sign-document.mjs`, `api/sign-change-order.mjs` |
-| **Complexity** | S |
-
-`Access-Control-Allow-Origin: *` allows any external site to trigger email relay or submit signatures.
-
-**Change needed:** Restrict to known origins in all three files:
-
-```js
-const ALLOWED_ORIGINS = [
-  'https://crm-kanban-integrate.vercel.app',
-  'https://614restore.github.io',
-];
-const origin = req.headers.origin || '';
-res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0]);
-res.setHeader('Vary', 'Origin');
-```
-
----
-
-### H-09 — `send-email.mjs` accepts arbitrary `from` address (open phishing relay)
-
-| | |
-|---|---|
-| **Source** | security-audit FINDING-02 |
-| **File** | `api/send-email.mjs` |
-| **Complexity** | S |
-
-The `from` field comes directly from the request body with no validation, allowing any caller to send phishing emails appearing to come from `scopemgr@614restore.com`.
-
-**Change needed:** Remove `from` from the destructured request body. Hardcode the sender:
-
-```js
-from: '614 Restore <scopemgr@614restore.com>', // never accept from caller
-```
-
-Also add HTML sanitization on the `html` body before passing to Resend.
-
----
-
-### H-10 — `handleSaveCompose` silently does nothing when no contact selected
-
-| | |
-|---|---|
-| **Source** | bug-audit BUG-05 |
-| **File** | `src/components/crm/CommunicationHub.tsx` — `handleSaveCompose` |
-| **Complexity** | S |
-
-If the user types a message but hasn't selected a contact, clicking Save is a silent no-op — no error, no feedback.
-
-**Change needed:**
-
-```js
-if (!composeContactId) {
-  toast.error('Please select a contact before saving');
-  return;
-}
-```
-
----
-
-### H-11 — "Save" button has Send icon — misleads users about whether email is sent
-
-| | |
-|---|---|
-| **Source** | ui-audit FINDING-11 |
-| **File** | `src/components/crm/CommunicationHub.tsx` line 749 |
-| **Complexity** | S |
-
-A `<Send />` icon with "Save" label is contradictory and erodes trust.
-
-**Change needed:** Use contextual labels by `composeType`:
-
-```tsx
-const actionLabel = ['note', 'call'].includes(composeType) ? 'Log' : 'Send';
-const ActionIcon = ['note', 'call'].includes(composeType) ? Clipboard : Send;
-```
-
----
-
-### H-12 — Reply input is single-line `<input>` — inadequate for emails/notes
-
-| | |
-|---|---|
-| **Source** | ui-audit FINDING-13 |
-| **File** | `src/components/crm/CommunicationHub.tsx` line 570 |
-| **Complexity** | S |
-
-The reply field is `<input type="text">` — text overflows horizontally and there's no way to write multi-line content.
-
-**Change needed:** Replace with:
-
-```tsx
-<textarea
-  rows={3}
-  className="... resize-none"
-  value={replyText}
-  onChange={(e) => setReplyText(e.target.value)}
-  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) handleSendReply(); }}
-  placeholder="Type a reply... (Shift+Enter for new line)"
-/>
-```
-
----
-
-### H-13 — Empty state copy blames user for empty data on a brand-new account
-
-| | |
-|---|---|
-| **Source** | ui-audit FINDING-14 |
-| **File** | `src/components/crm/CommunicationHub.tsx` line 450 |
-| **Complexity** | S |
-
-"Try adjusting your search or filter" shown to new users who have never added data.
-
-**Change needed:** Branch on whether data exists vs is filtered (see ui-audit FINDING-14 for full code).
-
----
-
-### H-14 — `BILLING_SETTINGS_VIEW` defined but never used — no "Go to Billing" link in banner
-
-| | |
-|---|---|
-| **Source** | bug-audit BUG-11, ui-audit FINDING-10 |
-| **File** | `src/components/AppLayout.tsx` line 317 |
-| **Complexity** | S |
-
-The trial banner tells users to go to Billing but provides no link to get there.
-
-**Change needed:** Use the constant:
-
-```tsx
-<button
-  onClick={() => dispatch({ type: 'SET_VIEW', payload: BILLING_SETTINGS_VIEW })}
-  className="underline font-medium hover:no-underline ml-2"
->
-  Subscribe now →
-</button>
-```
-
----
-
-### H-15 — Urgency banner (≤7 days left) has no copy button for LAUNCH50
-
-| | |
-|---|---|
-| **Source** | ui-audit FINDING-7 |
-| **File** | `src/components/AppLayout.tsx` line 374 |
-| **Complexity** | S |
-
-The early trial banner (days 1–7) has a copy button; the urgency banner (days 8–14, when conversion peaks) shows the code as plain text only.
-
-**Change needed:** Add the same `handleCopy` button pattern to the `showUrgency` banner variant.
-
----
-
-### H-16 — Promo badge on signup page doesn't show the promo code
-
-| | |
-|---|---|
-| **Source** | ui-audit FINDING-2 |
-| **File** | `src/components/crm/AuthPage.tsx` line 271 |
-| **Complexity** | S |
-
-The signup header says "Subscribe within your trial — get 50% off your first 3 months" but omits the actual code `LAUNCH50`. The user has no idea what code to enter.
-
-**Change needed:** Inline the code: `Use code **LAUNCH50** at checkout — 50% off your first 3 months.` Style it in `font-mono` with a small copy button.
-
----
-
-### H-17 — `Manage Billing` button opens for trial users with no Stripe account
-
-| | |
-|---|---|
-| **Source** | bug-audit BUG-09 |
-| **File** | `src/components/crm/SubscriptionView.tsx` — `handleManageBilling` |
-| **Complexity** | S |
-
-Trial users who haven't paid have no Stripe customer record; the portal returns an error page.
-
-**Change needed:**
-
-```tsx
-{company?.stripe_customer_id && (
-  <button onClick={handleManageBilling}>Manage Billing</button>
-)}
-```
-
----
-
-### H-18 — 11 server-side env vars missing from `.env.example`
-
-| | |
-|---|---|
-| **Source** | infra-audit INFRA-06 |
-| **File** | `.env.example` |
-| **Complexity** | S |
-
-`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `APP_URL`, `RESEND_API_KEY`, `QBO_CLIENT_ID`, `QBO_CLIENT_SECRET`, `QBO_ENVIRONMENT`, `QB_ENCRYPT_KEY`, `OPENAI_API_KEY` are all required by Vercel functions but completely undocumented.
-
-**Change needed:** Add a `# === SERVER-SIDE (Vercel env vars only) ===` section to `.env.example` documenting all 11 with comments on impact if missing.
-
----
-
-### H-19 — Auth page email field has no `<label>` (accessibility + inconsistency)
-
-| | |
-|---|---|
-| **Source** | ui-audit FINDING-1 |
-| **File** | `src/components/crm/AuthPage.tsx` line 338 |
-| **Complexity** | S |
-
-Every other field has an explicit `<label>` except email, which only has a placeholder. Breaks screen readers.
-
-**Change needed:** Add `<label className="block text-sm font-medium text-gray-700 mb-1">Email</label>` above the email input.
-
----
-
-### H-20 — `VITE_BASE_URL` comment in `.env.example` is wrong — causes broken Vercel assets
-
-| | |
-|---|---|
-| **Source** | infra-audit INFRA-07 |
-| **File** | `.env.example` line 17 |
-| **Complexity** | S |
-
-Comment says "Automatically set by Vite config" — it is not. Devs won't set it to `/` for Vercel, breaking all asset references.
-
-**Change needed:** Replace comment:
-
-```
-# Vercel deployment: set VITE_BASE_URL=/
-# GitHub Pages: leave unset (Vite config applies /crm-kanban-integrate/ automatically)
-VITE_BASE_URL=/
-```
-
----
-
-## MEDIUM — Fix before scaling
-
-Performance, edge cases, and secondary UX issues.
-
----
-
-### M-01 — Missing `company_id` indexes on 5 core tables
-
-| | |
-|---|---|
-| **Source** | db-audit FINDING-6 |
-| **Files** | New migration needed |
-| **Complexity** | S |
-
-`estimates`, `projects`, `work_orders`, `suppliers`, `material_orders` — all missing `company_id` index. Every list-page query and RLS evaluation does a full scan.
-
-**Change needed:**
-
-```sql
-CREATE INDEX IF NOT EXISTS idx_estimates_company_id ON estimates (company_id);
-CREATE INDEX IF NOT EXISTS idx_projects_company_id ON projects (company_id);
-CREATE INDEX IF NOT EXISTS idx_work_orders_company_id ON work_orders (company_id);
-CREATE INDEX IF NOT EXISTS idx_suppliers_company_id ON suppliers (company_id);
-CREATE INDEX IF NOT EXISTS idx_material_orders_company_id ON material_orders (company_id);
-```
-
----
-
-### M-02 — Missing Stripe indexes on `companies` table
-
-| | |
-|---|---|
-| **Source** | db-audit FINDING-7 |
-| **Files** | New migration needed |
-| **Complexity** | S |
-
-Once B-01 is fixed, every webhook event scans the entire `companies` table to find the row by `stripe_customer_id` or `stripe_subscription_id`.
-
-**Change needed:**
-
-```sql
-CREATE INDEX IF NOT EXISTS idx_companies_stripe_customer_id ON companies (stripe_customer_id)
-  WHERE stripe_customer_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_companies_stripe_subscription_id ON companies (stripe_subscription_id)
-  WHERE stripe_subscription_id IS NOT NULL;
-```
-
----
-
-### M-03 — Trial banner dismissal not persisted — reappears on every page load
-
-| | |
-|---|---|
-| **Source** | ui-audit FINDING-8 |
-| **File** | `src/components/AppLayout.tsx` line 322 |
-| **Complexity** | S |
-
-`dismissed` is component-local state — resets on every navigation.
-
-**Change needed:**
-
-```tsx
-const [dismissed, setDismissed] = useState(
-  () => localStorage.getItem('trial_banner_dismissed') === '1'
-);
-// in dismiss handler:
-localStorage.setItem('trial_banner_dismissed', '1');
-setDismissed(true);
-```
-
----
-
-### M-04 — Clipboard errors swallowed silently in trial banner copy button
-
-| | |
-|---|---|
-| **Source** | bug-audit BUG-06 |
-| **File** | `src/components/AppLayout.tsx` — `handleCopy` |
-| **Complexity** | S |
-
-`navigator.clipboard` rejects in HTTP dev contexts; no `.catch()` means the button appears broken.
-
-**Change needed:**
-
-```js
-navigator.clipboard.writeText(LAUNCH_PROMO_CODE)
-  .then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); })
-  .catch(() => toast.error(`Copy failed — code is: ${LAUNCH_PROMO_CODE}`));
-```
-
----
-
-### M-05 — AI Draft produces `"Subject: \n\n..."` when subject is empty
-
-| | |
-|---|---|
-| **Source** | bug-audit BUG-07 |
-| **File** | `src/components/crm/CommunicationHub.tsx` — `handleAIDraft` |
-| **Complexity** | S |
-
-Empty subject from OpenAI produces a malformed artifact at the top of the compose field.
-
-**Change needed:**
-
-```js
-if (data.subject && data.body) {
-  setComposeText(`Subject: ${data.subject}\n\n${data.body}`);
-} else if (data.body) {
-  setComposeText(data.body);
-} else {
-  toast.error('AI returned an empty draft — please try again');
-}
-```
-
----
-
-### M-06 — Contact avatar crashes on null `firstName`/`lastName`
-
-| | |
-|---|---|
-| **Source** | bug-audit BUG-08 |
-| **Files** | `src/components/crm/CommunicationHub.tsx`, `src/lib/database.ts` — `dbContactToAppContact` |
-| **Complexity** | S |
-
-`dbContactToAppContact` maps `firstName: dbContact.first_name` with no null guard. Null `first_name` renders blank initials; future `.toUpperCase()` calls would throw.
-
-**Change needed:** In `dbContactToAppContact`:
-
-```js
-firstName: dbContact.first_name || '',
-lastName: dbContact.last_name || '',
-```
-
-And in avatar JSX use optional chaining: `firstName?.[0] || '?'`.
-
----
-
-### M-07 — URL parameter injection in `sign-document.mjs` via unvalidated `estimateId`
-
-| | |
-|---|---|
-| **Source** | security-audit FINDING-06 |
-| **File** | `api/sign-document.mjs` lines 36, 59 |
-| **Complexity** | S |
-
-`estimateId` is interpolated into a Supabase REST URL without UUID validation, allowing query parameter injection using the service role key (bypasses RLS).
-
-**Change needed:**
-
-```js
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-if (!UUID_RE.test(estimateId)) {
-  return res.status(400).json({ error: 'Invalid estimateId format' });
-}
-```
-
-Apply same validation to `sign-change-order.mjs` and any other handler using IDs in raw URLs.
-
----
-
-### M-08 — Rate limiting missing on cost-incurring endpoints
-
-| | |
-|---|---|
-| **Source** | security-audit FINDING-07 |
-| **Files** | `api/ai-draft.mjs`, `api/send-email.mjs` |
-| **Complexity** | L |
-
-Even after adding auth (B-02), a single authenticated user can loop-call these endpoints causing runaway OpenAI charges or Resend quota exhaustion.
-
-**Change needed:** Add Upstash Redis rate limiting (see security-audit FINDING-07 for full implementation). Also cap AI input size:
-
-```js
-const MAX_CONTEXT_CHARS = 2000;
-if (context?.length > MAX_CONTEXT_CHARS) {
-  return res.status(400).json({ error: 'context too long' });
-}
-```
-
----
-
-### M-09 — Supabase URL hardcoded in `sign-change-order.mjs` and `quickbooks-callback.mjs`
-
-| | |
-|---|---|
-| **Source** | infra-audit INFRA-05 |
-| **Files** | `api/sign-change-order.mjs` line 11, `api/quickbooks-callback.mjs` line 7 |
-| **Complexity** | S |
-
-Project URL hardcoded in source — silently connects to wrong database if URL changes or staging is needed.
-
-**Change needed:** Remove all hardcoded URLs. Replace with:
-
-```js
-const supabaseUrl = process.env.SUPABASE_URL;
-if (!supabaseUrl) throw new Error('SUPABASE_URL not configured');
-```
-
----
-
-### M-10 — Service worker non-functional on Vercel (hardcoded GitHub Pages path prefix)
-
-| | |
-|---|---|
-| **Source** | infra-audit INFRA-04 |
-| **File** | `public/sw.js` |
-| **Complexity** | M |
-
-`urlsToCache` and the fetch handler are hardcoded to `/crm-kanban-integrate/`. On Vercel (`/`), every fetch hits an early `return` and the SW does nothing — no caching, no offline mode, PWA is broken.
-
-**Change needed:**
-
-```js
-const BASE = self.registration.scope;
-const urlsToCache = [BASE, `${BASE}index.html`, `${BASE}manifest.json`];
-// In fetch handler:
-if (!url.pathname.startsWith(new URL(BASE).pathname)) return;
-// fallback:
-caches.match(`${BASE}index.html`)
-```
-
----
-
-### M-11 — `vercel.json` has no function timeout configuration
-
-| | |
-|---|---|
-| **Source** | infra-audit INFRA-10 |
-| **File** | `vercel.json` |
-| **Complexity** | S |
-
-Default 10s timeout is inadequate for `stripe-webhook.mjs` (DB writes + Stripe API) and `quickbooks-sync.mjs` (full accounting sync).
-
-**Change needed:**
-
-```json
-{
-  "functions": {
-    "api/stripe-webhook.mjs": { "maxDuration": 30 },
-    "api/quickbooks-sync.mjs": { "maxDuration": 60 },
-    "api/quickbooks-callback.mjs": { "maxDuration": 30 }
-  }
-}
-```
-
----
-
-### M-12 — `update_my_company` RPC silently drops 5 company fields
-
-| | |
-|---|---|
-| **Source** | db-audit FINDING-8 |
-| **Files** | `supabase/migrations/20260306_fix_company_access.sql`, `src/lib/database.ts` |
-| **Complexity** | M |
-
-The RPC only accepts 9 parameters; `database.ts` passes 14. Fields `tagline`, `contractor_license`, `tax_id`, `from_email`, `from_name` are silently discarded when the RPC runs.
-
-**Change needed:** Add the missing parameters to the RPC signature, or rely exclusively on the direct table-update fallback path already in `database.ts` (audited and confirm it works).
-
----
-
-### M-13 — Role selector shown as disabled on invite flow — confusing UI
-
-| | |
-|---|---|
-| **Source** | ui-audit FINDING-5 |
-| **File** | `src/components/crm/AuthPage.tsx` line 465 |
-| **Complexity** | S |
-
-When accepting an invite, a disabled `<select>` for Role appears with no explanation.
-
-**Change needed:** When `inviteToken` is set, hide the role selector and show read-only text: "Role assigned by your team admin."
-
----
-
-### M-14 — AI Draft button disappears silently when switching communication types
-
-| | |
-|---|---|
-| **Source** | ui-audit FINDING-12 |
-| **File** | `src/components/crm/CommunicationHub.tsx` line 724 |
-| **Complexity** | S |
-
-AI Draft button only renders for `composeType === 'email'` and vanishes for SMS/note without explanation.
-
-**Change needed:** Render for all types but disable with a tooltip for non-email: "AI drafting available for email only."
-
----
-
-### M-15 — Beta users' `trial_ends_at` all point to the migration run date
-
-| | |
-|---|---|
-| **Source** | db-audit FINDING-12 |
-| **Files** | One-time SQL update |
-| **Complexity** | S |
-
-When `add-subscription-plans.sql` added the `trial_ends_at` column, PostgreSQL filled all existing rows with `ALTER TABLE` time + 14 days, giving every beta user the same expiry instead of 14 days from their own signup.
-
-**Change needed:**
-
-```sql
-UPDATE companies
-SET trial_ends_at = created_at + INTERVAL '14 days'
-WHERE subscription_status = 'trialing'
-  AND trial_ends_at IS NOT NULL;
-```
-
-Run once in Supabase SQL editor.
-
----
-
-## LOW — Nice to have
-
----
-
-### L-01 — Stripe pricing table renders with empty `customer-email` during profile load
-
-| | |
-|---|---|
-| **Source** | bug-audit BUG-10 |
-| **File** | `src/components/crm/SubscriptionView.tsx` |
-| **Complexity** | S |
-
-Brief flash of `customer-email=""` during load may cause Stripe pre-fill to fail.
-
-**Change needed:** Conditionally render: `{profile?.email && <stripe-pricing-table ... customer-email={profile.email} />}`
-
----
-
-### L-02 — N+1 queries in `getInvoiceWithItems` and `getKanbanBoardWithColumns`
-
-| | |
-|---|---|
-| **Source** | db-audit FINDING-10 |
-| **File** | `src/lib/database.ts` |
-| **Complexity** | S |
-
-Two separate sequential queries where a single nested select would suffice.
-
-**Change needed:** Use Supabase nested select:
-
-```ts
-await supabase.from('invoices').select('*, invoice_items(*)').eq('id', invoiceId).single();
-await supabase.from('kanban_boards').select('*, kanban_columns(*)').eq('id', boardId).single();
-```
-
----
-
-### L-03 — Trial banner copy button has no clipboard icon — low discoverability
-
-| | |
-|---|---|
-| **Source** | ui-audit FINDING-9 |
-| **File** | `src/components/AppLayout.tsx` line 355 |
-| **Complexity** | S |
-
-Button looks like a code chip, not a button. Add `<ClipboardCopy size={12} />` icon to the left of `LAUNCH50`.
-
----
-
-### L-04 — Template card has `cursor-pointer` but no `onClick` — false affordance
-
-| | |
-|---|---|
-| **Source** | ui-audit FINDING-15 |
-| **File** | `src/components/crm/CommunicationHub.tsx` line 607 |
-| **Complexity** | S |
-
-Either add `onClick={() => handleUseTemplate(template)}` to the card `<div>`, or remove `cursor-pointer` from the wrapper.
-
----
-
-### L-05 — `npm run deploy` deploys to GitHub Pages, not Vercel — confusing for new devs
-
-| | |
-|---|---|
-| **Source** | infra-audit INFRA-11 |
-| **File** | `package.json` line 11 |
-| **Complexity** | S |
-
-Rename scripts:
-
-```json
-"deploy:ghpages": "npm run build && gh-pages -d dist",
-"deploy:vercel": "vercel --prod"
-```
-
----
-
-### L-06 — `supabaseKey` exported unnecessarily from `supabase.ts`
-
-| | |
-|---|---|
-| **Source** | security-audit FINDING-09 |
-| **File** | `src/lib/supabase.ts` line 63 |
-| **Complexity** | S |
-
-Change `export { supabase, supabaseUrl, supabaseKey }` → `export { supabase, supabaseUrl }`. No consumer needs the raw key string.
-
----
-
-### L-07 — `handle_new_user` trigger has two conflicting definitions across migrations
-
-| | |
-|---|---|
-| **Source** | db-audit FINDING-9 |
-| **Files** | `supabase/migrations/20260228183000_roles_rls_and_owner_backfill.sql`, `supabase/migrations/20260306_fix_company_access.sql` |
-| **Complexity** | M |
-
-Two migrations redefine the trigger with different behavior. Final state is correct (20260306 wins), but the intent is undocumented and the NULL `company_id` window after signup is unguarded.
-
-**Change needed:** Add explanatory comments to 20260306 migration. Consider wrapping company creation in an RPC to make the NULL window atomic (see db-audit FINDING-9).
-
----
-
-### L-08 — No password strength indicator on signup
-
-| | |
-|---|---|
-| **Source** | ui-audit FINDING-3 |
-| **File** | `src/components/crm/AuthPage.tsx` line 130 |
-| **Complexity** | S |
-
-Only a 6-character minimum enforced post-submit. Add a real-time strength meter (regex-based or `zxcvbn`) below the password field during signup.
+# FIXES.md — TrussCTR CRM (Round 2)
+**Date:** 2026-03-08
+**New findings only** — previously resolved issues excluded per scope.
 
 ---
 
 ## Summary
 
-| Priority | Count | Blocking Concern |
-|---|---|---|
-| **BLOCKER** | 9 | Billing never activates, auth bypass, data exposure |
-| **HIGH** | 20 | Revenue, privacy, customer-facing UX |
-| **MEDIUM** | 15 | Scale, edge cases, secondary UX |
-| **LOW** | 8 | Polish, DX, defense-in-depth |
-| **Total** | **52** | |
+| Severity | Count |
+|----------|-------|
+| BLOCKER  | 8     |
+| HIGH     | 15    |
+| MEDIUM   | 14    |
+| LOW      | 7     |
+| **Total**| **44**|
 
-> Note: Some original audit findings are consolidated here (e.g. B-02 covers SEC FINDING-01 + FINDING-02 together; B-01 covers BUG-01 + DB FINDING-1). Total fix count (52) exceeds raw finding count (47) in some cases due to splitting compound issues.
+---
 
-## Recommended Fix Order (BLOCKER sprint)
+## BLOCKER — Fix Before Next Production Deploy
 
+---
+
+### FIX-B01 — Recursive RLS on 6 tables causes 500 errors under load
+**Severity:** BLOCKER
+**Files:** `supabase/migrations/20260307_v2_pm_features.sql`, `supabase/migrations/20260307_company_integrations.sql`
+**Tables:** `crew_schedules`, `change_orders`, `permits`, `equipment`, `equipment_assignments`, `company_integrations`
+
+These 6 tables were added *after* the RLS recursion fix migration and reintroduce the banned `SELECT company_id FROM profiles WHERE id = auth.uid()` pattern. Under real load this triggers PostgreSQL error `42P17` (infinite recursion) — all queries against these tables fail with 500s.
+
+**Fix:** New migration dropping and recreating all policies using `public.get_my_company_id()`:
+
+```sql
+DROP POLICY IF EXISTS "company_members_crew_schedules" ON crew_schedules;
+CREATE POLICY crew_schedules_tenant_select ON crew_schedules FOR SELECT TO authenticated
+  USING (company_id = public.get_my_company_id());
+CREATE POLICY crew_schedules_tenant_insert ON crew_schedules FOR INSERT TO authenticated
+  WITH CHECK (company_id = public.get_my_company_id());
+CREATE POLICY crew_schedules_tenant_update ON crew_schedules FOR UPDATE TO authenticated
+  USING (company_id = public.get_my_company_id())
+  WITH CHECK (company_id = public.get_my_company_id());
+CREATE POLICY crew_schedules_tenant_delete ON crew_schedules FOR DELETE TO authenticated
+  USING (company_id = public.get_my_company_id());
+-- Repeat for: change_orders, permits, equipment, equipment_assignments, company_integrations
 ```
-Day 1:  B-03 (delete debug-env.mjs)          — 15 min
-        B-07 (set APP_URL in Vercel)           — 10 min
-        B-04 (fix XSS in Index.tsx)            — 30 min
-        B-09 (fix AuthPage legal link paths)   — 30 min
-Day 2:  B-01 (fix stripe-webhook table)        — 2–3 hrs
-        H-02 (fix trial_end always null)        — 30 min
-Day 3:  B-06 (fix detectSessionInUrl)          — 1 hr
-        B-02 (add auth middleware)             — 3–4 hrs
-        B-05 (fix Stripe IDOR)                 — 1 hr
-        H-09 (lock send-email from address)    — 30 min
-Day 4:  B-08 (add paywall enforcement)         — 2–3 hrs
-        H-18 (update .env.example)             — 30 min
-        H-01 (fix template injection)          — 30 min
+
+**Effort:** S (1 migration, ~30 min)
+
+---
+
+### FIX-B02 — Expense receipt storage bucket has no company isolation
+**Severity:** BLOCKER (cross-company data leak)
+**File:** `supabase/migrations/20260308_expenses_table.sql`
+
+Storage policies on `expense-receipts` only check `auth.uid() IS NOT NULL`. Any authenticated user from any company can read or insert another company's receipts — zero tenant isolation.
+
+**Fix:** Re-create storage policies enforcing a company-scoped path prefix. Upload path must be prefixed `${companyId}/receipts/`.
+
+```sql
+DROP POLICY IF EXISTS "expense_receipts_select" ON storage.objects;
+DROP POLICY IF EXISTS "expense_receipts_insert" ON storage.objects;
+DROP POLICY IF EXISTS "expense_receipts_delete" ON storage.objects;
+
+CREATE POLICY "expense_receipts_select" ON storage.objects
+  FOR SELECT USING (
+    bucket_id = 'expense-receipts'
+    AND (storage.foldername(name))[1] = public.get_my_company_id()::text
+  );
+CREATE POLICY "expense_receipts_insert" ON storage.objects
+  FOR INSERT WITH CHECK (
+    bucket_id = 'expense-receipts'
+    AND (storage.foldername(name))[1] = public.get_my_company_id()::text
+  );
+CREATE POLICY "expense_receipts_delete" ON storage.objects
+  FOR DELETE USING (
+    bucket_id = 'expense-receipts'
+    AND (storage.foldername(name))[1] = public.get_my_company_id()::text
+  );
 ```
+
+Also update the frontend upload call to prefix path with `${companyId}/receipts/filename`.
+**Effort:** S (1 migration + 1 frontend upload path change)
+
+---
+
+### FIX-B03 — `sign-document.mjs` token check skipped when `sign_token` is NULL
+**Severity:** BLOCKER (broken access control — OWASP A01)
+**File:** `api/sign-document.mjs`
+
+When `sign_token` is NULL (default for all pre-existing estimate rows), the guard `if (estimate.sign_token && token !== estimate.sign_token)` is entirely skipped. Anyone who knows an estimate UUID can sign it with no token. Signed documents are legally binding.
+
+**Fix:** Require a non-null stored token AND enforce it matches; add `token` to upfront required-field check:
+
+```js
+if (!estimateId || !signedBy || !signatureData || !token) {
+  return res.status(400).json({ error: 'Missing required fields' });
+}
+if (!estimate.sign_token || token !== estimate.sign_token) {
+  return res.status(403).json({ error: 'Invalid signing token' });
+}
+```
+
+**Effort:** S (single file, ~10 min)
+
+---
+
+### FIX-B04 — `quickbooks-auth.mjs` has no authentication — QB account hijack possible
+**Severity:** BLOCKER (OWASP A01/A07)
+**File:** `api/quickbooks-auth.mjs`
+
+`GET /api/quickbooks-auth?company_id=<uuid>` has no `requireAuth`. Any anonymous caller can initiate OAuth for an arbitrary `company_id`, linking a victim company's DB row to the attacker's QuickBooks account.
+
+**Fix:**
+
+```js
+import { requireAuth } from './_auth-middleware.mjs';
+export default async function handler(req, res) {
+  const user = await requireAuth(req, res);
+  if (!user) return;
+  // Verify user's company_id matches the requested company_id via profiles lookup
+}
+```
+
+**Effort:** S (< 30 min)
+
+---
+
+### FIX-B05 — `quickbooks-sync.mjs` has no authentication — cross-company data sync
+**Severity:** BLOCKER (OWASP A01)
+**File:** `api/quickbooks-sync.mjs`
+
+`POST /api/quickbooks-sync` accepts `company_id` from the request body with zero auth. Any caller knowing a valid company UUID can read that company's data from Supabase and push it to QuickBooks.
+
+**Fix:** Add `requireAuth` and verify company membership (same pattern as B04).
+**Effort:** S (< 30 min)
+
+---
+
+### FIX-B06 — `past_due` subscriptions bypass the paywall
+**Severity:** BLOCKER (payment bypass)
+**File:** `src/components/AppLayout.tsx` (lines ~910-918)
+
+Subscription gate only blocks `trialing-expired` and `canceled`. Stripe sets `past_due` when a card is declined. Customers with failed payments retain full app access indefinitely.
+
+**Fix:**
+
+```js
+const blocked =
+  trialExpired ||
+  company.subscription_status === 'canceled' ||
+  company.subscription_status === 'past_due';
+```
+
+**Effort:** S (1 line, ~5 min)
+
+---
+
+### FIX-B07 — QuickBooks callback redirects users to GitHub Pages after OAuth
+**Severity:** BLOCKER (broken integration — dead redirect)
+**File:** `api/quickbooks-callback.mjs` (lines 13, ~47)
+
+`const appBase = 'https://614restore.github.io/crm-kanban-integrate'` — all KB OAuth redirects send users to the dead old domain. The entire QB integration is non-functional in production.
+
+**Fix:**
+
+```js
+const appBase = process.env.APP_URL || 'https://crm-kanban-integrate.vercel.app';
+const fullUrl = `${process.env.APP_URL || 'https://crm-kanban-integrate.vercel.app'}${req.url}`;
+```
+
+**Effort:** S (2 line changes)
+
+---
+
+### FIX-B08 — Vite base path defaults to GitHub Pages path — breaks Vercel builds
+**Severity:** BLOCKER (production broken if env var missing)
+**File:** `vite.config.ts` (line 9)
+
+`const base = process.env.VITE_BASE_URL ?? (mode === "production" ? "/crm-kanban-integrate/" : "/")` — if `VITE_BASE_URL` is not set in Vercel, every production build serves assets from a non-existent path. Completely white/broken app.
+
+**Fix:**
+1. Set `VITE_BASE_URL=/` in all three Vercel environment tiers (Production, Preview, Development).
+2. Flip the code default: `const base = process.env.VITE_BASE_URL ?? "/";`
+
+**Effort:** S (env var + 1-line code change)
+
+---
+
+## HIGH — Fix This Sprint
+
+---
+
+### FIX-H01 — `stripe-webhook.mjs` calls `listUsers()` without pagination
+**Severity:** HIGH
+**Files:** `api/stripe-webhook.mjs` (line ~87), `api/stripe-checkout.mjs`
+
+`client_reference_id` is never set in `stripe-checkout.mjs`, so the webhook always falls back to `listUsers()` with no `perPage` (Supabase caps at 1,000). Companies with >1,000 users never get their subscription activated — they stay `trialing` permanently.
+
+**Fix (two-part):**
+1. Pass `client_reference_id: companyId` from the frontend into checkout session params.
+2. If fallback still needed, use a targeted email filter instead of listing all users.
+
+**Effort:** M (frontend + backend)
+
+---
+
+### FIX-H02 — `handleUseTemplate` / `handleCompose` fall back to `state.contacts[0]`
+**Severity:** HIGH (wrong customer data sent)
+**File:** `src/components/crm/CommunicationHub.tsx` (lines ~270, ~307)
+
+When no thread is selected, template variables are silently filled with a random contact's name/claim/adjuster data. Users can unknowingly send a message to the wrong person with wrong information.
+
+**Fix:** Remove the fallback; require a selected thread:
+
+```js
+if (!selectedCommData?.contact) {
+  toast.error('Select a contact thread before using a template');
+  return;
+}
+const contact = selectedCommData.contact;
+```
+
+**Effort:** S (~15 min)
+
+---
+
+### FIX-H03 — Subscription gate race window — app visible briefly before block resolves
+**Severity:** HIGH
+**File:** `src/components/AppLayout.tsx` (line ~405)
+
+`subscriptionBlocked` initialises as `false`. On slow connections the full CRM renders for several seconds before being blocked — a `past_due` user could read/copy data during this window.
+
+**Fix:** Initialise `subscriptionBlocked` as `null` and show a loading state until the check resolves, OR move the company/subscription check as the first step in `loadData` before dispatching `INITIALIZE_DATA`.
+**Effort:** M
+
+---
+
+### FIX-H04 — Missing indexes on 5 major tables
+**Severity:** HIGH (sequential scans on every tenant query)
+**File:** `supabase/migrations/20260306_missing_tables.sql`
+
+`estimates`, `projects`, `work_orders`, `suppliers`, `material_orders`, and `material_order_items` have zero indexes beyond their PKs.
+
+**Fix:** New migration:
+
+```sql
+CREATE INDEX IF NOT EXISTS idx_estimates_company        ON estimates (company_id);
+CREATE INDEX IF NOT EXISTS idx_estimates_contact        ON estimates (contact_id);
+CREATE INDEX IF NOT EXISTS idx_projects_company         ON projects (company_id);
+CREATE INDEX IF NOT EXISTS idx_projects_contact         ON projects (contact_id);
+CREATE INDEX IF NOT EXISTS idx_work_orders_company      ON work_orders (company_id);
+CREATE INDEX IF NOT EXISTS idx_work_orders_project      ON work_orders (project_id);
+CREATE INDEX IF NOT EXISTS idx_suppliers_company        ON suppliers (company_id);
+CREATE INDEX IF NOT EXISTS idx_material_orders_supplier ON material_orders (supplier_id);
+CREATE INDEX IF NOT EXISTS idx_material_orders_project  ON material_orders (project_id);
+CREATE INDEX IF NOT EXISTS idx_material_order_items_order ON material_order_items (order_id);
+```
+
+**Effort:** S (1 migration)
+
+---
+
+### FIX-H05 — 12 direct Supabase calls in components bypass `DatabaseService`
+**Severity:** HIGH (no timeout protection — components can hang indefinitely)
+**Files:** `TeamView.tsx`, `InsuranceTrackingView.tsx`, `SupplementTrackingView.tsx`, `EquipmentView.tsx`, `CrewScheduleView.tsx`, `PermitTracker.tsx`
+
+Direct `supabase.from()` calls bypass `DatabaseService`, losing `raceTimeout` protection, demo-mode handling, and centralised error logging.
+
+**Fix:** Add CRUD methods for `insurance_claims`, `supplements`, `equipment`, `crew_schedules`, and `permits` to `src/lib/database.ts`. Replace all direct component-level calls.
+**Effort:** M (6 files, ~2 hrs)
+
+---
+
+### FIX-H06 — `ai-draft.mjs` — prompt injection via unsanitized user fields
+**Severity:** HIGH (OWASP A03 — LLM prompt injection)
+**File:** `api/ai-draft.mjs` (line ~38)
+
+`contactName`, `projectType`, `tone`, and `context` interpolated directly into the Groq prompt with no length caps or control-character stripping. A user can inject instructions to generate phishing content sent from the company's verified sender address.
+
+**Fix:**
+
+```js
+const userPrompt = `Write a professional email.
+<contact_name>${contactName.slice(0, 100).replace(/[\n\r]/g, ' ')}</contact_name>
+<project_type>${(projectType || 'roofing/restoration').slice(0, 100)}</project_type>
+<tone>${(tone || 'professional').slice(0, 50)}</tone>
+${context ? `<context>${context.slice(0, 500)}</context>` : ''}
+Reply ONLY with JSON: { "subject": "...", "body": "..." }`;
+```
+
+**Effort:** S (single file, ~20 min)
+
+---
+
+### FIX-H07 — `sign-document.mjs` — `estimateId` not validated as UUID
+**Severity:** HIGH (OWASP A03 — PostgREST injection)
+**File:** `api/sign-document.mjs`
+
+`estimateId` used raw in Supabase REST URL query strings. A crafted value like `real-id&status=eq.sent` injects additional PostgREST filter parameters.
+
+**Fix:**
+
+```js
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+if (!UUID_RE.test(estimateId)) {
+  return res.status(400).json({ error: 'Invalid estimateId' });
+}
+```
+
+**Effort:** S (~10 min)
+
+---
+
+### FIX-H08 — 3 hardcoded Vercel domain URLs in frontend source
+**Severity:** HIGH (breaks preview deploys and any custom domain)
+**Files:** `src/pages/SignEstimate.tsx` (line 5), `src/pages/SignChangeOrder.tsx` (line 5), `src/components/crm/TeamView.tsx` (line 161)
+
+**Fix:** Use relative paths — API functions share origin with the frontend on Vercel:
+
+```ts
+const API_BASE = "/api/sign-document";
+await fetch('/api/send-email', ...
+```
+
+**Effort:** S (3 files, ~10 min)
+
+---
+
+### FIX-H09 — QuickBooks auth/callback hardcode `redirectUri` and token exchange URL
+**Severity:** HIGH (OAuth breaks on any domain change)
+**Files:** `api/quickbooks-auth.mjs` (line 27), `api/quickbooks-callback.mjs` (line ~41)
+
+**Fix:**
+
+```js
+redirectUri: `${process.env.APP_URL || 'https://crm-kanban-integrate.vercel.app'}/api/quickbooks-callback`,
+```
+
+**Effort:** S (2 files, ~10 min)
+
+---
+
+### FIX-H10 — `SUPABASE_URL` hardcoded as constant in `quickbooks-callback.mjs`
+**Severity:** HIGH
+**File:** `api/quickbooks-callback.mjs` (line 7)
+
+Never reads from `process.env`. Silent breakage if the Supabase project is migrated.
+
+**Fix:**
+
+```js
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://qgvuzrvpyyrrulhwlzma.supabase.co';
+```
+
+**Effort:** S (1 line)
+
+---
+
+### FIX-H11 — `.env.example` missing all server-side and several frontend env vars
+**Severity:** HIGH (ops/recovery risk)
+**File:** `.env.example`
+
+**Missing server-side:** `APP_URL`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `QBO_CLIENT_ID`, `QBO_CLIENT_SECRET`, `QBO_ENVIRONMENT`, `QB_ENCRYPT_KEY`, `GROQ_API_KEY`
+**Missing frontend:** `VITE_API_BASE_URL`, `VITE_API_URL`, `VITE_DEMO_MODE`, `VITE_HASH_ROUTING`, `VITE_DISABLE_REALTIME`, `VITE_BASE_URL`
+
+**Fix:** Add a `## Server-side (Vercel) Environment Variables` section to `.env.example` with descriptions and example values for all of the above.
+**Effort:** S (~20 min)
+
+---
+
+### FIX-H12 — `xlsx` package at vulnerable/controversial version
+**Severity:** HIGH
+**File:** `package.json` — `"xlsx": "^0.18.5"`
+
+SheetJS 0.18.5 has reported telemetry issues, multiple security advisories, and is 2+ years stale.
+
+**Fix:** Replace with `exceljs` (actively maintained). If only CSV is needed, use `papaparse`.
+**Effort:** M (package evaluation + replacement)
+
+---
+
+### FIX-H13 — `BillingSettings.tsx` is dead code — pricing page never shown to users
+**Severity:** HIGH (feature gap — conversion impact)
+**Files:** `src/components/settings/BillingSettings.tsx`, `src/components/settings/MainSettings.tsx`
+
+`MainSettings.tsx` has no consumers. The billing/upgrade page with pricing table is never rendered. Add-On buttons in `BillingSettings.tsx` also have no `onClick` handlers.
+
+**Fix:** Wire `BillingSettings` into `SettingsView.tsx` billing tab and add `onClick` handlers — OR delete both files as confirmed dead code.
+**Effort:** M
+
+---
+
+### FIX-H14 — Trial urgency banner (days 8-14) has no copy button for LAUNCH50
+**Severity:** HIGH (conversion loss — 5-minute fix)
+**File:** `src/components/AppLayout.tsx` (lines ~375-393)
+
+Day 8-14 urgency banner shows the promo code as plain bold text only. The `handleCopy` function already exists — it just wasn't threaded into the urgency variant.
+
+**Fix:** Add `<button onClick={handleCopy}>` to the urgency banner (same pattern as the discount variant).
+**Effort:** S (~5 min)
+
+---
+
+### FIX-H15 — LAUNCH50 promo code not visible at the point of purchase
+**Severity:** HIGH (conversion gap)
+**File:** `src/components/crm/SubscriptionView.tsx`
+
+Neither `SubscriptionView` nor the billing tab shows LAUNCH50. Users who navigate to pricing from the banner lose sight of the code before completing checkout.
+
+**Fix:** Add a promo callout above the Stripe pricing table in `SubscriptionView`, visible during trial:
+
+```tsx
+{company?.subscription_status === 'trialing' && (
+  <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-2 text-sm text-indigo-800 flex items-center gap-2 mb-4">
+    <Tag className="w-4 h-4" />
+    Use code <strong className="font-mono">LAUNCH50</strong> at checkout — 50% off 3 months (monthly plans).
+  </div>
+)}
+```
+
+**Effort:** S (~10 min)
+
+---
+
+## MEDIUM — Fix This Sprint or Next
+
+---
+
+### FIX-M01 — N+1 queries on contact detail page (7 sequential round-trips)
+**Severity:** MEDIUM
+**File:** `src/lib/database.ts`
+
+Opening a contact triggers 7 individual sequential DB queries. Degrades noticeably at 100+ contacts.
+
+**Fix:** Consolidate into `Promise.all` (all 7 queries run in parallel).
+**Effort:** M (~2 hrs)
+
+---
+
+### FIX-M02 — `getContact()` has no `company_id` filter at the application layer
+**Severity:** MEDIUM (defence-in-depth)
+**File:** `src/lib/database.ts` (line ~637)
+
+Only filters by `id`. If RLS is accidentally disabled, any contact UUID returns cross-company data.
+
+**Fix:** Add `.eq('company_id', companyId)` as a second filter. Apply same hardening to `getJobsByContact`, `getCommunicationsByContact`, `getDocumentsByContact`, `getEstimatesByContact`, `getProjectsByContact`, and `getWorkOrdersByContact`.
+**Effort:** S
+
+---
+
+### FIX-M03 — Inconsistent error handling and missing `raceTimeout` across `DatabaseService`
+**Severity:** MEDIUM
+**File:** `src/lib/database.ts`
+
+Several methods (`getDocumentsByContact`, `getCommunicationsByContact`, `getDocuments`, `deleteDocument`, `deleteEstimate`, `getTeamMembers`) lack `raceTimeout` wrappers and can hang indefinitely. `createJob()` and `createMaterialOrder()` silently return `null` on error while `createContact()` throws — inconsistent contract.
+
+**Fix:** Apply `raceTimeout` to all async DB ops. Standardise on throw-on-error or `{ data, error }`.
+**Effort:** M (~2 hrs)
+
+---
+
+### FIX-M04 — Auth context race: dual `loadProfile` calls cause unauthenticated flash
+**Severity:** MEDIUM
+**File:** `src/lib/authContext.tsx` (line ~120)
+
+Both `onAuthStateChange` (INITIAL_SESSION) and `getSession().then()` call `loadProfile` independently. Second path can set `loading = false` before profile is stored — one-frame flash of the unauthenticated view.
+
+**Fix:** Consolidate auth initialisation to a single code path. Only call `setLoading(false)` after profile is definitively set.
+**Effort:** M
+
+---
+
+### FIX-M05 — `send-email.mjs` CORS header is empty string if `APP_URL` unset
+**Severity:** MEDIUM
+**File:** `api/send-email.mjs` (line 9)
+
+`res.setHeader('Access-Control-Allow-Origin', process.env.APP_URL || '')` — empty CORS header is invalid; browsers silently block all requests. Email feature breaks without any server-side error.
+
+**Fix:**
+
+```js
+const allowedOrigin = process.env.APP_URL;
+if (!allowedOrigin) console.error('[send-email] APP_URL not set — CORS blocked');
+res.setHeader('Access-Control-Allow-Origin', allowedOrigin || 'https://crm-kanban-integrate.vercel.app');
+```
+
+Also tighten QB endpoints' `'*'` CORS to `process.env.APP_URL` after adding auth (B04/B05).
+**Effort:** S (3 files)
+
+---
+
+### FIX-M06 — `stripe-checkout.mjs` allows unauthenticated coupon enumeration
+**Severity:** MEDIUM (OWASP A01)
+**File:** `api/stripe-checkout.mjs`
+
+No auth. `couponId` from the request body passed directly to Stripe — allows probe-based enumeration of valid codes.
+
+**Fix:** Add a server-side coupon allowlist:
+
+```js
+const ALLOWED_COUPONS = (process.env.ALLOWED_COUPONS || 'LAUNCH50').split(',');
+if (couponId && !ALLOWED_COUPONS.includes(couponId)) {
+  return res.status(400).json({ error: 'Invalid coupon' });
+}
+```
+
+**Effort:** S (~30 min)
+
+---
+
+### FIX-M07 — No rate limiting on high-value endpoints
+**Severity:** MEDIUM (OWASP A05)
+**Files:** `api/sign-document.mjs`, `api/sign-change-order.mjs`, `api/send-email.mjs`, `api/ai-draft.mjs`, `api/stripe-checkout.mjs`
+
+Signing endpoints allow token-guessing brute force. Email/AI endpoints allow cost abuse. Checkout allows session flooding.
+
+**Fix:** Add Vercel Edge Middleware with `@upstash/ratelimit`. Minimums: 5 req/min/IP on signing; 20 req/min/user on send-email and ai-draft.
+**Effort:** M (~3 hrs, shared middleware)
+
+---
+
+### FIX-M08 — MobileNav "Work Orders" uses wrong view ID
+**Severity:** MEDIUM (mobile navigation broken)
+**File:** `src/components/mobile/MobileNav.tsx` (line ~76)
+
+`view: 'work_orders'` (underscore) — `ViewType` uses `'work-orders'` (hyphen). Tapping "Work Orders" on mobile navigates to Dashboard instead.
+
+**Fix:** `view: 'work_orders'` → `view: 'work-orders'`
+**Effort:** S (1 character)
+
+---
+
+### FIX-M09 — ContactList empty state doesn't distinguish no-data vs. no-search-results
+**Severity:** MEDIUM
+**File:** `src/components/crm/ContactList.tsx` (lines 519-528)
+
+New users see a Search icon and "Try adjusting your filter criteria" when they have no contacts at all. No CTA to add a first contact.
+
+**Fix:** Check `state.contacts.length === 0` for the zero-data case and render a different empty state with an "Add First Contact" button.
+**Effort:** S (~30 min)
+
+---
+
+### FIX-M10 — No onboarding / first-run experience for new users
+**Severity:** MEDIUM (activation risk)
+**Files:** `src/components/crm/Dashboard.tsx`, `src/lib/setupCompany.ts`
+
+New users land on all-zero metrics with "Welcome back, {name}!" and no guidance whatsoever.
+
+**Fix:** Show a first-run checklist panel when all data is empty. Steps: Add first contact → Create an estimate → Invite a team member → Connect email. Change "Welcome back" to "Welcome" on first login.
+**Effort:** L (new component)
+
+---
+
+### FIX-M11 — Sidebar has 23 flat ungrouped navigation items
+**Severity:** MEDIUM
+**File:** `src/components/crm/Sidebar.tsx` (lines 40-63)
+
+23 items in a flat list with no section headers, dividers, or grouping — cognitive overload.
+
+**Fix:** Add uppercase section labels between logical groups: **Overview** | **Leads & CRM** | **Sales** | **Projects** | **Insurance** | **Tools** | **Admin**.
+**Effort:** S (~1 hr)
+
+---
+
+### FIX-M12 — Data load failure silently shows empty app — no error, no retry
+**Severity:** MEDIUM
+**File:** `src/components/AppLayout.tsx` (lines ~733-751)
+
+Any Supabase outage or expired session causes `loadData` to silently dispatch empty arrays. Users see an empty CRM with no indication of a problem.
+
+**Fix:**
+
+```tsx
+} catch (error) {
+  console.error('Error loading CRM data:', error);
+  toast.error('Failed to load your data. Please refresh to try again.');
+}
+```
+
+**Effort:** S (~30 min)
+
+---
+
+### FIX-M13 — `QBO_ENVIRONMENT` defaults to `sandbox` — real customers hit test data
+**Severity:** MEDIUM
+**Files:** `api/quickbooks-auth.mjs` (line 20), `api/quickbooks-callback.mjs` (line 39)
+
+If `QBO_ENVIRONMENT` is not set in Vercel Production, real customers connect to QuickBooks sandbox data.
+
+**Fix:** Set `QBO_ENVIRONMENT=production` in Vercel Production environment variables. Document in `.env.example`.
+**Effort:** S (env var + docs)
+
+---
+
+### FIX-M14 — Plan names and prices inconsistent between `SubscriptionView` and `BillingSettings`
+**Severity:** MEDIUM (trust / credibility)
+**Files:** `src/components/crm/SubscriptionView.tsx`, `src/components/settings/BillingSettings.tsx`
+
+`SubscriptionView`: Starter ($49), Professional ($99), Enterprise ($199).
+`BillingSettings`: Starter ($29), Pro ($59), Business ($99), Enterprise ($179).
+Different names, different prices for the same product.
+
+**Fix:** Create `src/lib/planConfig.ts` with a single `PLANS` constant. Import in both components. Verify against the live Stripe pricing table.
+**Effort:** S (~1 hr)
+
+---
+
+## LOW — Address When Capacity Allows
+
+---
+
+### FIX-L01 — TrialBanner discount/urgency cutoff hardcodes 7-day split
+**Severity:** LOW
+**File:** `src/components/AppLayout.tsx` (line ~339)
+
+`showDiscount = daysLeft > 7` assumes exactly 14-day trials. Breaks for 7-day or 30-day trials.
+
+**Fix:** Derive the midpoint from actual trial duration (`created_at` vs. `trial_ends_at`).
+**Effort:** S
+
+---
+
+### FIX-L02 — Unfiltered realtime subscription on `kanban_columns`
+**Severity:** LOW
+**File:** `src/lib/database.ts` (line ~1541)
+
+`kanban_columns` has no `company_id` so no server-side realtime filter can be applied — events from all companies arrive.
+
+**Fix:** Subscribe to `kanban_boards` changes (filtered) and re-fetch columns on board change instead.
+**Effort:** S
+
+---
+
+### FIX-L03 — `setup.sql` has permissive `WITH CHECK (true)` companies insert policy
+**Severity:** LOW
+**File:** `supabase/setup.sql` (~line 340)
+
+Fresh-install reference file still has the open policy that was hardened in migration `20260225173000`. Could mislead future developers.
+
+**Fix:** Update `setup.sql` to mirror the hardened `companies_insert_authenticated` policy.
+**Effort:** S
+
+---
+
+### FIX-L04 — Mobile header hardcodes "TrussCTR" instead of company name
+**Severity:** LOW
+**File:** `src/components/mobile/ResponsiveLayout.tsx` (line ~152)
+
+Desktop sidebar shows the real company name dynamically. Mobile header always shows "TrussCTR".
+
+**Fix:** Load `companyName` alongside `companyLogoUrl` in `ResponsiveLayout.tsx`, mirroring `Sidebar.tsx`.
+**Effort:** S
+
+---
+
+### FIX-L05 — Unbounded `signatureData` payload in signing endpoints
+**Severity:** LOW (OWASP A05 — storage exhaustion)
+**Files:** `api/sign-document.mjs`, `api/sign-change-order.mjs`
+
+No cap on base64 signature payload. Retina blobs can be 1-2 MB; enables storage bloat and DoS.
+
+**Fix:**
+
+```js
+if (signatureData && signatureData.length > 500_000) {
+  return res.status(413).json({ error: 'Signature data too large' });
+}
+```
+
+**Effort:** S (2 files, ~10 min)
+
+---
+
+### FIX-L06 — `@types/*` packages in `dependencies` instead of `devDependencies`
+**Severity:** LOW
+**File:** `package.json`
+
+`@types/dexie`, `@types/uuid`, `@types/xlsx` in `dependencies` — zero runtime value, adds to production serverless bundle.
+
+**Fix:** Move all three to `devDependencies`.
+**Effort:** S (1 min)
+
+---
+
+### FIX-L07 — `package.json` deploy script and `homepage` field point to GitHub Pages
+**Severity:** LOW
+**File:** `package.json`
+
+`"deploy"` script pushes to GH Pages; `"homepage"` field points to the old domain. Confuses tooling and developers.
+
+**Fix:** Rename to `deploy:gh-pages`. Update `homepage` to Vercel production URL. Add a comment noting GH Pages is legacy.
+**Effort:** S (5 min)
+
+---
+
+## Remediation Order — Top 15 Quick Wins and Blockers
+
+| # | ID | Title | Effort |
+|---|----|-------|--------|
+| 1 | B06 | Add `past_due` to paywall block | S |
+| 2 | B03 | Fix sign-document token bypass | S |
+| 3 | B07 | Fix QB callback GitHub Pages redirect | S |
+| 4 | H14 | Add copy button to urgency trial banner | S |
+| 5 | H15 | Add LAUNCH50 reminder above pricing table | S |
+| 6 | H08 | Replace 3 hardcoded Vercel URLs with relative paths | S |
+| 7 | H07 | UUID-validate estimateId in sign-document | S |
+| 8 | B04 | Add requireAuth to quickbooks-auth | S |
+| 9 | B05 | Add requireAuth to quickbooks-sync | S |
+| 10 | M08 | Fix MobileNav work_orders -> work-orders | S |
+| 11 | B01 | Fix recursive RLS on 6 tables (migration) | S |
+| 12 | B02 | Fix expense receipt storage isolation (migration) | S |
+| 13 | H04 | Add missing indexes — 5 tables (migration) | S |
+| 14 | H06 | Sanitize ai-draft prompt injection fields | S |
+| 15 | H11 | Expand .env.example with all server-side vars | S |

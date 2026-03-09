@@ -4,23 +4,22 @@ import OAuthClient from 'intuit-oauth';
 import { createClient } from '@supabase/supabase-js';
 import { encrypt, verifyOAuthState, setNoCacheHeaders } from './_crypto-utils.mjs';
 
-const SUPABASE_URL = 'https://qgvuzrvpyyrrulhwlzma.supabase.co';
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const APP_URL = process.env.APP_URL || 'https://crm-kanban-integrate.vercel.app';
 
 export default async function handler(req, res) {
   setNoCacheHeaders(res);
   const { code, state: signedState, realmId, error } = req.query;
 
-  const appBase = 'https://614restore.github.io/crm-kanban-integrate';
-
   if (!SUPABASE_KEY) {
-    return res.redirect(`${appBase}/#/settings?qb_error=${encodeURIComponent('Missing SUPABASE_SERVICE_ROLE_KEY on server')}`);
+    return res.redirect(`${APP_URL}/settings?qb_error=${encodeURIComponent('Missing SUPABASE_SERVICE_ROLE_KEY on server')}`);
   }
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
   if (error) {
-    return res.redirect(`${appBase}/#/settings?qb_error=${encodeURIComponent(error)}`);
+    return res.redirect(`${APP_URL}/settings?qb_error=${encodeURIComponent(error)}`);
   }
 
   if (!code || !signedState || !realmId) {
@@ -33,11 +32,11 @@ export default async function handler(req, res) {
     company_id = verifyOAuthState(signedState);
   } catch (stateErr) {
     console.error('OAuth state validation failed:', stateErr.message);
-    return res.redirect(`${appBase}/#/settings?qb_error=${encodeURIComponent('Invalid OAuth state. Please try connecting again.')}`);
+    return res.redirect(`${APP_URL}/settings?qb_error=${encodeURIComponent('Invalid OAuth state. Please try connecting again.')}`);
   }
 
   const environment = process.env.QBO_ENVIRONMENT || 'sandbox';
-  const redirectUri = 'https://crm-kanban-integrate.vercel.app/api/quickbooks-callback';
+  const redirectUri = `${APP_URL}/api/quickbooks-callback`;
 
   const oauthClient = new OAuthClient({
     clientId: (process.env.QBO_CLIENT_ID || '').trim(),
@@ -48,7 +47,7 @@ export default async function handler(req, res) {
 
   try {
     // Exchange code for tokens (Vercel req.url is path-only, need full URL)
-    const fullUrl = `https://crm-kanban-integrate.vercel.app${req.url}`;
+    const fullUrl = `${APP_URL}${req.url}`;
     const authResponse = await oauthClient.createToken(fullUrl);
     const token = authResponse.getJson();
 
@@ -69,12 +68,12 @@ export default async function handler(req, res) {
 
     if (dbError) {
       console.error('DB error saving QB tokens:', dbError);
-      return res.redirect(`${appBase}/#/settings?qb_error=db_save_failed`);
+      return res.redirect(`${APP_URL}/settings?qb_error=db_save_failed`);
     }
 
-    return res.redirect(`${appBase}/#/settings?qb_connected=1`);
+    return res.redirect(`${APP_URL}/settings?qb_connected=1`);
   } catch (err) {
     console.error('QB OAuth error:', err);
-    return res.redirect(`${appBase}/#/settings?qb_error=${encodeURIComponent(err.message)}`);
+    return res.redirect(`${APP_URL}/settings?qb_error=${encodeURIComponent(err.message)}`);
   }
 }

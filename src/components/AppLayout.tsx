@@ -914,7 +914,8 @@ function CRMApp() {
         new Date(company.trial_ends_at) < new Date();
       const blocked =
         trialExpired ||
-        company.subscription_status === 'canceled';
+        company.subscription_status === 'canceled' ||
+        company.subscription_status === 'past_due';
       setSubscriptionBlocked(blocked);
     });
   }, [profile?.company_id]);

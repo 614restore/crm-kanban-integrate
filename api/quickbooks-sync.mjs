@@ -1,10 +1,11 @@
 // POST /api/quickbooks-sync
-// Body: { company_id, sync_type: 'invoices' | 'customers' | 'all' }
+// Body: { sync_type: 'invoices' | 'customers' | 'all' }
 // Pushes data from Supabase → QuickBooks
 import OAuthClient from 'intuit-oauth';
 import QuickBooks from 'node-quickbooks';
 import { createClient } from '@supabase/supabase-js';
 import { encrypt, decrypt, setNoCacheHeaders } from './_crypto-utils.mjs';
+import { requireAuth } from './_auth-middleware.mjs';
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -28,7 +29,7 @@ async function getAccessToken(company) {
     clientId: process.env.QBO_CLIENT_ID,
     clientSecret: process.env.QBO_CLIENT_SECRET,
     environment,
-    redirectUri: 'https://crm-kanban-integrate.vercel.app/api/quickbooks-callback',
+    redirectUri: `${process.env.APP_URL || 'https://crm-kanban-integrate.vercel.app'}/api/quickbooks-callback`,
   });
 
   oauthClient.setToken({
@@ -74,12 +75,24 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
+  const user = await requireAuth(req, res);
+  if (!user) return;
+
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return res.status(500).json({ error: 'Server misconfigured: missing SUPABASE_SERVICE_ROLE_KEY' });
   }
 
-  const { company_id, sync_type = 'all' } = req.body || {};
-  if (!company_id) return res.status(400).json({ error: 'Missing company_id' });
+  // Derive company_id from authenticated user — never trust caller-supplied value
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('company_id')
+    .eq('id', user.id)
+    .single();
+
+  const company_id = profile?.company_id;
+  if (!company_id) return res.status(403).json({ error: 'No company associated with this account' });
+
+  const { sync_type = 'all' } = req.body || {};
 
   // Load company QB tokens
   const { data: company, error: companyError } = await supabase
