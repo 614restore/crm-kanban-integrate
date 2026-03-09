@@ -2,15 +2,25 @@ import { requireAuth } from './_auth-middleware.mjs';
 
 const SENDER = '614 Restore <scopemgr@614restore.com>';
 
-function setCors(res) {
-  const allowedOrigin = process.env.APP_URL || '';
-  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+const ALLOWED_ORIGINS = [
+  'https://crm-kanban-integrate.vercel.app',
+  'http://localhost:8080',
+  'http://localhost:5173',
+  'http://localhost:3000',
+];
+
+function setCors(req, res) {
+  const origin = req.headers.origin || '';
+  const allowed = ALLOWED_ORIGINS.includes(origin)
+    ? origin
+    : (process.env.APP_URL || 'https://crm-kanban-integrate.vercel.app');
+  res.setHeader('Access-Control-Allow-Origin', allowed);
   res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 }
 
 export default async function handler(req, res) {
-  setCors(res);
+  setCors(req, res);
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -59,4 +69,3 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: error?.message || String(error) });
   }
 }
-
