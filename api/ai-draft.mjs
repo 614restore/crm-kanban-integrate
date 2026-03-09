@@ -9,11 +9,11 @@ export default async function handler(req, res) {
   const user = await requireAuth(req, res);
   if (!user) return;
 
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
     return res.status(503).json({
       error: 'AI not configured',
-      message: 'Add OPENAI_API_KEY to your Vercel environment variables to enable AI drafting.',
+      message: 'Add GROQ_API_KEY to your Vercel environment variables to enable AI drafting.',
     });
   }
 
@@ -34,14 +34,14 @@ ${context ? `Context: ${context}` : ''}
 Reply ONLY with JSON: { "subject": "...", "body": "..." }`;
 
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'llama-3.3-70b-versatile',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
@@ -54,8 +54,8 @@ Reply ONLY with JSON: { "subject": "...", "body": "..." }`;
     if (!response.ok) {
       const err = await response.json();
       return res.status(502).json({
-        error: 'OpenAI error',
-        message: err.error?.message || 'Unknown error from OpenAI',
+        error: 'Groq error',
+        message: err.error?.message || 'Unknown error from Groq',
       });
     }
 
