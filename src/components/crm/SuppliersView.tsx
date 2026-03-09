@@ -138,7 +138,7 @@ export default function SuppliersView() {
         dispatch({ type: 'SET_COMPANY_ID', payload: data.company_id });
         return data.company_id;
       }
-    } catch (_) { /* ignore network errors */ }
+    } catch (e) { console.warn('[SuppliersView] Could not resolve company_id:', e); }
     return null;
   };
 

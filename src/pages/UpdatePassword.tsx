@@ -81,7 +81,7 @@ export default function UpdatePassword() {
             } else {
                 setSuccess('Password updated successfully! Redirecting...');
                 setTimeout(() => {
-                    try { sessionStorage.removeItem('pending_password_reset'); } catch (_) { /* ignore */ }
+                    try { sessionStorage.removeItem('pending_password_reset'); } catch (e) { console.warn('[UpdatePassword] sessionStorage cleanup failed:', e); }
                     window.location.href = window.location.origin + (import.meta.env.BASE_URL || '/');
                 }, 2000);
             }

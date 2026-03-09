@@ -11,7 +11,7 @@ if (typeof window !== 'undefined') {
     if (params.get('type') === 'recovery' || hash.includes('type=recovery')) {
       sessionStorage.setItem('pending_password_reset', 'true');
     }
-  } catch (_) { /* ignore */ }
+  } catch (e) { console.warn('[supabase] Could not parse recovery URL params:', e); }
 }
 
 // Environment variable configuration - REQUIRED FOR SECURITY

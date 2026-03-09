@@ -60,7 +60,7 @@ const getInitialView = (): ViewType => {
   try {
     const saved = sessionStorage.getItem('crm_current_view');
     if (saved) return saved as ViewType;
-  } catch (_) { /* ignore */ }
+  } catch (e) { console.warn('[AppLayout] sessionStorage read failed (private browsing?):', e); }
   return 'dashboard';
 };
 
@@ -404,7 +404,7 @@ function CRMApp() {
   const [state, dispatch] = useReducer(crmReducer, initialState);
   const [subscriptionBlocked, setSubscriptionBlocked] = useState(false);
   useEffect(() => {
-    try { sessionStorage.setItem('crm_current_view', state.currentView); } catch (_) { /* ignore */ }
+    try { sessionStorage.setItem('crm_current_view', state.currentView); } catch (e) { console.warn('[AppLayout] sessionStorage write failed (private browsing?):', e); }
   }, [state.currentView]);
   const realtimeFailedRef = useRef(false);
   const isReloadingRef = useRef(false);

@@ -162,7 +162,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(session?.user ?? null);
         setIsPasswordReset(true);
         setLoading(false);
-        try { sessionStorage.removeItem('pending_password_reset'); } catch (_) { /* ignore */ }
+        try { sessionStorage.removeItem('pending_password_reset'); } catch (e) { console.warn('[authContext] sessionStorage cleanup failed:', e); }
         return;
       }
 
