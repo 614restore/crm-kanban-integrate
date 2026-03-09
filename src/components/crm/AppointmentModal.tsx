@@ -339,7 +339,7 @@ export default function AppointmentModal({
           const shouldAdvanceStatus =
             contact.status === 'prospect' || contact.status === 'lead';
           if (shouldAdvanceStatus) {
-            db.updateContact(contactId, { status: 'appt_set' }).catch(
+            db.updateContact(contactId, { status: 'appt_set', status_changed_at: new Date().toISOString() }).catch(
               (err) => console.error('Failed to update contact status:', err)
             );
             dispatch({

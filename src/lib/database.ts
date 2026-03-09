@@ -41,6 +41,7 @@ export interface DbContact {
   state?: string;
   zip?: string;
   status: string;
+  status_changed_at?: string;
   lead_source?: string;
   assigned_to?: string;
   tags: string[];

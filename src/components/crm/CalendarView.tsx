@@ -220,6 +220,7 @@ export default function CalendarView() {
         const now = new Date().toISOString();
         await db.updateContact(appointment.contactId, {
           status: 'inspection_completed',
+          status_changed_at: now,
           inspectionCompleted: true,
           inspectionCompletedDate: now,
         }).catch((err) => console.error('Failed to advance contact status:', err));

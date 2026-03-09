@@ -52,6 +52,7 @@ export interface Contact {
   state: string;
   zip: string;
   status: CustomerStatus;
+  statusChangedAt?: string;
   leadSource: string;
   assignedTo: string;
   createdAt: string;

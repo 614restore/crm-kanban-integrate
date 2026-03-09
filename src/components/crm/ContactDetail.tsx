@@ -422,7 +422,7 @@ export default function ContactDetail() {
         return;
       }
 
-      const updated = await db.updateContact(contact.id, { status: newStatus });
+      const updated = await db.updateContact(contact.id, { status: newStatus, status_changed_at: new Date().toISOString() });
       if (!updated) {
         toast.error('Failed to update status');
         return;

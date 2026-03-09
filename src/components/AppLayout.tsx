@@ -218,6 +218,7 @@ function dbContactToAppContact(dbContact: any): Contact {
     assignedTo: dbContact.assigned_to || '',
     createdAt: dbContact.created_at,
     updatedAt: dbContact.updated_at,
+    statusChangedAt: dbContact.status_changed_at,
     tags: dbContact.tags || [],
     insuranceCompany: dbContact.insurance_company,
     policyNumber: dbContact.policy_number,

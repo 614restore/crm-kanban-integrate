@@ -28,6 +28,16 @@ import {
   ArrowDown,
 } from 'lucide-react';
 
+function getStageAlert(contact: Contact): { label: string; className: string } | null {
+  const since = contact.statusChangedAt || contact.updatedAt || contact.createdAt;
+  if (!since) return null;
+  const days = Math.floor((Date.now() - new Date(since).getTime()) / (1000 * 60 * 60 * 24));
+  if (days >= 21) return { label: `${days}d`, className: 'bg-red-100 text-red-700 border border-red-300 animate-pulse' };
+  if (days >= 14) return { label: `${days}d`, className: 'bg-orange-100 text-orange-700 border border-orange-300' };
+  if (days >= 7)  return { label: `${days}d`, className: 'bg-yellow-100 text-yellow-700 border border-yellow-300' };
+  return null;
+}
+
 export default function PipelineBoard() {
   const { state, dispatch } = useCRM();
   const { profile } = useAuth();
@@ -68,7 +78,7 @@ export default function PipelineBoard() {
     if (draggedContact && draggedContact.status !== column.status) {
       try {
         if (effectiveCompanyId) {
-          await db.updateContact(draggedContact.id, { status: column.status });
+          await db.updateContact(draggedContact.id, { status: column.status, status_changed_at: new Date().toISOString() });
         }
 
         dispatch({
@@ -423,8 +433,9 @@ export default function PipelineBoard() {
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-2 space-y-2">
-                  {contacts.map((contact) => {
+                        {contacts.map((contact) => {
                     const assignee = state.teamMembers.find((tm) => tm.id === contact.assignedTo);
+                    const stageAlert = getStageAlert(contact);
                     return (
                       <div
                         key={contact.id}
@@ -485,6 +496,13 @@ export default function PipelineBoard() {
                                 +{contact.tags.length - 2}
                               </span>
                             )}
+                          </div>
+                        )}
+                        {stageAlert && (
+                          <div className="mt-2 flex items-center justify-between">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${stageAlert.className}`}>
+                              ⚠ {stageAlert.label} in stage
+                            </span>
                           </div>
                         )}
                       </div>

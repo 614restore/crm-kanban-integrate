@@ -249,7 +249,7 @@ export function crmReducer(state: CRMState, action: CRMAction): CRMState {
         ...state,
         contacts: state.contacts.map((c) =>
           c.id === action.payload.contactId
-            ? { ...c, status: action.payload.status, updatedAt: new Date().toISOString() }
+            ? { ...c, status: action.payload.status, statusChangedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
             : c
         ),
       };
