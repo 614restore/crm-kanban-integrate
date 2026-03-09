@@ -90,13 +90,10 @@ const DocumentTemplates: React.FC = () => {
   // ── Folder state ────────────────────────────────────────────────────────
   // 'all' = show everything; 'cat:CATEGORY_ID' = system folder; custom string = user folder
   const [selectedFolder, setSelectedFolder] = useState<string>('all');
-  const [customFolders, setCustomFolders] = useState<string[]>(() => {
-    try { return JSON.parse(localStorage.getItem('dt_custom_folders') || '[]'); } catch { return []; }
-  });
+  const [customFolders, setCustomFolders] = useState<string[]>([]);
   // templateFolderMap: templateId → custom folder name
-  const [templateFolderMap, setTemplateFolderMap] = useState<Record<string, string>>(() => {
-    try { return JSON.parse(localStorage.getItem('dt_folder_map') || '{}'); } catch { return {}; }
-  });
+  const [templateFolderMap, setTemplateFolderMap] = useState<Record<string, string>>({});
+  const [folderPrefsLoaded, setFolderPrefsLoaded] = useState(false);
   const [showNewFolderInput, setShowNewFolderInput] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [movingTemplateId, setMovingTemplateId] = useState<string | null>(null);
@@ -123,6 +120,57 @@ const DocumentTemplates: React.FC = () => {
     window.addEventListener('crm-company-updated', onCompanyUpdated);
     return () => window.removeEventListener('crm-company-updated', onCompanyUpdated);
   }, [profile?.company_id]);
+
+  // Load folder prefs from profile.ui_prefs (fall back to localStorage for migration)
+  useEffect(() => {
+    if (!profile?.id) return;
+    const prefs = (profile as any).ui_prefs as Record<string, unknown> | undefined;
+    if (prefs) {
+      try {
+        const folders = prefs.dt_custom_folders;
+        const folderMap = prefs.dt_folder_map;
+        if (Array.isArray(folders)) setCustomFolders(folders as string[]);
+        else {
+          // one-time migration from localStorage
+          const stored = localStorage.getItem('dt_custom_folders');
+          if (stored) setCustomFolders(JSON.parse(stored));
+        }
+        if (folderMap && typeof folderMap === 'object') {
+          setTemplateFolderMap(folderMap as Record<string, string>);
+        } else {
+          const stored = localStorage.getItem('dt_folder_map');
+          if (stored) setTemplateFolderMap(JSON.parse(stored));
+        }
+      } catch {
+        // ignore corrupted prefs
+      }
+    } else {
+      // Profile doesn't have ui_prefs yet — try legacy localStorage
+      try {
+        const folders = localStorage.getItem('dt_custom_folders');
+        const folderMap = localStorage.getItem('dt_folder_map');
+        if (folders) setCustomFolders(JSON.parse(folders));
+        if (folderMap) setTemplateFolderMap(JSON.parse(folderMap));
+      } catch {
+        // ignore
+      }
+    }
+    setFolderPrefsLoaded(true);
+  }, [profile?.id]);
+
+  // Persist folder prefs to Supabase whenever they change (after initial load)
+  useEffect(() => {
+    if (!folderPrefsLoaded || !profile?.id) return;
+    const prefs: Record<string, unknown> = {
+      ...((profile as any).ui_prefs ?? {}),
+      dt_custom_folders: customFolders,
+      dt_folder_map: templateFolderMap,
+    };
+    db.saveUiPrefs(profile.id, prefs);
+    // Clean up legacy localStorage entries
+    localStorage.removeItem('dt_custom_folders');
+    localStorage.removeItem('dt_folder_map');
+  }, [customFolders, templateFolderMap, folderPrefsLoaded, profile?.id]);
 
   // Template categories for contractors
   const templateCategories = [
@@ -2485,16 +2533,6 @@ const DocumentTemplates: React.FC = () => {
 
     setFilteredTemplates(filtered);
   }, [templates, filters, searchQuery, selectedFolder, templateFolderMap]);
-
-  // Persist custom folders to localStorage
-  useEffect(() => {
-    localStorage.setItem('dt_custom_folders', JSON.stringify(customFolders));
-  }, [customFolders]);
-
-  // Persist folder assignments to localStorage
-  useEffect(() => {
-    localStorage.setItem('dt_folder_map', JSON.stringify(templateFolderMap));
-  }, [templateFolderMap]);
 
   // Toggle favorite
   const toggleFavorite = (templateId: string) => {

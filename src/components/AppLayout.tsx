@@ -968,6 +968,27 @@ function CRMApp() {
             onClick={() => {
               setSubscriptionBlocked(false);
               dispatch({ type: 'SET_VIEW', payload: 'settings' });
+              // Navigate to billing tab after SettingsView mounts
+              window.setTimeout(() => {
+                window.dispatchEvent(
+                  new CustomEvent('crm-open-settings-tab', { detail: { tab: 'billing' } })
+                );
+              }, 50);
+              // Re-verify subscription status after a short delay to prevent long-term bypass
+              window.setTimeout(() => {
+                if (profile?.company_id) {
+                  db.getCompany(profile.company_id).then((company) => {
+                    if (!company) return;
+                    const isBlocked =
+                      company.subscription_status === 'canceled' ||
+                      company.subscription_status === 'past_due' ||
+                      (company.subscription_status === 'trialing' &&
+                        !!company.trial_ends_at &&
+                        new Date(company.trial_ends_at) < new Date());
+                    setSubscriptionBlocked(isBlocked);
+                  });
+                }
+              }, 5000);
             }}
             className="inline-block w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg px-6 py-3 text-sm transition-colors"
           >

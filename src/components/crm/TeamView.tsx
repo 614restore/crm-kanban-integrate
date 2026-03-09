@@ -234,6 +234,17 @@ export default function TeamView() {
       return;
     }
 
+    // Validate commission rates are within 0–100 before saving
+    const rateFields = [
+      selectedMember.commission_rate_self_gen ?? 0,
+      selectedMember.commission_rate_company  ?? 0,
+      selectedMember.commission_rate_custom   ?? 0,
+    ];
+    if (rateFields.some((r) => r < 0 || r > 100)) {
+      toast.error('Commission rates must be between 0% and 100%');
+      return;
+    }
+
     setIsSavingMember(true);
     try {
       const [firstName, ...lastParts] = selectedMember.name.trim().split(/\s+/);

@@ -215,6 +215,7 @@ export interface DbProfile {
   commission_rate_custom?: number;    // custom/override %
   member_type?: 'employee' | 'subcontractor';
   subcontractor_company?: string;
+  ui_prefs?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
 }
@@ -1400,6 +1401,17 @@ class DatabaseService {
       return null;
     }
     return data;
+  }
+
+  /** Persist per-user UI preferences (e.g. document template folder state). */
+  async saveUiPrefs(profileId: string, prefs: Record<string, unknown>): Promise<void> {
+    const { error } = await supabase
+      .from('profiles')
+      .update({ ui_prefs: prefs, updated_at: new Date().toISOString() })
+      .eq('id', profileId);
+    if (error) {
+      console.error('Error saving ui_prefs:', error);
+    }
   }
 
   // Invite operations

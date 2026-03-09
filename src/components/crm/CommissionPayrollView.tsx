@@ -101,13 +101,14 @@ export default function CommissionPayrollView() {
     try {
       // Load profiles with commission_rate for sales roles
       const { data: profiles, error: profilesError } = await withTimeout(
-        supabase
-          .from('profiles')
-          .select('id, first_name, last_name, email, role, commission_rate_self_gen, commission_rate_company, commission_rate_custom')
-          .eq('company_id', companyId)
-          .eq('is_active', true)
-          .in('role', ['owner', 'admin', 'manager', 'sales', 'canvas'])
-          .then((r) => r) as Promise<any>,
+        Promise.resolve(
+          supabase
+            .from('profiles')
+            .select('id, first_name, last_name, email, role, commission_rate_self_gen, commission_rate_company, commission_rate_custom')
+            .eq('company_id', companyId)
+            .eq('is_active', true)
+            .in('role', ['owner', 'admin', 'manager', 'sales', 'canvas'])
+        ) as Promise<any>,
         10000,
         'loadCommissionProfiles'
       ) as { data: any[] | null; error: any };
@@ -115,14 +116,15 @@ export default function CommissionPayrollView() {
 
       // Load commissionable contacts in date range
       const { data: contacts, error: contactsError } = await withTimeout(
-        supabase
-          .from('contacts')
-          .select('id, first_name, last_name, status, project_value, assigned_to, updated_at, address, city, state, lead_source')
-          .eq('company_id', companyId)
-          .in('status', COMMISSIONABLE_STATUSES)
-          .gte('updated_at', `${dateFrom}T00:00:00.000Z`)
-          .lte('updated_at', `${dateTo}T23:59:59.999Z`)
-          .then((r) => r) as Promise<any>,
+        Promise.resolve(
+          supabase
+            .from('contacts')
+            .select('id, first_name, last_name, status, project_value, assigned_to, updated_at, address, city, state, lead_source')
+            .eq('company_id', companyId)
+            .in('status', COMMISSIONABLE_STATUSES)
+            .gte('updated_at', `${dateFrom}T00:00:00.000Z`)
+            .lte('updated_at', `${dateTo}T23:59:59.999Z`)
+        ) as Promise<any>,
         10000,
         'loadCommissionContacts'
       ) as { data: any[] | null; error: any };
