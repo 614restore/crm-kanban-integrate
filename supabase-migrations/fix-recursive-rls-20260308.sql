@@ -511,3 +511,79 @@ CREATE POLICY "expense_receipts_delete"
         AND (storage.foldername(name))[1] = profiles.company_id::text
     )
   );
+
+-- ============================================================
+-- ROUND 4: Drop _tenant_ policies missed in previous rounds
+-- These tables had "tablename_tenant_*" named policies using
+-- get_my_company_id() — never dropped, causing timeout on writes.
+-- ============================================================
+
+-- ── material_orders ───────────────────────────────────────────
+DROP POLICY IF EXISTS "material_orders_tenant_select" ON material_orders;
+DROP POLICY IF EXISTS "material_orders_tenant_insert" ON material_orders;
+DROP POLICY IF EXISTS "material_orders_tenant_update" ON material_orders;
+DROP POLICY IF EXISTS "material_orders_tenant_delete" ON material_orders;
+DROP POLICY IF EXISTS "company_members_material_orders" ON material_orders;
+CREATE POLICY "company_members_material_orders" ON material_orders FOR ALL
+  USING (EXISTS (SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.company_id = material_orders.company_id))
+  WITH CHECK (EXISTS (SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.company_id = material_orders.company_id));
+
+-- ── estimates ─────────────────────────────────────────────────
+DROP POLICY IF EXISTS "estimates_tenant_select" ON estimates;
+DROP POLICY IF EXISTS "estimates_tenant_insert" ON estimates;
+DROP POLICY IF EXISTS "estimates_tenant_update" ON estimates;
+DROP POLICY IF EXISTS "estimates_tenant_delete" ON estimates;
+DROP POLICY IF EXISTS "company_members_estimates" ON estimates;
+CREATE POLICY "company_members_estimates" ON estimates FOR ALL
+  USING (EXISTS (SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.company_id = estimates.company_id))
+  WITH CHECK (EXISTS (SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.company_id = estimates.company_id));
+
+-- ── suppliers ─────────────────────────────────────────────────
+DROP POLICY IF EXISTS "suppliers_tenant_select" ON suppliers;
+DROP POLICY IF EXISTS "suppliers_tenant_insert" ON suppliers;
+DROP POLICY IF EXISTS "suppliers_tenant_update" ON suppliers;
+DROP POLICY IF EXISTS "suppliers_tenant_delete" ON suppliers;
+DROP POLICY IF EXISTS "company_members_suppliers" ON suppliers;
+CREATE POLICY "company_members_suppliers" ON suppliers FOR ALL
+  USING (EXISTS (SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.company_id = suppliers.company_id))
+  WITH CHECK (EXISTS (SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.company_id = suppliers.company_id));
+
+-- ── work_orders ───────────────────────────────────────────────
+DROP POLICY IF EXISTS "work_orders_tenant_select" ON work_orders;
+DROP POLICY IF EXISTS "work_orders_tenant_insert" ON work_orders;
+DROP POLICY IF EXISTS "work_orders_tenant_update" ON work_orders;
+DROP POLICY IF EXISTS "work_orders_tenant_delete" ON work_orders;
+DROP POLICY IF EXISTS "company_members_work_orders" ON work_orders;
+CREATE POLICY "company_members_work_orders" ON work_orders FOR ALL
+  USING (EXISTS (SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.company_id = work_orders.company_id))
+  WITH CHECK (EXISTS (SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.company_id = work_orders.company_id));
+
+-- ── projects ──────────────────────────────────────────────────
+DROP POLICY IF EXISTS "projects_tenant_select" ON projects;
+DROP POLICY IF EXISTS "projects_tenant_insert" ON projects;
+DROP POLICY IF EXISTS "projects_tenant_update" ON projects;
+DROP POLICY IF EXISTS "projects_tenant_delete" ON projects;
+DROP POLICY IF EXISTS "company_members_projects" ON projects;
+CREATE POLICY "company_members_projects" ON projects FOR ALL
+  USING (EXISTS (SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.company_id = projects.company_id))
+  WITH CHECK (EXISTS (SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.company_id = projects.company_id));
+
+-- ── insurance_claims ──────────────────────────────────────────
+DROP POLICY IF EXISTS "insurance_claims_tenant_select" ON insurance_claims;
+DROP POLICY IF EXISTS "insurance_claims_tenant_insert" ON insurance_claims;
+DROP POLICY IF EXISTS "insurance_claims_tenant_update" ON insurance_claims;
+DROP POLICY IF EXISTS "insurance_claims_tenant_delete" ON insurance_claims;
+DROP POLICY IF EXISTS "company_members_insurance_claims" ON insurance_claims;
+CREATE POLICY "company_members_insurance_claims" ON insurance_claims FOR ALL
+  USING (EXISTS (SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.company_id = insurance_claims.company_id))
+  WITH CHECK (EXISTS (SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.company_id = insurance_claims.company_id));
+
+-- ── supplements ───────────────────────────────────────────────
+DROP POLICY IF EXISTS "supplements_tenant_select" ON supplements;
+DROP POLICY IF EXISTS "supplements_tenant_insert" ON supplements;
+DROP POLICY IF EXISTS "supplements_tenant_update" ON supplements;
+DROP POLICY IF EXISTS "supplements_tenant_delete" ON supplements;
+DROP POLICY IF EXISTS "company_members_supplements" ON supplements;
+CREATE POLICY "company_members_supplements" ON supplements FOR ALL
+  USING (EXISTS (SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.company_id = supplements.company_id))
+  WITH CHECK (EXISTS (SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.company_id = supplements.company_id));
