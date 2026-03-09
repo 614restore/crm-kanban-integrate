@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { Automation } from '@/lib/crmData';
 import { db } from '@/lib/database';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/authContext';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -28,19 +30,247 @@ import {
   Calendar,
   ArrowRight,
   CheckCircle,
-  XCircle,
   Settings,
+  HardHat,
+  UserCheck,
+  ChevronDown,
+  ChevronUp,
+  X,
 } from 'lucide-react';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface RecipientOption {
+  id: string;
+  label: string;
+  sub: string;
+  type: 'contact' | 'team' | 'subcontractor';
+  email?: string | null;
+  phone?: string | null;
+}
+
+interface AutomationRecipient {
+  recipientType: 'contact' | 'team' | 'subcontractor';
+  recipientId: string;
+  label: string;
+}
+
+// ─── Recipient Picker ─────────────────────────────────────────────────────────
+
+interface RecipientPickerProps {
+  companyId: string;
+  contacts: { id: string; firstName: string; lastName: string; email?: string }[];
+  selected: AutomationRecipient[];
+  onChange: (recipients: AutomationRecipient[]) => void;
+}
+
+function RecipientPicker({ companyId, contacts, selected, onChange }: RecipientPickerProps) {
+  const [tab, setTab] = useState<'contact' | 'team' | 'subcontractor'>('contact');
+  const [teamMembers, setTeamMembers] = useState<RecipientOption[]>([]);
+  const [subcontractors, setSubcontractors] = useState<RecipientOption[]>([]);
+  const [search, setSearch] = useState('');
+  const [expanded, setExpanded] = useState(false);
+
+  const loadTeam = useCallback(async () => {
+    if (!companyId) return;
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, full_name, role, email')
+      .eq('company_id', companyId)
+      .order('full_name');
+    setTeamMembers(
+      (data ?? []).map(p => ({
+        id: p.id,
+        label: p.full_name,
+        sub: p.role ?? 'Team Member',
+        type: 'team',
+        email: p.email,
+      }))
+    );
+  }, [companyId]);
+
+  const loadSubs = useCallback(async () => {
+    if (!companyId) return;
+    const { data } = await supabase
+      .from('subcontractor_crews')
+      .select('id, company_name, contact_name, email, phone, trade')
+      .eq('company_id', companyId)
+      .eq('is_active', true)
+      .order('company_name');
+    setSubcontractors(
+      (data ?? []).map(s => ({
+        id: s.id,
+        label: s.company_name,
+        sub: [s.contact_name, s.trade].filter(Boolean).join(' · ') || 'Subcontractor',
+        type: 'subcontractor',
+        email: s.email,
+        phone: s.phone,
+      }))
+    );
+  }, [companyId]);
+
+  useEffect(() => {
+    if (expanded) {
+      loadTeam();
+      loadSubs();
+    }
+  }, [expanded, loadTeam, loadSubs]);
+
+  const contactOptions: RecipientOption[] = contacts.map(c => ({
+    id: c.id,
+    label: `${c.firstName} ${c.lastName}`.trim(),
+    sub: c.email ?? 'Customer',
+    type: 'contact',
+    email: c.email,
+  }));
+
+  const listByTab: Record<string, RecipientOption[]> = {
+    contact: contactOptions,
+    team: teamMembers,
+    subcontractor: subcontractors,
+  };
+
+  const filtered = (listByTab[tab] ?? []).filter(o =>
+    o.label.toLowerCase().includes(search.toLowerCase()) ||
+    o.sub.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const isSelected = (id: string) => selected.some(s => s.recipientId === id);
+
+  const toggle = (opt: RecipientOption) => {
+    if (isSelected(opt.id)) {
+      onChange(selected.filter(s => s.recipientId !== opt.id));
+    } else {
+      onChange([...selected, { recipientType: opt.type, recipientId: opt.id, label: opt.label }]);
+    }
+  };
+
+  const removeChip = (id: string) => onChange(selected.filter(s => s.recipientId !== id));
+
+  const tabDef = [
+    { id: 'contact', label: 'Customers', icon: Users },
+    { id: 'team', label: 'Team', icon: UserCheck },
+    { id: 'subcontractor', label: 'Subcontractors', icon: HardHat },
+  ] as const;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <label className="text-sm font-medium text-gray-700">Send To (Recipients)</label>
+        <button
+          type="button"
+          onClick={() => setExpanded(v => !v)}
+          className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800"
+        >
+          {expanded ? <><ChevronUp size={12} /> Hide</> : <><ChevronDown size={12} /> Select recipients</>}
+        </button>
+      </div>
+
+      {/* Selected chips */}
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {selected.map(r => (
+            <span
+              key={r.recipientId}
+              className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full font-medium"
+            >
+              {r.label}
+              <button type="button" onClick={() => removeChip(r.recipientId)} className="hover:text-blue-600">
+                <X size={10} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {selected.length === 0 && !expanded && (
+        <p className="text-xs text-gray-400 italic">No recipients selected — automation will run without a specific recipient.</p>
+      )}
+
+      {expanded && (
+        <div className="border border-gray-200 rounded-lg overflow-hidden">
+          {/* Tabs */}
+          <div className="flex border-b border-gray-200 bg-gray-50">
+            {tabDef.map(t => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setTab(t.id)}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium transition-colors ${
+                  tab === t.id ? 'bg-white text-blue-700 border-b-2 border-blue-500' : 'text-gray-500 hover:text-gray-800'
+                }`}
+              >
+                <t.icon size={12} />
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Search */}
+          <div className="px-3 py-2 border-b border-gray-100">
+            <input
+              type="text"
+              placeholder={`Search ${tab === 'contact' ? 'customers' : tab === 'team' ? 'team members' : 'subcontractors'}…`}
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* List */}
+          <div className="max-h-48 overflow-y-auto divide-y divide-gray-50">
+            {filtered.length === 0 ? (
+              <p className="px-3 py-4 text-xs text-gray-400 text-center">
+                {tab === 'subcontractor'
+                  ? 'No subcontractors found. Add them in Crew Schedule → Manage Subcontractors.'
+                  : 'No results found.'}
+              </p>
+            ) : (
+              filtered.map(opt => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => toggle(opt)}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-gray-50 transition-colors ${
+                    isSelected(opt.id) ? 'bg-blue-50' : ''
+                  }`}
+                >
+                  <div
+                    className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 ${
+                      isSelected(opt.id) ? 'bg-blue-600 border-blue-600' : 'border-gray-300'
+                    }`}
+                  >
+                    {isSelected(opt.id) && <CheckCircle size={12} className="text-white" />}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-gray-900 truncate">{opt.label}</p>
+                    <p className="text-xs text-gray-400 truncate">{opt.sub}</p>
+                  </div>
+                  {opt.type === 'subcontractor' && (
+                    <span className="ml-auto shrink-0 px-1.5 py-0.5 bg-orange-100 text-orange-600 text-xs rounded-full">Sub</span>
+                  )}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Main View ────────────────────────────────────────────────────────────────
 
 export default function AutomationsView() {
   const { state, dispatch } = useCRM();
+  const { profile } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterActive, setFilterActive] = useState<'all' | 'active' | 'inactive'>('all');
   const [nameDialog, setNameDialog] = useState<{ type: 'create' | 'edit'; automation?: Automation } | null>(null);
   const [nameValue, setNameValue] = useState('');
   const [nameSaving, setNameSaving] = useState(false);
+  const [recipients, setRecipients] = useState<AutomationRecipient[]>([]);
 
-  // Filter automations
   const filteredAutomations = state.automations.filter((auto) => {
     const matchesSearch =
       searchQuery === '' ||
@@ -57,10 +287,8 @@ export default function AutomationsView() {
   const handleToggleAutomation = (id: string) => {
     const target = state.automations.find((auto) => auto.id === id);
     if (!target) return;
-
     const nextIsActive = !target.isActive;
     dispatch({ type: 'TOGGLE_AUTOMATION', payload: id });
-
     db.updateAutomation(id, { is_active: nextIsActive }).catch((error) => {
       console.error('Failed to persist automation toggle:', error);
       dispatch({ type: 'TOGGLE_AUTOMATION', payload: id });
@@ -69,16 +297,15 @@ export default function AutomationsView() {
   };
 
   const handleCreateAutomation = () => {
-    if (!state.companyId) {
-      toast.error('No company selected');
-      return;
-    }
+    if (!state.companyId) { toast.error('No company selected'); return; }
     setNameValue('New Automation');
+    setRecipients([]);
     setNameDialog({ type: 'create' });
   };
 
   const handleEditAutomation = (automation: Automation) => {
     setNameValue(automation.name);
+    setRecipients([]);
     setNameDialog({ type: 'edit', automation });
   };
 
@@ -95,6 +322,7 @@ export default function AutomationsView() {
           action_type: 'send notification',
           is_active: false,
           created_by: state.currentUser?.id,
+          recipients: recipients.length > 0 ? recipients : undefined,
         });
         if (!created) { toast.error('Failed to create automation'); return; }
         dispatch({
@@ -107,8 +335,10 @@ export default function AutomationsView() {
         toast.success('Automation created');
       } else if (nameDialog?.automation) {
         const automation = nameDialog.automation;
-        if (trimmed === automation.name) { setNameDialog(null); return; }
-        const updated = await db.updateAutomation(automation.id, { name: trimmed });
+        const updated = await db.updateAutomation(automation.id, {
+          name: trimmed,
+          recipients: recipients.length > 0 ? recipients : undefined,
+        });
         if (!updated) { toast.error('Failed to update automation'); return; }
         dispatch({
           type: 'SET_AUTOMATIONS',
@@ -170,9 +400,7 @@ export default function AutomationsView() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Workflow Automations</h2>
-          <p className="text-gray-500 mt-1">
-            {activeCount} active, {inactiveCount} inactive automations
-          </p>
+          <p className="text-gray-500 mt-1">{activeCount} active, {inactiveCount} inactive automations</p>
         </div>
         <button
           onClick={handleCreateAutomation}
@@ -233,21 +461,15 @@ export default function AutomationsView() {
           />
         </div>
         <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
-          {[
-            { id: 'all', label: 'All' },
-            { id: 'active', label: 'Active' },
-            { id: 'inactive', label: 'Inactive' },
-          ].map((filter) => (
+          {(['all', 'active', 'inactive'] as const).map((f) => (
             <button
-              key={filter.id}
-              onClick={() => setFilterActive(filter.id as 'all' | 'active' | 'inactive')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                filterActive === filter.id
-                  ? 'bg-white shadow-sm text-gray-900'
-                  : 'text-gray-600 hover:text-gray-900'
+              key={f}
+              onClick={() => setFilterActive(f)}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors capitalize ${
+                filterActive === f ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600 hover:text-gray-900'
               }`}
             >
-              {filter.label}
+              {f}
             </button>
           ))}
         </div>
@@ -264,40 +486,27 @@ export default function AutomationsView() {
           >
             <div className="flex items-start justify-between">
               <div className="flex items-start gap-4">
-                <div
-                  className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                    automation.isActive ? 'bg-green-100' : 'bg-gray-100'
-                  }`}
-                >
-                  <Zap
-                    size={24}
-                    className={automation.isActive ? 'text-green-600' : 'text-gray-400'}
-                  />
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                  automation.isActive ? 'bg-green-100' : 'bg-gray-100'
+                }`}>
+                  <Zap size={24} className={automation.isActive ? 'text-green-600' : 'text-gray-400'} />
                 </div>
                 <div>
                   <div className="flex items-center gap-3">
                     <h3 className="text-lg font-semibold text-gray-900">{automation.name}</h3>
-                    <span
-                      className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                        automation.isActive
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-gray-100 text-gray-600'
-                      }`}
-                    >
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                      automation.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
+                    }`}>
                       {automation.isActive ? 'Active' : 'Paused'}
                     </span>
                   </div>
 
                   <div className="mt-4 flex items-center gap-4">
-                    {/* Trigger */}
                     <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 rounded-lg">
                       {getTriggerIcon(automation.trigger)}
                       <span className="text-sm text-gray-700">{automation.trigger}</span>
                     </div>
-
                     <ArrowRight size={20} className="text-gray-400" />
-
-                    {/* Action */}
                     <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 rounded-lg">
                       {getActionIcon(automation.action)}
                       <span className="text-sm text-blue-700">{automation.action}</span>
@@ -307,30 +516,22 @@ export default function AutomationsView() {
               </div>
 
               <div className="flex items-center gap-2">
-                {/* Toggle Switch */}
                 <button
                   onClick={() => handleToggleAutomation(automation.id)}
                   className={`relative w-12 h-6 rounded-full transition-colors ${
                     automation.isActive ? 'bg-green-500' : 'bg-gray-300'
                   }`}
                 >
-                  <div
-                    className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
-                      automation.isActive ? 'translate-x-7' : 'translate-x-1'
-                    }`}
-                  />
+                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                    automation.isActive ? 'translate-x-7' : 'translate-x-1'
+                  }`} />
                 </button>
-
-                <button
-                  onClick={() => handleEditAutomation(automation)}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                >
+                <button onClick={() => handleEditAutomation(automation)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
                   <Edit2 size={16} className="text-gray-500" />
                 </button>
-                <button
-                  onClick={() => handleDeleteAutomation(automation)}
-                  className="p-2 hover:bg-red-100 rounded-lg transition-colors"
-                >
+                <button onClick={() => handleDeleteAutomation(automation)}
+                  className="p-2 hover:bg-red-100 rounded-lg transition-colors">
                   <Trash2 size={16} className="text-red-500" />
                 </button>
               </div>
@@ -352,31 +553,12 @@ export default function AutomationsView() {
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Suggested Automations</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {[
-            {
-              name: 'Welcome Series',
-              description: 'Send a series of welcome emails to new leads',
-              icon: <Mail className="text-blue-500" size={20} />,
-            },
-            {
-              name: 'Stale Lead Alert',
-              description: 'Notify sales when a lead has been inactive for 7 days',
-              icon: <Bell className="text-amber-500" size={20} />,
-            },
-            {
-              name: 'Job Completion Survey',
-              description: 'Automatically send satisfaction survey after job completion',
-              icon: <FileText className="text-green-500" size={20} />,
-            },
-            {
-              name: 'Payment Reminder',
-              description: 'Send reminder 3 days before invoice due date',
-              icon: <DollarSign className="text-purple-500" size={20} />,
-            },
+            { name: 'Welcome Series', description: 'Send a series of welcome emails to new leads', icon: <Mail className="text-blue-500" size={20} /> },
+            { name: 'Stale Lead Alert', description: 'Notify sales when a lead has been inactive for 7 days', icon: <Bell className="text-amber-500" size={20} /> },
+            { name: 'Job Completion Survey', description: 'Automatically send satisfaction survey after job completion', icon: <FileText className="text-green-500" size={20} /> },
+            { name: 'Payment Reminder', description: 'Send reminder 3 days before invoice due date', icon: <DollarSign className="text-purple-500" size={20} /> },
           ].map((suggestion, index) => (
-            <div
-              key={index}
-              className="bg-white rounded-lg p-4 border border-gray-200 hover:border-blue-300 cursor-pointer transition-colors"
-            >
+            <div key={index} className="bg-white rounded-lg p-4 border border-gray-200 hover:border-blue-300 cursor-pointer transition-colors">
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
                   {suggestion.icon}
@@ -391,24 +573,39 @@ export default function AutomationsView() {
         </div>
       </div>
 
-      {/* Name dialog for create/edit automation */}
-      <Dialog open={!!nameDialog} onOpenChange={(open) => { if (!open) setNameDialog(null); }}>
-        <DialogContent className="max-w-sm">
+      {/* Create / Edit Dialog */}
+      <Dialog open={!!nameDialog} onOpenChange={(open) => { if (!open) { setNameDialog(null); setRecipients([]); } }}>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>{nameDialog?.type === 'create' ? 'Create Automation' : 'Rename Automation'}</DialogTitle>
+            <DialogTitle>{nameDialog?.type === 'create' ? 'Create Automation' : 'Edit Automation'}</DialogTitle>
           </DialogHeader>
-          <input
-            autoFocus
-            type="text"
-            value={nameValue}
-            onChange={(e) => setNameValue(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') handleNameDialogSave(); }}
-            placeholder="Automation name"
-            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+
+          <div className="space-y-4 py-2">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Automation Name</label>
+              <input
+                autoFocus
+                type="text"
+                value={nameValue}
+                onChange={(e) => setNameValue(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleNameDialogSave(); }}
+                placeholder="Automation name"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            {/* Recipient Picker */}
+            <RecipientPicker
+              companyId={state.companyId ?? ''}
+              contacts={state.contacts}
+              selected={recipients}
+              onChange={setRecipients}
+            />
+          </div>
+
           <DialogFooter>
             <button
-              onClick={() => setNameDialog(null)}
+              onClick={() => { setNameDialog(null); setRecipients([]); }}
               className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
             >
               Cancel
