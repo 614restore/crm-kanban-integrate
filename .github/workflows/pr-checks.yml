@@ -1,0 +1,43 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-check:
+    name: Build & Type Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Production build
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+
+      - name: Verify dist/index.html exists
+        run: test -f dist/index.html && echo "Build OK" || (echo "Build FAILED" && exit 1)
+
+      - name: Gherkin parse check
+        run: |
+          npx @cucumber/cucumber --dry-run \
+            --require-module ts-node/register \
+            'tests/features/**/*.feature' 2>&1 | tee gherkin-check.txt
+          grep -i "parse error" gherkin-check.txt && exit 1 || echo "Gherkin OK"
