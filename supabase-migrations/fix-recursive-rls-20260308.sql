@@ -356,33 +356,7 @@ CREATE POLICY "company_members_estimates"
       AND profiles.company_id = estimates.company_id
   ));
 
--- ── estimate_items ────────────────────────────────────────────
-DROP POLICY IF EXISTS "company_members_estimate_items" ON estimate_items;
-DROP POLICY IF EXISTS "Users can view their company estimate_items" ON estimate_items;
-DROP POLICY IF EXISTS "Users can insert their company estimate_items" ON estimate_items;
-DROP POLICY IF EXISTS "Users can update their company estimate_items" ON estimate_items;
-DROP POLICY IF EXISTS "Users can delete their company estimate_items" ON estimate_items;
-
-CREATE POLICY "company_members_estimate_items"
-  ON estimate_items FOR ALL
-  USING (EXISTS (
-    SELECT 1 FROM estimates
-    WHERE estimates.id = estimate_items.estimate_id
-      AND EXISTS (
-        SELECT 1 FROM profiles
-        WHERE profiles.id = auth.uid()
-          AND profiles.company_id = estimates.company_id
-      )
-  ))
-  WITH CHECK (EXISTS (
-    SELECT 1 FROM estimates
-    WHERE estimates.id = estimate_items.estimate_id
-      AND EXISTS (
-        SELECT 1 FROM profiles
-        WHERE profiles.id = auth.uid()
-          AND profiles.company_id = estimates.company_id
-      )
-  ));
+-- estimate_items: stored as JSONB in estimates table — no separate table
 
 -- ── material_orders ───────────────────────────────────────────
 DROP POLICY IF EXISTS "company_members_material_orders" ON material_orders;
@@ -404,33 +378,7 @@ CREATE POLICY "company_members_material_orders"
       AND profiles.company_id = material_orders.company_id
   ));
 
--- ── material_order_items ──────────────────────────────────────
-DROP POLICY IF EXISTS "company_members_material_order_items" ON material_order_items;
-DROP POLICY IF EXISTS "Users can view their company material_order_items" ON material_order_items;
-DROP POLICY IF EXISTS "Users can insert their company material_order_items" ON material_order_items;
-DROP POLICY IF EXISTS "Users can update their company material_order_items" ON material_order_items;
-DROP POLICY IF EXISTS "Users can delete their company material_order_items" ON material_order_items;
-
-CREATE POLICY "company_members_material_order_items"
-  ON material_order_items FOR ALL
-  USING (EXISTS (
-    SELECT 1 FROM material_orders
-    WHERE material_orders.id = material_order_items.order_id
-      AND EXISTS (
-        SELECT 1 FROM profiles
-        WHERE profiles.id = auth.uid()
-          AND profiles.company_id = material_orders.company_id
-      )
-  ))
-  WITH CHECK (EXISTS (
-    SELECT 1 FROM material_orders
-    WHERE material_orders.id = material_order_items.order_id
-      AND EXISTS (
-        SELECT 1 FROM profiles
-        WHERE profiles.id = auth.uid()
-          AND profiles.company_id = material_orders.company_id
-      )
-  ));
+-- material_order_items: stored as JSONB in material_orders table — no separate table
 
 -- ── suppliers ─────────────────────────────────────────────────
 DROP POLICY IF EXISTS "company_members_suppliers" ON suppliers;
