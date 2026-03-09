@@ -314,6 +314,7 @@ export default function MaterialOrdersView() {
         tax: parseFloat(tax) || 0,
         shipping: parseFloat(shipping) || 0,
         total: parseFloat(total) || 0,
+        description: notes.trim() || '',
         notes: notes.trim() || undefined,
         created_by: profile.id,
       };

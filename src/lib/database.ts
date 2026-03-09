@@ -1904,9 +1904,9 @@ class DatabaseService {
         supabase.from('work_orders').insert([workOrder]).select().single(),
         10000, 'createWorkOrder'
       );
-      if (error) { console.error('Error creating work order:', error); return null; }
+      if (error) throw new Error(error.message);
       return data;
-    } catch (err) { console.error('createWorkOrder timed out or failed:', err); return null; }
+    } catch (err) { console.error('createWorkOrder timed out or failed:', err); throw err; }
   }
 
   async updateWorkOrder(workOrderId: string, updates: Partial<DbWorkOrder>): Promise<DbWorkOrder | null> {
