@@ -35,8 +35,17 @@ jobs:
       - name: Build application
         run: npm run build
         env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || '' }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY || '' }}
+          VITE_STRIPE_PUBLISHABLE_KEY: ${{ secrets.VITE_STRIPE_PUBLISHABLE_KEY || '' }}
+          VITE_STRIPE_STARTER_MONTHLY: ${{ secrets.VITE_STRIPE_STARTER_MONTHLY || '' }}
+          VITE_STRIPE_STARTER_YEARLY: ${{ secrets.VITE_STRIPE_STARTER_YEARLY || '' }}
+          VITE_STRIPE_PRO_MONTHLY: ${{ secrets.VITE_STRIPE_PRO_MONTHLY || '' }}
+          VITE_STRIPE_PRO_YEARLY: ${{ secrets.VITE_STRIPE_PRO_YEARLY || '' }}
+          VITE_STRIPE_BUSINESS_MONTHLY: ${{ secrets.VITE_STRIPE_BUSINESS_MONTHLY || '' }}
+          VITE_STRIPE_BUSINESS_YEARLY: ${{ secrets.VITE_STRIPE_BUSINESS_YEARLY || '' }}
+          VITE_STRIPE_ENTERPRISE_MONTHLY: ${{ secrets.VITE_STRIPE_ENTERPRISE_MONTHLY || '' }}
+          VITE_STRIPE_ENTERPRISE_YEARLY: ${{ secrets.VITE_STRIPE_ENTERPRISE_YEARLY || '' }}
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
