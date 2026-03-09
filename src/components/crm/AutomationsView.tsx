@@ -4,6 +4,13 @@ import { Automation } from '@/lib/crmData';
 import { db } from '@/lib/database';
 import { toast } from 'sonner';
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
   Zap,
   Plus,
   Search,
@@ -29,6 +36,9 @@ export default function AutomationsView() {
   const { state, dispatch } = useCRM();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterActive, setFilterActive] = useState<'all' | 'active' | 'inactive'>('all');
+  const [nameDialog, setNameDialog] = useState<{ type: 'create' | 'edit'; automation?: Automation } | null>(null);
+  const [nameValue, setNameValue] = useState('');
+  const [nameSaving, setNameSaving] = useState(false);
 
   // Filter automations
   const filteredAutomations = state.automations.filter((auto) => {
@@ -58,85 +68,74 @@ export default function AutomationsView() {
     });
   };
 
-  const handleCreateAutomation = async () => {
+  const handleCreateAutomation = () => {
     if (!state.companyId) {
       toast.error('No company selected');
       return;
     }
+    setNameValue('New Automation');
+    setNameDialog({ type: 'create' });
+  };
 
-    const name = window.prompt('Automation name', 'New Automation');
-    if (!name?.trim()) return;
+  const handleEditAutomation = (automation: Automation) => {
+    setNameValue(automation.name);
+    setNameDialog({ type: 'edit', automation });
+  };
 
-    const created = await db.createAutomation({
-      company_id: state.companyId,
-      name: name.trim(),
-      trigger_event: 'status change',
-      action_type: 'send notification',
-      is_active: false,
-      created_by: state.currentUser?.id,
-    });
-
-    if (!created) {
-      toast.error('Failed to create automation');
-      return;
+  const handleNameDialogSave = async () => {
+    const trimmed = nameValue.trim();
+    if (!trimmed) return;
+    setNameSaving(true);
+    try {
+      if (nameDialog?.type === 'create') {
+        const created = await db.createAutomation({
+          company_id: state.companyId!,
+          name: trimmed,
+          trigger_event: 'status change',
+          action_type: 'send notification',
+          is_active: false,
+          created_by: state.currentUser?.id,
+        });
+        if (!created) { toast.error('Failed to create automation'); return; }
+        dispatch({
+          type: 'SET_AUTOMATIONS',
+          payload: [...state.automations, {
+            id: created.id, name: created.name, trigger: created.trigger_event,
+            action: created.action_type, isActive: created.is_active, createdBy: created.created_by || '',
+          }],
+        });
+        toast.success('Automation created');
+      } else if (nameDialog?.automation) {
+        const automation = nameDialog.automation;
+        if (trimmed === automation.name) { setNameDialog(null); return; }
+        const updated = await db.updateAutomation(automation.id, { name: trimmed });
+        if (!updated) { toast.error('Failed to update automation'); return; }
+        dispatch({
+          type: 'SET_AUTOMATIONS',
+          payload: state.automations.map((a) => a.id === automation.id ? { ...a, name: updated.name } : a),
+        });
+        toast.success('Automation updated');
+      }
+      setNameDialog(null);
+    } finally {
+      setNameSaving(false);
     }
+  };
 
-    dispatch({
-      type: 'SET_AUTOMATIONS',
-      payload: [
-        ...state.automations,
-        {
-          id: created.id,
-          name: created.name,
-          trigger: created.trigger_event,
-          action: created.action_type,
-          isActive: created.is_active,
-          createdBy: created.created_by || '',
+  const handleDeleteAutomation = (automation: Automation) => {
+    toast.warning(`Delete "${automation.name}"? This cannot be undone.`, {
+      action: {
+        label: 'Delete',
+        onClick: async () => {
+          const ok = await db.deleteAutomation(automation.id);
+          if (!ok) { toast.error('Failed to delete automation'); return; }
+          dispatch({ type: 'SET_AUTOMATIONS', payload: state.automations.filter((a) => a.id !== automation.id) });
+          toast.success('Automation deleted');
         },
-      ],
+      },
+      cancel: { label: 'Cancel' },
+      duration: 8000,
     });
-    toast.success('Automation created');
-  };
-
-  const handleEditAutomation = async (automation: Automation) => {
-    const name = window.prompt('Edit automation name', automation.name);
-    if (!name?.trim() || name.trim() === automation.name) return;
-
-    const updated = await db.updateAutomation(automation.id, { name: name.trim() });
-    if (!updated) {
-      toast.error('Failed to update automation');
-      return;
-    }
-
-    dispatch({
-      type: 'SET_AUTOMATIONS',
-      payload: state.automations.map((a) =>
-        a.id === automation.id
-          ? {
-              ...a,
-              name: updated.name,
-            }
-          : a
-      ),
-    });
-    toast.success('Automation updated');
-  };
-
-  const handleDeleteAutomation = async (automation: Automation) => {
-    const confirmed = window.confirm(`Delete automation "${automation.name}"?`);
-    if (!confirmed) return;
-
-    const ok = await db.deleteAutomation(automation.id);
-    if (!ok) {
-      toast.error('Failed to delete automation');
-      return;
-    }
-
-    dispatch({
-      type: 'SET_AUTOMATIONS',
-      payload: state.automations.filter((a) => a.id !== automation.id),
-    });
-    toast.success('Automation deleted');
   };
 
   const getActionIcon = (action: string) => {
@@ -391,6 +390,39 @@ export default function AutomationsView() {
           ))}
         </div>
       </div>
+
+      {/* Name dialog for create/edit automation */}
+      <Dialog open={!!nameDialog} onOpenChange={(open) => { if (!open) setNameDialog(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{nameDialog?.type === 'create' ? 'Create Automation' : 'Rename Automation'}</DialogTitle>
+          </DialogHeader>
+          <input
+            autoFocus
+            type="text"
+            value={nameValue}
+            onChange={(e) => setNameValue(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleNameDialogSave(); }}
+            placeholder="Automation name"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <DialogFooter>
+            <button
+              onClick={() => setNameDialog(null)}
+              className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleNameDialogSave}
+              disabled={!nameValue.trim() || nameSaving}
+              className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+            >
+              {nameSaving ? 'Saving…' : nameDialog?.type === 'create' ? 'Create' : 'Save'}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

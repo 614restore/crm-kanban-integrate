@@ -256,18 +256,20 @@ export default function ContactDetail() {
     }
   };
 
-  const handleDeleteDocument = async (docId: string) => {
-    const confirmed = window.confirm('Delete this document?');
-    if (!confirmed) return;
-
-    const ok = await db.deleteDocument(docId);
-    if (!ok) {
-      toast.error('Failed to delete document');
-      return;
-    }
-
-    setContactDocuments((prev) => prev.filter((doc) => doc.id !== docId));
-    toast.success('Document deleted');
+  const handleDeleteDocument = (docId: string) => {
+    toast.warning('Delete this document? This cannot be undone.', {
+      action: {
+        label: 'Delete',
+        onClick: async () => {
+          const ok = await db.deleteDocument(docId);
+          if (!ok) { toast.error('Failed to delete document'); return; }
+          setContactDocuments((prev) => prev.filter((doc) => doc.id !== docId));
+          toast.success('Document deleted');
+        },
+      },
+      cancel: { label: 'Cancel' },
+      duration: 8000,
+    });
   };
 
   const handleOpenDocument = async (url?: string, docName?: string) => {

@@ -34,3 +34,5 @@ dist-ssr
 .vibecheck/screenshots/
 .vibecheck/scan-results.json
 .vibecheck/context-engine-ledger.json
+.vercel
+.env*.local

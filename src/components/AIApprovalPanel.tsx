@@ -87,25 +87,31 @@ export default function AIApprovalPanel({ companyId }: AIApprovalPanelProps) {
     }
   };
 
-  const handleRevokeConfig = async (configId: string) => {
-    if (!window.confirm('Are you sure you want to revoke this AI configuration?')) return;
-
-    setIsRevoking(true);
-    try {
-      const result = await aiConfigurationManager.revokeConfiguration(configId, companyId);
-
-      if (result) {
-        toast.success('AI configuration revoked');
-        loadConfigurations();
-        setSelectedConfigId(null);
-      } else {
-        throw new Error('Revocation failed');
-      }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to revoke configuration');
-    } finally {
-      setIsRevoking(false);
-    }
+  const handleRevokeConfig = (configId: string) => {
+    toast.warning('Are you sure you want to revoke this AI configuration?', {
+      action: {
+        label: 'Revoke',
+        onClick: async () => {
+          setIsRevoking(true);
+          try {
+            const result = await aiConfigurationManager.revokeConfiguration(configId, companyId);
+            if (result) {
+              toast.success('AI configuration revoked');
+              loadConfigurations();
+              setSelectedConfigId(null);
+            } else {
+              throw new Error('Revocation failed');
+            }
+          } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Failed to revoke configuration');
+          } finally {
+            setIsRevoking(false);
+          }
+        },
+      },
+      cancel: { label: 'Cancel' },
+      duration: 8000,
+    });
   };
 
   const handleGrantAccess = async () => {
@@ -133,23 +139,29 @@ export default function AIApprovalPanel({ companyId }: AIApprovalPanelProps) {
     }
   };
 
-  const handleRevokeAccess = async (accessId: string, userId: string) => {
+  const handleRevokeAccess = (accessId: string, userId: string) => {
     if (!selectedConfigId) return;
 
-    if (!window.confirm(`Revoke access for this user?`)) return;
-
-    try {
-      const result = await aiConfigurationManager.revokeAccess(selectedConfigId, userId);
-
-      if (result) {
-        toast.success('Access revoked');
-        loadAccessors(selectedConfigId);
-      } else {
-        throw new Error('Failed to revoke access');
-      }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to revoke access');
-    }
+    toast.warning('Revoke access for this user?', {
+      action: {
+        label: 'Revoke',
+        onClick: async () => {
+          try {
+            const result = await aiConfigurationManager.revokeAccess(selectedConfigId, userId);
+            if (result) {
+              toast.success('Access revoked');
+              loadAccessors(selectedConfigId);
+            } else {
+              throw new Error('Failed to revoke access');
+            }
+          } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Failed to revoke access');
+          }
+        },
+      },
+      cancel: { label: 'Cancel' },
+      duration: 8000,
+    });
   };
 
   if (!isAdmin) {

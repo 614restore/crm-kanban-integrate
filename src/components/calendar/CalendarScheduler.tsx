@@ -86,7 +86,7 @@ interface TeamMember {
 }
 
 const CalendarScheduler: React.FC = () => {
-  const [currentView, setCurrentView] = useState<'month' | 'week' | 'day' | 'agenda'>('month');
+  const [currentView, setCurrentView] = useState<'month' | 'week' | 'day' | 'agenda'>('agenda');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
@@ -490,19 +490,27 @@ const CalendarScheduler: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            {['month', 'week', 'day', 'agenda'].map((view) => (
-              <button
-                key={view}
-                onClick={() => setCurrentView(view as any)}
-                className={`px-3 py-1 text-sm rounded-md capitalize ${
-                  currentView === view
-                    ? 'bg-blue-100 text-blue-700'
-                    : 'text-gray-600 hover:bg-gray-100'
-                }`}
-              >
-                {view}
-              </button>
-            ))}
+            {['agenda', 'month', 'week', 'day'].map((view) => {
+              const comingSoon = view !== 'agenda';
+              return (
+                <button
+                  key={view}
+                  onClick={() => setCurrentView(view as any)}
+                  className={`px-3 py-1 text-sm rounded-md capitalize flex items-center gap-1 ${
+                    currentView === view
+                      ? 'bg-blue-100 text-blue-700'
+                      : comingSoon
+                        ? 'text-gray-400 hover:bg-gray-100'
+                        : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  {view === 'agenda' ? 'List' : view}
+                  {comingSoon && (
+                    <span className="text-[9px] bg-gray-200 text-gray-400 px-1 rounded-full leading-tight">Soon</span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>

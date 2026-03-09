@@ -273,17 +273,25 @@ export default function PermitTracker({ contactId, companyId, readOnly }: Permit
   };
 
   // Delete permit
-  const deletePermit = async (id: string) => {
-    if (!window.confirm('Delete this permit?')) return;
-    try {
-      const { error } = await supabase.from('permits').delete().eq('id', id);
-      if (error) throw error;
-      toast.success('Permit deleted');
-      setPermits(prev => prev.filter(p => p.id !== id));
-    } catch (err) {
-      console.error('Error deleting permit:', err);
-      toast.error('Failed to delete permit');
-    }
+  const deletePermit = (id: string) => {
+    toast.warning('Delete this permit? This cannot be undone.', {
+      action: {
+        label: 'Delete',
+        onClick: async () => {
+          try {
+            const { error } = await supabase.from('permits').delete().eq('id', id);
+            if (error) throw error;
+            toast.success('Permit deleted');
+            setPermits(prev => prev.filter(p => p.id !== id));
+          } catch (err) {
+            console.error('Error deleting permit:', err);
+            toast.error('Failed to delete permit');
+          }
+        },
+      },
+      cancel: { label: 'Cancel' },
+      duration: 8000,
+    });
   };
 
   // Form field helpers

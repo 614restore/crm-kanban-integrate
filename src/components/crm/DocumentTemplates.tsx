@@ -40,6 +40,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
+import { toast as sonnerToast } from 'sonner';
 import { useAuth } from '@/lib/authContext';
 import { db, DbCompany } from '@/lib/database';
 import { useCRM } from '@/lib/crmStore';
@@ -2533,13 +2534,21 @@ const DocumentTemplates: React.FC = () => {
 
   // Delete a non-default template
   const deleteTemplate = (template: DocumentTemplate) => {
-    if (!window.confirm(`Delete "${template.name}"?`)) return;
-    setTemplates(prev => prev.filter(t => t.id !== template.id));
-    if (selectedTemplate?.id === template.id) {
-      setSelectedTemplate(null);
-      setPreviewMode(false);
-    }
-    toast({ title: "Template Deleted", description: `"${template.name}" has been removed.` });
+    sonnerToast.warning(`Delete "${template.name}"? This cannot be undone.`, {
+      action: {
+        label: 'Delete',
+        onClick: () => {
+          setTemplates(prev => prev.filter(t => t.id !== template.id));
+          if (selectedTemplate?.id === template.id) {
+            setSelectedTemplate(null);
+            setPreviewMode(false);
+          }
+          toast({ title: 'Template Deleted', description: `"${template.name}" has been removed.` });
+        },
+      },
+      cancel: { label: 'Cancel' },
+      duration: 8000,
+    });
   };
 
   // Fill template variables for a specific contact

@@ -105,11 +105,11 @@ export default function WorkOrdersView() {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load work orders on mount
+  // Load work orders when company is available (handles slow auth)
   useEffect(() => {
-    loadWorkOrders();
+    if (profile?.company_id) loadWorkOrders();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [profile?.company_id]);
 
   // Auto-fill location from selected contact (only when creating, not editing)
   useEffect(() => {

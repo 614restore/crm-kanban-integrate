@@ -332,7 +332,7 @@ const BillingSettings: React.FC = () => {
                 <p className="text-sm font-medium text-gray-900">{addon.name}</p>
                 <p className="text-xs text-gray-500">${addon.price}{addon.period}</p>
               </div>
-              <button className="flex items-center gap-1 text-xs bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded text-gray-700">
+              <button onClick={handleManageBilling} className="flex items-center gap-1 text-xs bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded text-gray-700">
                 <Plus className="w-3 h-3" /> Add
               </button>
             </div>

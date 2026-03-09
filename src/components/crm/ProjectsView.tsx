@@ -102,11 +102,11 @@ export default function ProjectsView() {
   const [notes, setNotes] = useState('');
   const [tags, setTags] = useState('');
 
-  // Load projects on mount
+  // Load projects when company is available (handles slow auth)
   useEffect(() => {
-    loadProjects();
+    if (profile?.company_id) loadProjects();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [profile?.company_id]);
 
   // Auto-fill location from selected contact (only when creating, not editing)
   useEffect(() => {

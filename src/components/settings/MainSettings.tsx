@@ -16,6 +16,7 @@ import {
   HelpCircle,
   Wrench
 } from 'lucide-react';
+import { useCRM } from '@/lib/crmStore';
 
 import IntegrationsSettings from './IntegrationsSettings';
 import CompanyTeamSettings from './CompanyTeamSettings';
@@ -73,21 +74,24 @@ const MainSettings: React.FC = () => {
       title: 'Communication',
       description: 'Email templates, SMS settings, and automation',
       icon: Mail,
-      component: CommunicationSettings
+      component: CommunicationSettings,
+      comingSoon: true,
     },
     {
       id: 'calendar',
       title: 'Calendar',
       description: 'Scheduling, availability, and calendar sync',
       icon: Calendar,
-      component: CalendarSettings
+      component: CalendarSettings,
+      comingSoon: true,
     },
     {
       id: 'documents',
       title: 'Documents',
       description: 'Templates, contracts, and document automation',
       icon: FileText,
-      component: DocumentSettings
+      component: DocumentSettings,
+      comingSoon: true,
     },
     {
       id: 'billing',
@@ -101,14 +105,16 @@ const MainSettings: React.FC = () => {
       title: 'Reporting',
       description: 'Dashboard configuration and report settings',
       icon: BarChart3,
-      component: ReportingSettings
+      component: ReportingSettings,
+      comingSoon: true,
     },
     {
       id: 'support',
       title: 'Help & Support',
       description: 'Documentation, tutorials, and support contacts',
       icon: HelpCircle,
-      component: SupportSettings
+      component: SupportSettings,
+      comingSoon: true,
     }
   ];
 
@@ -150,13 +156,20 @@ const MainSettings: React.FC = () => {
                   <Icon className="w-4 h-4" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className={`font-medium text-sm ${
-                    activeSection === section.id
-                      ? 'text-blue-900'
-                      : 'text-gray-900'
-                  }`}>
-                    {section.title}
-                  </h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className={`font-medium text-sm ${
+                      activeSection === section.id
+                        ? 'text-blue-900'
+                        : 'text-gray-900'
+                    }`}>
+                      {section.title}
+                    </h3>
+                    {(section as any).comingSoon && (
+                      <span className="text-[10px] font-medium bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded-full leading-none">
+                        Soon
+                      </span>
+                    )}
+                  </div>
                   <p className={`text-xs mt-1 ${
                     activeSection === section.id
                       ? 'text-blue-700'
@@ -178,14 +191,17 @@ const MainSettings: React.FC = () => {
               <span className="text-sm font-medium text-gray-700">Quick Actions</span>
             </div>
             <div className="space-y-2">
-              <button className="w-full text-left text-sm text-gray-600 hover:text-blue-600">
-                Export Settings
+              <button disabled className="w-full text-left text-sm text-gray-400 cursor-not-allowed flex items-center justify-between">
+                <span>Export Settings</span>
+                <span className="text-[10px] bg-gray-200 text-gray-400 px-1.5 py-0.5 rounded-full">Soon</span>
               </button>
-              <button className="w-full text-left text-sm text-gray-600 hover:text-blue-600">
-                Import Configuration
+              <button disabled className="w-full text-left text-sm text-gray-400 cursor-not-allowed flex items-center justify-between">
+                <span>Import Configuration</span>
+                <span className="text-[10px] bg-gray-200 text-gray-400 px-1.5 py-0.5 rounded-full">Soon</span>
               </button>
-              <button className="w-full text-left text-sm text-gray-600 hover:text-blue-600">
-                Reset to Defaults
+              <button disabled className="w-full text-left text-sm text-gray-400 cursor-not-allowed flex items-center justify-between">
+                <span>Reset to Defaults</span>
+                <span className="text-[10px] bg-gray-200 text-gray-400 px-1.5 py-0.5 rounded-full">Soon</span>
               </button>
             </div>
           </div>
@@ -376,7 +392,58 @@ const SecuritySettings: React.FC = () => (
   </div>
 );
 
-const DataSettings: React.FC = () => (
+const DataSettings: React.FC = () => {
+  const { state } = useCRM();
+
+  const downloadCsv = (filename: string, rows: object[]) => {
+    if (!rows.length) return;
+    const headers = Object.keys(rows[0]);
+    const csv = [
+      headers.join(','),
+      ...rows.map(row =>
+        headers.map(h => {
+          const val = (row as any)[h] ?? '';
+          const str = String(val).replace(/"/g, '""');
+          return str.includes(',') || str.includes('"') || str.includes('\n') ? `"${str}"` : str;
+        }).join(',')
+      ),
+    ].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportAll = () => {
+    downloadCsv('contacts.csv', state.contacts.map(c => ({
+      Name: `${c.firstName || ''} ${c.lastName || ''}`.trim(),
+      Email: c.email || '',
+      Phone: c.phone || '',
+      Status: c.status || '',
+      Company: c.company || '',
+      Address: c.address || '',
+    })));
+    downloadCsv('estimates.csv', state.estimates.map(e => ({
+      Number: e.estimateNumber || '',
+      Title: e.title || '',
+      Status: e.status || '',
+      Total: e.total || 0,
+      Contact: e.contactName || '',
+      Created: e.createdAt || '',
+    })));
+    downloadCsv('invoices.csv', state.invoices.map(inv => ({
+      Number: inv.invoiceNumber || '',
+      Status: inv.status || '',
+      Amount: inv.amount || 0,
+      Due: inv.dueDate || '',
+      Contact: inv.contactName || '',
+    })));
+  };
+
+  return (
   <div className="p-6">
     <div className="max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-2">Data Management</h1>
@@ -386,19 +453,54 @@ const DataSettings: React.FC = () => (
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <h2 className="text-lg font-medium text-gray-900 mb-4">Backup & Export</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <button className="p-4 border border-gray-300 rounded-lg text-left hover:bg-gray-50">
+            <button onClick={handleExportAll} className="p-4 border border-gray-300 rounded-lg text-left hover:bg-gray-50">
               <h3 className="font-medium text-gray-900">Export All Data</h3>
-              <p className="text-sm text-gray-600 mt-1">Download complete database backup</p>
+              <p className="text-sm text-gray-600 mt-1">Download contacts, estimates & invoices as CSV</p>
             </button>
-            <button className="p-4 border border-gray-300 rounded-lg text-left hover:bg-gray-50">
+            <button
+              onClick={() => downloadCsv('contacts.csv', state.contacts.map(c => ({
+                Name: `${c.firstName || ''} ${c.lastName || ''}`.trim(),
+                Email: c.email || '',
+                Phone: c.phone || '',
+                Status: c.status || '',
+                Company: c.company || '',
+                Address: c.address || '',
+                City: c.city || '',
+                State: c.state || '',
+              })))}
+              className="p-4 border border-gray-300 rounded-lg text-left hover:bg-gray-50"
+            >
               <h3 className="font-medium text-gray-900">Export Contacts</h3>
               <p className="text-sm text-gray-600 mt-1">Customer and lead information only</p>
             </button>
-            <button className="p-4 border border-gray-300 rounded-lg text-left hover:bg-gray-50">
+            <button
+              onClick={() => downloadCsv('estimates.csv', state.estimates.map(e => ({
+                Number: e.estimateNumber || '',
+                Title: e.title || '',
+                Status: e.status || '',
+                Subtotal: e.amount || 0,
+                Tax: e.tax || 0,
+                Total: e.total || 0,
+                Contact: e.contactName || '',
+                Created: e.createdAt || '',
+                ValidUntil: e.validUntil || '',
+              })))}
+              className="p-4 border border-gray-300 rounded-lg text-left hover:bg-gray-50"
+            >
               <h3 className="font-medium text-gray-900">Export Estimates</h3>
               <p className="text-sm text-gray-600 mt-1">All estimates and project data</p>
             </button>
-            <button className="p-4 border border-gray-300 rounded-lg text-left hover:bg-gray-50">
+            <button
+              onClick={() => downloadCsv('invoices.csv', state.invoices.map(inv => ({
+                Number: inv.invoiceNumber || '',
+                Status: inv.status || '',
+                Amount: inv.amount || 0,
+                Due: inv.dueDate || '',
+                Contact: inv.contactName || '',
+                PaidAt: inv.paidAt || '',
+              })))}
+              className="p-4 border border-gray-300 rounded-lg text-left hover:bg-gray-50"
+            >
               <h3 className="font-medium text-gray-900">Export Invoices</h3>
               <p className="text-sm text-gray-600 mt-1">Billing and payment records</p>
             </button>
@@ -407,7 +509,8 @@ const DataSettings: React.FC = () => (
       </div>
     </div>
   </div>
-);
+  );
+};
 
 // Additional placeholder components for remaining settings sections
 const CommunicationSettings: React.FC = () => <SettingsPlaceholder title="Communication Settings" />;

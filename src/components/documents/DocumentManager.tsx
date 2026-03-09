@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { 
   FileText, 
   Plus, 
@@ -319,10 +320,18 @@ const DocumentManager: React.FC = () => {
             localStorage.setItem('documentTemplates', JSON.stringify(updatedTemplates));
           }}
           onDelete={(template) => {
-            if (!window.confirm(`Delete "${template.name}"? This cannot be undone.`)) return;
-            const updatedTemplates = templates.filter(t => t.id !== template.id);
-            setTemplates(updatedTemplates);
-            localStorage.setItem('documentTemplates', JSON.stringify(updatedTemplates));
+            toast.warning(`Delete "${template.name}"? This cannot be undone.`, {
+              action: {
+                label: 'Delete',
+                onClick: () => {
+                  const updatedTemplates = templates.filter(t => t.id !== template.id);
+                  setTemplates(updatedTemplates);
+                  localStorage.setItem('documentTemplates', JSON.stringify(updatedTemplates));
+                },
+              },
+              cancel: { label: 'Cancel' },
+              duration: 8000,
+            });
           }}
         />
       )}

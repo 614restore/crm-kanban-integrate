@@ -75,11 +75,11 @@ export default function EstimatesView() {
   const [terms, setTerms] = useState('');
   const [taxRate, setTaxRate] = useState(0);
 
-  // Load estimates on mount
+  // Load estimates when company is available (handles slow auth)
   useEffect(() => {
-    loadEstimates();
+    if (profile?.company_id) loadEstimates();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [profile?.company_id]);
 
   const loadEstimates = async () => {
     if (!profile?.company_id) return;
@@ -193,7 +193,7 @@ export default function EstimatesView() {
       setItems(estimate.items);
       setNotes(estimate.notes || '');
       setTerms(estimate.terms || '');
-      setTaxRate(estimate.tax / estimate.amount * 100 || 0);
+      setTaxRate(estimate.amount > 0 ? (estimate.tax / estimate.amount) * 100 : 0);
     } else {
       // Generate estimate number
       const nextNumber = `EST-${Date.now().toString().slice(-6)}`;

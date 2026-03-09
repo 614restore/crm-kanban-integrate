@@ -119,7 +119,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let profileFetchInProgress = false;
     let recoveryEventFired = false;
-    const pendingReset = (() => { try { return sessionStorage.getItem('pending_password_reset') === 'true'; } catch(_) { return false; } })();
+    let pendingReset = (() => { try { return sessionStorage.getItem('pending_password_reset') === 'true'; } catch(_) { return false; } })();
 
     const loadProfile = async (userId: string, email: string) => {
       if (profileFetchInProgress) return;
@@ -184,6 +184,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // For SIGNED_IN, INITIAL_SESSION, USER_UPDATED, etc.
       // Don't override if we're in a recovery flow
+      // Clear stale pending_password_reset flag if the user is actually signing in normally
+      if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && pendingReset && !recoveryEventFired) {
+        try { sessionStorage.removeItem('pending_password_reset'); } catch (e) { console.warn('[authContext] sessionStorage cleanup failed:', e); }
+        pendingReset = false;
+      }
       if (recoveryEventFired || pendingReset) return;
       setSession(session);
       setUser(session?.user ?? null);
@@ -200,6 +205,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Get initial session — skip everything if this is a password reset
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       // If pending reset or recovery already fired, don't interfere — wait for PASSWORD_RECOVERY event
+      // Clear stale flag if the user has actually obtained a valid session normally
+      if (session && pendingReset && !recoveryEventFired) {
+        try { sessionStorage.removeItem('pending_password_reset'); } catch (e) { console.warn('[authContext] sessionStorage cleanup failed:', e); }
+        pendingReset = false;
+      }
       if (recoveryEventFired || pendingReset) return;
 
       setSession(session);

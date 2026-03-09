@@ -768,46 +768,53 @@ export default function SettingsView() {
     }
   };
 
-  const handleStartFreshWorkspace = async () => {
+  const handleStartFreshWorkspace = () => {
     if (!profile?.id || !profile?.email) {
       toast.error('You must be signed in to start fresh');
       return;
     }
 
-    const confirmed = window.confirm(
-      'Start fresh with a brand new company workspace? This will switch your profile to a new company and initialize default settings.'
+    toast.warning(
+      'Start fresh with a brand new company workspace? This will switch your profile to a new company and initialize default settings.',
+      {
+        action: {
+          label: 'Start Fresh',
+          onClick: async () => {
+            setIsStartingFresh(true);
+            try {
+              const { data: newCompanyId, error: startFreshError } = await withTimeout(
+                supabase.rpc('start_fresh_workspace'),
+                15000,
+                'Start fresh workspace'
+              );
+
+              if (startFreshError || !newCompanyId) {
+                throw startFreshError || new Error('Failed to create new company workspace');
+              }
+
+              const profileUpdate = await updateProfile({ company_id: newCompanyId as string });
+              if (profileUpdate.error) {
+                throw profileUpdate.error;
+              }
+
+              await ensureDefaultLeadSources(newCompanyId as string);
+
+              dispatch({ type: 'SET_COMPANY_ID', payload: newCompanyId as string });
+              dispatch({ type: 'SET_VIEW', payload: 'dashboard' });
+              window.dispatchEvent(new Event('crm-company-updated'));
+              toast.success('Fresh workspace created. You are now in a brand-new company.');
+            } catch (error) {
+              console.error('Start fresh workspace error:', error);
+              toast.error('Failed to start fresh workspace: ' + getReadableError(error));
+            } finally {
+              setIsStartingFresh(false);
+            }
+          },
+        },
+        cancel: { label: 'Cancel' },
+        duration: 10000,
+      }
     );
-    if (!confirmed) return;
-
-    setIsStartingFresh(true);
-    try {
-      const { data: newCompanyId, error: startFreshError } = await withTimeout(
-        supabase.rpc('start_fresh_workspace'),
-        15000,
-        'Start fresh workspace'
-      );
-
-      if (startFreshError || !newCompanyId) {
-        throw startFreshError || new Error('Failed to create new company workspace');
-      }
-
-      const profileUpdate = await updateProfile({ company_id: newCompanyId as string });
-      if (profileUpdate.error) {
-        throw profileUpdate.error;
-      }
-
-      await ensureDefaultLeadSources(newCompanyId as string);
-
-      dispatch({ type: 'SET_COMPANY_ID', payload: newCompanyId as string });
-      dispatch({ type: 'SET_VIEW', payload: 'dashboard' });
-      window.dispatchEvent(new Event('crm-company-updated'));
-      toast.success('Fresh workspace created. You are now in a brand-new company.');
-    } catch (error) {
-      console.error('Start fresh workspace error:', error);
-      toast.error('Failed to start fresh workspace: ' + getReadableError(error));
-    } finally {
-      setIsStartingFresh(false);
-    }
   };
 
   const handleDeleteAccount = async () => {

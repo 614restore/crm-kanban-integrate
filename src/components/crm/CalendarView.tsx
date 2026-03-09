@@ -186,7 +186,7 @@ export default function CalendarView() {
 
   const handleCompleteInspection = async (appointment: Appointment) => {
     if (appointment.type !== 'inspection' || appointment.status === 'completed') return;
-    const notes = window.prompt('Add completion notes (optional):', '') || '';
+    const notes = '';
     const updatedAppointment: Appointment = {
       ...appointment,
       status: 'completed',
@@ -218,15 +218,20 @@ export default function CalendarView() {
     toast.success('Inspection marked as complete!');
   };
 
-  const handleDeleteAppointment = async (appointment: Appointment) => {
-    if (!window.confirm(`Delete "${appointment.title}"?`)) return;
-    const ok = await db.deleteAppointment(appointment.id);
-    if (!ok) {
-      toast.error('Failed to delete appointment');
-      return;
-    }
-    dispatch({ type: 'DELETE_APPOINTMENT', payload: appointment.id });
-    toast.success('Appointment deleted');
+  const handleDeleteAppointment = (appointment: Appointment) => {
+    toast.warning(`Delete "${appointment.title}"? This cannot be undone.`, {
+      action: {
+        label: 'Delete',
+        onClick: async () => {
+          const ok = await db.deleteAppointment(appointment.id);
+          if (!ok) { toast.error('Failed to delete appointment'); return; }
+          dispatch({ type: 'DELETE_APPOINTMENT', payload: appointment.id });
+          toast.success('Appointment deleted');
+        },
+      },
+      cancel: { label: 'Cancel' },
+      duration: 8000,
+    });
   };
 
   const renderMentions = (value: string) => {

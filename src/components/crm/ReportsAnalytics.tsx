@@ -99,19 +99,26 @@ const ReportsAnalytics: React.FC = () => {
 
   // Build revenue data from real invoices grouped by month
   const revenueData: RevenueData[] = useMemo(() => {
-    const months: Record<string, { revenue: number; expenses: number; projects: Set<string> }> = {};
     const now = new Date();
-    // Seed last 12 months
-    for (let i = 11; i >= 0; i--) {
+    let monthCount = 12;
+    if (selectedPeriod === '30days') monthCount = 1;
+    else if (selectedPeriod === '90days') monthCount = 3;
+    else if (selectedPeriod === 'ytd') monthCount = now.getMonth() + 1;
+
+    const months: Record<string, { revenue: number; expenses: number; projects: Set<string> }> = {};
+    // Seed the relevant months
+    for (let i = monthCount - 1; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const key = d.toLocaleString('default', { month: 'short' });
+      const key = d.toLocaleString('default', { month: 'short', year: selectedPeriod === 'ytd' || monthCount <= 3 ? undefined : '2-digit' });
       months[key] = { revenue: 0, expenses: 0, projects: new Set() };
     }
+    const cutoff = new Date(now.getFullYear(), now.getMonth() - (monthCount - 1), 1);
+
     // Sum invoices by month
     state.invoices.forEach((inv) => {
       const d = new Date(inv.createdAt || inv.dueDate || '');
-      if (isNaN(d.getTime())) return;
-      const key = d.toLocaleString('default', { month: 'short' });
+      if (isNaN(d.getTime()) || d < cutoff) return;
+      const key = d.toLocaleString('default', { month: 'short', year: selectedPeriod === 'ytd' || monthCount <= 3 ? undefined : '2-digit' });
       if (months[key]) {
         if (inv.status === 'paid') months[key].revenue += inv.amount;
         if (inv.contactId) months[key].projects.add(inv.contactId);
@@ -121,7 +128,8 @@ const ReportsAnalytics: React.FC = () => {
     state.contacts.forEach((c) => {
       if (c.status === 'completed' && c.finalPaymentPaid && c.finalPaymentAmount) {
         const d = new Date(c.updatedAt);
-        const key = d.toLocaleString('default', { month: 'short' });
+        if (isNaN(d.getTime()) || d < cutoff) return;
+        const key = d.toLocaleString('default', { month: 'short', year: selectedPeriod === 'ytd' || monthCount <= 3 ? undefined : '2-digit' });
         if (months[key]) months[key].revenue += c.finalPaymentAmount;
       }
     });
@@ -136,7 +144,7 @@ const ReportsAnalytics: React.FC = () => {
         projects: data.projects.size,
       };
     });
-  }, [state.invoices, state.contacts]);
+  }, [state.invoices, state.contacts, selectedPeriod]);
 
   // Build project data from real projects or contacts in project stages
   const projectData: ProjectData[] = useMemo(() => {
@@ -352,10 +360,10 @@ const ReportsAnalytics: React.FC = () => {
       {
         heading: 'Team Performance',
         rows: teamPerformance.map(t => ({
-          Team_Member: t.name,
-          Projects: t.projects,
+          Team_Member: t.member,
+          Projects: t.projectsCompleted,
           Revenue: `$${t.revenue.toLocaleString()}`,
-          Satisfaction: `${t.satisfaction}/5`,
+          Rating: `${t.customerRating}/5`,
         }))
       }
     ]);
