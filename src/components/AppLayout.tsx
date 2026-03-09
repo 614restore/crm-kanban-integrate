@@ -59,7 +59,7 @@ const CommissionPayrollView = lazy(() => import('./crm/CommissionPayrollView'));
 // Initial CRM state (completely empty)
 const getInitialView = (): ViewType => {
   try {
-    const saved = sessionStorage.getItem('crm_current_view');
+    const saved = localStorage.getItem('crm_current_view');
     if (saved) return saved as ViewType;
   } catch (e) { console.warn('[AppLayout] sessionStorage read failed (private browsing?):', e); }
   return 'dashboard';
@@ -409,7 +409,7 @@ function CRMApp() {
   const [state, dispatch] = useReducer(crmReducer, initialState);
   const [subscriptionBlocked, setSubscriptionBlocked] = useState(false);
   useEffect(() => {
-    try { sessionStorage.setItem('crm_current_view', state.currentView); } catch (e) { console.warn('[AppLayout] sessionStorage write failed (private browsing?):', e); }
+    try { localStorage.setItem('crm_current_view', state.currentView); } catch (e) { console.warn('[AppLayout] localStorage write failed (private browsing?):', e); }
   }, [state.currentView]);
   const realtimeFailedRef = useRef(false);
   const isReloadingRef = useRef(false);
@@ -576,6 +576,9 @@ function CRMApp() {
         department: tm.department || 'General',
         isActive: tm.is_active,
         commission_rate: tm.commission_rate,
+        commission_rate_self_gen: tm.commission_rate_self_gen,
+        commission_rate_company: tm.commission_rate_company,
+        commission_rate_custom: tm.commission_rate_custom,
         member_type: tm.member_type,
         subcontractor_company: tm.subcontractor_company,
       }));

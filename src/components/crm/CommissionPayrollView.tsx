@@ -26,7 +26,12 @@ interface SalesmanCommission {
   name: string;
   email: string;
   role: string;
-  commission_rate: number;
+  /** % applied to self-generated leads */
+  commission_rate_self_gen: number;
+  /** % applied to company-generated leads */
+  commission_rate_company: number;
+  /** custom/override % — when > 0 it overrides both */
+  commission_rate_custom: number;
   jobs: CommissionJob[];
   totalRevenue: number;
   totalCommission: number;
@@ -36,7 +41,9 @@ interface CommissionJob {
   contactId: string;
   contactName: string;
   status: string;
+  leadSource: string;
   projectValue: number;
+  rateUsed: number;
   commissionEarned: number;
   closedAt: string;
   address?: string;
@@ -96,43 +103,57 @@ export default function CommissionPayrollView() {
       const { data: profiles, error: profilesError } = await withTimeout(
         supabase
           .from('profiles')
-          .select('id, first_name, last_name, email, role, commission_rate')
+          .select('id, first_name, last_name, email, role, commission_rate_self_gen, commission_rate_company, commission_rate_custom')
           .eq('company_id', companyId)
           .eq('is_active', true)
-          .in('role', ['owner', 'admin', 'manager', 'sales', 'canvas']),
+          .in('role', ['owner', 'admin', 'manager', 'sales', 'canvas'])
+          .then((r) => r) as Promise<any>,
         10000,
         'loadCommissionProfiles'
-      );
+      ) as { data: any[] | null; error: any };
       if (profilesError) throw profilesError;
 
       // Load commissionable contacts in date range
       const { data: contacts, error: contactsError } = await withTimeout(
         supabase
           .from('contacts')
-          .select('id, first_name, last_name, status, project_value, assigned_to, updated_at, address, city, state')
+          .select('id, first_name, last_name, status, project_value, assigned_to, updated_at, address, city, state, lead_source')
           .eq('company_id', companyId)
           .in('status', COMMISSIONABLE_STATUSES)
           .gte('updated_at', `${dateFrom}T00:00:00.000Z`)
-          .lte('updated_at', `${dateTo}T23:59:59.999Z`),
+          .lte('updated_at', `${dateTo}T23:59:59.999Z`)
+          .then((r) => r) as Promise<any>,
         10000,
         'loadCommissionContacts'
-      );
+      ) as { data: any[] | null; error: any };
       if (contactsError) throw contactsError;
 
       // Build per-salesman commission data
       const result: SalesmanCommission[] = (profiles ?? []).map((p) => {
+        const self_gen_rate = Number(p.commission_rate_self_gen ?? 0);
+        const company_rate  = Number(p.commission_rate_company  ?? 0);
+        const custom_rate   = Number(p.commission_rate_custom   ?? 0);
+
         const assignedContacts = (contacts ?? []).filter(
           (c) => c.assigned_to === p.id && (c.project_value ?? 0) > 0
         );
-        const rate = Number(p.commission_rate ?? 0);
         const jobs: CommissionJob[] = assignedContacts.map((c) => {
           const value = Number(c.project_value ?? 0);
+          const leadSource = c.lead_source ?? '';
+          // Custom overrides everything when set; otherwise self-gen vs company
+          const rateUsed = custom_rate > 0
+            ? custom_rate
+            : leadSource === 'Self Generated'
+              ? self_gen_rate
+              : company_rate;
           return {
             contactId: c.id,
             contactName: `${c.first_name ?? ''} ${c.last_name ?? ''}`.trim(),
             status: c.status,
+            leadSource,
             projectValue: value,
-            commissionEarned: value * (rate / 100),
+            rateUsed,
+            commissionEarned: value * (rateUsed / 100),
             closedAt: c.updated_at,
             address: [c.address, c.city, c.state].filter(Boolean).join(', '),
           };
@@ -146,7 +167,9 @@ export default function CommissionPayrollView() {
           name: `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() || p.email,
           email: p.email,
           role: p.role ?? 'sales',
-          commission_rate: rate,
+          commission_rate_self_gen: self_gen_rate,
+          commission_rate_company:  company_rate,
+          commission_rate_custom:   custom_rate,
           jobs,
           totalRevenue,
           totalCommission,
@@ -154,7 +177,12 @@ export default function CommissionPayrollView() {
       });
 
       // Only show salesmen who have jobs OR have a commission rate set
-      const filtered = result.filter((s) => s.jobs.length > 0 || s.commission_rate > 0);
+      const filtered = result.filter((s) =>
+        s.jobs.length > 0 ||
+        s.commission_rate_self_gen > 0 ||
+        s.commission_rate_company > 0 ||
+        s.commission_rate_custom > 0
+      );
       setSalesmen(filtered);
     } catch (err) {
       console.error('Error loading commission data:', err);
@@ -178,17 +206,17 @@ export default function CommissionPayrollView() {
 
   const exportCSV = () => {
     const rows: string[] = [
-      'Salesman,Email,Role,Commission Rate (%),# Jobs,Total Revenue,Total Commission',
+      'Salesman,Email,Role,Self Gen Rate (%),Company Rate (%),Custom Rate (%),# Jobs,Total Revenue,Total Commission',
     ];
     for (const s of filteredSalesmen) {
       rows.push(
-        `"${s.name}","${s.email}","${s.role}",${s.commission_rate},${s.jobs.length},${s.totalRevenue.toFixed(2)},${s.totalCommission.toFixed(2)}`
+        `"${s.name}","${s.email}","${s.role}",${s.commission_rate_self_gen},${s.commission_rate_company},${s.commission_rate_custom},${s.jobs.length},${s.totalRevenue.toFixed(2)},${s.totalCommission.toFixed(2)}`
       );
       if (s.jobs.length > 0) {
-        rows.push('  Contact,Status,Address,Project Value,Commission Earned,Date');
+        rows.push('  Contact,Lead Source,Status,Address,Rate Used (%),Project Value,Commission Earned,Date');
         for (const j of s.jobs) {
           rows.push(
-            `  "${j.contactName}","${STATUS_LABELS[j.status] ?? j.status}","${j.address ?? ''}",${j.projectValue.toFixed(2)},${j.commissionEarned.toFixed(2)},"${j.closedAt.split('T')[0]}"`
+            `  "${j.contactName}","${j.leadSource || 'Unknown'}","${STATUS_LABELS[j.status] ?? j.status}","${j.address ?? ''}",${j.rateUsed},${j.projectValue.toFixed(2)},${j.commissionEarned.toFixed(2)},"${j.closedAt.split('T')[0]}"`
           );
         }
       }
@@ -353,7 +381,9 @@ export default function CommissionPayrollView() {
                       <div className="flex items-center gap-1 justify-end">
                         <Percent size={13} className="text-gray-400" />
                         <span className="font-semibold text-gray-900">
-                          {salesman.commission_rate > 0 ? `${salesman.commission_rate}%` : '—'}
+                          {salesman.commission_rate_custom > 0
+                            ? `Custom: ${salesman.commission_rate_custom}%`
+                            : `SG: ${salesman.commission_rate_self_gen}% / Co: ${salesman.commission_rate_company}%`}
                         </span>
                       </div>
                     </div>
@@ -392,9 +422,11 @@ export default function CommissionPayrollView() {
                           <tr>
                             <th className="text-left px-5 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Customer</th>
                             <th className="text-left px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Address</th>
+                            <th className="text-left px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Lead Source</th>
                             <th className="text-left px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Status</th>
                             <th className="text-right px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Project Value</th>
-                            <th className="text-right px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Commission ({salesman.commission_rate}%)</th>
+                            <th className="text-right px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Rate Used</th>
+                            <th className="text-right px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Commission Earned</th>
                             <th className="text-right px-5 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Date</th>
                           </tr>
                         </thead>
@@ -403,12 +435,16 @@ export default function CommissionPayrollView() {
                             <tr key={job.contactId} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
                               <td className="px-5 py-3 font-medium text-gray-800">{job.contactName}</td>
                               <td className="px-4 py-3 text-gray-500 text-xs">{job.address || '—'}</td>
+                              <td className="px-4 py-3 text-xs text-gray-500">
+                                {job.leadSource || '—'}
+                              </td>
                               <td className="px-4 py-3">
                                 <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
                                   {STATUS_LABELS[job.status] ?? job.status}
                                 </span>
                               </td>
                               <td className="px-4 py-3 text-right text-gray-800">{formatCurrency(job.projectValue)}</td>
+                              <td className="px-4 py-3 text-right text-gray-500 text-xs">{job.rateUsed}%</td>
                               <td className="px-4 py-3 text-right font-semibold text-green-700">{formatCurrency(job.commissionEarned)}</td>
                               <td className="px-5 py-3 text-right text-gray-400 text-xs">{job.closedAt.split('T')[0]}</td>
                             </tr>
@@ -416,10 +452,11 @@ export default function CommissionPayrollView() {
                         </tbody>
                         <tfoot>
                           <tr className="border-t border-gray-200 bg-gray-50">
-                            <td colSpan={3} className="px-5 py-2 text-sm font-semibold text-gray-700">
+                            <td colSpan={4} className="px-5 py-2 text-sm font-semibold text-gray-700">
                               Totals ({salesman.jobs.length} jobs)
                             </td>
                             <td className="px-4 py-2 text-right font-bold text-gray-800">{formatCurrency(salesman.totalRevenue)}</td>
+                            <td />
                             <td className="px-4 py-2 text-right font-bold text-green-700">{formatCurrency(salesman.totalCommission)}</td>
                             <td />
                           </tr>

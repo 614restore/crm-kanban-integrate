@@ -247,13 +247,15 @@ export default function TeamView() {
         is_active: selectedMember.isActive,
       });
 
-      // Save commission_rate separately (not in RPC args)
-      if (selectedMember.commission_rate !== undefined) {
-        await supabase
-          .from('profiles')
-          .update({ commission_rate: selectedMember.commission_rate })
-          .eq('id', selectedMember.id);
-      }
+      // Save commission rates separately (not in RPC args)
+      await supabase
+        .from('profiles')
+        .update({
+          commission_rate_self_gen: selectedMember.commission_rate_self_gen ?? 0,
+          commission_rate_company:  selectedMember.commission_rate_company  ?? 0,
+          commission_rate_custom:   selectedMember.commission_rate_custom   ?? 0,
+        })
+        .eq('id', selectedMember.id);
 
       if (!updated) {
         toast.error('Failed to save team member');
@@ -765,25 +767,64 @@ export default function TeamView() {
               </div>
               {['owner', 'admin', 'manager', 'sales_manager'].includes(userRole) && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Commission Rate (%)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="0.1"
-                    value={selectedMember.commission_rate ?? ''}
-                    onChange={(e) =>
-                      setSelectedMember({
-                        ...selectedMember,
-                        commission_rate: e.target.value === '' ? undefined : parseFloat(e.target.value),
-                      })
-                    }
-                    placeholder="e.g. 5 for 5%"
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Leave blank for 0% commission</p>
+                  <p className="block text-sm font-semibold text-gray-700 mb-2">Commission Rates (%)</p>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Self Generated</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        value={selectedMember.commission_rate_self_gen ?? ''}
+                        onChange={(e) =>
+                          setSelectedMember({
+                            ...selectedMember,
+                            commission_rate_self_gen: e.target.value === '' ? undefined : parseFloat(e.target.value),
+                          })
+                        }
+                        placeholder="e.g. 10"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Company Lead</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        value={selectedMember.commission_rate_company ?? ''}
+                        onChange={(e) =>
+                          setSelectedMember({
+                            ...selectedMember,
+                            commission_rate_company: e.target.value === '' ? undefined : parseFloat(e.target.value),
+                          })
+                        }
+                        placeholder="e.g. 5"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Custom / Override</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        value={selectedMember.commission_rate_custom ?? ''}
+                        onChange={(e) =>
+                          setSelectedMember({
+                            ...selectedMember,
+                            commission_rate_custom: e.target.value === '' ? undefined : parseFloat(e.target.value),
+                          })
+                        }
+                        placeholder="e.g. 7"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">Self Generated = leads they sourced themselves &bull; Company Lead = leads from company marketing &bull; Custom = overrides both for special arrangements</p>
                 </div>
               )}
               <div className="flex items-center gap-3">

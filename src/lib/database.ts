@@ -209,7 +209,10 @@ export interface DbProfile {
   avatar_url?: string;
   work_email?: string;
   is_active: boolean;
-  commission_rate?: number;
+  commission_rate?: number;           // legacy – kept for backcompat
+  commission_rate_self_gen?: number;  // % for self-generated leads
+  commission_rate_company?: number;   // % for company-generated leads
+  commission_rate_custom?: number;    // custom/override %
   member_type?: 'employee' | 'subcontractor';
   subcontractor_company?: string;
   created_at: string;

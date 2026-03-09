@@ -151,7 +151,10 @@ export interface TeamMember {
   phone: string;
   department: string;
   isActive: boolean;
-  commission_rate?: number; // Commission percentage (e.g., 5 = 5%)
+  commission_rate?: number;           // legacy – kept for backcompat
+  commission_rate_self_gen?: number;  // % for self-generated leads
+  commission_rate_company?: number;   // % for company-generated leads
+  commission_rate_custom?: number;    // custom/override %
   member_type?: 'employee' | 'subcontractor';
   subcontractor_company?: string;
   performance?: {
