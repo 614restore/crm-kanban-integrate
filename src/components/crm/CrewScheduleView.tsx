@@ -17,10 +17,10 @@ import {
   PlayCircle,
   XCircle,
   BarChart3,
-  Building2,
   Edit3,
   Trash2,
   HardHat,
+  Building2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -37,7 +37,7 @@ interface CrewSchedule {
   contact_id?: string | null;
   title: string;
   notes?: string | null;
-  scheduled_date: string; // YYYY-MM-DD
+  scheduled_date: string;
   start_time?: string | null;
   end_time?: string | null;
   status: ScheduleStatus;
@@ -47,6 +47,7 @@ interface CrewSchedule {
 interface InternalCrewRow {
   type: 'internal';
   id: string;
+  // profiles stores first_name + last_name, NOT a full_name column
   full_name: string;
   avatar_url?: string | null;
   role?: string | null;
@@ -55,7 +56,7 @@ interface InternalCrewRow {
 interface SubcontractorCrewRow {
   type: 'subcontractor';
   id: string;
-  full_name: string; // company_name shown as name
+  full_name: string;
   contact_name?: string | null;
   phone?: string | null;
   email?: string | null;
@@ -63,28 +64,13 @@ interface SubcontractorCrewRow {
 }
 
 type CrewRow = InternalCrewRow | SubcontractorCrewRow;
-
-// Legacy alias for existing code
 type CrewMemberRow = CrewRow;
-
-interface SubcontractorCrew {
-  id: string;
-  company_id: string;
-  company_name: string;
-  contact_name?: string | null;
-  phone?: string | null;
-  email?: string | null;
-  trade?: string | null;
-  notes?: string | null;
-  is_active: boolean;
-  created_at: string;
-}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function getWeekDates(anchorDate: Date): Date[] {
   const d = new Date(anchorDate);
-  const day = d.getDay(); // 0=Sun
+  const day = d.getDay();
   const monday = new Date(d);
   monday.setDate(d.getDate() - ((day + 6) % 7));
   return Array.from({ length: 7 }, (_, i) => {
@@ -124,12 +110,125 @@ function StatusBadge({ status }: { status: ScheduleStatus }) {
   );
 }
 
+// ─── Create Subcontractor Crew Modal ──────────────────────────────────────────
+
+interface CreateSubModalProps {
+  companyId: string;
+  onClose: () => void;
+  onCreated: () => void;
+}
+
+function CreateSubcontractorModal({ companyId, onClose, onCreated }: CreateSubModalProps) {
+  const [companyName, setCompanyName] = useState('');
+  const [contactName, setContactName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [trade, setTrade] = useState('');
+  const [notes, setNotes] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!companyName.trim()) {
+      toast.error('Company name is required');
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const { error } = await supabase.from('subcontractor_crews').insert({
+        company_id: companyId,
+        company_name: companyName.trim(),
+        contact_name: contactName.trim() || null,
+        phone: phone.trim() || null,
+        email: email.trim() || null,
+        trade: trade.trim() || null,
+        notes: notes.trim() || null,
+        is_active: true,
+      });
+      if (error) throw error;
+      toast.success('Subcontractor crew created');
+      onCreated();
+      onClose();
+    } catch (err: any) {
+      console.error('Error creating subcontractor crew:', err);
+      // Friendly message if table doesn't exist yet
+      if (err?.message?.includes('relation') || err?.message?.includes('does not exist')) {
+        toast.error('subcontractor_crews table not found. Please run the latest Supabase migration.');
+      } else {
+        toast.error('Failed to create subcontractor crew');
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+          <h2 className="text-lg font-semibold text-gray-900">Add Subcontractor Crew</h2>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="px-6 py-4 space-y-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Company Name <span className="text-red-500">*</span></label>
+            <input type="text" value={companyName} onChange={e => setCompanyName(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="e.g. Smith Roofing LLC" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Contact Name</label>
+            <input type="text" value={contactName} onChange={e => setContactName(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Primary contact" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+              <input type="tel" value={phone} onChange={e => setPhone(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Trade / Specialty</label>
+            <input type="text" value={trade} onChange={e => setTrade(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="e.g. Roofing, Gutters, HVAC" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 px-6 py-4 border-t border-gray-200">
+          <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+            Cancel
+          </button>
+          <button onClick={handleSave} disabled={isSaving}
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2">
+            {isSaving && <Loader2 size={14} className="animate-spin" />}
+            Create Crew
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Assignment Modal ─────────────────────────────────────────────────────────
 
 interface AssignmentModalProps {
   crewMemberId: string;
   crewMemberName: string;
-  date: string; // YYYY-MM-DD
+  crewMemberType: 'internal' | 'subcontractor';
+  date: string;
   existing?: CrewSchedule | null;
   contacts: { id: string; firstName: string; lastName: string }[];
   onClose: () => void;
@@ -142,6 +241,7 @@ interface AssignmentModalProps {
 function AssignmentModal({
   crewMemberId,
   crewMemberName,
+  crewMemberType,
   date,
   existing,
   contacts,
@@ -166,9 +266,8 @@ function AssignmentModal({
     }
     setIsSaving(true);
     try {
-      const payload = {
+      const payload: any = {
         company_id: companyId,
-        crew_member_id: crewMemberId,
         title: title.trim(),
         contact_id: contactId || null,
         notes: notes.trim() || null,
@@ -179,12 +278,18 @@ function AssignmentModal({
         created_by: userId,
       };
 
+      // Set the correct FK depending on crew member type
+      if (crewMemberType === 'internal') {
+        payload.crew_member_id = crewMemberId;
+        payload.subcontractor_id = null;
+      } else {
+        payload.subcontractor_id = crewMemberId;
+        payload.crew_member_id = null;
+      }
+
       if (existing) {
         const { error } = await withTimeout(
-          supabase
-            .from('crew_schedules')
-            .update(payload)
-            .eq('id', existing.id),
+          supabase.from('crew_schedules').update(payload).eq('id', existing.id),
           10000, 'updateCrewSchedule'
         );
         if (error) throw error;
@@ -212,10 +317,7 @@ function AssignmentModal({
     setIsSaving(true);
     try {
       const { error } = await withTimeout(
-        supabase
-          .from('crew_schedules')
-          .delete()
-          .eq('id', existing.id),
+        supabase.from('crew_schedules').delete().eq('id', existing.id),
         10000, 'deleteCrewSchedule'
       );
       if (error) throw error;
@@ -233,7 +335,6 @@ function AssignmentModal({
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
-        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">
@@ -248,7 +349,6 @@ function AssignmentModal({
           </button>
         </div>
 
-        {/* Conflict warning */}
         {hasConflict && !existing && (
           <div className="mx-6 mt-4 flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-amber-700 text-sm">
             <AlertTriangle size={15} className="shrink-0" />
@@ -256,105 +356,69 @@ function AssignmentModal({
           </div>
         )}
 
-        {/* Form */}
         <div className="px-6 py-4 space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Title <span className="text-red-500">*</span></label>
-            <input
-              type="text"
-              value={title}
-              onChange={e => setTitle(e.target.value)}
+            <input type="text" value={title} onChange={e => setTitle(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="e.g., Roof installation – Phase 1"
-            />
+              placeholder="e.g., Roof installation – Phase 1" />
           </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Contact</label>
-            <select
-              value={contactId}
-              onChange={e => setContactId(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-            >
+            <select value={contactId} onChange={e => setContactId(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
               <option value="">— None —</option>
               {contacts.map(c => (
                 <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>
               ))}
             </select>
           </div>
-
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
-              <input
-                type="time"
-                value={startTime}
-                onChange={e => setStartTime(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+              <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">End Time</label>
-              <input
-                type="time"
-                value={endTime}
-                onChange={e => setEndTime(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+              <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
           </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-            <select
-              value={status}
-              onChange={e => setStatus(e.target.value as ScheduleStatus)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-            >
+            <select value={status} onChange={e => setStatus(e.target.value as ScheduleStatus)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
               <option value="scheduled">Scheduled</option>
               <option value="in_progress">In Progress</option>
               <option value="completed">Completed</option>
               <option value="cancelled">Cancelled</option>
             </select>
           </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-            <textarea
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              rows={3}
+            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-              placeholder="Any additional notes…"
-            />
+              placeholder="Any additional notes…" />
           </div>
         </div>
 
-        {/* Footer */}
         <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200">
           <div>
             {existing && (
-              <button
-                onClick={handleDelete}
-                disabled={isSaving}
-                className="px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-              >
+              <button onClick={handleDelete} disabled={isSaving}
+                className="px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50">
                 Remove
               </button>
             )}
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            >
+            <button onClick={onClose}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
               Cancel
             </button>
-            <button
-              onClick={handleSave}
-              disabled={isSaving}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
-            >
+            <button onClick={handleSave} disabled={isSaving}
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2">
               {isSaving && <Loader2 size={14} className="animate-spin" />}
               {existing ? 'Save Changes' : 'Add Assignment'}
             </button>
@@ -375,8 +439,8 @@ export default function CrewScheduleView({ contactFilterId }: { contactFilterId?
   const [crewMembers, setCrewMembers] = useState<CrewMemberRow[]>([]);
   const [schedules, setSchedules] = useState<CrewSchedule[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [showCreateSubModal, setShowCreateSubModal] = useState(false);
 
-  // Modal state
   const [modalOpen, setModalOpen] = useState(false);
   const [modalCrewMember, setModalCrewMember] = useState<CrewMemberRow | null>(null);
   const [modalDate, setModalDate] = useState<string>('');
@@ -390,17 +454,61 @@ export default function CrewScheduleView({ contactFilterId }: { contactFilterId?
 
   const loadCrewMembers = useCallback(async () => {
     if (!profile?.company_id) return;
-    const { data, error } = await supabase
+
+    // Internal team members: profiles table uses first_name + last_name, NOT full_name
+    const { data: internalData, error: internalError } = await supabase
       .from('profiles')
-      .select('id, full_name, avatar_url, role')
+      .select('id, first_name, last_name, avatar_url, role')
       .eq('company_id', profile.company_id)
-      .order('full_name');
-    if (error) {
-      console.error('Error loading crew members:', error);
+      .eq('is_active', true)
+      .order('first_name');
+
+    if (internalError) {
+      console.error('Error loading internal crew:', internalError);
       toast.error('Failed to load crew members');
-      return;
     }
-    setCrewMembers((data ?? []) as CrewMemberRow[]);
+
+    const internal: InternalCrewRow[] = (internalData ?? []).map((p: any) => ({
+      type: 'internal' as const,
+      id: p.id,
+      full_name: [p.first_name, p.last_name].filter(Boolean).join(' ') || p.email || 'Unnamed',
+      avatar_url: p.avatar_url ?? null,
+      role: p.role ?? null,
+    }));
+
+    // Subcontractor crews — gracefully handle if table doesn't exist
+    let subcontractors: SubcontractorCrewRow[] = [];
+    try {
+      const { data: subData, error: subError } = await supabase
+        .from('subcontractor_crews')
+        .select('id, company_name, contact_name, phone, email, trade')
+        .eq('company_id', profile.company_id)
+        .eq('is_active', true)
+        .order('company_name');
+
+      if (subError) {
+        if (subError.message?.includes('does not exist') || subError.message?.includes('relation')) {
+          // Table not migrated yet — silently skip subcontractors
+          console.warn('subcontractor_crews table not found — skipping');
+        } else {
+          console.error('Error loading subcontractor crews:', subError);
+        }
+      } else {
+        subcontractors = (subData ?? []).map((s: any) => ({
+          type: 'subcontractor' as const,
+          id: s.id,
+          full_name: s.company_name,
+          contact_name: s.contact_name ?? null,
+          phone: s.phone ?? null,
+          email: s.email ?? null,
+          trade: s.trade ?? null,
+        }));
+      }
+    } catch {
+      // Silently ignore if table missing
+    }
+
+    setCrewMembers([...internal, ...subcontractors]);
   }, [profile?.company_id]);
 
   const loadSchedules = useCallback(async () => {
@@ -430,15 +538,20 @@ export default function CrewScheduleView({ contactFilterId }: { contactFilterId?
   // ── Summary stats ─────────────────────────────────────────────────────────
 
   const totalAssignments = schedules.length;
-  const scheduledMemberIds = new Set(schedules.map(s => s.crew_member_id));
+  const scheduledMemberIds = new Set([
+    ...schedules.map(s => s.crew_member_id).filter(Boolean),
+    ...schedules.map(s => s.subcontractor_id).filter(Boolean),
+  ]);
   const crewScheduledCount = scheduledMemberIds.size;
   const totalSlots = crewMembers.length * 7;
-  const openSlots = totalSlots - totalAssignments;
+  const openSlots = Math.max(0, totalSlots - totalAssignments);
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
-  const getSchedulesFor = (crewMemberId: string, date: string): CrewSchedule[] =>
-    schedules.filter(s => s.crew_member_id === crewMemberId && s.scheduled_date === date);
+  const getSchedulesFor = (memberId: string, date: string): CrewSchedule[] =>
+    schedules.filter(
+      s => (s.crew_member_id === memberId || s.subcontractor_id === memberId) && s.scheduled_date === date
+    );
 
   const openModal = (member: CrewMemberRow, date: string, existing?: CrewSchedule) => {
     setModalCrewMember(member);
@@ -447,20 +560,8 @@ export default function CrewScheduleView({ contactFilterId }: { contactFilterId?
     setModalOpen(true);
   };
 
-  // ── Navigation ────────────────────────────────────────────────────────────
-
-  const prevWeek = () => {
-    const d = new Date(anchorDate);
-    d.setDate(d.getDate() - 7);
-    setAnchorDate(d);
-  };
-
-  const nextWeek = () => {
-    const d = new Date(anchorDate);
-    d.setDate(d.getDate() + 7);
-    setAnchorDate(d);
-  };
-
+  const prevWeek = () => { const d = new Date(anchorDate); d.setDate(d.getDate() - 7); setAnchorDate(d); };
+  const nextWeek = () => { const d = new Date(anchorDate); d.setDate(d.getDate() + 7); setAnchorDate(d); };
   const goToday = () => setAnchorDate(new Date());
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -480,35 +581,37 @@ export default function CrewScheduleView({ contactFilterId }: { contactFilterId?
             </div>
           </div>
 
-          {/* Week navigation */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            {/* Add Subcontractor Crew button */}
             <button
-              onClick={prevWeek}
-              className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors text-gray-600"
+              onClick={() => setShowCreateSubModal(true)}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
             >
-              <ChevronLeft size={16} />
+              <Building2 size={15} />
+              Add Sub Crew
             </button>
-            <button
-              onClick={goToday}
-              className="px-3 py-1.5 text-sm font-medium border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-gray-700"
-            >
-              Today
-            </button>
-            <button
-              onClick={nextWeek}
-              className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors text-gray-600"
-            >
-              <ChevronRight size={16} />
-            </button>
-            <span className="text-sm font-medium text-gray-700 ml-1">
-              {weekDates[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-              {' – '}
-              {weekDates[6].toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-            </span>
+
+            {/* Week navigation */}
+            <div className="flex items-center gap-2">
+              <button onClick={prevWeek} className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors text-gray-600">
+                <ChevronLeft size={16} />
+              </button>
+              <button onClick={goToday} className="px-3 py-1.5 text-sm font-medium border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-gray-700">
+                Today
+              </button>
+              <button onClick={nextWeek} className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors text-gray-600">
+                <ChevronRight size={16} />
+              </button>
+              <span className="text-sm font-medium text-gray-700 ml-1">
+                {weekDates[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                {' – '}
+                {weekDates[6].toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* This Week summary */}
+        {/* Summary stats */}
         <div className="mt-4 grid grid-cols-3 gap-4 max-w-2xl">
           <div className="flex items-center gap-3 bg-blue-50 rounded-lg px-4 py-3">
             <BarChart3 size={18} className="text-blue-600 shrink-0" />
@@ -528,7 +631,7 @@ export default function CrewScheduleView({ contactFilterId }: { contactFilterId?
             <Clock size={18} className="text-gray-500 shrink-0" />
             <div>
               <p className="text-xs text-gray-500 font-medium">Open Slots</p>
-              <p className="text-xl font-bold text-gray-700">{openSlots < 0 ? 0 : openSlots}</p>
+              <p className="text-xl font-bold text-gray-700">{openSlots}</p>
             </div>
           </div>
         </div>
@@ -543,50 +646,48 @@ export default function CrewScheduleView({ contactFilterId }: { contactFilterId?
         ) : crewMembers.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-gray-400 gap-3">
             <Users size={40} className="opacity-40" />
-            <p className="text-sm">No crew members found for your company.</p>
+            <p className="text-sm font-medium">No crew members found.</p>
+            <p className="text-xs text-gray-400">Add team members in Team settings, or click "Add Sub Crew" for subcontractors.</p>
           </div>
         ) : (
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
             {/* Header row */}
-            <div
-              className="grid border-b border-gray-200 bg-gray-50"
-              style={{ gridTemplateColumns: '180px repeat(7, minmax(120px, 1fr))' }}
-            >
+            <div className="grid border-b border-gray-200 bg-gray-50"
+              style={{ gridTemplateColumns: '200px repeat(7, minmax(120px, 1fr))' }}>
               <div className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide border-r border-gray-200">
                 Crew Member
               </div>
               {weekDates.map(date => (
-                <div
-                  key={toISO(date)}
+                <div key={toISO(date)}
                   className={`px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide border-r last:border-r-0 border-gray-200 ${
                     isToday(date) ? 'bg-blue-50 text-blue-700' : 'text-gray-500'
-                  }`}
-                >
+                  }`}>
                   {formatHeaderDate(date)}
-                  {isToday(date) && (
-                    <span className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-blue-500 align-middle" />
-                  )}
+                  {isToday(date) && <span className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-blue-500 align-middle" />}
                 </div>
               ))}
             </div>
 
             {/* Crew rows */}
             {crewMembers.map((member, memberIdx) => (
-              <div
-                key={member.id}
+              <div key={member.id}
                 className={`grid border-b last:border-b-0 border-gray-100 ${memberIdx % 2 === 1 ? 'bg-gray-50/50' : 'bg-white'}`}
-                style={{ gridTemplateColumns: '180px repeat(7, minmax(120px, 1fr))' }}
-              >
-                {/* Crew member name cell */}
+                style={{ gridTemplateColumns: '200px repeat(7, minmax(120px, 1fr))' }}>
+
+                {/* Name cell */}
                 <div className="px-4 py-3 flex items-center gap-2.5 border-r border-gray-200 min-h-[72px]">
-                  <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-semibold shrink-0 uppercase">
-                    {member.full_name?.charAt(0) ?? '?'}
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 uppercase ${
+                    member.type === 'subcontractor' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'
+                  }`}>
+                    {member.type === 'subcontractor' ? <Building2 size={14} /> : (member.full_name?.charAt(0) ?? '?')}
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-gray-900 truncate">{member.full_name}</p>
-                    {member.role && (
-                      <p className="text-xs text-gray-400 capitalize truncate">{member.role}</p>
-                    )}
+                    <p className="text-xs text-gray-400 capitalize truncate">
+                      {member.type === 'subcontractor'
+                        ? `Sub · ${(member as SubcontractorCrewRow).trade || 'General'}`
+                        : (member as InternalCrewRow).role ?? 'Team member'}
+                    </p>
                   </div>
                 </div>
 
@@ -598,25 +699,20 @@ export default function CrewScheduleView({ contactFilterId }: { contactFilterId?
                   const firstSchedule = daySchedules[0] ?? null;
 
                   return (
-                    <div
-                      key={dateStr}
+                    <div key={dateStr}
                       onClick={() => openModal(member, dateStr, firstSchedule ?? undefined)}
                       className={`px-2 py-2 border-r last:border-r-0 border-gray-100 min-h-[72px] cursor-pointer group transition-colors ${
                         isToday(date) ? 'bg-blue-50/30' : 'hover:bg-gray-50'
-                      } ${!firstSchedule ? 'hover:bg-blue-50/20' : ''}`}
-                    >
+                      } ${!firstSchedule ? 'hover:bg-blue-50/20' : ''}`}>
                       {firstSchedule ? (
                         <div className="space-y-1">
-                          {/* Conflict badge */}
                           {hasConflict && (
                             <div className="flex items-center gap-1 text-amber-600 text-xs font-medium mb-1">
                               <AlertTriangle size={11} />
                               <span>{daySchedules.length} assignments</span>
                             </div>
                           )}
-                          <p className="text-xs font-medium text-gray-800 line-clamp-2 leading-snug">
-                            {firstSchedule.title}
-                          </p>
+                          <p className="text-xs font-medium text-gray-800 line-clamp-2 leading-snug">{firstSchedule.title}</p>
                           <StatusBadge status={firstSchedule.status} />
                           {(firstSchedule.start_time || firstSchedule.end_time) && (
                             <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
@@ -640,11 +736,21 @@ export default function CrewScheduleView({ contactFilterId }: { contactFilterId?
         )}
       </div>
 
+      {/* Create Subcontractor Modal */}
+      {showCreateSubModal && (
+        <CreateSubcontractorModal
+          companyId={profile?.company_id ?? ''}
+          onClose={() => setShowCreateSubModal(false)}
+          onCreated={loadCrewMembers}
+        />
+      )}
+
       {/* Assignment modal */}
       {modalOpen && modalCrewMember && (
         <AssignmentModal
           crewMemberId={modalCrewMember.id}
           crewMemberName={modalCrewMember.full_name}
+          crewMemberType={modalCrewMember.type}
           date={modalDate}
           existing={modalExisting}
           contacts={state.contacts}
