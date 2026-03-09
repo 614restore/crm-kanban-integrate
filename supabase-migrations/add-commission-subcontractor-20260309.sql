@@ -25,7 +25,8 @@ CREATE TABLE IF NOT EXISTS subcontractor_crews (
 -- 3. RLS for subcontractor_crews
 ALTER TABLE subcontractor_crews ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS "subcontractor_crews_company_isolation"
+DROP POLICY IF EXISTS "subcontractor_crews_company_isolation" ON subcontractor_crews;
+CREATE POLICY "subcontractor_crews_company_isolation"
   ON subcontractor_crews
   FOR ALL
   USING (
