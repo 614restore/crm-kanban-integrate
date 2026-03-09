@@ -2178,10 +2178,7 @@ export default function SettingsView() {
                 </p>
                 
                 <div className="space-y-2 mb-4">
-                  {[
-                    { event: 'contact.created', url: 'https://example.com/webhook/contact' },
-                    { event: 'invoice.paid', url: 'https://example.com/webhook/payment' },
-                  ].map((webhook, idx) => (
+                  {([] as { event: string; url: string }[]).map((webhook, idx) => (
                     <div key={idx} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                       <div className="flex-1">
                         <div className="text-xs font-semibold text-gray-700 mb-1">{webhook.event}</div>

@@ -89,30 +89,31 @@ export default function EagleViewPanel({
 
     if (!companyId) { setConfigStatus('missing'); return; }
 
-    supabase
-      .from('company_integrations')
-      .select('credentials')
-      .eq('company_id', companyId)
-      .eq('integration_type', 'eagleview')
-      .eq('is_active', true)
-      .single()
-      .then(({ data }) => {
+    const load = async () => {
+      try {
+        const { data } = await supabase
+          .from('company_integrations')
+          .select('credentials')
+          .eq('company_id', companyId)
+          .eq('integration_type', 'eagleview')
+          .eq('is_active', true)
+          .single();
         const apiKey = data?.credentials?.apiKey;
         const clientId = data?.credentials?.clientId;
         const env = data?.credentials?.environment || 'production';
-        if (!apiKey || !clientId) {
-          setConfigStatus('missing');
-          return;
-        }
+        if (!apiKey || !clientId) { setConfigStatus('missing'); return; }
         const ev = new EagleViewIntegration(apiKey, clientId, env);
         setEagleView(ev);
         setConfigStatus('ok');
-        // Load account credits
-        ev.getAccountCredits()
-          .then(d => setAccountCredits(d?.credits_available ?? d?.balance ?? null))
-          .catch(() => {});
-      })
-      .catch(() => setConfigStatus('missing'));
+        try {
+          const credits = await ev.getAccountCredits();
+          setAccountCredits(credits?.credits_available ?? credits?.balance ?? null);
+        } catch { /* non-critical */ }
+      } catch {
+        setConfigStatus('missing');
+      }
+    };
+    load();
   }, [companyId, contactId]);
 
   // ── Persist order to localStorage ────────────────────────────────────────
@@ -255,7 +256,7 @@ export default function EagleViewPanel({
       const file = new File([pdfBlob], fileName, { type: pdfBlob.type });
 
       const uploadResult = await uploadDocument(file, companyId, contactId);
-      if (!uploadResult.success || !uploadResult.path) {
+      if (uploadResult.error || !uploadResult.path) {
         throw new Error(uploadResult.error || 'Upload failed');
       }
 

@@ -63,7 +63,7 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
   // Build preview whenever selected template, company, or user-supplied overrides change
   useEffect(() => {
     if (!selected) return;
-    const base = buildContactOverrides(contact as any, companyProfile, profile);
+    const base = buildContactOverrides(contact as any, companyProfile as any, profile as any);
     const merged = { ...base, ...overrideInputs };
     const filled = fillTemplateVars(selected.content, merged);
     setPreviewContent(filled);
@@ -95,7 +95,7 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
     setIsSaving(true);
     try {
       // Use the most up-to-date preview content
-      const base = buildContactOverrides(contact as any, companyProfile, profile);
+      const base = buildContactOverrides(contact as any, companyProfile as any, profile as any);
       const merged = { ...base, ...overrideInputs };
       const finalHtml = fillTemplateVars(selected.content, merged);
 
@@ -108,7 +108,7 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
 
       // Upload to Supabase storage under this contact's folder
       const uploadResult = await uploadDocument(file, profile.company_id, contact.id);
-      if (!uploadResult.success || !uploadResult.path) {
+      if (uploadResult.error || !uploadResult.path) {
         throw new Error(uploadResult.error || 'Upload failed');
       }
 

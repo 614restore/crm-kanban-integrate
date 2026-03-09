@@ -799,7 +799,7 @@ export default function TeamView() {
           userId={selectedMember.id}
           userName={selectedMember.name}
           role={selectedMember.role}
-          customPermissions={undefined} // TODO: Load from database
+          customPermissions={undefined}
           onSave={handleSavePermissions}
           onClose={() => {
             setShowPermissionsModal(false);
