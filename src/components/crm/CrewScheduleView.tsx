@@ -104,6 +104,14 @@ function isToday(date: Date): boolean {
   return toISO(date) === toISO(new Date());
 }
 
+/** Build a display name from profile row — handles full_name, first+last, or email fallback */
+function buildFullName(p: { full_name?: string | null; first_name?: string | null; last_name?: string | null; email?: string | null }): string {
+  if (p.full_name?.trim()) return p.full_name.trim();
+  const parts = [p.first_name, p.last_name].filter(Boolean).join(' ').trim();
+  if (parts) return parts;
+  return p.email ?? 'Unknown';
+}
+
 // ─── Status Badge ─────────────────────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: ScheduleStatus }) {
@@ -624,7 +632,6 @@ export default function CrewScheduleView({ contactFilterId }: { contactFilterId?
       .eq('is_active', true)
       .order('company_name');
     if (error) {
-      // Table may not exist yet — fail silently
       console.warn('subcontractor_crews query failed (table may need migration):', error.message);
       return;
     }
@@ -634,19 +641,19 @@ export default function CrewScheduleView({ contactFilterId }: { contactFilterId?
   const loadCrewMembers = useCallback(async () => {
     if (!profile?.company_id) return;
 
-    // Load internal team members from profiles
+    // Select both first_name/last_name AND full_name so we handle either schema
     const { data: profileData, error: profileError } = await supabase
       .from('profiles')
-      .select('id, full_name, avatar_url, role')
+      .select('id, first_name, last_name, full_name, avatar_url, role, email')
       .eq('company_id', profile.company_id)
-      .order('full_name');
+      .order('first_name');
+
     if (profileError) {
       console.error('Error loading internal crew:', profileError);
       toast.error('Failed to load crew members');
       return;
     }
 
-    // Load subcontractors
     const { data: subData, error: subError } = await supabase
       .from('subcontractor_crews')
       .select('id, company_name, contact_name, phone, email, trade')
@@ -660,19 +667,19 @@ export default function CrewScheduleView({ contactFilterId }: { contactFilterId?
     const internal: InternalCrewRow[] = (profileData ?? []).map(p => ({
       type: 'internal',
       id: p.id,
-      full_name: p.full_name,
-      avatar_url: p.avatar_url,
-      role: p.role,
+      full_name: buildFullName(p),
+      avatar_url: p.avatar_url ?? null,
+      role: p.role ?? null,
     }));
 
     const subs: SubcontractorCrewRow[] = (subData ?? []).map(s => ({
       type: 'subcontractor',
       id: s.id,
       full_name: s.company_name,
-      contact_name: s.contact_name,
-      phone: s.phone,
-      email: s.email,
-      trade: s.trade,
+      contact_name: s.contact_name ?? null,
+      phone: s.phone ?? null,
+      email: s.email ?? null,
+      trade: s.trade ?? null,
     }));
 
     setCrewMembers([...internal, ...subs]);
@@ -748,7 +755,6 @@ export default function CrewScheduleView({ contactFilterId }: { contactFilterId?
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Manage Subcontractors toggle */}
             <button
               onClick={() => setShowSubManager(v => !v)}
               className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors ${
@@ -761,7 +767,6 @@ export default function CrewScheduleView({ contactFilterId }: { contactFilterId?
               Manage Subcontractors
             </button>
 
-            {/* Week navigation */}
             <button onClick={prevWeek} className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 text-gray-600">
               <ChevronLeft size={16} />
             </button>
@@ -805,7 +810,7 @@ export default function CrewScheduleView({ contactFilterId }: { contactFilterId?
         </div>
       </div>
 
-      {/* Subcontractor manager panel (collapsible) */}
+      {/* Subcontractor manager panel */}
       {showSubManager && (
         <div className="px-6 pt-4">
           <SubcontractorManager
