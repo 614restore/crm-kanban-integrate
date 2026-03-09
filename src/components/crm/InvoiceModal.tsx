@@ -4,6 +4,7 @@ import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
 import { fireAutomationEvent } from '@/lib/automationEngine';
 import { Invoice, InvoiceItem, formatCurrency, getContactFullName } from '@/lib/crmData';
+import { sendEmail } from '@/lib/emailApi';
 import { toast } from 'sonner';
 import { X, Plus, Trash2, Save, Send, DollarSign } from 'lucide-react';
 
@@ -133,6 +134,47 @@ export default function InvoiceModal() {
       };
 
       dispatch({ type: 'ADD_INVOICE', payload: newInvoice });
+
+      // Send email to customer when marking as sent
+      if (status === 'sent' && selectedContact?.email) {
+        const itemRows = validItems.map((item) =>
+          `<tr>
+            <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb">${item.description}</td>
+            <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;text-align:center">${item.quantity}</td>
+            <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;text-align:right">${formatCurrency(item.unitPrice)}</td>
+            <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;text-align:right">${formatCurrency(item.total)}</td>
+          </tr>`
+        ).join('');
+        sendEmail({
+          to: selectedContact.email,
+          subject: `Invoice from ${state.companyName || 'TrussCTR'} — Due ${dueDate}`,
+          html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto">
+            <h2 style="color:#1e293b">Invoice from ${state.companyName || 'TrussCTR'}</h2>
+            <p>Hi ${getContactFullName(selectedContact)},</p>
+            <p>Please find your invoice below. Payment is due by <strong>${dueDate}</strong>.</p>
+            <table style="width:100%;border-collapse:collapse;margin:16px 0">
+              <thead>
+                <tr style="background:#f1f5f9">
+                  <th style="padding:8px;text-align:left">Description</th>
+                  <th style="padding:8px;text-align:center">Qty</th>
+                  <th style="padding:8px;text-align:right">Unit Price</th>
+                  <th style="padding:8px;text-align:right">Total</th>
+                </tr>
+              </thead>
+              <tbody>${itemRows}</tbody>
+            </table>
+            <table style="width:100%;max-width:300px;margin-left:auto">
+              <tr><td style="padding:4px 8px">Subtotal</td><td style="padding:4px 8px;text-align:right">${formatCurrency(subtotal)}</td></tr>
+              <tr><td style="padding:4px 8px">Tax (8.25%)</td><td style="padding:4px 8px;text-align:right">${formatCurrency(tax)}</td></tr>
+              <tr style="font-weight:700;font-size:16px"><td style="padding:8px">Total Due</td><td style="padding:8px;text-align:right">${formatCurrency(total)}</td></tr>
+            </table>
+            ${notes ? `<p style="margin-top:16px;color:#64748b">${notes}</p>` : ''}
+            <p style="margin-top:24px;color:#64748b;font-size:13px">Please reply to this email or call us if you have any questions.</p>
+          </div>`,
+        }).catch(() => {});
+      } else if (status === 'sent' && !selectedContact?.email) {
+        toast.warning('Invoice saved — no email on file for this customer');
+      }
 
       fireAutomationEvent('invoice_created', effectiveCompanyId, {
         contactId: selectedContactId,

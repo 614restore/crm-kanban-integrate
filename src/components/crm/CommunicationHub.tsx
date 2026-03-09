@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
+import { sendEmail } from '@/lib/emailApi';
 import { toast } from 'sonner';
 import {
   formatDateTime,
@@ -350,9 +351,40 @@ export default function CommunicationHub() {
   const handleSaveCompose = async () => {
     if (!composeText.trim() || !composeContactId) return;
     await persistCommunication(composeContactId, composeText.trim(), composeType);
+
+    // If type is email, actually send it to the contact
+    if (composeType === 'email') {
+      const contact = state.contacts.find((c) => c.id === composeContactId);
+      if (contact?.email) {
+        // Parse optional "Subject: ..." line from compose text
+        const lines = composeText.trim().split('\n');
+        let subject = `Message from ${state.companyName || 'TrussCTR'}`;
+        let body = composeText.trim();
+        if (lines[0].toLowerCase().startsWith('subject:')) {
+          subject = lines[0].replace(/^subject:\s*/i, '').trim();
+          body = lines.slice(2).join('\n').trim() || lines.slice(1).join('\n').trim();
+        }
+        sendEmail({
+          to: contact.email,
+          subject,
+          html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto">
+            <p>${body.replace(/\n/g, '<br>')}</p>
+            <p style="margin-top:24px;color:#64748b;font-size:13px">— ${state.currentUser?.name || 'TrussCTR Team'}</p>
+          </div>`,
+        }).then(() => {
+          toast.success(`Email sent to ${contact.email}`);
+        }).catch(() => {
+          toast.error('Email failed to send — saved as draft');
+        });
+      } else {
+        toast.warning('Communication saved — no email on file for this contact');
+      }
+    } else {
+      toast.success('Communication saved');
+    }
+
     setShowComposeModal(false);
     setComposeText('');
-    toast.success('Communication saved');
   };
 
   const handleSendReply = async () => {

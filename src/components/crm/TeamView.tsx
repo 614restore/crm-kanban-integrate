@@ -158,7 +158,7 @@ export default function TeamView() {
 
       // Send email via our Vercel API (Resend)
       const inviteUrl = `${window.location.origin}${window.location.pathname}#/join?token=${token}`;
-      const emailRes = await fetch('https://crm-kanban-integrate.vercel.app/api/send-email', {
+      const emailRes = await fetch(`${window.location.origin}/api/send-email`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
