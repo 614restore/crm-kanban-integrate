@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { AlertCircle, Check, ExternalLink, Loader2, X } from 'lucide-react';
 import { BaseIntegration } from '@/lib/integrations/apiTypes';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/lib/authContext';
 
 interface IntegrationConfigDialogProps {
   integration: BaseIntegration & { credentialFields?: Record<string, any> };
