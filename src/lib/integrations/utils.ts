@@ -169,8 +169,8 @@ export function getSetupDifficulty(integrationId: string): 'easy' | 'moderate' |
 export function getFieldPlaceholder(integrationId: string, fieldName: string): string | undefined {
   const placeholders: Record<string, Record<string, string>> = {
     stripe: {
-      secretKey: 'sk_live_51234567890abcdefghijk',
-      publishableKey: 'pk_live_51234567890abcdefghijk',
+      secretKey: 'Your Stripe secret key (sk_live_...)',
+      publishableKey: 'Your Stripe publishable key (pk_live_...)',
     },
     quickbooks: {
       companyId: '1234567890',
@@ -181,8 +181,8 @@ export function getFieldPlaceholder(integrationId: string, fieldName: string): s
       fromNumber: '+1234567890',
     },
     eagleview: {
-      apiKey: 'ev_live_abc123def456',
-      clientId: 'client_123456789',
+      apiKey: 'Your EagleView API key (ev_live_...)',
+      clientId: 'Your EagleView client ID',
     },
   };
 
