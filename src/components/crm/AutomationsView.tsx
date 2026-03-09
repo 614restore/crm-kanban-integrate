@@ -82,6 +82,7 @@ export default function AutomationsView() {
   const [nameDialog, setNameDialog] = useState<{ type: 'create' | 'edit'; automation?: Automation } | null>(null);
   const [nameValue, setNameValue] = useState('');
   const [nameSaving, setNameSaving] = useState(false);
+  const [recipients, setRecipients] = useState<AutomationRecipient[]>([]);
 
   // Automation run history
   const [logs, setLogs] = useState<AutomationLog[]>([]);
@@ -150,11 +151,13 @@ export default function AutomationsView() {
   const handleCreateAutomation = () => {
     if (!state.companyId) { toast.error('No company selected'); return; }
     setNameValue('New Automation');
+    setRecipients([]);
     setNameDialog({ type: 'create' });
   };
 
   const handleEditAutomation = (automation: Automation) => {
     setNameValue(automation.name);
+    setRecipients([]);
     setNameDialog({ type: 'edit', automation });
   };
 
@@ -171,6 +174,7 @@ export default function AutomationsView() {
           action_type: 'send notification',
           is_active: false,
           created_by: state.currentUser?.id,
+          recipients: recipients.length > 0 ? recipients : undefined,
         });
         if (!created) { toast.error('Failed to create automation'); return; }
         dispatch({
@@ -187,8 +191,10 @@ export default function AutomationsView() {
         toast.success('Automation created');
       } else if (nameDialog?.automation) {
         const automation = nameDialog.automation;
-        if (trimmed === automation.name) { setNameDialog(null); return; }
-        const updated = await db.updateAutomation(automation.id, { name: trimmed });
+        const updated = await db.updateAutomation(automation.id, {
+          name: trimmed,
+          recipients: recipients.length > 0 ? recipients : undefined,
+        });
         if (!updated) { toast.error('Failed to update automation'); return; }
         dispatch({
           type: 'SET_AUTOMATIONS',
@@ -459,17 +465,17 @@ export default function AutomationsView() {
       </div>
 
       {/* Name dialog */}
-      <Dialog open={!!nameDialog} onOpenChange={(open) => { if (!open) setNameDialog(null); }}>
+      <Dialog open={!!nameDialog} onOpenChange={(open) => { if (!open) { setNameDialog(null); setRecipients([]); } }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>{nameDialog?.type === 'create' ? 'Create Automation' : 'Rename Automation'}</DialogTitle>
+            <DialogTitle>{nameDialog?.type === 'create' ? 'Create Automation' : 'Edit Automation'}</DialogTitle>
           </DialogHeader>
           <input autoFocus type="text" value={nameValue} onChange={(e) => setNameValue(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') handleNameDialogSave(); }}
             placeholder="Automation name"
             className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           <DialogFooter>
-            <button onClick={() => setNameDialog(null)}
+            <button onClick={() => { setNameDialog(null); setRecipients([]); }}
               className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button>
             <button onClick={handleNameDialogSave} disabled={!nameValue.trim() || nameSaving}
               className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50">
