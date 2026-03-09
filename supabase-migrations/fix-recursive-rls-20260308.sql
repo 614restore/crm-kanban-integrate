@@ -60,6 +60,54 @@ CREATE POLICY "company_members_equipment_assignments"
       AND profiles.company_id = equipment_assignments.company_id
   ));
 
+-- ── contacts ─────────────────────────────────────────────────
+DROP POLICY IF EXISTS "Users can view their company contacts" ON contacts;
+DROP POLICY IF EXISTS "Users can insert their company contacts" ON contacts;
+DROP POLICY IF EXISTS "Users can update their company contacts" ON contacts;
+DROP POLICY IF EXISTS "Users can delete their company contacts" ON contacts;
+DROP POLICY IF EXISTS "company_members_contacts" ON contacts;
+DROP POLICY IF EXISTS "contacts_select_policy" ON contacts;
+DROP POLICY IF EXISTS "contacts_insert_policy" ON contacts;
+DROP POLICY IF EXISTS "contacts_update_policy" ON contacts;
+DROP POLICY IF EXISTS "contacts_delete_policy" ON contacts;
+DROP POLICY IF EXISTS "Enable read access for company members" ON contacts;
+DROP POLICY IF EXISTS "Enable insert for company members" ON contacts;
+DROP POLICY IF EXISTS "Enable update for company members" ON contacts;
+DROP POLICY IF EXISTS "Enable delete for company members" ON contacts;
+
+CREATE POLICY "company_members_contacts"
+  ON contacts FOR ALL
+  USING (EXISTS (
+    SELECT 1 FROM profiles
+    WHERE profiles.id = auth.uid()
+      AND profiles.company_id = contacts.company_id
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM profiles
+    WHERE profiles.id = auth.uid()
+      AND profiles.company_id = contacts.company_id
+  ));
+
+-- ── appointments ──────────────────────────────────────────────
+DROP POLICY IF EXISTS "company_members_appointments" ON appointments;
+DROP POLICY IF EXISTS "Users can view their company appointments" ON appointments;
+DROP POLICY IF EXISTS "Users can insert their company appointments" ON appointments;
+DROP POLICY IF EXISTS "Users can update their company appointments" ON appointments;
+DROP POLICY IF EXISTS "Users can delete their company appointments" ON appointments;
+
+CREATE POLICY "company_members_appointments"
+  ON appointments FOR ALL
+  USING (EXISTS (
+    SELECT 1 FROM profiles
+    WHERE profiles.id = auth.uid()
+      AND profiles.company_id = appointments.company_id
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM profiles
+    WHERE profiles.id = auth.uid()
+      AND profiles.company_id = appointments.company_id
+  ));
+
 -- ── company_integrations ─────────────────────────────────────
 DROP POLICY IF EXISTS "company_members_read_integrations" ON company_integrations;
 DROP POLICY IF EXISTS "company_admins_write_integrations" ON company_integrations;
