@@ -316,6 +316,202 @@ CREATE POLICY "company_members_kanban_columns"
       AND profiles.company_id = kanban_columns.company_id
   ));
 
+-- ── expenses ─────────────────────────────────────────────────
+DROP POLICY IF EXISTS "company_members_expenses" ON expenses;
+DROP POLICY IF EXISTS "Users can view their company expenses" ON expenses;
+DROP POLICY IF EXISTS "Users can insert their company expenses" ON expenses;
+DROP POLICY IF EXISTS "Users can update their company expenses" ON expenses;
+DROP POLICY IF EXISTS "Users can delete their company expenses" ON expenses;
+
+CREATE POLICY "company_members_expenses"
+  ON expenses FOR ALL
+  USING (EXISTS (
+    SELECT 1 FROM profiles
+    WHERE profiles.id = auth.uid()
+      AND profiles.company_id = expenses.company_id
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM profiles
+    WHERE profiles.id = auth.uid()
+      AND profiles.company_id = expenses.company_id
+  ));
+
+-- ── estimates ─────────────────────────────────────────────────
+DROP POLICY IF EXISTS "company_members_estimates" ON estimates;
+DROP POLICY IF EXISTS "Users can view their company estimates" ON estimates;
+DROP POLICY IF EXISTS "Users can insert their company estimates" ON estimates;
+DROP POLICY IF EXISTS "Users can update their company estimates" ON estimates;
+DROP POLICY IF EXISTS "Users can delete their company estimates" ON estimates;
+
+CREATE POLICY "company_members_estimates"
+  ON estimates FOR ALL
+  USING (EXISTS (
+    SELECT 1 FROM profiles
+    WHERE profiles.id = auth.uid()
+      AND profiles.company_id = estimates.company_id
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM profiles
+    WHERE profiles.id = auth.uid()
+      AND profiles.company_id = estimates.company_id
+  ));
+
+-- ── estimate_items ────────────────────────────────────────────
+DROP POLICY IF EXISTS "company_members_estimate_items" ON estimate_items;
+DROP POLICY IF EXISTS "Users can view their company estimate_items" ON estimate_items;
+DROP POLICY IF EXISTS "Users can insert their company estimate_items" ON estimate_items;
+DROP POLICY IF EXISTS "Users can update their company estimate_items" ON estimate_items;
+DROP POLICY IF EXISTS "Users can delete their company estimate_items" ON estimate_items;
+
+CREATE POLICY "company_members_estimate_items"
+  ON estimate_items FOR ALL
+  USING (EXISTS (
+    SELECT 1 FROM estimates
+    WHERE estimates.id = estimate_items.estimate_id
+      AND EXISTS (
+        SELECT 1 FROM profiles
+        WHERE profiles.id = auth.uid()
+          AND profiles.company_id = estimates.company_id
+      )
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM estimates
+    WHERE estimates.id = estimate_items.estimate_id
+      AND EXISTS (
+        SELECT 1 FROM profiles
+        WHERE profiles.id = auth.uid()
+          AND profiles.company_id = estimates.company_id
+      )
+  ));
+
+-- ── material_orders ───────────────────────────────────────────
+DROP POLICY IF EXISTS "company_members_material_orders" ON material_orders;
+DROP POLICY IF EXISTS "Users can view their company material_orders" ON material_orders;
+DROP POLICY IF EXISTS "Users can insert their company material_orders" ON material_orders;
+DROP POLICY IF EXISTS "Users can update their company material_orders" ON material_orders;
+DROP POLICY IF EXISTS "Users can delete their company material_orders" ON material_orders;
+
+CREATE POLICY "company_members_material_orders"
+  ON material_orders FOR ALL
+  USING (EXISTS (
+    SELECT 1 FROM profiles
+    WHERE profiles.id = auth.uid()
+      AND profiles.company_id = material_orders.company_id
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM profiles
+    WHERE profiles.id = auth.uid()
+      AND profiles.company_id = material_orders.company_id
+  ));
+
+-- ── material_order_items ──────────────────────────────────────
+DROP POLICY IF EXISTS "company_members_material_order_items" ON material_order_items;
+DROP POLICY IF EXISTS "Users can view their company material_order_items" ON material_order_items;
+DROP POLICY IF EXISTS "Users can insert their company material_order_items" ON material_order_items;
+DROP POLICY IF EXISTS "Users can update their company material_order_items" ON material_order_items;
+DROP POLICY IF EXISTS "Users can delete their company material_order_items" ON material_order_items;
+
+CREATE POLICY "company_members_material_order_items"
+  ON material_order_items FOR ALL
+  USING (EXISTS (
+    SELECT 1 FROM material_orders
+    WHERE material_orders.id = material_order_items.order_id
+      AND EXISTS (
+        SELECT 1 FROM profiles
+        WHERE profiles.id = auth.uid()
+          AND profiles.company_id = material_orders.company_id
+      )
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM material_orders
+    WHERE material_orders.id = material_order_items.order_id
+      AND EXISTS (
+        SELECT 1 FROM profiles
+        WHERE profiles.id = auth.uid()
+          AND profiles.company_id = material_orders.company_id
+      )
+  ));
+
+-- ── suppliers ─────────────────────────────────────────────────
+DROP POLICY IF EXISTS "company_members_suppliers" ON suppliers;
+DROP POLICY IF EXISTS "Users can view their company suppliers" ON suppliers;
+DROP POLICY IF EXISTS "Users can insert their company suppliers" ON suppliers;
+DROP POLICY IF EXISTS "Users can update their company suppliers" ON suppliers;
+DROP POLICY IF EXISTS "Users can delete their company suppliers" ON suppliers;
+
+CREATE POLICY "company_members_suppliers"
+  ON suppliers FOR ALL
+  USING (EXISTS (
+    SELECT 1 FROM profiles
+    WHERE profiles.id = auth.uid()
+      AND profiles.company_id = suppliers.company_id
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM profiles
+    WHERE profiles.id = auth.uid()
+      AND profiles.company_id = suppliers.company_id
+  ));
+
+-- ── automations ───────────────────────────────────────────────
+DROP POLICY IF EXISTS "company_members_automations" ON automations;
+DROP POLICY IF EXISTS "Users can view their company automations" ON automations;
+DROP POLICY IF EXISTS "Users can insert their company automations" ON automations;
+DROP POLICY IF EXISTS "Users can update their company automations" ON automations;
+DROP POLICY IF EXISTS "Users can delete their company automations" ON automations;
+
+CREATE POLICY "company_members_automations"
+  ON automations FOR ALL
+  USING (EXISTS (
+    SELECT 1 FROM profiles
+    WHERE profiles.id = auth.uid()
+      AND profiles.company_id = automations.company_id
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM profiles
+    WHERE profiles.id = auth.uid()
+      AND profiles.company_id = automations.company_id
+  ));
+
+-- ── lead_sources ──────────────────────────────────────────────
+DROP POLICY IF EXISTS "company_members_lead_sources" ON lead_sources;
+DROP POLICY IF EXISTS "Users can view their company lead_sources" ON lead_sources;
+DROP POLICY IF EXISTS "Users can insert their company lead_sources" ON lead_sources;
+DROP POLICY IF EXISTS "Users can update their company lead_sources" ON lead_sources;
+DROP POLICY IF EXISTS "Users can delete their company lead_sources" ON lead_sources;
+
+CREATE POLICY "company_members_lead_sources"
+  ON lead_sources FOR ALL
+  USING (EXISTS (
+    SELECT 1 FROM profiles
+    WHERE profiles.id = auth.uid()
+      AND profiles.company_id = lead_sources.company_id
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM profiles
+    WHERE profiles.id = auth.uid()
+      AND profiles.company_id = lead_sources.company_id
+  ));
+
+-- ── projects ──────────────────────────────────────────────────
+DROP POLICY IF EXISTS "company_members_projects" ON projects;
+DROP POLICY IF EXISTS "Users can view their company projects" ON projects;
+DROP POLICY IF EXISTS "Users can insert their company projects" ON projects;
+DROP POLICY IF EXISTS "Users can update their company projects" ON projects;
+DROP POLICY IF EXISTS "Users can delete their company projects" ON projects;
+
+CREATE POLICY "company_members_projects"
+  ON projects FOR ALL
+  USING (EXISTS (
+    SELECT 1 FROM profiles
+    WHERE profiles.id = auth.uid()
+      AND profiles.company_id = projects.company_id
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM profiles
+    WHERE profiles.id = auth.uid()
+      AND profiles.company_id = projects.company_id
+  ));
+
 -- ============================================================
 -- FIX: Expense receipts storage bucket isolation (B02)
 -- Add company-scoped storage policies so users can only access
