@@ -114,6 +114,53 @@ const termsBlock = `<div class="terms">
   • Payment terms: {{PAYMENT_TERMS}}
 </div>`;
 
+/** Header for contract documents (uses CONTRACT_NUMBER / CONTRACT_DATE instead of estimate fields) */
+const contractHeader = (titleText: string) => `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>${titleText}</title><style>${CSS}</style></head>
+<body>
+<div class="hdr">
+  <div class="hdr-left">
+    <div class="co-name">{{COMPANY_NAME}}</div>
+    <div class="co-tag">{{COMPANY_TAGLINE}}</div>
+    <div class="co-info">
+      <strong>{{REP_NAME}}</strong><br>
+      {{COMPANY_ADDRESS}}, {{COMPANY_CITY}}, {{COMPANY_STATE}} {{COMPANY_ZIP}}<br>
+      {{COMPANY_PHONE}} &nbsp;·&nbsp; {{COMPANY_EMAIL}}<br>
+      License: {{CONTRACTOR_LICENSE}}
+    </div>
+  </div>
+  <div>{{COMPANY_LOGO}}</div>
+</div>
+<div class="doc-title">${titleText.toUpperCase()}</div>
+<div class="grid2">
+  <div class="box">
+    <h4>Customer / Property Owner</h4>
+    <div class="row"><span class="lbl">Name:</span><span class="val">{{CUSTOMER_NAME}}</span></div>
+    <div class="row"><span class="lbl">Phone:</span><span class="val">{{CUSTOMER_PHONE}}</span></div>
+    <div class="row"><span class="lbl">Email:</span><span class="val">{{CUSTOMER_EMAIL}}</span></div>
+    <div class="row"><span class="lbl">Property:</span><span class="val">{{PROPERTY_ADDRESS}}</span></div>
+    <div class="row"><span class="lbl"></span><span class="val">{{PROPERTY_CITY}}, {{PROPERTY_STATE}} {{PROPERTY_ZIP}}</span></div>
+  </div>
+  <div class="box">
+    <h4>Contract Details</h4>
+    <div class="row"><span class="lbl">Contract #:</span><span class="val">{{CONTRACT_NUMBER}}</span></div>
+    <div class="row"><span class="lbl">Date:</span><span class="val">{{CONTRACT_DATE}}</span></div>
+    <div class="row"><span class="lbl">Start Date:</span><span class="val">{{START_DATE}}</span></div>
+    <div class="row"><span class="lbl">Est. Completion:</span><span class="val">{{ESTIMATED_COMPLETION}}</span></div>
+    <div class="row"><span class="lbl">Project Mgr:</span><span class="val">{{REP_NAME}}</span></div>
+  </div>
+</div>`;
+
+const contractTermsBlock = `<div class="terms">
+  <strong>Terms &amp; Conditions:</strong><br>
+  • This contract is a legally binding agreement between the parties named above.<br>
+  • All work performed to manufacturer specifications and applicable local building codes.<br>
+  • Materials and workmanship warranted for <strong>{{WARRANTY_PERIOD}}</strong> from completion.<br>
+  • Any changes to scope of work require a signed written change order prior to work.<br>
+  • Payment constitutes acceptance of completed work.<br>
+  • Payment terms: {{PAYMENT_TERMS}}
+</div>`;
+
 // ─── Template Definitions ──────────────────────────────────────────────────
 
 export function getContractorEstimateTemplates(): DocumentTemplate[] {
@@ -585,6 +632,374 @@ ${termsBlock}
 ${footer}`,
       variables: ['COMPANY_NAME','COMPANY_TAGLINE','REP_NAME','COMPANY_ADDRESS','COMPANY_CITY','COMPANY_STATE','COMPANY_ZIP','COMPANY_PHONE','COMPANY_EMAIL','CONTRACTOR_LICENSE','COMPANY_LOGO','CUSTOMER_NAME','CUSTOMER_PHONE','CUSTOMER_EMAIL','PROPERTY_ADDRESS','PROPERTY_CITY','PROPERTY_STATE','PROPERTY_ZIP','ESTIMATE_NUMBER','ESTIMATE_DATE','ESTIMATE_EXPIRY','START_DATE','ESTIMATED_DURATION','PAINT_BRAND','PAINT_LINE','WALL_COLOR','TRIM_COLOR','CEILING_COLOR','DOOR_COLOR','WALL_SHEEN','TRIM_SHEEN','COAT_COUNT','CEILING_COATS','ROOM_LIST','ROOM_COUNT','WALL_SQFT','CEILING_SQFT','DOOR_COUNT','TOTAL_AMOUNT','DEPOSIT_AMOUNT','BALANCE_DUE','SUBTOTAL','TAX_RATE','TAX_AMOUNT','WARRANTY_PERIOD','PAYMENT_TERMS'],
       favorite: false, isDefault: false, tags: ['painting','interior','residential'],
+      createdAt: '2026-03-08', lastModified: '2026-03-08', usageCount: 0, fileType: 'html'
+    },
+
+    // ── 9. EPA Lead Safe Disclosure & Authorization ───────────────────────
+    {
+      id: 'ct-009',
+      name: 'EPA Lead Safe Disclosure & Authorization',
+      description: 'Pre-renovation lead disclosure form per EPA RRP Rule (40 CFR Part 745) for homes built before 1978',
+      category: 'safety',
+      content: `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Lead Safe Disclosure</title><style>${CSS}
+  .alert-box{background:#fef2f2;border:2px solid #dc2626;border-radius:8px;padding:14px 18px;margin:16px 0;font-size:13px;color:#7f1d1d}
+  .alert-box h3{color:#dc2626;font-size:14px;font-weight:700;margin-bottom:6px}
+  .check-row{display:flex;align-items:flex-start;gap:10px;margin:8px 0;font-size:13px}
+  .check-box{width:16px;height:16px;border:2px solid #374151;border-radius:3px;flex-shrink:0;margin-top:1px}
+  .initials-field{display:inline-block;border-bottom:1px solid #374151;min-width:80px;height:20px;margin:0 6px;vertical-align:bottom}
+  .cert-block{background:#f0fdf4;border:1px solid #a7f3d0;border-radius:8px;padding:14px 18px;margin:16px 0;font-size:13px}
+  .cert-block h3{color:#065f46;font-size:14px;font-weight:700;margin-bottom:8px}
+</style></head><body>
+<div class="hdr">
+  <div class="hdr-left">
+    <div class="co-name">{{COMPANY_NAME}}</div>
+    <div class="co-tag">{{COMPANY_TAGLINE}}</div>
+    <div class="co-info">
+      <strong>{{REP_NAME}}</strong><br>
+      {{COMPANY_ADDRESS}}, {{COMPANY_CITY}}, {{COMPANY_STATE}} {{COMPANY_ZIP}}<br>
+      {{COMPANY_PHONE}} &nbsp;·&nbsp; {{COMPANY_EMAIL}}<br>
+      License: {{CONTRACTOR_LICENSE}} &nbsp;·&nbsp; EPA RRP Cert: <strong>{{EPA_RRP_CERT}}</strong>
+    </div>
+  </div>
+  <div>{{COMPANY_LOGO}}</div>
+</div>
+<div class="doc-title">EPA LEAD SAFE DISCLOSURE &amp; WORK AUTHORIZATION</div>
+<div class="grid2">
+  <div class="box">
+    <h4>Property Owner</h4>
+    <div class="row"><span class="lbl">Name:</span><span class="val">{{CUSTOMER_NAME}}</span></div>
+    <div class="row"><span class="lbl">Phone:</span><span class="val">{{CUSTOMER_PHONE}}</span></div>
+    <div class="row"><span class="lbl">Email:</span><span class="val">{{CUSTOMER_EMAIL}}</span></div>
+    <div class="row"><span class="lbl">Property:</span><span class="val">{{PROPERTY_ADDRESS}}</span></div>
+    <div class="row"><span class="lbl"></span><span class="val">{{PROPERTY_CITY}}, {{PROPERTY_STATE}} {{PROPERTY_ZIP}}</span></div>
+  </div>
+  <div class="box">
+    <h4>Property &amp; Project</h4>
+    <div class="row"><span class="lbl">Year Built:</span><span class="val">{{YEAR_BUILT}}</span></div>
+    <div class="row"><span class="lbl">Lead Test:</span><span class="val">{{LEAD_TEST_STATUS}}</span></div>
+    <div class="row"><span class="lbl">Disclosure Date:</span><span class="val">{{DISCLOSURE_DATE}}</span></div>
+    <div class="row"><span class="lbl">Work Start Date:</span><span class="val">{{START_DATE}}</span></div>
+    <div class="row"><span class="lbl">Scope:</span><span class="val">{{WORK_TYPE}}</span></div>
+  </div>
+</div>
+
+<div class="alert-box">
+  <h3>&#x26A0;&#xFE0F; IMPORTANT: This Property May Contain Lead-Based Paint</h3>
+  <p>This property was built before 1978. Paint in older homes may contain lead. Lead from paint, paint chips, and dust can pose health hazards if not managed properly. Lead exposure is especially harmful to children under 6 years old. Before your contractor begins renovation work, Federal law requires contractors to provide you with the EPA pamphlet <em>"Renovate Right: Important Lead Hazard Information for Families, Child Care Facilities and Schools"</em> and obtain your acknowledgment of receipt.</p>
+</div>
+
+<div class="sec">
+  <h3>Description of Renovation Work</h3>
+  <div class="row"><span class="lbl">Work Description:</span><span class="val">{{WORK_DESCRIPTION}}</span></div>
+  <div class="row"><span class="lbl">Location:</span><span class="val">{{WORK_LOCATION}}</span></div>
+  <div class="row"><span class="lbl">Area Affected:</span><span class="val">{{AFFECTED_AREA}}</span></div>
+</div>
+
+<div class="sec">
+  <h3>Lead-Safe Work Practices — {{COMPANY_NAME}} Certification</h3>
+  <p style="font-size:13px;color:#374151;margin-bottom:10px">{{COMPANY_NAME}} (EPA Firm Cert: <strong>{{EPA_FIRM_CERT}}</strong>) certifies that all renovation activities will be conducted in accordance with the EPA Renovation, Repair, and Painting (RRP) Rule (40 CFR Part 745) using the following lead-safe work practices:</p>
+  <div class="check-row"><span class="check-box">&#10003;</span><span>Post warning signs at the entrance to the work area before beginning work</span></div>
+  <div class="check-row"><span class="check-box">&#10003;</span><span>Contain the work area to prevent dust and debris from spreading — plastic sheeting on floors and covering all HVAC vents</span></div>
+  <div class="check-row"><span class="check-box">&#10003;</span><span>Avoid practices that generate airborne lead dust (open-flame burning, dry scraping, dry sanding, power sanding without HEPA vacuum)</span></div>
+  <div class="check-row"><span class="check-box">&#10003;</span><span>Clean the work area thoroughly after renovation — wet mopping, wet wiping, HEPA vacuuming all surfaces</span></div>
+  <div class="check-row"><span class="check-box">&#10003;</span><span>Collect and properly dispose of all waste in sealed, heavy-duty plastic bags</span></div>
+  <div class="check-row"><span class="check-box">&#10003;</span><span>Perform post-renovation cleaning verification before removing containment</span></div>
+  <div class="check-row"><span class="check-box">&#10003;</span><span>Maintain records of this disclosure, acknowledgment, and all renovation activities for 3 years</span></div>
+</div>
+
+<div class="sec">
+  <h3>Property Owner Acknowledgment &amp; Authorization</h3>
+  <p style="font-size:13px;color:#374151;margin-bottom:12px">By signing below, the property owner acknowledges and agrees to the following:</p>
+  <div class="check-row"><span class="check-box">&#10003;</span><span>I have received a copy of the EPA pamphlet <em>"Renovate Right"</em> before the start of renovation (Pamphlet Date: <span class="initials-field"></span>)</span></div>
+  <div class="check-row"><span class="check-box">&#10003;</span><span>I have been informed that this property or the work area may contain lead-based paint and/or lead-based paint hazards</span></div>
+  <div class="check-row"><span class="check-box">&#10003;</span><span>I authorize {{COMPANY_NAME}} to perform the renovation work described above using EPA-certified lead-safe work practices</span></div>
+  <div class="check-row"><span class="check-box">&#10003;</span><span>I understand that I (or my tenants/occupants) should not be present during renovation work and should stay out of the contained work area</span></div>
+  <div class="check-row"><span class="check-box">&#10003;</span><span>I have been given the opportunity to ask questions about lead safety and renovation procedures</span></div>
+</div>
+
+<div class="cert-block">
+  <h3>Contractor RRP Certification</h3>
+  <div class="row"><span class="lbl">Company:</span><span class="val">{{COMPANY_NAME}}</span></div>
+  <div class="row"><span class="lbl">EPA Firm Cert #:</span><span class="val">{{EPA_FIRM_CERT}}</span></div>
+  <div class="row"><span class="lbl">Certified Renovator:</span><span class="val">{{REP_NAME}}</span></div>
+  <div class="row"><span class="lbl">Individual Cert #:</span><span class="val">{{EPA_RRP_CERT}}</span></div>
+  <div class="row"><span class="lbl">Cert Expiration:</span><span class="val">{{EPA_CERT_EXPIRY}}</span></div>
+</div>
+
+${footer}`,
+      variables: ['COMPANY_NAME','COMPANY_TAGLINE','REP_NAME','COMPANY_ADDRESS','COMPANY_CITY','COMPANY_STATE','COMPANY_ZIP','COMPANY_PHONE','COMPANY_EMAIL','CONTRACTOR_LICENSE','COMPANY_LOGO','CUSTOMER_NAME','CUSTOMER_PHONE','CUSTOMER_EMAIL','PROPERTY_ADDRESS','PROPERTY_CITY','PROPERTY_STATE','PROPERTY_ZIP','YEAR_BUILT','LEAD_TEST_STATUS','DISCLOSURE_DATE','START_DATE','WORK_TYPE','WORK_DESCRIPTION','WORK_LOCATION','AFFECTED_AREA','EPA_FIRM_CERT','EPA_RRP_CERT','EPA_CERT_EXPIRY'],
+      favorite: false, isDefault: false, tags: ['lead-safe','EPA','RRP','compliance','safety','pre-1978'],
+      createdAt: '2026-03-08', lastModified: '2026-03-08', usageCount: 0, fileType: 'html'
+    },
+
+    // ── 10. Window Replacement Contract ──────────────────────────────────
+    {
+      id: 'ct-010',
+      name: 'Window Replacement Contract',
+      description: 'Full window replacement contract covering specs, scope, pricing, warranty, and payment schedule',
+      category: 'contract',
+      content: contractHeader('Window Replacement Contract') + `
+<div class="sec">
+  <h3>Window Specifications</h3>
+  <div class="highlight">
+    <strong>Brand / Series:</strong> {{WINDOW_BRAND}} {{WINDOW_SERIES}} &nbsp;·&nbsp;
+    <strong>Frame:</strong> {{FRAME_MATERIAL}} &nbsp;·&nbsp;
+    <strong>Glass:</strong> {{GLASS_PACKAGE}} &nbsp;·&nbsp;
+    <strong>Color:</strong> {{FRAME_COLOR}}
+  </div>
+  <div class="row"><span class="lbl">Total Windows:</span><span class="val">{{TOTAL_WINDOWS}} windows</span></div>
+  <div class="row"><span class="lbl">Window Types:</span><span class="val">{{WINDOW_TYPES}}</span></div>
+  <div class="row"><span class="lbl">Glass Options:</span><span class="val">{{GLASS_OPTIONS}}</span></div>
+  <div class="row"><span class="lbl">Grilles / Screens:</span><span class="val">{{GRILLE_OPTION}}</span></div>
+  <div class="row"><span class="lbl">Lead Time:</span><span class="val">{{LEAD_TIME}} from contract signing</span></div>
+</div>
+<div class="sec">
+  <h3>Scope of Work</h3>
+  <ul class="scope-list">
+    <li>Remove and dispose of all existing windows and related trim / flashing</li>
+    <li>Inspect rough opening framing; repair or replace rotted sill plates, jack studs, and trimmers as needed</li>
+    <li>Install new {{WINDOW_BRAND}} {{WINDOW_SERIES}} windows — one at a time to maintain building envelope</li>
+    <li>Flash all windows per manufacturer specifications using self-adhering flashing tape</li>
+    <li>Install interior and exterior trim / casing — Color: {{TRIM_COLOR}}</li>
+    <li>Caulk all exterior perimeters with paintable elastomeric sealant; color-match to frame</li>
+    <li>Verify all windows open, close, lock, and operate properly</li>
+    <li>Clean all glass; haul away all old windows and debris</li>
+    <li>Customer walkthrough and demonstration of operation for all windows</li>
+  </ul>
+</div>
+<div class="sec">
+  <h3>Cost Breakdown</h3>
+  <table>
+    <thead><tr><th>Window Type / Location</th><th style="width:60px">Qty</th><th style="width:110px">Unit Price</th><th style="width:110px">Total</th></tr></thead>
+    <tbody>
+      <tr><td>{{WINDOW_TYPE_1}} ({{WINDOW_SIZE_1}})</td><td>{{WINDOW_QTY_1}}</td><td>{{WINDOW_PRICE_1}}</td><td>{{WINDOW_TOTAL_1}}</td></tr>
+      <tr><td>{{WINDOW_TYPE_2}} ({{WINDOW_SIZE_2}})</td><td>{{WINDOW_QTY_2}}</td><td>{{WINDOW_PRICE_2}}</td><td>{{WINDOW_TOTAL_2}}</td></tr>
+      <tr><td>{{WINDOW_TYPE_3}} ({{WINDOW_SIZE_3}})</td><td>{{WINDOW_QTY_3}}</td><td>{{WINDOW_PRICE_3}}</td><td>{{WINDOW_TOTAL_3}}</td></tr>
+      <tr><td>Removal &amp; disposal of existing windows</td><td>{{TOTAL_WINDOWS}}</td><td>{{REMOVAL_RATE}}</td><td>{{REMOVAL_TOTAL}}</td></tr>
+      <tr><td>Rough opening framing repairs (if needed)</td><td>Lot</td><td>—</td><td>{{FRAMING_REPAIR_TOTAL}}</td></tr>
+      <tr><td>Exterior trim, casing &amp; caulking</td><td>{{TOTAL_WINDOWS}} openings</td><td>{{TRIM_RATE}}</td><td>{{TRIM_TOTAL}}</td></tr>
+      <tr><td>Interior trim / paint-ready casing</td><td>{{TOTAL_WINDOWS}} openings</td><td>{{INT_TRIM_RATE}}</td><td>{{INT_TRIM_TOTAL}}</td></tr>
+      <tr><td>Cleanup &amp; haul-away</td><td>Lot</td><td>—</td><td>{{CLEANUP_TOTAL}}</td></tr>
+    </tbody>
+  </table>
+  ${totalsBlock}
+</div>
+<div class="sec">
+  <h3>Warranty</h3>
+  <div class="row"><span class="lbl">Manufacturer:</span><span class="val">{{MANUFACTURER_WARRANTY}} — {{WINDOW_BRAND}} limited warranty (glass, frame, hardware)</span></div>
+  <div class="row"><span class="lbl">Workmanship:</span><span class="val">{{WORKMANSHIP_WARRANTY}} — labor and installation by {{COMPANY_NAME}}</span></div>
+  <div class="row"><span class="lbl">Energy Performance:</span><span class="val">Per {{WINDOW_BRAND}} specifications for selected glass package</span></div>
+</div>
+${contractTermsBlock}
+${footer}`,
+      variables: ['COMPANY_NAME','COMPANY_TAGLINE','REP_NAME','COMPANY_ADDRESS','COMPANY_CITY','COMPANY_STATE','COMPANY_ZIP','COMPANY_PHONE','COMPANY_EMAIL','CONTRACTOR_LICENSE','COMPANY_LOGO','CUSTOMER_NAME','CUSTOMER_PHONE','CUSTOMER_EMAIL','PROPERTY_ADDRESS','PROPERTY_CITY','PROPERTY_STATE','PROPERTY_ZIP','CONTRACT_NUMBER','CONTRACT_DATE','START_DATE','ESTIMATED_COMPLETION','WINDOW_BRAND','WINDOW_SERIES','FRAME_MATERIAL','GLASS_PACKAGE','FRAME_COLOR','TOTAL_WINDOWS','WINDOW_TYPES','GLASS_OPTIONS','GRILLE_OPTION','LEAD_TIME','TRIM_COLOR','WINDOW_TYPE_1','WINDOW_SIZE_1','WINDOW_QTY_1','WINDOW_PRICE_1','WINDOW_TOTAL_1','WINDOW_TYPE_2','WINDOW_SIZE_2','WINDOW_QTY_2','WINDOW_PRICE_2','WINDOW_TOTAL_2','WINDOW_TYPE_3','WINDOW_SIZE_3','WINDOW_QTY_3','WINDOW_PRICE_3','WINDOW_TOTAL_3','SUBTOTAL','TAX_RATE','TAX_AMOUNT','TOTAL_AMOUNT','DEPOSIT_AMOUNT','BALANCE_DUE','WARRANTY_PERIOD','MANUFACTURER_WARRANTY','WORKMANSHIP_WARRANTY','PAYMENT_TERMS'],
+      favorite: false, isDefault: false, tags: ['windows','contract','replacement','exterior'],
+      createdAt: '2026-03-08', lastModified: '2026-03-08', usageCount: 0, fileType: 'html'
+    },
+
+    // ── 11. Siding Replacement Contract ──────────────────────────────────
+    {
+      id: 'ct-011',
+      name: 'Siding Replacement Contract',
+      description: 'Complete siding replacement contract for vinyl, fiber cement, LP SmartSide, or aluminum siding projects',
+      category: 'contract',
+      content: contractHeader('Siding Replacement Contract') + `
+<div class="sec">
+  <h3>Siding Specifications</h3>
+  <div class="highlight">
+    <strong>Product:</strong> {{SIDING_BRAND}} {{SIDING_PRODUCT}} &nbsp;·&nbsp;
+    <strong>Style / Profile:</strong> {{SIDING_STYLE}} &nbsp;·&nbsp;
+    <strong>Color:</strong> {{SIDING_COLOR}} &nbsp;·&nbsp;
+    <strong>Thickness:</strong> {{SIDING_THICKNESS}}
+  </div>
+  <div class="row"><span class="lbl">Wall Area:</span><span class="val">{{SIDING_SQUARES}} squares ({{SIDING_SQFT}} sq ft)</span></div>
+  <div class="row"><span class="lbl">Soffit / Fascia:</span><span class="val">{{SOFFIT_SQFT}} sq ft soffit &nbsp;·&nbsp; {{FASCIA_LF}} LF fascia</span></div>
+  <div class="row"><span class="lbl">Window/Door Trim:</span><span class="val">{{TRIM_OPTION}}</span></div>
+  <div class="row"><span class="lbl">House Wrap:</span><span class="val">{{WRAP_BRAND}} weather-resistant barrier</span></div>
+</div>
+<div class="sec">
+  <h3>Scope of Work</h3>
+  <ul class="scope-list">
+    <li>Remove and dispose of all existing siding, trim, and related materials</li>
+    <li>Inspect sheathing and framing; repair rotted or damaged areas as needed</li>
+    <li>Install {{WRAP_BRAND}} house wrap / weather-resistant barrier over full wall area</li>
+    <li>Install all starter strips, corner posts (inside and outside), J-channel, and receiver trim</li>
+    <li>Install <strong>{{SIDING_BRAND}} {{SIDING_PRODUCT}}</strong> siding — {{SIDING_STYLE}} profile, Color: {{SIDING_COLOR}}</li>
+    <li>Install soffit panels at all overhangs — Color: {{SOFFIT_COLOR}}</li>
+    <li>Install fascia / coil stock wrap at all fascia boards — Color: {{FASCIA_COLOR}}</li>
+    <li>Wrap all windows and doors with coil stock or install manufacturer trim — Color: {{TRIM_COLOR}}</li>
+    <li>Caulk all penetrations, top of windows, and transitions with color-match sealant</li>
+    <li>Touch up and prime any exposed areas; daily site cleanup and final haul-away</li>
+  </ul>
+</div>
+<div class="sec">
+  <h3>Cost Breakdown</h3>
+  <table>
+    <thead><tr><th>Description</th><th style="width:100px">Qty / Unit</th><th style="width:110px">Unit Price</th><th style="width:110px">Total</th></tr></thead>
+    <tbody>
+      <tr><td>Remove &amp; dispose existing siding</td><td>{{SIDING_SQUARES}} sq</td><td>{{REMOVAL_RATE}}</td><td>{{REMOVAL_TOTAL}}</td></tr>
+      <tr><td>Sheathing / framing repairs</td><td>Allow</td><td>—</td><td>{{SHEATHING_REPAIR_TOTAL}}</td></tr>
+      <tr><td>{{WRAP_BRAND}} house wrap</td><td>{{SIDING_SQUARES}} sq</td><td>{{WRAP_RATE}}</td><td>{{WRAP_TOTAL}}</td></tr>
+      <tr><td>{{SIDING_BRAND}} {{SIDING_PRODUCT}} siding — {{SIDING_COLOR}}</td><td>{{SIDING_SQUARES}} sq</td><td>{{SIDING_RATE}}</td><td>{{SIDING_TOTAL}}</td></tr>
+      <tr><td>Corner posts, starter strip, J-trim, receiver trim</td><td>Lot</td><td>—</td><td>{{TRIM_MATERIALS_TOTAL}}</td></tr>
+      <tr><td>Soffit panels — {{SOFFIT_COLOR}}</td><td>{{SOFFIT_SQFT}} sq ft</td><td>{{SOFFIT_RATE}}</td><td>{{SOFFIT_TOTAL}}</td></tr>
+      <tr><td>Fascia / coil stock wrap — {{FASCIA_COLOR}}</td><td>{{FASCIA_LF}} LF</td><td>{{FASCIA_RATE}}</td><td>{{FASCIA_TOTAL}}</td></tr>
+      <tr><td>Window &amp; door trim wrap — {{TRIM_COLOR}}</td><td>{{WINDOW_COUNT}} openings</td><td>{{WINDOW_WRAP_RATE}}</td><td>{{WINDOW_WRAP_TOTAL}}</td></tr>
+      <tr><td>Sealant, fasteners &amp; accessories</td><td>Lot</td><td>—</td><td>{{HARDWARE_TOTAL}}</td></tr>
+      <tr><td>Cleanup &amp; haul-away</td><td>Lot</td><td>—</td><td>{{CLEANUP_TOTAL}}</td></tr>
+    </tbody>
+  </table>
+  ${totalsBlock}
+</div>
+<div class="sec">
+  <h3>Warranty</h3>
+  <div class="row"><span class="lbl">Manufacturer:</span><span class="val">{{MANUFACTURER_WARRANTY}} — {{SIDING_BRAND}} limited warranty on product</span></div>
+  <div class="row"><span class="lbl">Workmanship:</span><span class="val">{{WORKMANSHIP_WARRANTY}} — installation and labor by {{COMPANY_NAME}}</span></div>
+</div>
+${contractTermsBlock}
+${footer}`,
+      variables: ['COMPANY_NAME','COMPANY_TAGLINE','REP_NAME','COMPANY_ADDRESS','COMPANY_CITY','COMPANY_STATE','COMPANY_ZIP','COMPANY_PHONE','COMPANY_EMAIL','CONTRACTOR_LICENSE','COMPANY_LOGO','CUSTOMER_NAME','CUSTOMER_PHONE','CUSTOMER_EMAIL','PROPERTY_ADDRESS','PROPERTY_CITY','PROPERTY_STATE','PROPERTY_ZIP','CONTRACT_NUMBER','CONTRACT_DATE','START_DATE','ESTIMATED_COMPLETION','SIDING_BRAND','SIDING_PRODUCT','SIDING_STYLE','SIDING_COLOR','SIDING_THICKNESS','SIDING_SQUARES','SIDING_SQFT','SOFFIT_SQFT','FASCIA_LF','TRIM_OPTION','WRAP_BRAND','SOFFIT_COLOR','FASCIA_COLOR','TRIM_COLOR','WINDOW_COUNT','SUBTOTAL','TAX_RATE','TAX_AMOUNT','TOTAL_AMOUNT','DEPOSIT_AMOUNT','BALANCE_DUE','WARRANTY_PERIOD','MANUFACTURER_WARRANTY','WORKMANSHIP_WARRANTY','PAYMENT_TERMS'],
+      favorite: false, isDefault: false, tags: ['siding','contract','exterior','replacement'],
+      createdAt: '2026-03-08', lastModified: '2026-03-08', usageCount: 0, fileType: 'html'
+    },
+
+    // ── 12. Insurance Restoration Contract ───────────────────────────────
+    {
+      id: 'ct-012',
+      name: 'Insurance Restoration Contract',
+      description: 'General insurance restoration contract covering RCV/ACV, supplement authorization, insurance assignment, and dual-party payment',
+      category: 'contract',
+      content: contractHeader('Insurance Restoration Contract') + `
+<div class="sec">
+  <h3>Insurance Claim Information</h3>
+  <div class="highlight">
+    <strong>Carrier:</strong> {{INSURANCE_COMPANY}} &nbsp;·&nbsp;
+    <strong>Claim #:</strong> {{CLAIM_NUMBER}} &nbsp;·&nbsp;
+    <strong>Policy #:</strong> {{POLICY_NUMBER}}
+  </div>
+  <div class="row"><span class="lbl">Loss Date:</span><span class="val">{{LOSS_DATE}}</span></div>
+  <div class="row"><span class="lbl">Loss Type:</span><span class="val">{{LOSS_TYPE}}</span></div>
+  <div class="row"><span class="lbl">Adjuster Name:</span><span class="val">{{ADJUSTER_NAME}}</span></div>
+  <div class="row"><span class="lbl">Adjuster Phone:</span><span class="val">{{ADJUSTER_PHONE}}</span></div>
+  <div class="row"><span class="lbl">RCV Amount:</span><span class="val">{{RCV_AMOUNT}}</span></div>
+  <div class="row"><span class="lbl">ACV Amount:</span><span class="val">{{ACV_AMOUNT}}</span></div>
+  <div class="row"><span class="lbl">Deductible:</span><span class="val">{{DEDUCTIBLE_AMOUNT}}</span></div>
+</div>
+<div class="sec">
+  <h3>Scope of Restoration Work</h3>
+  <div style="background:#f8fafc;padding:12px 14px;border-radius:6px;font-size:13px;line-height:1.9;color:#374151">
+    {{SCOPE_OF_WORK}}
+  </div>
+</div>
+<div class="sec">
+  <h3>Contract Price</h3>
+  <table>
+    <thead><tr><th>Trade / Division</th><th style="width:110px">RCV</th><th style="width:110px">ACV</th><th style="width:110px">Depr.</th></tr></thead>
+    <tbody>
+      <tr><td>{{TRADE_1}}</td><td>{{TRADE_1_RCV}}</td><td>{{TRADE_1_ACV}}</td><td>{{TRADE_1_DEPR}}</td></tr>
+      <tr><td>{{TRADE_2}}</td><td>{{TRADE_2_RCV}}</td><td>{{TRADE_2_ACV}}</td><td>{{TRADE_2_DEPR}}</td></tr>
+      <tr><td>{{TRADE_3}}</td><td>{{TRADE_3_RCV}}</td><td>{{TRADE_3_ACV}}</td><td>{{TRADE_3_DEPR}}</td></tr>
+      <tr><td>Supplements (if any)</td><td>{{SUPPLEMENT_TOTAL}}</td><td>—</td><td>—</td></tr>
+    </tbody>
+  </table>
+  <div class="totals">
+    <div class="t-row"><span class="t-lbl">Total RCV:</span><span class="t-val">{{RCV_AMOUNT}}</span></div>
+    <div class="t-row"><span class="t-lbl">Less Deductible:</span><span class="t-val">–{{DEDUCTIBLE_AMOUNT}}</span></div>
+    <div class="t-row"><span class="t-lbl">ACV Payment:</span><span class="t-val">{{ACV_AMOUNT}}</span></div>
+    <div class="t-row t-grand"><span class="t-lbl">CUSTOMER OWES (Deductible):</span><span class="t-val">{{DEDUCTIBLE_AMOUNT}}</span></div>
+  </div>
+</div>
+<div class="sec">
+  <h3>Authorization &amp; Assignment</h3>
+  <div style="font-size:12.5px;line-height:1.9;color:#374151;background:#fef3c7;padding:12px 14px;border-left:4px solid #f59e0b;border-radius:0 8px 8px 0">
+    <strong>Insurance Assignment:</strong> Customer hereby authorizes {{INSURANCE_COMPANY}} to include {{COMPANY_NAME}} as a co-payee on all restoration-related insurance payments. Customer authorizes {{COMPANY_NAME}} to communicate directly with the insurance carrier and adjuster on all matters related to this claim.<br><br>
+    <strong>Supplement Authorization:</strong> Customer authorizes {{COMPANY_NAME}} to identify and submit supplements for any additional damage discovered during the course of work and for any line items omitted from the initial insurance scope. No supplement work shall commence without written customer approval.<br><br>
+    <strong>Deductible:</strong> Customer is responsible for paying their insurance deductible of <strong>{{DEDUCTIBLE_AMOUNT}}</strong> directly to {{COMPANY_NAME}}. Customer may not waive or reduce their deductible through any discount or credit arrangement, as this may constitute insurance fraud.
+  </div>
+</div>
+<div class="sec">
+  <h3>Payment Schedule</h3>
+  <table>
+    <thead><tr><th>Milestone</th><th style="width:140px">Amount</th><th>Due</th></tr></thead>
+    <tbody>
+      <tr><td>Insurance deductible</td><td>{{DEDUCTIBLE_AMOUNT}}</td><td>Prior to work commencement</td></tr>
+      <tr><td>ACV check (insurance)</td><td>{{ACV_AMOUNT}}</td><td>Upon receipt from insurance carrier</td></tr>
+      <tr><td>Recoverable depreciation</td><td>{{RECOVERABLE_DEPRECIATION}}</td><td>Upon completion and depreciation release from carrier</td></tr>
+      <tr><td>Approved supplements</td><td>{{SUPPLEMENT_TOTAL}}</td><td>Per supplement approval and completion</td></tr>
+    </tbody>
+  </table>
+</div>
+${contractTermsBlock}
+${footer}`,
+      variables: ['COMPANY_NAME','COMPANY_TAGLINE','REP_NAME','COMPANY_ADDRESS','COMPANY_CITY','COMPANY_STATE','COMPANY_ZIP','COMPANY_PHONE','COMPANY_EMAIL','CONTRACTOR_LICENSE','COMPANY_LOGO','CUSTOMER_NAME','CUSTOMER_PHONE','CUSTOMER_EMAIL','PROPERTY_ADDRESS','PROPERTY_CITY','PROPERTY_STATE','PROPERTY_ZIP','CONTRACT_NUMBER','CONTRACT_DATE','START_DATE','ESTIMATED_COMPLETION','INSURANCE_COMPANY','CLAIM_NUMBER','POLICY_NUMBER','LOSS_DATE','LOSS_TYPE','ADJUSTER_NAME','ADJUSTER_PHONE','RCV_AMOUNT','ACV_AMOUNT','DEDUCTIBLE_AMOUNT','RECOVERABLE_DEPRECIATION','SCOPE_OF_WORK','TRADE_1','TRADE_1_RCV','TRADE_1_ACV','TRADE_1_DEPR','TRADE_2','TRADE_2_RCV','TRADE_2_ACV','TRADE_2_DEPR','TRADE_3','TRADE_3_RCV','TRADE_3_ACV','TRADE_3_DEPR','SUPPLEMENT_TOTAL','WARRANTY_PERIOD','PAYMENT_TERMS'],
+      favorite: true, isDefault: false, tags: ['restoration','contract','insurance','RCV','ACV','supplement'],
+      createdAt: '2026-03-08', lastModified: '2026-03-08', usageCount: 0, fileType: 'html'
+    },
+
+    // ── 13. Interior Restoration Contract ────────────────────────────────
+    {
+      id: 'ct-013',
+      name: 'Interior Restoration Contract',
+      description: 'Interior restoration contract covering drywall, paint, flooring, and contents — suitable for water, fire, and mold remediation follow-up',
+      category: 'contract',
+      content: contractHeader('Interior Restoration Contract') + `
+<div class="sec">
+  <h3>Project Overview</h3>
+  <div class="highlight">
+    <strong>Loss Type:</strong> {{LOSS_TYPE}} &nbsp;·&nbsp;
+    <strong>Affected Area:</strong> {{AFFECTED_SQFT}} sq ft &nbsp;·&nbsp;
+    <strong>Rooms:</strong> {{ROOM_LIST}}
+  </div>
+  <div class="row"><span class="lbl">Insurance Carrier:</span><span class="val">{{INSURANCE_COMPANY}}</span></div>
+  <div class="row"><span class="lbl">Claim #:</span><span class="val">{{CLAIM_NUMBER}}</span></div>
+  <div class="row"><span class="lbl">Adjuster:</span><span class="val">{{ADJUSTER_NAME}} — {{ADJUSTER_PHONE}}</span></div>
+  <div class="row"><span class="lbl">Mitigation Co.:</span><span class="val">{{MITIGATION_COMPANY}}</span></div>
+</div>
+<div class="sec">
+  <h3>Scope of Restoration Work</h3>
+  <ul class="scope-list">
+    <li><strong>Drywall:</strong> {{DRYWALL_SCOPE}} — hang, tape, float to Level {{FINISH_LEVEL}}, texture to match existing</li>
+    <li><strong>Insulation:</strong> {{INSULATION_SCOPE}}</li>
+    <li><strong>Paint / Finish:</strong> {{PAINT_SCOPE}} — prime all repaired areas; {{PAINT_COATS}} finish coats matching existing color</li>
+    <li><strong>Flooring:</strong> {{FLOORING_SCOPE}} — remove damaged flooring, install {{FLOORING_TYPE}} to match existing</li>
+    <li><strong>Trim / Millwork:</strong> {{TRIM_SCOPE}}</li>
+    <li><strong>Cabinetry:</strong> {{CABINET_SCOPE}}</li>
+    <li><strong>Contents / Flatwork:</strong> {{CONTENTS_SCOPE}}</li>
+    <li>All debris removal, containment, and site cleanup throughout and upon completion</li>
+    <li>Environmental monitoring as required: {{ENVIRONMENTAL_CONTROLS}}</li>
+  </ul>
+</div>
+<div class="sec">
+  <h3>Cost Breakdown</h3>
+  <table>
+    <thead><tr><th>Division</th><th style="width:100px">Qty / Unit</th><th style="width:110px">Unit Price</th><th style="width:110px">Total</th></tr></thead>
+    <tbody>
+      <tr><td>Demo / debris removal</td><td>{{DEMO_SQFT}} sq ft</td><td>{{DEMO_RATE}}</td><td>{{DEMO_TOTAL}}</td></tr>
+      <tr><td>Drywall — hang, tape &amp; finish (Level {{FINISH_LEVEL}})</td><td>{{DRYWALL_SQFT}} sq ft</td><td>{{DRYWALL_RATE}}</td><td>{{DRYWALL_TOTAL}}</td></tr>
+      <tr><td>Insulation replacement</td><td>{{INSULATION_SQFT}} sq ft</td><td>{{INSULATION_RATE}}</td><td>{{INSULATION_TOTAL}}</td></tr>
+      <tr><td>Texture matching</td><td>{{TEXTURE_SQFT}} sq ft</td><td>{{TEXTURE_RATE}}</td><td>{{TEXTURE_TOTAL}}</td></tr>
+      <tr><td>Paint (prime + {{PAINT_COATS}} coats)</td><td>{{PAINT_SQFT}} sq ft</td><td>{{PAINT_RATE}}</td><td>{{PAINT_TOTAL}}</td></tr>
+      <tr><td>Flooring — {{FLOORING_TYPE}}</td><td>{{FLOORING_SQFT}} sq ft</td><td>{{FLOORING_RATE}}</td><td>{{FLOORING_TOTAL}}</td></tr>
+      <tr><td>Base, casing &amp; millwork</td><td>{{TRIM_LF}} LF</td><td>{{TRIM_RATE}}</td><td>{{TRIM_TOTAL}}</td></tr>
+      <tr><td>Cabinetry / built-ins</td><td>Allow</td><td>—</td><td>{{CABINET_TOTAL}}</td></tr>
+      <tr><td>Contents — cleaning / restoration</td><td>Allow</td><td>—</td><td>{{CONTENTS_TOTAL}}</td></tr>
+      <tr><td>Environmental controls &amp; monitoring</td><td>Allow</td><td>—</td><td>{{ENVIRONMENTAL_TOTAL}}</td></tr>
+      <tr><td>General cleanup &amp; haul-away</td><td>Lot</td><td>—</td><td>{{CLEANUP_TOTAL}}</td></tr>
+    </tbody>
+  </table>
+  ${totalsBlock}
+</div>
+<div class="sec">
+  <h3>Warranty</h3>
+  <div class="row"><span class="lbl">Workmanship:</span><span class="val">{{WARRANTY_PERIOD}} — all labor performed by {{COMPANY_NAME}}</span></div>
+  <div class="row"><span class="lbl">Materials:</span><span class="val">Per manufacturer warranties — flooring, paint, and millwork products</span></div>
+  <div class="row"><span class="lbl">Exclusions:</span><span class="val">Warranty does not cover recurrence of the original loss, secondary water intrusion, or damage from occupant activity</span></div>
+</div>
+${contractTermsBlock}
+${footer}`,
+      variables: ['COMPANY_NAME','COMPANY_TAGLINE','REP_NAME','COMPANY_ADDRESS','COMPANY_CITY','COMPANY_STATE','COMPANY_ZIP','COMPANY_PHONE','COMPANY_EMAIL','CONTRACTOR_LICENSE','COMPANY_LOGO','CUSTOMER_NAME','CUSTOMER_PHONE','CUSTOMER_EMAIL','PROPERTY_ADDRESS','PROPERTY_CITY','PROPERTY_STATE','PROPERTY_ZIP','CONTRACT_NUMBER','CONTRACT_DATE','START_DATE','ESTIMATED_COMPLETION','LOSS_TYPE','AFFECTED_SQFT','ROOM_LIST','INSURANCE_COMPANY','CLAIM_NUMBER','ADJUSTER_NAME','ADJUSTER_PHONE','MITIGATION_COMPANY','DRYWALL_SCOPE','FINISH_LEVEL','INSULATION_SCOPE','PAINT_SCOPE','PAINT_COATS','FLOORING_SCOPE','FLOORING_TYPE','TRIM_SCOPE','CABINET_SCOPE','CONTENTS_SCOPE','ENVIRONMENTAL_CONTROLS','DEMO_SQFT','DEMO_RATE','DEMO_TOTAL','DRYWALL_SQFT','DRYWALL_RATE','DRYWALL_TOTAL','INSULATION_SQFT','INSULATION_RATE','INSULATION_TOTAL','TEXTURE_SQFT','TEXTURE_RATE','TEXTURE_TOTAL','PAINT_SQFT','PAINT_RATE','PAINT_TOTAL','FLOORING_SQFT','FLOORING_RATE','FLOORING_TOTAL','TRIM_LF','TRIM_RATE','TRIM_TOTAL','CABINET_TOTAL','CONTENTS_TOTAL','ENVIRONMENTAL_TOTAL','CLEANUP_TOTAL','SUBTOTAL','TAX_RATE','TAX_AMOUNT','TOTAL_AMOUNT','DEPOSIT_AMOUNT','BALANCE_DUE','WARRANTY_PERIOD','PAYMENT_TERMS'],
+      favorite: false, isDefault: false, tags: ['interior','restoration','contract','drywall','paint','flooring','water-damage','fire-damage'],
       createdAt: '2026-03-08', lastModified: '2026-03-08', usageCount: 0, fileType: 'html'
     },
   ];

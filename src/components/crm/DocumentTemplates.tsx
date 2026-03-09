@@ -21,7 +21,13 @@ import {
   FileSignature,
   ClipboardList,
   Wrench,
-  User
+  User,
+  Folder,
+  FolderOpen,
+  FolderPlus,
+  FolderX,
+  ChevronRight,
+  X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -79,6 +85,20 @@ const DocumentTemplates: React.FC = () => {
   const [customerEditMode, setCustomerEditMode] = useState(false);
   const [selectedContactId, setSelectedContactId] = useState<string>('');
   const [editedContent, setEditedContent] = useState<string>('');
+
+  // ── Folder state ────────────────────────────────────────────────────────
+  // 'all' = show everything; 'cat:CATEGORY_ID' = system folder; custom string = user folder
+  const [selectedFolder, setSelectedFolder] = useState<string>('all');
+  const [customFolders, setCustomFolders] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('dt_custom_folders') || '[]'); } catch { return []; }
+  });
+  // templateFolderMap: templateId → custom folder name
+  const [templateFolderMap, setTemplateFolderMap] = useState<Record<string, string>>(() => {
+    try { return JSON.parse(localStorage.getItem('dt_folder_map') || '{}'); } catch { return {}; }
+  });
+  const [showNewFolderInput, setShowNewFolderInput] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [movingTemplateId, setMovingTemplateId] = useState<string | null>(null);
   
   const { toast } = useToast();
   const { profile } = useAuth();
@@ -2431,6 +2451,17 @@ const DocumentTemplates: React.FC = () => {
   useEffect(() => {
     let filtered = [...templates];
 
+    // Apply folder filter
+    if (selectedFolder !== 'all') {
+      if (selectedFolder.startsWith('cat:')) {
+        const catId = selectedFolder.slice(4);
+        filtered = filtered.filter(t => t.category === catId);
+      } else {
+        // custom folder — show templates assigned to this folder
+        filtered = filtered.filter(t => templateFolderMap[t.id] === selectedFolder);
+      }
+    }
+
     // Apply filters
     if (filters.category !== 'all') {
       filtered = filtered.filter(template => template.category === filters.category);
@@ -2452,7 +2483,17 @@ const DocumentTemplates: React.FC = () => {
     }
 
     setFilteredTemplates(filtered);
-  }, [templates, filters, searchQuery]);
+  }, [templates, filters, searchQuery, selectedFolder, templateFolderMap]);
+
+  // Persist custom folders to localStorage
+  useEffect(() => {
+    localStorage.setItem('dt_custom_folders', JSON.stringify(customFolders));
+  }, [customFolders]);
+
+  // Persist folder assignments to localStorage
+  useEffect(() => {
+    localStorage.setItem('dt_folder_map', JSON.stringify(templateFolderMap));
+  }, [templateFolderMap]);
 
   // Toggle favorite
   const toggleFavorite = (templateId: string) => {
@@ -2714,6 +2755,37 @@ const DocumentTemplates: React.FC = () => {
   // Get all unique tags
   const allTags = Array.from(new Set(templates.flatMap(t => t.tags))).sort();
 
+  // ── Folder helpers ────────────────────────────────────────────────────
+  const createFolder = () => {
+    const name = newFolderName.trim();
+    if (!name || customFolders.includes(name)) return;
+    setCustomFolders(prev => [...prev, name]);
+    setNewFolderName('');
+    setShowNewFolderInput(false);
+    setSelectedFolder(name);
+  };
+
+  const deleteFolder = (folderName: string) => {
+    setCustomFolders(prev => prev.filter(f => f !== folderName));
+    // Unassign templates from deleted folder
+    setTemplateFolderMap(prev => {
+      const updated = { ...prev };
+      Object.keys(updated).forEach(id => { if (updated[id] === folderName) delete updated[id]; });
+      return updated;
+    });
+    if (selectedFolder === folderName) setSelectedFolder('all');
+  };
+
+  const moveToFolder = (templateId: string, folderName: string | null) => {
+    setTemplateFolderMap(prev => {
+      const updated = { ...prev };
+      if (folderName === null) { delete updated[templateId]; }
+      else { updated[templateId] = folderName; }
+      return updated;
+    });
+    setMovingTemplateId(null);
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
@@ -2744,93 +2816,165 @@ const DocumentTemplates: React.FC = () => {
         </div>
       )}
 
-      {/* Category Overview */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {templateCategories.map(category => {
-          const count = templates.filter(t => t.category === category.id).length;
-          return (
-            <Card 
-              key={category.id} 
-              className={`cursor-pointer hover:shadow-lg transition-shadow ${
-                filters.category === category.id ? 'ring-2 ring-blue-500' : ''
-              }`}
-              onClick={() => setFilters({
-                ...filters,
-                category: filters.category === category.id ? 'all' : category.id
-              })}
-            >
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    {category.icon}
-                    <div>
-                      <p className="font-medium">{category.label}</p>
-                      <p className="text-sm text-gray-600">{count} templates</p>
-                    </div>
-                  </div>
-                  <Badge className={category.color}>
-                    {count}
-                  </Badge>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+      {/* Main layout: folder sidebar + templates */}
+      <div className="flex gap-6 items-start">
 
-      {/* Search and Filters */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            <div className="md:col-span-2">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <Input
-                  placeholder="Search templates..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
+        {/* ── Folder Sidebar ─────────────────────────────────────────── */}
+        <div className="w-52 flex-shrink-0 space-y-1">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider px-2 mb-2">Folders</p>
 
-            <Select value={filters.category} onValueChange={(value) => setFilters({...filters, category: value})}>
-              <SelectTrigger>
-                <SelectValue placeholder="Category" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
-                {templateCategories.map(category => (
-                  <SelectItem key={category.id} value={category.id}>{category.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={filters.tag} onValueChange={(value) => setFilters({...filters, tag: value})}>
-              <SelectTrigger>
-                <SelectValue placeholder="Tag" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Tags</SelectItem>
-                {allTags.map(tag => (
-                  <SelectItem key={tag} value={tag}>{tag}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
+          {/* All Templates */}
+          <button
+            onClick={() => setSelectedFolder('all')}
+            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+              selectedFolder === 'all'
+                ? 'bg-blue-600 text-white'
+                : 'text-gray-700 hover:bg-gray-100'
+            }`}
+          >
             <div className="flex items-center gap-2">
-              <Switch 
-                checked={filters.favorite}
-                onCheckedChange={(checked) => setFilters({...filters, favorite: checked})}
-              />
-              <Label>Favorites only</Label>
+              {selectedFolder === 'all' ? <FolderOpen className="w-4 h-4" /> : <Folder className="w-4 h-4" />}
+              <span>All Templates</span>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+            <span className={`text-xs rounded-full px-1.5 py-0.5 ${selectedFolder === 'all' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-600'}`}>
+              {templates.length}
+            </span>
+          </button>
 
-      {/* Templates List */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* System folders (by category) */}
+          <p className="text-xs text-gray-400 uppercase tracking-wider px-2 pt-3 pb-1">By Type</p>
+          {templateCategories.map(cat => {
+            const count = templates.filter(t => t.category === cat.id).length;
+            if (count === 0) return null;
+            const folderKey = `cat:${cat.id}`;
+            const active = selectedFolder === folderKey;
+            return (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedFolder(active ? 'all' : folderKey)}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors ${
+                  active ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  {active ? <FolderOpen className="w-4 h-4" /> : <Folder className="w-4 h-4" />}
+                  <span>{cat.label}</span>
+                </div>
+                <span className={`text-xs rounded-full px-1.5 py-0.5 ${active ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-600'}`}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+
+          {/* Custom folders */}
+          {customFolders.length > 0 && (
+            <>
+              <p className="text-xs text-gray-400 uppercase tracking-wider px-2 pt-3 pb-1">My Folders</p>
+              {customFolders.map(folderName => {
+                const count = Object.values(templateFolderMap).filter(v => v === folderName).length;
+                const active = selectedFolder === folderName;
+                return (
+                  <div key={folderName} className="group relative">
+                    <button
+                      onClick={() => setSelectedFolder(active ? 'all' : folderName)}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors ${
+                        active ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        {active ? <FolderOpen className="w-4 h-4 flex-shrink-0" /> : <Folder className="w-4 h-4 flex-shrink-0" />}
+                        <span className="truncate">{folderName}</span>
+                      </div>
+                      <span className={`text-xs rounded-full px-1.5 py-0.5 ${active ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-600'}`}>
+                        {count}
+                      </span>
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); deleteFolder(folderName); }}
+                      className="absolute right-7 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center justify-center w-5 h-5 rounded text-gray-400 hover:text-red-500 hover:bg-red-50"
+                      title="Delete folder"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                );
+              })}
+            </>
+          )}
+
+          {/* New folder input */}
+          <div className="pt-2">
+            {showNewFolderInput ? (
+              <div className="px-2 space-y-1">
+                <Input
+                  autoFocus
+                  placeholder="Folder name…"
+                  value={newFolderName}
+                  onChange={(e) => setNewFolderName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') createFolder(); if (e.key === 'Escape') { setShowNewFolderInput(false); setNewFolderName(''); } }}
+                  className="h-8 text-sm"
+                />
+                <div className="flex gap-1">
+                  <Button size="sm" onClick={createFolder} className="flex-1 h-7 text-xs">Create</Button>
+                  <Button size="sm" variant="ghost" onClick={() => { setShowNewFolderInput(false); setNewFolderName(''); }} className="h-7 text-xs">Cancel</Button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowNewFolderInput(true)}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-500 hover:bg-gray-100 transition-colors"
+              >
+                <FolderPlus className="w-4 h-4" />
+                <span>New Folder</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* ── Main content area ───────────────────────────────────────── */}
+        <div className="flex-1 min-w-0 space-y-4">
+          {/* Search and Filters */}
+          <Card>
+            <CardContent className="p-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="md:col-span-2">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                    <Input
+                      placeholder="Search templates..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+
+                <Select value={filters.tag} onValueChange={(value) => setFilters({...filters, tag: value})}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Filter by tag" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Tags</SelectItem>
+                    {allTags.map(tag => (
+                      <SelectItem key={tag} value={tag}>{tag}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={filters.favorite}
+                    onCheckedChange={(checked) => setFilters({...filters, favorite: checked})}
+                  />
+                  <Label>Favorites only</Label>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Templates Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {loading ? (
           Array.from({length: 6}).map((_, i) => (
             <Card key={i} className="animate-pulse">
@@ -2932,6 +3076,48 @@ const DocumentTemplates: React.FC = () => {
                       >
                         <Copy className="w-4 h-4" />
                       </Button>
+                      {/* Move to folder button */}
+                      <div className="relative">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          title={templateFolderMap[template.id] ? `In folder: ${templateFolderMap[template.id]}` : 'Move to folder'}
+                          onClick={() => setMovingTemplateId(movingTemplateId === template.id ? null : template.id)}
+                          className={templateFolderMap[template.id] ? 'text-blue-600 border-blue-300 bg-blue-50' : ''}
+                        >
+                          <FolderPlus className="w-4 h-4" />
+                        </Button>
+                        {movingTemplateId === template.id && (
+                          <div className="absolute bottom-full mb-1 right-0 z-20 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[160px]">
+                            <div className="px-3 py-1 text-xs font-semibold text-gray-500 border-b">Move to folder</div>
+                            {customFolders.length === 0 ? (
+                              <div className="px-3 py-2 text-xs text-gray-400">No folders yet — create one in the sidebar</div>
+                            ) : customFolders.map(f => (
+                              <button
+                                key={f}
+                                onClick={() => moveToFolder(template.id, f)}
+                                className={`w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 flex items-center gap-2 ${templateFolderMap[template.id] === f ? 'text-blue-600 font-medium' : 'text-gray-700'}`}
+                              >
+                                <Folder className="w-3.5 h-3.5" />
+                                {f}
+                                {templateFolderMap[template.id] === f && <span className="ml-auto text-xs">✓</span>}
+                              </button>
+                            ))}
+                            {templateFolderMap[template.id] && (
+                              <>
+                                <div className="border-t my-1" />
+                                <button
+                                  onClick={() => moveToFolder(template.id, null)}
+                                  className="w-full text-left px-3 py-1.5 text-sm text-red-500 hover:bg-red-50 flex items-center gap-2"
+                                >
+                                  <FolderX className="w-3.5 h-3.5" />
+                                  Remove from folder
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
                       {!template.isDefault && (
                         <Button
                           size="sm"
@@ -2952,7 +3138,9 @@ const DocumentTemplates: React.FC = () => {
             );
           })
         )}
-      </div>
+          </div>  {/* end templates grid */}
+        </div>  {/* end main content */}
+      </div>  {/* end flex row with sidebar */}
 
       {/* Template Preview Modal */}
       {selectedTemplate && previewMode && (
