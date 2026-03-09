@@ -80,6 +80,7 @@ export interface CRMState {
   showInvoiceModal: boolean;
   selectedInvoiceId: string | null;
   invoiceModalPrefill: { contactId?: string; items?: any[]; notes?: string } | null;
+  pendingAppointmentContactId: string | null;
   
   // Loading states
   isLoading: boolean;
@@ -108,6 +109,7 @@ export type CRMAction =
   | { type: 'SET_FILTER_ASSIGNEE'; payload: string | 'all' }
   | { type: 'TOGGLE_QUICK_ADD' }
   | { type: 'TOGGLE_INVOICE_MODAL'; payload?: string | null; prefill?: { contactId?: string; items?: any[]; notes?: string } | null }
+  | { type: 'SET_PENDING_APPOINTMENT_CONTACT'; payload: string | null }
   | { type: 'ADD_CONTACT'; payload: Contact }
   | { type: 'UPDATE_CONTACT'; payload: Contact }
   | { type: 'DELETE_CONTACT'; payload: string }
@@ -213,6 +215,9 @@ export function crmReducer(state: CRMState, action: CRMAction): CRMState {
     case 'TOGGLE_QUICK_ADD':
       return { ...state, showQuickAdd: !state.showQuickAdd };
     
+    case 'SET_PENDING_APPOINTMENT_CONTACT':
+      return { ...state, pendingAppointmentContactId: action.payload };
+
     case 'TOGGLE_INVOICE_MODAL':
       return { 
         ...state, 

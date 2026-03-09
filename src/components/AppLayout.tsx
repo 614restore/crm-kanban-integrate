@@ -90,6 +90,7 @@ const initialState: CRMState = {
   showInvoiceModal: false,
   selectedInvoiceId: null,
   invoiceModalPrefill: null,
+  pendingAppointmentContactId: null,
   isLoading: true,
   isInitialized: false,
   notifications: [],

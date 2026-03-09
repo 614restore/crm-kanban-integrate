@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { Appointment, formatDate } from '@/lib/crmData';
 import { db } from '@/lib/database';
@@ -52,6 +52,17 @@ export default function CalendarView() {
   const [filterType, setFilterType] = useState<string>('all');
   const [showModal, setShowModal] = useState(false);
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
+  const [pendingContactId, setPendingContactId] = useState<string | null>(null);
+
+  // Auto-open appointment modal when navigated here from "Add New Contact" → "Save & Open Calendar"
+  useEffect(() => {
+    if (state.pendingAppointmentContactId) {
+      setPendingContactId(state.pendingAppointmentContactId);
+      setEditingAppointment(null);
+      setShowModal(true);
+      dispatch({ type: 'SET_PENDING_APPOINTMENT_CONTACT', payload: null });
+    }
+  }, [state.pendingAppointmentContactId]);
   const mentionTargets = getMentionTargets(state.teamMembers);
 
   const allAppointments = [...state.appointments];
@@ -543,9 +554,10 @@ export default function CalendarView() {
 
       <AppointmentModal
         isOpen={showModal}
-        onClose={() => { setShowModal(false); setEditingAppointment(null); }}
+        onClose={() => { setShowModal(false); setEditingAppointment(null); setPendingContactId(null); }}
         selectedDate={selectedDate || undefined}
         editingAppointment={editingAppointment}
+        preselectedContactId={pendingContactId || undefined}
       />
     </div>
   );

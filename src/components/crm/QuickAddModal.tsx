@@ -6,7 +6,7 @@ import { db } from '@/lib/database';
 import { ensureUserHasCompany } from '@/lib/setupCompany';
 import { Contact, defaultLeadSources, CustomerStatus } from '@/lib/crmData';
 import { formatPhoneNumber } from '@/lib/utils';
-import { X, User, Phone, Mail, MapPin, DollarSign, Tag, Shield, Building, Loader2, Calendar, Clock } from 'lucide-react';
+import { X, User, Phone, Mail, MapPin, DollarSign, Tag, Shield, Building, Loader2, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
 
 type FormStep = 'basic' | 'project' | 'insurance' | 'appointment';
@@ -44,13 +44,6 @@ export default function QuickAddModal() {
 
   // Appointment scheduling state
   const [scheduleAppt, setScheduleAppt] = useState(false);
-  const [apptDate, setApptDate] = useState('');
-  const [apptTime, setApptTime] = useState('09:00');
-  const [apptType, setApptType] = useState('inspection');
-  const [apptDuration, setApptDuration] = useState(60);
-  const [apptLocation, setApptLocation] = useState('');
-  const [apptNotes, setApptNotes] = useState('');
-
   // Timeout helper for database operations
   const withTimeout = async <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -173,12 +166,6 @@ export default function QuickAddModal() {
     });
     setCurrentStep('basic');
     setScheduleAppt(false);
-    setApptDate('');
-    setApptTime('09:00');
-    setApptType('inspection');
-    setApptDuration(60);
-    setApptLocation('');
-    setApptNotes('');
   };
 
   const handleSubmit = async () => {
@@ -273,49 +260,14 @@ export default function QuickAddModal() {
 
         dispatch({ type: 'ADD_CONTACT', payload: createdContact });
 
-      // Optionally schedule an appointment
-      if (scheduleAppt && apptDate) {
-        try {
-          const apptTitle = `${apptType.charAt(0).toUpperCase() + apptType.slice(1)} — ${formData.firstName} ${formData.lastName}`;
-          const created = await db.createAppointment({
-            company_id: finalCompanyId,
-            contact_id: dbContact.id,
-            title: apptTitle,
-            type: apptType,
-            date: apptDate,
-            time: apptTime,
-            duration: apptDuration,
-            assigned_to: formData.assignedTo || undefined,
-            location: apptLocation || undefined,
-            notes: apptNotes || undefined,
-            status: 'scheduled',
-          });
-
-          if (created) {
-            dispatch({
-              type: 'ADD_APPOINTMENT',
-              payload: {
-                id: created.id,
-                contactId: dbContact.id,
-                contactName: `${formData.firstName} ${formData.lastName}`,
-                title: apptTitle,
-                type: apptType as import('@/lib/crmData').Appointment['type'],
-                date: apptDate,
-                time: apptTime,
-                duration: apptDuration,
-                assignedTo: formData.assignedTo || '',
-                location: apptLocation || '',
-                notes: apptNotes || undefined,
-                status: 'scheduled',
-              },
-            });
-          }
-        } catch (apptError) {
-          console.error('Appointment creation failed (contact was saved):', apptError);
-          toast.warning(`${formData.firstName} ${formData.lastName} was added, but the appointment could not be scheduled. Please add it manually from the Calendar.`);
-          handleClose();
-          return;
-        }
+      // If the user wants to schedule an appointment, navigate to the calendar
+      // with the new contact pre-filled in the appointment modal
+      if (scheduleAppt) {
+        toast.success(`${formData.firstName} ${formData.lastName} added — opening Calendar to schedule.`);
+        dispatch({ type: 'SET_PENDING_APPOINTMENT_CONTACT', payload: dbContact.id });
+        dispatch({ type: 'SET_VIEW', payload: 'calendar' });
+        dispatch({ type: 'TOGGLE_QUICK_ADD' });
+        return;
       }
 
       toast.success(`${formData.firstName} ${formData.lastName} has been added to the CRM.`);
@@ -763,121 +715,45 @@ export default function QuickAddModal() {
 
           {currentStep === 'appointment' && (
             <div className="space-y-6">
-              <div className="flex items-center gap-3 p-4 bg-blue-50 rounded-lg">
-                <input
-                  type="checkbox"
-                  id="scheduleAppt"
-                  checked={scheduleAppt}
-                  onChange={(e) => setScheduleAppt(e.target.checked)}
-                  className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <label htmlFor="scheduleAppt" className="text-sm font-medium text-blue-800">
-                  Schedule an appointment for this contact
-                </label>
+              <div className="text-center py-4">
+                <Calendar size={48} className="mx-auto mb-4 text-blue-500 opacity-80" />
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Schedule an Appointment</h3>
+                <p className="text-sm text-gray-500 max-w-sm mx-auto">
+                  After saving this contact, open the full Calendar so you can see existing appointments and pick a time that works.
+                </p>
               </div>
 
-              {scheduleAppt && (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Date <span className="text-red-500">*</span>
-                      </label>
-                      <div className="relative">
-                        <Calendar size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                        <input
-                          type="date"
-                          value={apptDate}
-                          onChange={(e) => setApptDate(e.target.value)}
-                          min={new Date().toISOString().split('T')[0]}
-                          className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none ${
-                            scheduleAppt && !apptDate ? 'border-red-300 bg-red-50' : 'border-gray-200'
-                          }`}
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Time</label>
-                      <div className="relative">
-                        <Clock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                        <input
-                          type="time"
-                          value={apptTime}
-                          onChange={(e) => setApptTime(e.target.value)}
-                          className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Appointment Type
-                      </label>
-                      <select
-                        value={apptType}
-                        onChange={(e) => setApptType(e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                      >
-                        <option value="inspection">Inspection</option>
-                        <option value="estimate">Estimate</option>
-                        <option value="follow-up">Follow-up</option>
-                        <option value="install">Install</option>
-                        <option value="other">Other</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Duration
-                      </label>
-                      <select
-                        value={apptDuration}
-                        onChange={(e) => setApptDuration(Number(e.target.value))}
-                        className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                      >
-                        <option value={30}>30 minutes</option>
-                        <option value={60}>1 hour</option>
-                        <option value={90}>1.5 hours</option>
-                        <option value={120}>2 hours</option>
-                        <option value={180}>3 hours</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Location
-                    </label>
-                    <input
-                      type="text"
-                      value={apptLocation}
-                      onChange={(e) => setApptLocation(e.target.value)}
-                      placeholder={formData.address ? `${formData.address}, ${formData.city}`.trim().replace(/,\s*$/, '') : 'Enter location...'}
-                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Appointment Notes
-                    </label>
-                    <textarea
-                      value={apptNotes}
-                      onChange={(e) => setApptNotes(e.target.value)}
-                      rows={3}
-                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none resize-none"
-                      placeholder="Access codes, special instructions, what to bring..."
-                    />
-                  </div>
+              <div
+                onClick={() => setScheduleAppt(!scheduleAppt)}
+                className={`flex items-center gap-4 p-5 rounded-xl border-2 cursor-pointer transition-all ${
+                  scheduleAppt
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-200 bg-white hover:border-gray-300'
+                }`}
+              >
+                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                  scheduleAppt ? 'border-blue-500 bg-blue-500' : 'border-gray-300'
+                }`}>
+                  {scheduleAppt && (
+                    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
                 </div>
-              )}
+                <div>
+                  <p className={`font-medium ${scheduleAppt ? 'text-blue-900' : 'text-gray-700'}`}>
+                    Yes, open Calendar to schedule
+                  </p>
+                  <p className="text-sm text-gray-500 mt-0.5">
+                    Saves this contact then takes you to the Calendar — contact will be pre-filled in the appointment form
+                  </p>
+                </div>
+              </div>
 
               {!scheduleAppt && (
-                <div className="text-center py-8 text-gray-400">
-                  <Calendar size={40} className="mx-auto mb-3 opacity-40" />
-                  <p className="text-sm">Check the box above to schedule an appointment now, or save the contact and schedule later from the Calendar.</p>
-                </div>
+                <p className="text-center text-xs text-gray-400">
+                  Leave unchecked to save the contact without scheduling — you can always schedule later from Calendar or the contact's profile.
+                </p>
               )}
             </div>
           )}
@@ -922,18 +798,18 @@ export default function QuickAddModal() {
               <>
                 <button
                   onClick={handleSubmit}
-                  disabled={!isBasicValid || isSubmitting || (scheduleAppt && !apptDate)}
+                  disabled={!isBasicValid || isSubmitting}
                   className="px-6 py-2 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Skip & Save
                 </button>
                 <button
                   onClick={handleSubmit}
-                  disabled={!isBasicValid || isSubmitting || (scheduleAppt && !apptDate)}
+                  disabled={!isBasicValid || isSubmitting}
                   className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   {isSubmitting && <Loader2 className="animate-spin" size={18} />}
-                  {scheduleAppt ? 'Create & Schedule' : 'Create Contact'}
+                  {scheduleAppt ? 'Save & Open Calendar' : 'Create Contact'}
                 </button>
               </>
             )}
