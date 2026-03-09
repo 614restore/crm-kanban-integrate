@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-// ─── Types ──────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type ScheduleStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
 
@@ -66,7 +66,7 @@ interface SubcontractorCrewRow {
 type CrewRow = InternalCrewRow | SubcontractorCrewRow;
 type CrewMemberRow = CrewRow;
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Helpers ───────────────────────────────────────────────────────────────────
 
 function getWeekDates(anchorDate: Date): Date[] {
   const d = new Date(anchorDate);
@@ -92,7 +92,7 @@ function isToday(date: Date): boolean {
   return toISO(date) === toISO(new Date());
 }
 
-// ─── Status Badge ─────────────────────────────────────────────────────────────
+// ─── Status Badge ───────────────────────────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: ScheduleStatus }) {
   const config: Record<ScheduleStatus, { label: string; className: string; icon: React.ElementType }> = {
@@ -110,7 +110,7 @@ function StatusBadge({ status }: { status: ScheduleStatus }) {
   );
 }
 
-// ─── Create Subcontractor Crew Modal ──────────────────────────────────────────
+// ─── Create Subcontractor Crew Modal ──────────────────────────────────────────────────
 
 interface CreateSubModalProps {
   companyId: string;
@@ -150,7 +150,6 @@ function CreateSubcontractorModal({ companyId, onClose, onCreated }: CreateSubMo
       onClose();
     } catch (err: any) {
       console.error('Error creating subcontractor crew:', err);
-      // Friendly message if table doesn't exist yet
       if (err?.message?.includes('relation') || err?.message?.includes('does not exist')) {
         toast.error('subcontractor_crews table not found. Please run the latest Supabase migration.');
       } else {
@@ -222,7 +221,7 @@ function CreateSubcontractorModal({ companyId, onClose, onCreated }: CreateSubMo
   );
 }
 
-// ─── Assignment Modal ─────────────────────────────────────────────────────────
+// ─── Assignment Modal ─────────────────────────────────────────────────────────────────
 
 interface AssignmentModalProps {
   crewMemberId: string;
@@ -278,7 +277,6 @@ function AssignmentModal({
         created_by: userId,
       };
 
-      // Set the correct FK depending on crew member type
       if (crewMemberType === 'internal') {
         payload.crew_member_id = crewMemberId;
         payload.subcontractor_id = null;
@@ -429,7 +427,7 @@ function AssignmentModal({
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ─── Main Component ────────────────────────────────────────────────────────────────
 
 export default function CrewScheduleView({ contactFilterId }: { contactFilterId?: string }) {
   const { state } = useCRM();
@@ -450,12 +448,11 @@ export default function CrewScheduleView({ contactFilterId }: { contactFilterId?
   const weekStart = toISO(weekDates[0]);
   const weekEnd = toISO(weekDates[6]);
 
-  // ── Data loading ──────────────────────────────────────────────────────────
+  // ── Data loading ──────────────────────────────────────────────────────────────
 
   const loadCrewMembers = useCallback(async () => {
     if (!profile?.company_id) return;
 
-    // Internal team members: profiles table uses first_name + last_name, NOT full_name
     const { data: internalData, error: internalError } = await supabase
       .from('profiles')
       .select('id, first_name, last_name, avatar_url, role')
@@ -476,7 +473,6 @@ export default function CrewScheduleView({ contactFilterId }: { contactFilterId?
       role: p.role ?? null,
     }));
 
-    // Subcontractor crews — gracefully handle if table doesn't exist
     let subcontractors: SubcontractorCrewRow[] = [];
     try {
       const { data: subData, error: subError } = await supabase
@@ -488,7 +484,6 @@ export default function CrewScheduleView({ contactFilterId }: { contactFilterId?
 
       if (subError) {
         if (subError.message?.includes('does not exist') || subError.message?.includes('relation')) {
-          // Table not migrated yet — silently skip subcontractors
           console.warn('subcontractor_crews table not found — skipping');
         } else {
           console.error('Error loading subcontractor crews:', subError);
@@ -535,7 +530,7 @@ export default function CrewScheduleView({ contactFilterId }: { contactFilterId?
     Promise.all([loadCrewMembers(), loadSchedules()]).finally(() => setIsLoading(false));
   }, [loadCrewMembers, loadSchedules]);
 
-  // ── Summary stats ─────────────────────────────────────────────────────────
+  // ── Summary stats ──────────────────────────────────────────────────────────────
 
   const totalAssignments = schedules.length;
   const scheduledMemberIds = new Set([
@@ -546,7 +541,7 @@ export default function CrewScheduleView({ contactFilterId }: { contactFilterId?
   const totalSlots = crewMembers.length * 7;
   const openSlots = Math.max(0, totalSlots - totalAssignments);
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
+  // ── Helpers ───────────────────────────────────────────────────────────────────
 
   const getSchedulesFor = (memberId: string, date: string): CrewSchedule[] =>
     schedules.filter(
@@ -582,7 +577,6 @@ export default function CrewScheduleView({ contactFilterId }: { contactFilterId?
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Add Subcontractor Crew button */}
             <button
               onClick={() => setShowCreateSubModal(true)}
               className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
@@ -591,7 +585,6 @@ export default function CrewScheduleView({ contactFilterId }: { contactFilterId?
               Add Sub Crew
             </button>
 
-            {/* Week navigation */}
             <div className="flex items-center gap-2">
               <button onClick={prevWeek} className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors text-gray-600">
                 <ChevronLeft size={16} />
