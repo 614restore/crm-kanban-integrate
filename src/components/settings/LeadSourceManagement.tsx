@@ -103,7 +103,15 @@ const LeadSourceManagement: React.FC<LeadSourceManagementProps> = () => {
             phone: '(555) 456-7890'
           },
           performance: { totalLeads: 15, convertedLeads: 3, conversionRate: 20.0, lastLeadDate: '2026-02-28' }
-        }
+        },
+        {
+          id: 'ls5',
+          name: 'Self Generated',
+          isActive: true,
+          isCustom: false,
+          createdAt: new Date().toISOString(),
+          performance: { totalLeads: 0, convertedLeads: 0, conversionRate: 0, lastLeadDate: '' }
+        },
       ];
       setLeadSources(defaultSources);
       localStorage.setItem('leadSources', JSON.stringify(defaultSources));

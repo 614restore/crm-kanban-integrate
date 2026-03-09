@@ -209,6 +209,9 @@ export interface DbProfile {
   avatar_url?: string;
   work_email?: string;
   is_active: boolean;
+  commission_rate?: number;
+  member_type?: 'employee' | 'subcontractor';
+  subcontractor_company?: string;
   created_at: string;
   updated_at: string;
 }

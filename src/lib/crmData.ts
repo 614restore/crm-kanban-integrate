@@ -151,6 +151,9 @@ export interface TeamMember {
   phone: string;
   department: string;
   isActive: boolean;
+  commission_rate?: number; // Commission percentage (e.g., 5 = 5%)
+  member_type?: 'employee' | 'subcontractor';
+  subcontractor_company?: string;
   performance?: {
     leadsGenerated: number;
     dealsClosed: number;
@@ -471,6 +474,7 @@ export const defaultLeadSources: LeadSource[] = [
   { id: 'ls8', name: 'Insurance Referral', isActive: true, isCustom: false },
   { id: 'ls9', name: 'Yard Sign', isActive: true, isCustom: false },
   { id: 'ls10', name: 'Repeat Customer', isActive: true, isCustom: false },
+  { id: 'ls11', name: 'Self Generated', isActive: true, isCustom: false },
 ];
 
 // Default Kanban Boards

@@ -247,6 +247,14 @@ export default function TeamView() {
         is_active: selectedMember.isActive,
       });
 
+      // Save commission_rate separately (not in RPC args)
+      if (selectedMember.commission_rate !== undefined) {
+        await supabase
+          .from('profiles')
+          .update({ commission_rate: selectedMember.commission_rate })
+          .eq('id', selectedMember.id);
+      }
+
       if (!updated) {
         toast.error('Failed to save team member');
         return;
@@ -755,6 +763,29 @@ export default function TeamView() {
                   className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                 />
               </div>
+              {['owner', 'admin', 'manager', 'sales_manager'].includes(userRole) && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Commission Rate (%)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    value={selectedMember.commission_rate ?? ''}
+                    onChange={(e) =>
+                      setSelectedMember({
+                        ...selectedMember,
+                        commission_rate: e.target.value === '' ? undefined : parseFloat(e.target.value),
+                      })
+                    }
+                    placeholder="e.g. 5 for 5%"
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Leave blank for 0% commission</p>
+                </div>
+              )}
               <div className="flex items-center gap-3">
                 <input
                   type="checkbox"

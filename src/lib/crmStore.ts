@@ -43,7 +43,8 @@ export type ViewType =
   | 'insurance-tracking'
   | 'supplement-tracking'
   | 'crew-schedule'
-  | 'equipment';
+  | 'equipment'
+  | 'commission-payroll';
 
 export interface CRMState {
   // Current user
@@ -733,7 +734,7 @@ export function canManageLeadSources(role: UserRole): boolean {
 }
 
 export function canViewFinancials(role: UserRole): boolean {
-  return ['owner', 'admin', 'sales_manager', 'office_staff'].includes(role);
+  return ['owner', 'admin', 'sales_manager', 'office_staff', 'manager'].includes(role);
 }
 
 export function canCreateInvoice(role: UserRole): boolean {

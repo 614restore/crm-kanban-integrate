@@ -54,6 +54,7 @@ const InsuranceTrackingView = lazy(() => import('./crm/InsuranceTrackingView'));
 const SupplementTrackingView = lazy(() => import('./crm/SupplementTrackingView'));
 const CrewScheduleView = lazy(() => import('./crm/CrewScheduleView'));
 const EquipmentView = lazy(() => import('./crm/EquipmentView'));
+const CommissionPayrollView = lazy(() => import('./crm/CommissionPayrollView'));
 
 // Initial CRM state (completely empty)
 const getInitialView = (): ViewType => {
@@ -154,6 +155,8 @@ function ViewRouter() {
         return <CrewScheduleView />;
       case 'equipment':
         return <EquipmentView />;
+      case 'commission-payroll':
+        return <CommissionPayrollView />;
       case 'settings':
         return <SettingsView />;
       case 'ai-assistant':
@@ -572,6 +575,9 @@ function CRMApp() {
         phone: tm.phone || '',
         department: tm.department || 'General',
         isActive: tm.is_active,
+        commission_rate: tm.commission_rate,
+        member_type: tm.member_type,
+        subcontractor_company: tm.subcontractor_company,
       }));
 
       const estimates: Estimate[] = (dbEstimates || []).map((e: any) => ({

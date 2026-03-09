@@ -30,6 +30,7 @@ import {
   AlertCircle,
   CalendarClock,
   Wrench,
+  BadgeDollarSign,
 } from 'lucide-react';
 
 interface NavItem {
@@ -59,6 +60,7 @@ const navItems: NavItem[] = [
   { id: 'insurance-tracking', label: 'Insurance', icon: <Shield size={20} /> },
   { id: 'supplement-tracking', label: 'Supplements', icon: <AlertCircle size={20} /> },
   { id: 'reports', label: 'Reports', icon: <BarChart size={20} /> },
+  { id: 'commission-payroll', label: 'Commission Payroll', icon: <BadgeDollarSign size={20} />, requiresPermission: 'financials' },
   { id: 'team', label: 'Team', icon: <UserCog size={20} />, requiresPermission: 'team' },
   { id: 'automations', label: 'Automations', icon: <Zap size={20} /> },
   { id: 'ai-assistant', label: 'AI Assistant', icon: <Bot size={20} /> },

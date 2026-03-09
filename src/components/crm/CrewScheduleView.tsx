@@ -17,6 +17,10 @@ import {
   PlayCircle,
   XCircle,
   BarChart3,
+  Building2,
+  Edit3,
+  Trash2,
+  HardHat,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -27,7 +31,8 @@ type ScheduleStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
 interface CrewSchedule {
   id: string;
   company_id: string;
-  crew_member_id: string;
+  crew_member_id?: string | null;
+  subcontractor_id?: string | null;
   job_id?: string | null;
   contact_id?: string | null;
   title: string;
@@ -39,11 +44,40 @@ interface CrewSchedule {
   created_by?: string | null;
 }
 
-interface CrewMemberRow {
+interface InternalCrewRow {
+  type: 'internal';
   id: string;
   full_name: string;
   avatar_url?: string | null;
   role?: string | null;
+}
+
+interface SubcontractorCrewRow {
+  type: 'subcontractor';
+  id: string;
+  full_name: string; // company_name shown as name
+  contact_name?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  trade?: string | null;
+}
+
+type CrewRow = InternalCrewRow | SubcontractorCrewRow;
+
+// Legacy alias for existing code
+type CrewMemberRow = CrewRow;
+
+interface SubcontractorCrew {
+  id: string;
+  company_id: string;
+  company_name: string;
+  contact_name?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  trade?: string | null;
+  notes?: string | null;
+  is_active: boolean;
+  created_at: string;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
