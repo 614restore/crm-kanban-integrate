@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { supabase, isDemoMode } from '@/lib/supabase';
 import { setupNewUser } from '@/lib/setupCompany';
 import type { Session, User } from '@supabase/supabase-js';
@@ -36,29 +36,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
-  // Detect recovery token — captured in supabase.ts before Supabase clears the hash
+
+  // Shared promise ref — ensures only ONE profile fetch runs at a time no matter
+  // how many callers race (getSession + onAuthStateChange on hard reload).
+  const profileFetchPromise = useRef<Promise<Profile | null> | null>(null);
+
   const [isPasswordReset, setIsPasswordReset] = useState(() => {
     try {
       return sessionStorage.getItem('pending_password_reset') === 'true';
     } catch (_) { return false; }
   });
 
-  // Fetch user profile
-  const fetchProfile = async (userId: string) => {
+  // ── Raw profile fetch (no dedup, no retry) ────────────────────────────
+  const fetchProfile = async (userId: string): Promise<Profile | null> => {
     try {
-      // In demo mode, try to load from localStorage first
       if (isDemoMode) {
         try {
-          const demoProfileKey = `demo_profile_${userId}`;
-          const stored = localStorage.getItem(demoProfileKey);
-          if (stored) {
-            const profileData = JSON.parse(stored);
-            return profileData as Profile;
-          }
-        } catch (localStorageError) {
-          console.warn('[Auth] Failed to load profile from localStorage:', localStorageError);
-        }
-        // In demo mode, if no stored profile, return null instead of hitting Supabase
+          const stored = localStorage.getItem(`demo_profile_${userId}`);
+          if (stored) return JSON.parse(stored) as Profile;
+        } catch { /* ignore */ }
         return null;
       }
 
@@ -68,11 +64,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .eq('id', userId)
         .single();
 
-      if (error) {
-        console.error('Error fetching profile:', error);
-        return null;
-      }
-
+      if (error) { console.error('Error fetching profile:', error); return null; }
       return data as Profile;
     } catch (err) {
       console.error('Error fetching profile:', err);
@@ -80,145 +72,137 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Ensure user has a company set up
-  const ensureUserSetup = async (userId: string, userEmail: string) => {
-    try {
-      // Get current profile
-      const profileData = await fetchProfile(userId);
-      
-      // If user doesn't have a company, set one up automatically
-      if (profileData && !profileData.company_id) {
-        const setupSuccess = await setupNewUser(userId, userEmail);
-        
-        if (setupSuccess) {
-          const updatedProfile = await fetchProfile(userId);
-          if (!updatedProfile?.company_id) {
-            console.warn('⚠️ Setup reported success but no company_id found, retrying...');
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            const retryProfile = await fetchProfile(userId);
-            if (!retryProfile?.company_id) {
-              console.error('❌ Company setup failed even after retry');
-            }
-            return retryProfile;
+  // ── Deduplicated, retrying profile loader ─────────────────────────────
+  // Returns the same in-flight promise if called concurrently (fixes reload race).
+  // Retries up to 3x with backoff if company_id is missing (Supabase trigger lag).
+  const loadProfileOnce = (userId: string, email: string): Promise<Profile | null> => {
+    if (profileFetchPromise.current) return profileFetchPromise.current;
+
+    profileFetchPromise.current = (async () => {
+      try {
+        let profileData = await fetchProfile(userId);
+
+        // If no company_id, the DB trigger may not have run yet — retry with backoff
+        if (profileData && !profileData.company_id) {
+          for (const delay of [600, 1200, 2000]) {
+            await new Promise(r => setTimeout(r, delay));
+            profileData = await fetchProfile(userId);
+            if (profileData?.company_id) break;
           }
-          return updatedProfile;
-        } else {
-          console.error('❌ Company setup failed');
         }
-      } else if (profileData?.company_id) {
-        // company_id already set, nothing to do
+
+        // Still no company_id — run first-time setup
+        if (profileData && !profileData.company_id) {
+          const ok = await setupNewUser(userId, email);
+          if (ok) {
+            await new Promise(r => setTimeout(r, 800));
+            profileData = await fetchProfile(userId);
+          }
+          if (!profileData?.company_id) {
+            console.error('[Auth] Company setup failed — user will see empty state.');
+          }
+        }
+
+        return profileData;
+      } finally {
+        // Clear the shared promise so future sign-ins / refreshes work normally
+        profileFetchPromise.current = null;
       }
-      
-      return profileData;
-    } catch (err) {
-      console.error('Error in ensureUserSetup:', err);
-      return await fetchProfile(userId);
-    }
+    })();
+
+    return profileFetchPromise.current;
   };
 
   useEffect(() => {
-    let profileFetchInProgress = false;
     let recoveryEventFired = false;
-    let pendingReset = (() => { try { return sessionStorage.getItem('pending_password_reset') === 'true'; } catch(_) { return false; } })();
+    let pendingReset = (() => {
+      try { return sessionStorage.getItem('pending_password_reset') === 'true'; } catch { return false; }
+    })();
 
-    const loadProfile = async (userId: string, email: string) => {
-      if (profileFetchInProgress) return;
-      profileFetchInProgress = true;
-      try {
-        const profileData = await ensureUserSetup(userId, email);
-        setProfile(profileData);
-      } finally {
-        profileFetchInProgress = false;
-      }
-    };
-
-    // Re-check session when tab becomes visible again (fixes stale state after idle)
+    // Re-check session when tab becomes visible (fixes stale state after idle)
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        supabase.auth.getSession().then(async ({ data: { session } }) => {
-          if (session?.user) {
-            setSession(session);
-            setUser(session.user);
-            // Only reload profile if we don't already have one (avoids full re-init on every tab focus)
-            setProfile(prev => {
-              if (!prev) {
-                loadProfile(session.user.id, session.user.email || '');
-              }
-              return prev;
-            });
+      if (document.visibilityState !== 'visible') return;
+      supabase.auth.getSession().then(async ({ data: { session } }) => {
+        if (!session?.user) return;
+        setSession(session);
+        setUser(session.user);
+        // Only reload profile if missing — avoids unnecessary refetch on every tab focus
+        setProfile(prev => {
+          if (!prev) {
+            loadProfileOnce(session.user.id, session.user.email || '')
+              .then(p => { if (p) setProfile(p); });
           }
+          return prev;
         });
-      }
+      });
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    // Set up onAuthStateChange FIRST so PASSWORD_RECOVERY fires before getSession resolves
+    // Register auth listener FIRST so PASSWORD_RECOVERY fires before getSession resolves
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-
-      // Handle password recovery — show reset form instead of app
       if (event === 'PASSWORD_RECOVERY') {
         recoveryEventFired = true;
         setSession(session);
         setUser(session?.user ?? null);
         setIsPasswordReset(true);
         setLoading(false);
-        try { sessionStorage.removeItem('pending_password_reset'); } catch (e) { console.warn('[authContext] sessionStorage cleanup failed:', e); }
+        try { sessionStorage.removeItem('pending_password_reset'); } catch { /* ignore */ }
         return;
       }
 
-      // For token refreshes, just update the session/user objects.
       if (event === 'TOKEN_REFRESHED') {
         setSession(session);
         setUser(session?.user ?? null);
         return;
       }
 
-      // On explicit sign-out, clear everything
       if (event === 'SIGNED_OUT') {
         setSession(null);
         setUser(null);
         setProfile(null);
+        profileFetchPromise.current = null;
         setLoading(false);
         return;
       }
 
-      // For SIGNED_IN, INITIAL_SESSION, USER_UPDATED, etc.
-      // Don't override if we're in a recovery flow
-      // Clear stale pending_password_reset flag if the user is actually signing in normally
+      // Clear stale reset flag on normal sign-in
       if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && pendingReset && !recoveryEventFired) {
-        try { sessionStorage.removeItem('pending_password_reset'); } catch (e) { console.warn('[authContext] sessionStorage cleanup failed:', e); }
+        try { sessionStorage.removeItem('pending_password_reset'); } catch { /* ignore */ }
         pendingReset = false;
       }
       if (recoveryEventFired || pendingReset) return;
+
       setSession(session);
       setUser(session?.user ?? null);
-      
+
       if (session?.user) {
-        await loadProfile(session.user.id, session.user.email || '');
+        // Share the same promise with getSession below — only one fetch runs
+        const profileData = await loadProfileOnce(session.user.id, session.user.email || '');
+        setProfile(profileData);
       } else {
         setProfile(null);
       }
-      
+
       setLoading(false);
     });
 
-    // Get initial session — skip everything if this is a password reset
+    // getSession fires nearly simultaneously with onAuthStateChange on reload.
+    // loadProfileOnce deduplicates so only one Supabase query actually runs.
     supabase.auth.getSession().then(async ({ data: { session } }) => {
-      // If pending reset or recovery already fired, don't interfere — wait for PASSWORD_RECOVERY event
-      // Clear stale flag if the user has actually obtained a valid session normally
       if (session && pendingReset && !recoveryEventFired) {
-        try { sessionStorage.removeItem('pending_password_reset'); } catch (e) { console.warn('[authContext] sessionStorage cleanup failed:', e); }
+        try { sessionStorage.removeItem('pending_password_reset'); } catch { /* ignore */ }
         pendingReset = false;
       }
       if (recoveryEventFired || pendingReset) return;
 
       setSession(session);
       setUser(session?.user ?? null);
-      
+
       if (session?.user) {
-        await loadProfile(session.user.id, session.user.email || '');
+        const profileData = await loadProfileOnce(session.user.id, session.user.email || '');
+        setProfile(profileData);
       }
-      
+
       setLoading(false);
     });
 
@@ -232,108 +216,58 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Fail-safe: never block the app forever on auth loading
   useEffect(() => {
     if (!loading) return;
-
     const timer = window.setTimeout(() => {
-      console.warn('Auth loading timed out; continuing with current session state.');
+      console.warn('[Auth] Loading timed out — continuing with current session state.');
       setLoading(false);
     }, 12000);
-
     return () => window.clearTimeout(timer);
   }, [loading]);
 
-  // Generate consistent demo user ID from email for data persistence across sessions
+  // ── Demo helpers ──────────────────────────────────────────────────────
   const generateDemoUserId = (email: string): string => {
-    // Create a deterministic hash from email to generate consistent UUID
-    // This ensures the same email always gets the same user ID
     let hash = 0;
     for (let i = 0; i < email.length; i++) {
       const char = email.charCodeAt(i);
       hash = ((hash << 5) - hash) + char;
-      hash = hash & hash; // Convert to 32bit integer
+      hash = hash & hash;
     }
-    // Convert hash to hex and pad to 12 chars
     const hex = Math.abs(hash).toString(16).padStart(12, '0').slice(-12);
     return `00000000-0000-0000-0000-${hex}`;
   };
 
+  // ── signIn ────────────────────────────────────────────────────────────
   const signIn = async (email: string, password: string) => {
     try {
-      // Demo mode authentication - accept any credentials
       if (isDemoMode) {
         const now = new Date().toISOString();
-        // Generate consistent demo user ID based on email so data persists across sessions
         const demoUserId = generateDemoUserId(email);
-        
-        // Create mock session for demo mode
-        const mockUser = {
-          id: demoUserId,
-          email: email,
-          app_metadata: {},
-          user_metadata: {},
-          aud: 'authenticated',
-          created_at: now,
-          updated_at: now,
-        };
-        
-        const mockSession = {
-          access_token: `demo-access-token-${Date.now()}`,
-          token_type: 'bearer',
-          expires_in: 3600,
-          expires_at: Math.floor(Date.now() / 1000) + 3600,
-          refresh_token: `demo-refresh-token-${Date.now()}`,
-          user: mockUser,
-        };
-
+        const mockUser = { id: demoUserId, email, app_metadata: {}, user_metadata: {}, aud: 'authenticated', created_at: now, updated_at: now };
+        const mockSession = { access_token: `demo-access-token-${Date.now()}`, token_type: 'bearer', expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600, refresh_token: `demo-refresh-token-${Date.now()}`, user: mockUser };
         setSession(mockSession as any);
         setUser(mockUser as any);
-        
-        // Try to load existing profile from localStorage first
+
         let demoProfile: Profile | null = null;
         try {
-          const demoProfileKey = `demo_profile_${demoUserId}`;
-          const stored = localStorage.getItem(demoProfileKey);
-          if (stored) {
-            demoProfile = JSON.parse(stored);
-          }
-        } catch (loadError) {
-          console.warn('[Auth] Failed to load demo profile from localStorage:', loadError);
-        }
+          const stored = localStorage.getItem(`demo_profile_${demoUserId}`);
+          if (stored) demoProfile = JSON.parse(stored);
+        } catch { /* ignore */ }
 
-        // If no existing profile, create a new one
         if (!demoProfile) {
-          demoProfile = {
-            id: demoUserId,
-            email: email,
-            first_name: email.split('@')[0] || 'Demo',
-            last_name: 'User',
-            role: 'admin',
-            company_id: '00000000-0000-0000-0000-000000000001',
-            is_active: true,
-          };
-          
-          // Save new demo profile to localStorage
-          try {
-            const demoProfileKey = `demo_profile_${demoUserId}`;
-            localStorage.setItem(demoProfileKey, JSON.stringify(demoProfile));
-          } catch (storageError) {
-            console.warn('[Auth] Failed to save demo profile to localStorage:', storageError);
-          }
+          demoProfile = { id: demoUserId, email, first_name: email.split('@')[0] || 'Demo', last_name: 'User', role: 'admin', company_id: '00000000-0000-0000-0000-000000000001', is_active: true };
+          try { localStorage.setItem(`demo_profile_${demoUserId}`, JSON.stringify(demoProfile)); } catch { /* ignore */ }
         }
-
         setProfile(demoProfile as any);
         return { error: null };
       }
 
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
       return { error };
     } catch (err) {
       return { error: err as Error };
     }
   };
 
+  // ── signUp ────────────────────────────────────────────────────────────
   const signUp = async (
     email: string,
     password: string,
@@ -342,90 +276,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       if (isDemoMode) {
         const now = new Date().toISOString();
-        // Generate consistent demo user ID based on email
         const demoUserId = generateDemoUserId(email);
-
-        const mockUser = {
-          id: demoUserId,
-          email,
-          app_metadata: {},
-          user_metadata: metadata || {},
-          aud: 'authenticated',
-          created_at: now,
-          updated_at: now,
-        };
-
-        const mockSession = {
-          access_token: `demo-access-token-${Date.now()}`,
-          token_type: 'bearer',
-          expires_in: 3600,
-          expires_at: Math.floor(Date.now() / 1000) + 3600,
-          refresh_token: `demo-refresh-token-${Date.now()}`,
-          user: mockUser,
-        };
-
-        const demoProfile = {
-          id: demoUserId,
-          email,
-          first_name: metadata?.first_name || email.split('@')[0] || 'Demo',
-          last_name: metadata?.last_name || 'User',
-          role: metadata?.role || 'admin',
-          company_id: metadata?.company_id || '00000000-0000-0000-0000-000000000001',
-          is_active: true,
-        };
-
+        const mockUser = { id: demoUserId, email, app_metadata: {}, user_metadata: metadata || {}, aud: 'authenticated', created_at: now, updated_at: now };
+        const mockSession = { access_token: `demo-access-token-${Date.now()}`, token_type: 'bearer', expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600, refresh_token: `demo-refresh-token-${Date.now()}`, user: mockUser };
+        const demoProfile = { id: demoUserId, email, first_name: metadata?.first_name || email.split('@')[0] || 'Demo', last_name: metadata?.last_name || 'User', role: metadata?.role || 'admin', company_id: metadata?.company_id || '00000000-0000-0000-0000-000000000001', is_active: true };
         setSession(mockSession as any);
         setUser(mockUser as any);
         setProfile(demoProfile as any);
-
-        // Save demo profile to localStorage
-        try {
-          const demoProfileKey = `demo_profile_${demoUserId}`;
-          localStorage.setItem(demoProfileKey, JSON.stringify(demoProfile));
-        } catch (storageError) {
-          console.warn('[Auth] Failed to save demo profile to localStorage:', storageError);
-        }
-
+        try { localStorage.setItem(`demo_profile_${demoUserId}`, JSON.stringify(demoProfile)); } catch { /* ignore */ }
         return { error: null };
       }
 
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: metadata,
-        },
-      });
+      const { data, error } = await supabase.auth.signUp({ email, password, options: { data: metadata } });
 
       if (!error && data.user) {
-        // Determine the role:
-        // - If signing up via invite (has company_id), use provided role
-        // - If creating new company (no company_id), assign 'owner' role
-        const userRole = metadata?.company_id 
-          ? (metadata.role || 'sales')  // Invite signup: use provided role or default to sales
-          : 'owner';                     // New company signup: always owner
-        
-        
-        // Wait briefly for the database trigger to create the profile row
+        const userRole = metadata?.company_id ? (metadata.role || 'sales') : 'owner';
         await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // Update profile with additional info (retry up to 3 times)
+
         let profileUpdateSuccess = false;
         for (let attempt = 1; attempt <= 3; attempt++) {
-          const profileUpdates: Record<string, unknown> = {
-              first_name: metadata?.first_name,
-              last_name: metadata?.last_name,
-              role: userRole,
-            };
-          // Only set company_id if provided (invite signup) — don't overwrite trigger-created company_id
-          if (metadata?.company_id) {
-            profileUpdates.company_id = metadata.company_id;
-          }
-          const { error: profileError, count } = await supabase
-            .from('profiles')
-            .update(profileUpdates)
-            .eq('id', data.user.id);
-          
+          const profileUpdates: Record<string, unknown> = { first_name: metadata?.first_name, last_name: metadata?.last_name, role: userRole };
+          if (metadata?.company_id) profileUpdates.company_id = metadata.company_id;
+          const { error: profileError } = await supabase.from('profiles').update(profileUpdates).eq('id', data.user.id);
           if (profileError) {
             console.error(`[Auth] Failed to update profile (attempt ${attempt}):`, profileError);
             if (attempt < 3) await new Promise(resolve => setTimeout(resolve, 500));
@@ -434,22 +306,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             break;
           }
         }
-        
-        if (!profileUpdateSuccess) {
-          console.error('[Auth] Failed to update profile role after all attempts');
-        }
-        
-        // Only run first-time setup if NOT signing up via invite
-        // (invite signup means they're joining an existing company)
+        if (!profileUpdateSuccess) console.error('[Auth] Failed to update profile role after all attempts');
+
         if (!metadata?.company_id) {
           await setupNewUser(data.user.id, data.user.email || email, metadata?.company_name);
         }
-        
-        // Re-fetch and set profile so the UI immediately reflects the correct role
+
         const freshProfile = await fetchProfile(data.user.id);
-        if (freshProfile) {
-          setProfile(freshProfile);
-        }
+        if (freshProfile) setProfile(freshProfile);
       }
 
       return { error };
@@ -458,38 +322,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // ── signOut ───────────────────────────────────────────────────────────
   const signOut = async () => {
     try {
-      // Clear all state immediately to provide instant feedback
       setSession(null);
       setUser(null);
       setProfile(null);
+      profileFetchPromise.current = null;
 
-      // Revoke the server-side session first (needs the token still in localStorage)
       const { error } = await supabase.auth.signOut();
-      if (error) {
-        console.error('[Auth] Sign out error:', error);
-      }
+      if (error) console.error('[Auth] Sign out error:', error);
 
-      // Clear storage after revoking the server session
-      try {
-        localStorage.clear();
-        sessionStorage.clear();
-      } catch (storageError) {
-        console.warn('[Auth] Failed to clear storage:', storageError);
-      }
+      try { localStorage.clear(); sessionStorage.clear(); } catch { /* ignore */ }
     } catch (err) {
       console.error('[Auth] Sign out failed:', err);
     } finally {
-      // Always redirect and reload, regardless of success/failure
-      // Use correct base path for GitHub Pages
       const basePath = import.meta.env.BASE_URL || '/';
-
-      // Force a hard reload to the base path to ensure clean state
       window.location.replace(basePath);
     }
   };
 
+  // ── resetPassword ─────────────────────────────────────────────────────
   const resetPassword = async (email: string) => {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -501,40 +354,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // ── updateProfile ─────────────────────────────────────────────────────
   const updateProfile = async (updates: Partial<Profile>) => {
     if (!user) return { error: new Error('No user logged in') };
-
     try {
-      // In demo mode, save profile updates to localStorage
       if (isDemoMode) {
         try {
-          const demoProfileKey = `demo_profile_${user.id}`;
-          const existing = localStorage.getItem(demoProfileKey);
+          const key = `demo_profile_${user.id}`;
+          const existing = localStorage.getItem(key);
           const profileData = existing ? JSON.parse(existing) : { id: user.id, email: user.email };
           const updated = { ...profileData, ...updates, updated_at: new Date().toISOString() };
-          localStorage.setItem(demoProfileKey, JSON.stringify(updated));
-          setProfile((prev) => (prev ? { ...prev, ...updates } : null));
-          return { error: null };
-        } catch (localStorageError) {
-          console.warn('[Auth] Failed to save profile to localStorage:', localStorageError);
-          // Even if localStorage fails, update state and return success
-          setProfile((prev) => (prev ? { ...prev, ...updates } : null));
-          return { error: null };
-        }
+          localStorage.setItem(key, JSON.stringify(updated));
+        } catch { /* ignore */ }
+        setProfile(prev => (prev ? { ...prev, ...updates } : null));
+        return { error: null };
       }
 
       const { error } = await supabase
         .from('profiles')
-        .update({
-          ...updates,
-          updated_at: new Date().toISOString(),
-        })
+        .update({ ...updates, updated_at: new Date().toISOString() })
         .eq('id', user.id);
 
-      if (!error) {
-        setProfile((prev) => (prev ? { ...prev, ...updates } : null));
-      }
-
+      if (!error) setProfile(prev => (prev ? { ...prev, ...updates } : null));
       return { error };
     } catch (err) {
       return { error: err as Error };
@@ -542,20 +383,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        session,
-        user,
-        profile,
-        loading,
-        isPasswordReset,
-        signIn,
-        signUp,
-        signOut,
-        resetPassword,
-        updateProfile,
-      }}
-    >
+    <AuthContext.Provider value={{ session, user, profile, loading, isPasswordReset, signIn, signUp, signOut, resetPassword, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );
@@ -563,8 +391,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 }
