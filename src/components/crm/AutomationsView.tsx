@@ -47,6 +47,11 @@ interface AutomationLog {
   success: boolean;
 }
 
+interface AutomationRecipient {
+  type: 'email' | 'sms';
+  value: string;
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function getActionIcon(action: string) {
@@ -103,7 +108,6 @@ export default function AutomationsView() {
 
       if (error) {
         if (error.message?.includes('does not exist') || error.message?.includes('relation')) {
-          // Table not migrated yet — silently ignore
           console.warn('automation_logs table not found');
         } else {
           console.error('Error loading automation logs:', error);
@@ -263,7 +267,7 @@ export default function AutomationsView() {
         </div>
       </div>
 
-      {/* Stats Cards — real data */}
+      {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white rounded-xl p-6 border border-gray-200">
           <div className="flex items-center gap-3">
@@ -395,7 +399,6 @@ export default function AutomationsView() {
                       <span className="text-sm text-blue-700">{automation.action}</span>
                     </div>
                   </div>
-                  {/* Last run time from logs */}
                   {(() => {
                     const lastLog = logs.find(l => l.automation_id === automation.id);
                     return lastLog ? (
