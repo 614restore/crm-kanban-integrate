@@ -2,11 +2,13 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useCRM, useCurrentContact } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
+import { supabase } from '@/lib/supabase';
 import { formatPhoneNumber } from '@/lib/utils';
 import JobStatusTimeline from './JobStatusTimeline';
 import CustomerSurvey from './CustomerSurvey';
 import AppointmentModal from './AppointmentModal';
 import ContactTemplateModal from './ContactTemplateModal';
+import ChangeOrderModal, { ChangeOrder } from './ChangeOrderModal';
 import HailTracePanel from './HailTracePanel';
 import EagleViewPanel from './EagleViewPanel';
 import InsuranceTrackingView from './InsuranceTrackingView';
@@ -100,6 +102,9 @@ export default function ContactDetail() {
   const [showEstimateModal, setShowEstimateModal] = useState(false);
   const [viewingEstimate, setViewingEstimate] = useState<any>(null);
   const [showWorkOrderModal, setShowWorkOrderModal] = useState(false);
+  const [contactChangeOrders, setContactChangeOrders] = useState<ChangeOrder[]>([]);
+  const [showChangeOrderModal, setShowChangeOrderModal] = useState(false);
+  const [viewingChangeOrder, setViewingChangeOrder] = useState<ChangeOrder | null>(null);
   const [showSurveyModal, setShowSurveyModal] = useState(false);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   
@@ -135,6 +140,14 @@ export default function ContactDetail() {
       // Load material orders for this contact
       const materialOrders = state.materialOrders.filter(mo => mo.contactId === contactId);
       setContactMaterialOrders(materialOrders);
+
+      // Load change orders for this contact
+      const { data: changeOrders } = await supabase
+        .from('change_orders')
+        .select('*')
+        .eq('contact_id', contactId)
+        .order('created_at', { ascending: false });
+      setContactChangeOrders((changeOrders as ChangeOrder[]) ?? []);
       
     };
 
@@ -1900,6 +1913,91 @@ export default function ContactDetail() {
                 </div>
               )}
             </div>
+
+            {/* Change Orders Section */}
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                  <FileText size={20} />
+                  Change Orders ({contactChangeOrders.length})
+                </h3>
+                <button
+                  onClick={() => { setViewingChangeOrder(null); setShowChangeOrderModal(true); }}
+                  className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors"
+                >
+                  <Plus size={18} />
+                  New Change Order
+                </button>
+              </div>
+
+              {contactChangeOrders.length > 0 ? (
+                <div className="grid gap-4">
+                  {contactChangeOrders.map((co) => (
+                    <div key={co.id} className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg transition-shadow">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <h4 className="text-lg font-semibold text-gray-900">{co.change_order_number}</h4>
+                          <p className="text-sm text-gray-500 mt-1">{co.title}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`px-3 py-1 rounded-full text-sm font-medium ${
+                              co.status === 'signed'
+                                ? 'bg-green-100 text-green-800'
+                                : co.status === 'sent'
+                                ? 'bg-blue-100 text-blue-800'
+                                : co.status === 'approved'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : co.status === 'rejected'
+                                ? 'bg-red-100 text-red-800'
+                                : 'bg-gray-100 text-gray-800'
+                            }`}
+                          >
+                            {co.status}
+                          </span>
+                          <button
+                            onClick={() => { setViewingChangeOrder(co); setShowChangeOrderModal(true); }}
+                            className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                            title="Edit change order"
+                          >
+                            <Edit2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-4 text-sm">
+                        <div>
+                          <p className="text-gray-500">Created</p>
+                          <p className="font-medium text-gray-900">{formatDate(co.created_at)}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500">Subtotal</p>
+                          <p className="font-medium text-gray-900">{formatCurrency(co.subtotal)}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500">Total</p>
+                          <p className="font-semibold text-gray-900">{formatCurrency(co.total)}</p>
+                        </div>
+                      </div>
+                      {co.notes && (
+                        <p className="mt-3 text-sm text-gray-500 border-t border-gray-100 pt-3">{co.notes}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+                  <FileText size={32} className="mx-auto mb-2 text-gray-400" />
+                  <p className="text-gray-500">No change orders yet</p>
+                  <button
+                    onClick={() => { setViewingChangeOrder(null); setShowChangeOrderModal(true); }}
+                    className="mt-4 text-amber-600 hover:text-amber-700 font-medium"
+                  >
+                    Create your first change order
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -2959,6 +3057,30 @@ export default function ContactDetail() {
           }}
         />
       )}
+
+      {/* Change Order Modal */}
+      <ChangeOrderModal
+        isOpen={showChangeOrderModal}
+        onClose={() => { setShowChangeOrderModal(false); setViewingChangeOrder(null); }}
+        onSave={async () => {
+          setShowChangeOrderModal(false);
+          setViewingChangeOrder(null);
+          // Reload change orders after save
+          if (contactId) {
+            const { data } = await supabase
+              .from('change_orders')
+              .select('*')
+              .eq('contact_id', contactId)
+              .order('created_at', { ascending: false });
+            setContactChangeOrders((data as ChangeOrder[]) ?? []);
+          }
+        }}
+        contactId={contact.id}
+        contactName={getContactFullName(contact)}
+        contactEmail={contact.email ?? undefined}
+        changeOrder={viewingChangeOrder}
+        companyId={profile?.company_id || ''}
+      />
     </div>
   );
 }

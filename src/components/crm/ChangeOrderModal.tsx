@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/authContext';
 import { formatCurrency } from '@/lib/crmData';
 import { toast } from 'sonner';
+import { sendEmail } from '@/lib/emailApi';
 import { X, Plus, Trash2, Save, Send, DollarSign, Copy, CheckCircle2 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -43,6 +44,7 @@ interface ChangeOrderModalProps {
   onSave: () => void;
   contactId: string;
   contactName: string;
+  contactEmail?: string;
   changeOrder?: ChangeOrder | null;
   companyId: string;
 }
@@ -75,6 +77,7 @@ export default function ChangeOrderModal({
   onSave,
   contactId,
   contactName,
+  contactEmail,
   changeOrder,
   companyId,
 }: ChangeOrderModalProps) {
@@ -236,6 +239,24 @@ export default function ChangeOrderModal({
       }
 
       setSignLink(link);
+
+      if (contactEmail) {
+        sendEmail({
+          to: contactEmail,
+          subject: `Change Order for Your Review: ${title}`,
+          html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px">
+            <h2 style="color:#1f2937">Change Order for Your Review</h2>
+            <p style="color:#6b7280">Hi ${contactName},</p>
+            <p style="color:#374151">A change order has been prepared for your review and signature. Please click the button below to review the details and sign electronically.</p>
+            <div style="margin:32px 0;text-align:center">
+              <a href="${link}" style="background:#7c3aed;color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:600;display:inline-block">Review &amp; Sign Change Order</a>
+            </div>
+            <p style="color:#6b7280;font-size:13px">If the button doesn't work, copy and paste this link into your browser:</p>
+            <p style="color:#6b7280;font-size:12px;word-break:break-all">${link}</p>
+          </div>`,
+        }).catch(() => {});
+      }
+
       toast.success('Change order sent for signature');
       onSave();
     } catch (err: any) {
