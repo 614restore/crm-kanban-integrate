@@ -104,9 +104,8 @@ function isToday(date: Date): boolean {
   return toISO(date) === toISO(new Date());
 }
 
-/** Build a display name from profile row — handles full_name, first+last, or email fallback */
-function buildFullName(p: { full_name?: string | null; first_name?: string | null; last_name?: string | null; email?: string | null }): string {
-  if (p.full_name?.trim()) return p.full_name.trim();
+/** Build a display name from first_name + last_name, falling back to email */
+function buildFullName(p: { first_name?: string | null; last_name?: string | null; email?: string | null }): string {
   const parts = [p.first_name, p.last_name].filter(Boolean).join(' ').trim();
   if (parts) return parts;
   return p.email ?? 'Unknown';
@@ -641,10 +640,10 @@ export default function CrewScheduleView({ contactFilterId }: { contactFilterId?
   const loadCrewMembers = useCallback(async () => {
     if (!profile?.company_id) return;
 
-    // Select both first_name/last_name AND full_name so we handle either schema
+    // Only select columns that actually exist on the profiles table
     const { data: profileData, error: profileError } = await supabase
       .from('profiles')
-      .select('id, first_name, last_name, full_name, avatar_url, role, email')
+      .select('id, first_name, last_name, avatar_url, role, email')
       .eq('company_id', profile.company_id)
       .order('first_name');
 
