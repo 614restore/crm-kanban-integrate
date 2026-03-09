@@ -318,7 +318,10 @@ export default function AIApprovalPanel({ companyId }: AIApprovalPanelProps) {
                   </SelectContent>
                 </Select>
 
-                <Select value={selectedAccessLevel} onValueChange={(value: any) => setSelectedAccessLevel(value)}>
+                <Select
+                  value={selectedAccessLevel}
+                  onValueChange={(value: 'read' | 'write' | 'admin') => setSelectedAccessLevel(value)}
+                >
                   <SelectTrigger className="w-24">
                     <SelectValue />
                   </SelectTrigger>
