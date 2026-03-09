@@ -14,6 +14,7 @@
 //   customer.subscription.updated
 //   customer.subscription.deleted
 //   invoice.payment_failed
+//   invoice.payment_succeeded
 
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
@@ -27,6 +28,17 @@ async function getRawBody(req) {
     req.on('end', () => resolve(Buffer.concat(chunks)));
     req.on('error', reject);
   });
+}
+
+/** Look up the company row that owns a given Stripe customer ID. */
+async function getCompanyByStripeCustomer(supabase, stripeCustomerId) {
+  const { data } = await supabase
+    .from('companies')
+    .select('id')
+    .eq('stripe_customer_id', stripeCustomerId)
+    .limit(1)
+    .single();
+  return data?.id ?? null;
 }
 
 export default async function handler(req, res) {
@@ -67,74 +79,103 @@ export default async function handler(req, res) {
         const subscriptionId = session.subscription;
         const planId = session.metadata?.planId || '';
 
-        // Store subscription info against the user (look up by Stripe customer email)
-        if (session.customer_details?.email) {
+        // Prefer client_reference_id (company UUID passed from the pricing table embed).
+        // Fall back to looking up the auth user by email, then their profile.
+        let companyId = session.client_reference_id || null;
+
+        if (!companyId && session.customer_details?.email) {
+          // Look up auth user by email using the admin API
+          const { data: { users }, error: listErr } = await supabase.auth.admin.listUsers();
+          if (!listErr) {
+            const matchedUser = users.find(
+              (u) => u.email?.toLowerCase() === session.customer_details.email.toLowerCase()
+            );
+            if (matchedUser) {
+              const { data: profileData } = await supabase
+                .from('profiles')
+                .select('company_id')
+                .eq('id', matchedUser.id)
+                .single();
+              companyId = profileData?.company_id ?? null;
+            }
+          }
+        }
+
+        if (companyId) {
           await supabase
-            .from('subscriptions')
-            .upsert({
-              email: session.customer_details.email,
+            .from('companies')
+            .update({
+              subscription_status: 'active',
               stripe_customer_id: customerId,
               stripe_subscription_id: subscriptionId,
-              plan: planId,
-              status: 'active',
-              trial_end: session.subscription ? null : null,
+              plan: planId || undefined,
               updated_at: new Date().toISOString(),
-            }, { onConflict: 'email' });
+            })
+            .eq('id', companyId);
+        } else {
+          console.warn('checkout.session.completed: could not resolve company_id for email', session.customer_details?.email);
         }
         break;
       }
 
       case 'customer.subscription.updated': {
         const sub = event.data.object;
-        await supabase
-          .from('subscriptions')
-          .update({
-            status: sub.status,
-            plan: sub.metadata?.planId || sub.items?.data?.[0]?.price?.metadata?.planId || '',
-            updated_at: new Date().toISOString(),
-          })
-          .eq('stripe_subscription_id', sub.id);
+        const companyId = await getCompanyByStripeCustomer(supabase, sub.customer);
+        if (companyId) {
+          await supabase
+            .from('companies')
+            .update({
+              subscription_status: sub.status,
+              plan: sub.metadata?.planId || sub.items?.data?.[0]?.price?.metadata?.planId || undefined,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', companyId);
+        }
         break;
       }
 
       case 'customer.subscription.deleted': {
         const sub = event.data.object;
-        await supabase
-          .from('subscriptions')
-          .update({ status: 'cancelled', updated_at: new Date().toISOString() })
-          .eq('stripe_subscription_id', sub.id);
+        const companyId = await getCompanyByStripeCustomer(supabase, sub.customer);
+        if (companyId) {
+          await supabase
+            .from('companies')
+            .update({ subscription_status: 'canceled', updated_at: new Date().toISOString() })
+            .eq('id', companyId);
+        }
         break;
       }
 
       case 'invoice.payment_failed': {
         const invoice = event.data.object;
-        if (invoice.subscription) {
-          await supabase
-            .from('subscriptions')
-            .update({ status: 'past_due', updated_at: new Date().toISOString() })
-            .eq('stripe_subscription_id', invoice.subscription);
+        if (invoice.customer) {
+          const companyId = await getCompanyByStripeCustomer(supabase, invoice.customer);
+          if (companyId) {
+            await supabase
+              .from('companies')
+              .update({ subscription_status: 'past_due', updated_at: new Date().toISOString() })
+              .eq('id', companyId);
+          }
         }
         break;
       }
 
       case 'invoice.payment_succeeded': {
         const invoice = event.data.object;
-        if (invoice.subscription) {
-          await supabase
-            .from('subscriptions')
-            .update({ status: 'active', updated_at: new Date().toISOString() })
-            .eq('stripe_subscription_id', invoice.subscription);
+        if (invoice.customer) {
+          const companyId = await getCompanyByStripeCustomer(supabase, invoice.customer);
+          if (companyId) {
+            await supabase
+              .from('companies')
+              .update({ subscription_status: 'active', updated_at: new Date().toISOString() })
+              .eq('id', companyId);
+          }
         }
         break;
       }
 
       case 'customer.subscription.trial_will_end': {
-        const sub = event.data.object;
-        // Mark trial ending soon — front-end can show a banner
-        await supabase
-          .from('subscriptions')
-          .update({ trial_ending_soon: true, updated_at: new Date().toISOString() })
-          .eq('stripe_subscription_id', sub.id);
+        // Informational — no action needed, the trial banner handles UI
         break;
       }
 
@@ -149,3 +190,4 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Internal server error' });
   }
 }
+

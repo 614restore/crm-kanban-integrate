@@ -1,5 +1,10 @@
+import { requireAuth } from './auth-middleware.mjs';
+
+const SENDER = '614 Restore <scopemgr@614restore.com>';
+
 function setCors(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  const allowedOrigin = process.env.APP_URL || '';
+  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
   res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 }
@@ -15,7 +20,11 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  const { to, subject, html, from } = req.body || {};
+  // Require authentication — prevents open relay abuse
+  const user = await requireAuth(req, res);
+  if (!user) return;
+
+  const { to, subject, html } = req.body || {};
   if (!to || !subject || !html) {
     return res.status(400).json({ error: 'Missing required fields: to, subject, html' });
   }
@@ -33,7 +42,7 @@ export default async function handler(req, res) {
         Authorization: `Bearer ${RESEND_API_KEY}`,
       },
       body: JSON.stringify({
-        from: from || '614 Restore <scopemgr@614restore.com>',
+        from: SENDER,
         to: Array.isArray(to) ? to : [to],
         subject,
         html,
@@ -50,3 +59,4 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: error?.message || String(error) });
   }
 }
+

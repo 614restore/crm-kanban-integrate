@@ -124,7 +124,6 @@ export default function FinancialDashboard() {
 
     try {
       const fromName = companyProfile?.from_name || companyProfile?.name || 'TrussCTR';
-      const fromEmail = companyProfile?.from_email || companyProfile?.email || undefined;
       await sendEmail({
         to: contact.email,
         subject: `Invoice ${existingInvoice.id} from ${companyProfile?.name || 'our company'}`,
@@ -137,7 +136,6 @@ export default function FinancialDashboard() {
           <p>Please reply to this email if you have any questions.</p>
           <p>Best regards,<br/>${fromName}</p>
         `,
-        ...(fromEmail ? { from: `${fromName} <${fromEmail}>` } : {}),
       });
 
       const updated = await db.updateInvoice(invoiceId, { status: 'sent' });

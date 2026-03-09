@@ -319,7 +319,6 @@ export default function EstimatesView() {
 
       await sendEmail({
         to: contact.email,
-        from: fromEmail,
         subject: `Estimate ${estimate.estimateNumber} from ${companyName}`,
         html: `
           <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
@@ -467,7 +466,6 @@ export default function EstimatesView() {
 
       await sendEmail({
         to: contact.email,
-        from: fromEmail,
         subject: `Action Required: Please sign Estimate ${estimate.estimateNumber} from ${companyName}`,
         html: `
           <div style="font-family:sans-serif;max-width:600px;margin:0 auto">

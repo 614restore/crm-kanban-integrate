@@ -45,7 +45,11 @@ const supabase = createClient(
     auth: {
       autoRefreshToken: true,
       persistSession: true,
-      detectSessionInUrl: false, // hash routing on GH Pages conflicts with URL session detection
+      // On Vercel (real paths), we must detect the session from the URL so that
+      // email confirmation and password-reset links work. On GitHub Pages we use
+      // hash routing, which conflicts with URL session detection — so we disable
+      // it there by setting VITE_HASH_ROUTING=true in the GH Pages build.
+      detectSessionInUrl: import.meta.env.VITE_HASH_ROUTING !== 'true',
       storage: typeof window !== 'undefined' ? window.localStorage : undefined,
       storageKey: 'sb-auth-token',
       flowType: 'pkce',

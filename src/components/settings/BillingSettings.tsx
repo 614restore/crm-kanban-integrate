@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { CreditCard, Plus, Zap, Rocket, Building2, Star, ChevronDown, ChevronRight, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/lib/authContext';
 
 // Tell TypeScript about the Stripe custom element
 declare global {
@@ -11,6 +12,7 @@ declare global {
         'pricing-table-id'?: string;
         'publishable-key'?: string;
         'customer-email'?: string;
+        'client-reference-id'?: string;
       }, HTMLElement>;
     }
   }
@@ -279,6 +281,7 @@ const ComparisonTable: React.FC = () => {
 };
 
 const BillingSettings: React.FC = () => {
+  const { profile } = useAuth();
 
   const handleManageBilling = () => {
     const a = document.createElement('a');
@@ -314,6 +317,7 @@ const BillingSettings: React.FC = () => {
         <stripe-pricing-table
           pricing-table-id="prctbl_1T8ahXQ4qbAu1D2SCifFughX"
           publishable-key="pk_live_51T8YyaQ4qbAu1D2STcaoAsxjqScvBgvTttf0k5DXp8t0BbDswCY6Hqdtd81MOlWeQqPBGCkAFBtAidM5Fsa8n0JK006K6b0Uv7"
+          client-reference-id={profile?.company_id || undefined}
         />
       </div>
 

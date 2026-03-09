@@ -402,6 +402,7 @@ function TrialBanner({ companyId }: { companyId: string | null }) {
 function CRMApp() {
   const { profile, user, loading: authLoading } = useAuth();
   const [state, dispatch] = useReducer(crmReducer, initialState);
+  const [subscriptionBlocked, setSubscriptionBlocked] = useState(false);
   useEffect(() => {
     try { sessionStorage.setItem('crm_current_view', state.currentView); } catch (_) { /* ignore */ }
   }, [state.currentView]);
@@ -902,6 +903,22 @@ function CRMApp() {
     return () => window.clearTimeout(timer);
   }, [state.isLoading, state.isInitialized, authLoading]);
 
+  // Check subscription status after data loads — enforce paywall on expired/canceled accounts
+  useEffect(() => {
+    if (!profile?.company_id) return;
+    db.getCompany(profile.company_id).then((company) => {
+      if (!company) return;
+      const trialExpired =
+        company.subscription_status === 'trialing' &&
+        !!company.trial_ends_at &&
+        new Date(company.trial_ends_at) < new Date();
+      const blocked =
+        trialExpired ||
+        company.subscription_status === 'canceled';
+      setSubscriptionBlocked(blocked);
+    });
+  }, [profile?.company_id]);
+
   // Set current user from profile
   useEffect(() => {
     if (profile) {
@@ -921,6 +938,38 @@ function CRMApp() {
 
   if (state.isLoading && !state.isInitialized) {
     return <LoadingScreen />;
+  }
+
+  if (subscriptionBlocked) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 max-w-md w-full p-8 text-center">
+          <div className="w-14 h-14 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-4">
+            <Zap className="w-7 h-7 text-amber-600" />
+          </div>
+          <h1 className="text-xl font-bold text-gray-900 mb-2">Subscription Required</h1>
+          <p className="text-gray-500 text-sm mb-6">
+            Your free trial has ended. Subscribe to continue using TrussCTR.
+            Use code <strong className="font-mono text-indigo-600">LAUNCH50</strong> for 50% off your first 3 months on any monthly plan.
+          </p>
+          <a
+            href="/settings?tab=billing"
+            className="inline-block w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg px-6 py-3 text-sm transition-colors"
+          >
+            Subscribe Now
+          </a>
+          <p className="text-xs text-gray-400 mt-4">
+            Already subscribed?{' '}
+            <button
+              onClick={() => window.location.reload()}
+              className="text-indigo-500 hover:underline"
+            >
+              Refresh to continue
+            </button>
+          </p>
+        </div>
+      </div>
+    );
   }
 
   return (

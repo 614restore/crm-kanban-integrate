@@ -31,7 +31,7 @@ import {
 
 export default function TeamView() {
   const { state, dispatch } = useCRM();
-  const { profile } = useAuth();
+  const { profile, session } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -160,7 +160,10 @@ export default function TeamView() {
       const inviteUrl = `${window.location.origin}${window.location.pathname}#/join?token=${token}`;
       const emailRes = await fetch('https://crm-kanban-integrate.vercel.app/api/send-email', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token || ''}`,
+        },
         body: JSON.stringify({
           to: inviteEmail.trim().toLowerCase(),
           subject: `You're invited to join ${state.currentUser?.name || 'TrussCTR'}`,

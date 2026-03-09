@@ -24,7 +24,11 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'priceId is required' });
   }
 
-  const appUrl = process.env.APP_URL || 'https://614restore.github.io/crm-kanban-integrate';
+  const appUrl = process.env.APP_URL;
+  if (!appUrl) {
+    console.error('APP_URL env var is not configured — cannot complete Stripe checkout redirect');
+    return res.status(500).json({ error: 'APP_URL is not configured on this server. Contact support.' });
+  }
 
   try {
     const sessionParams = {

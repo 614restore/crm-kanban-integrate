@@ -1,8 +1,9 @@
+import { supabase } from './supabase';
+
 export interface SendEmailPayload {
   to: string | string[];
   subject: string;
   html: string;
-  from?: string;
 }
 
 function getApiBaseUrl(): string | null {
@@ -31,6 +32,9 @@ export async function sendEmail(payload: SendEmailPayload, timeoutMs: number = 1
     throw new Error('Email API is not configured. Set VITE_EMAIL_API_BASE_URL to your Vercel app URL.');
   }
 
+  const { data: { session } } = await supabase.auth.getSession();
+  const accessToken = session?.access_token || '';
+
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), timeoutMs);
 
@@ -38,7 +42,10 @@ export async function sendEmail(payload: SendEmailPayload, timeoutMs: number = 1
   try {
     response = await fetch(`${baseUrl}/api/send-email`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+      },
       body: JSON.stringify(payload),
       signal: controller.signal,
     });

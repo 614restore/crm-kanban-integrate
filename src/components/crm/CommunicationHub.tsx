@@ -132,7 +132,7 @@ Best regards,
 
 export default function CommunicationHub() {
   const { state, dispatch } = useCRM();
-  const { profile } = useAuth();
+  const { profile, session } = useAuth();
   const [filter, setFilter] = useState<CommFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedComm, setSelectedComm] = useState<string | null>(null);
@@ -321,7 +321,10 @@ export default function CommunicationHub() {
     try {
       const res = await fetch('/api/ai-draft', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token || ''}`,
+        },
         body: JSON.stringify({
           contactName: `${contact.firstName} ${contact.lastName}`,
           projectType: contact.projectType || contact.source || 'roofing/restoration',
