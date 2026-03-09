@@ -252,7 +252,6 @@ export interface DbMaterialOrder {
   company_id: string;
   supplier_id: string;
   contact_id?: string;
-  project_id?: string;
   job_id?: string;
   order_number?: string;
   order_date: string;
@@ -264,7 +263,6 @@ export interface DbMaterialOrder {
   shipping: number;
   total: number;
   notes?: string;
-  attachments?: string[];
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -1653,9 +1651,9 @@ class DatabaseService {
         supabase.from('material_orders').insert(order).select().single(),
         10000, 'createMaterialOrder'
       );
-      if (error) { console.error('Error creating material order:', error); return null; }
+      if (error) { console.error('Error creating material order:', error); throw new Error(error.message); }
       return data;
-    } catch (err) { console.error('createMaterialOrder timed out or failed:', err); return null; }
+    } catch (err) { console.error('createMaterialOrder timed out or failed:', err); throw err; }
   }
 
   async updateMaterialOrder(orderId: string, updates: Partial<DbMaterialOrder>): Promise<DbMaterialOrder | null> {

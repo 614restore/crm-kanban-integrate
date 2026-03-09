@@ -306,9 +306,8 @@ export default function MaterialOrdersView() {
         supplier_id: selectedSupplierId,
         contact_id: selectedContactId || undefined,
         job_id: selectedJobId || selectedProjectId || undefined,
-        project_id: selectedProjectId || selectedJobId || undefined,
         status,
-        order_date: orderDate || undefined,
+        order_date: orderDate || new Date().toISOString().split('T')[0],
         expected_delivery_date: expectedDeliveryDate || undefined,
         actual_delivery_date: actualDeliveryDate || undefined,
         subtotal: parseFloat(subtotal) || 0,
@@ -316,7 +315,6 @@ export default function MaterialOrdersView() {
         shipping: parseFloat(shipping) || 0,
         total: parseFloat(total) || 0,
         notes: notes.trim() || undefined,
-        attachments: attachments.length > 0 ? attachments : undefined,
         created_by: profile.id,
       };
 
@@ -379,13 +377,11 @@ export default function MaterialOrdersView() {
           dispatch({ type: 'ADD_MATERIAL_ORDER', payload: appOrder });
           toast.success('Material order created');
           handleCloseModal();
-        } else {
-          toast.error('Failed to create order. Please try again.');
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving material order:', error);
-      toast.error('Failed to save material order');
+      toast.error(error?.message || 'Failed to save material order');
     } finally {
       setIsSaving(false);
     }
