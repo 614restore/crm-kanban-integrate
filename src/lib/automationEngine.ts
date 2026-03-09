@@ -1,8 +1,10 @@
 import { db } from '@/lib/database';
+import { sendEmail } from '@/lib/emailApi';
 import { toast } from 'sonner';
 
 export interface AutomationContext {
   contactName?: string;
+  contactEmail?: string;
   contactId?: string;
   oldStatus?: string;
   newStatus?: string;
@@ -53,6 +55,24 @@ function buildNotificationMessage(actionName: string, eventType: string, ctx: Au
   };
 }
 
+function buildEmailHtml(title: string, message: string, ctx: AutomationContext): string {
+  const name = ctx.contactName || 'there';
+  return `
+    <!DOCTYPE html>
+    <html>
+      <body style="font-family: Arial, sans-serif; background: #f9fafb; padding: 32px;">
+        <div style="max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 8px; padding: 32px; border: 1px solid #e5e7eb;">
+          <h2 style="color: #1f2937; margin-top: 0;">${title}</h2>
+          <p style="color: #4b5563; font-size: 15px;">Hi ${name},</p>
+          <p style="color: #4b5563; font-size: 15px;">${message}</p>
+          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+          <p style="color: #9ca3af; font-size: 12px; margin: 0;">This email was sent automatically by your CRM automation.</p>
+        </div>
+      </body>
+    </html>
+  `.trim();
+}
+
 async function executeAction(
   automationName: string,
   actionType: string,
@@ -78,22 +98,38 @@ async function executeAction(
   }
 
   if (at.includes('email')) {
-    console.log(`Automation: would send email for "${automationName}" — contact: ${ctx.contactName || 'unknown'}`);
+    if (!ctx.contactEmail) {
+      console.warn(`Automation "${automationName}": no contactEmail in context, skipping email send.`);
+      return;
+    }
+    const { title, message } = buildNotificationMessage(automationName, eventType, ctx);
+    const html = buildEmailHtml(title, message, ctx);
+    try {
+      await sendEmail({
+        to: ctx.contactEmail,
+        subject: title,
+        html,
+      });
+      console.log(`Automation "${automationName}": email sent to ${ctx.contactEmail}`);
+    } catch (err) {
+      console.error(`Automation "${automationName}": failed to send email to ${ctx.contactEmail}:`, err);
+    }
     return;
   }
 
   if (at.includes('sms')) {
-    console.log(`Automation: would send SMS for "${automationName}" — contact: ${ctx.contactName || 'unknown'}`);
+    // SMS requires a paid provider (e.g. Twilio). Gracefully skip for now.
+    console.log(`Automation "${automationName}": SMS action not yet configured — skipping.`);
     return;
   }
 
   if (at.includes('status')) {
-    console.log(`Automation: would update status for "${automationName}" — new status: ${ctx.newStatus || 'unknown'}`);
+    console.log(`Automation "${automationName}": would update status — new status: ${ctx.newStatus || 'unknown'}`);
     return;
   }
 
   if (at.includes('assign')) {
-    console.log(`Automation: would assign team member for "${automationName}" — assignedTo: ${ctx.assignedTo || 'unknown'}`);
+    console.log(`Automation "${automationName}": would assign team member — assignedTo: ${ctx.assignedTo || 'unknown'}`);
     return;
   }
 
