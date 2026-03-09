@@ -69,7 +69,7 @@ const initialState: CRMState = {
   companyId: null,
   currentView: getInitialView(),
   selectedContactId: null,
-  selectedBoardId: 'board-sales',
+  selectedBoardId: 'board-retail',
   contacts: [],
   teamMembers: [],
   boards: defaultBoards, // Use default boards as fallback

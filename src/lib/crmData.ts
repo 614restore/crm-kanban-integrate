@@ -15,7 +15,11 @@ export type CustomerStatus =
   | 'invoicing' 
   | 'pending_payment' 
   | 'completed' 
-  | 'lost';
+  | 'lost'
+  | 'claim_filed'
+  | 'adjuster_scheduled'
+  | 'supplement_filed'
+  | 'approved';
 
 export type UserRole = 
   | 'owner' 
@@ -471,20 +475,47 @@ export const defaultLeadSources: LeadSource[] = [
 // Default Kanban Boards
 export const defaultBoards: KanbanBoard[] = [
   {
-    id: 'board-sales',
-    name: 'Sales Pipeline',
+    id: 'board-retail',
+    name: 'Retail Pipeline (Cash Jobs)',
     type: 'sales',
     visibleTo: ['owner', 'manager', 'admin', 'sales'],
     createdBy: 'system',
     isDefault: true,
     columns: [
-      { id: 'col-0', title: 'Prospect', status: 'prospect', color: '#94a3b8', order: 0 },
-      { id: 'col-1', title: 'Lead', status: 'lead', color: '#6366f1', order: 1 },
-      { id: 'col-2', title: 'Appt Set', status: 'appt_set', color: '#8b5cf6', order: 2 },
-      { id: 'col-2b', title: 'Inspection Completed', status: 'inspection_completed', color: '#06b6d4', order: 3 },
-      { id: 'col-3', title: 'Estimate Sent', status: 'estimate_sent', color: '#a855f7', order: 4 },
-      { id: 'col-4', title: 'Signed Customer', status: 'signed', color: '#22c55e', order: 5 },
-      { id: 'col-5', title: 'Lost', status: 'lost', color: '#ef4444', order: 6 },
+      { id: 'ret-1',  title: 'New Lead',                    status: 'prospect',    color: '#94a3b8', order: 0 },
+      { id: 'ret-2',  title: 'Contacted / Qualifying',       status: 'lead',        color: '#6366f1', order: 1 },
+      { id: 'ret-3',  title: 'Inspection Scheduled',         status: 'appt_set',    color: '#8b5cf6', order: 2 },
+      { id: 'ret-4',  title: 'Estimate Sent',                status: 'estimate_sent', color: '#a855f7', order: 3 },
+      { id: 'ret-5',  title: 'Follow-up / Negotiation',      status: 'contingency', color: '#f59e0b', order: 4 },
+      { id: 'ret-6',  title: 'Sold / Ready for Production',  status: 'signed',      color: '#22c55e', order: 5 },
+      { id: 'ret-7',  title: 'Scheduled',                    status: 'in_progress', color: '#3b82f6', order: 6 },
+      { id: 'ret-8',  title: 'In Progress',                  status: 'build_phase', color: '#06b6d4', order: 7 },
+      { id: 'ret-9',  title: 'Punch List',                   status: 'cleanup',     color: '#f97316', order: 8 },
+      { id: 'ret-10', title: 'Completed',                    status: 'completed',   color: '#10b981', order: 9 },
+      { id: 'ret-11', title: 'Lost',                         status: 'lost',        color: '#ef4444', order: 10 },
+    ],
+  },
+  {
+    id: 'board-insurance',
+    name: 'Insurance Pipeline (Claims)',
+    type: 'sales',
+    visibleTo: ['owner', 'manager', 'admin', 'sales'],
+    createdBy: 'system',
+    isDefault: true,
+    columns: [
+      { id: 'ins-1',  title: 'New Lead (Damage Report)',      status: 'prospect',            color: '#94a3b8', order: 0 },
+      { id: 'ins-2',  title: 'Inspection Scheduled',          status: 'appt_set',            color: '#6366f1', order: 1 },
+      { id: 'ins-3',  title: 'Inspection & Authorization',    status: 'claim_filed',         color: '#8b5cf6', order: 2 },
+      { id: 'ins-4',  title: 'Adjuster Scheduled',            status: 'adjuster_scheduled',  color: '#7c3aed', order: 3 },
+      { id: 'ins-5',  title: 'Initial Estimate Review',       status: 'inspection_completed', color: '#06b6d4', order: 4 },
+      { id: 'ins-6',  title: 'Supplement Filed',              status: 'supplement_filed',    color: '#f59e0b', order: 5 },
+      { id: 'ins-7',  title: 'Approved / Final Scope',        status: 'approved',            color: '#14b8a6', order: 6 },
+      { id: 'ins-8',  title: 'Sold / Ready for Production',   status: 'signed',              color: '#22c55e', order: 7 },
+      { id: 'ins-9',  title: 'Scheduled',                     status: 'in_progress',         color: '#3b82f6', order: 8 },
+      { id: 'ins-10', title: 'In Progress',                   status: 'build_phase',         color: '#06b6d4', order: 9 },
+      { id: 'ins-11', title: 'Punch List',                    status: 'cleanup',             color: '#f97316', order: 10 },
+      { id: 'ins-12', title: 'Completed',                     status: 'completed',           color: '#10b981', order: 11 },
+      { id: 'ins-13', title: 'Lost',                          status: 'lost',                color: '#ef4444', order: 12 },
     ],
   },
   {
@@ -495,11 +526,11 @@ export const defaultBoards: KanbanBoard[] = [
     createdBy: 'system',
     isDefault: true,
     columns: [
-      { id: 'col-p1', title: 'New', status: 'signed', color: '#3b82f6', order: 0 },
-      { id: 'col-p2', title: 'Estimating', status: 'contingency', color: '#f59e0b', order: 1 },
-      { id: 'col-p3', title: 'Scheduling', status: 'in_progress', color: '#8b5cf6', order: 2 },
-      { id: 'col-p4', title: 'Production', status: 'build_phase', color: '#06b6d4', order: 3 },
-      { id: 'col-p5', title: 'Billing', status: 'cleanup', color: '#22c55e', order: 4 },
+      { id: 'col-p1', title: 'Sold / New',   status: 'signed',      color: '#3b82f6', order: 0 },
+      { id: 'col-p2', title: 'Scheduled',    status: 'in_progress', color: '#8b5cf6', order: 1 },
+      { id: 'col-p3', title: 'In Progress',  status: 'build_phase', color: '#06b6d4', order: 2 },
+      { id: 'col-p4', title: 'Punch List',   status: 'cleanup',     color: '#f97316', order: 3 },
+      { id: 'col-p5', title: 'Completed',    status: 'completed',   color: '#22c55e', order: 4 },
     ],
   },
   {
@@ -510,13 +541,13 @@ export const defaultBoards: KanbanBoard[] = [
     createdBy: 'system',
     isDefault: true,
     columns: [
-      { id: 'col-b1', title: 'Incoming Job', status: 'cleanup', color: '#3b82f6', order: 0 },
-      { id: 'col-b2', title: 'Scheduled Job', status: 'in_progress', color: '#8b5cf6', order: 1 },
-      { id: 'col-b3', title: 'In Progress', status: 'build_phase', color: '#f59e0b', order: 2 },
-      { id: 'col-b4', title: 'Complete', status: 'cleanup', color: '#06b6d4', order: 3 },
-      { id: 'col-b5', title: 'Invoicing', status: 'invoicing', color: '#ec4899', order: 4 },
-      { id: 'col-b6', title: 'Pending Payment', status: 'pending_payment', color: '#f97316', order: 5 },
-      { id: 'col-b7', title: 'Paid & Closed', status: 'completed', color: '#22c55e', order: 6 },
+      { id: 'col-b1', title: 'Incoming Job',     status: 'cleanup',         color: '#3b82f6', order: 0 },
+      { id: 'col-b2', title: 'Scheduled Job',    status: 'in_progress',     color: '#8b5cf6', order: 1 },
+      { id: 'col-b3', title: 'In Progress',      status: 'build_phase',     color: '#f59e0b', order: 2 },
+      { id: 'col-b4', title: 'Complete',         status: 'completed',       color: '#06b6d4', order: 3 },
+      { id: 'col-b5', title: 'Invoicing',        status: 'invoicing',       color: '#ec4899', order: 4 },
+      { id: 'col-b6', title: 'Pending Payment',  status: 'pending_payment', color: '#f97316', order: 5 },
+      { id: 'col-b7', title: 'Paid & Closed',    status: 'completed',       color: '#22c55e', order: 6 },
     ],
   },
 ];
@@ -1409,6 +1440,10 @@ export const statusLabels: Record<CustomerStatus, string> = {
   pending_payment: 'Pending Payment',
   completed: 'Completed',
   lost: 'Lost',
+  claim_filed: 'Claim Filed',
+  adjuster_scheduled: 'Adjuster Scheduled',
+  supplement_filed: 'Supplement Filed',
+  approved: 'Approved / Final Scope',
 };
 
 export const statusColors: Record<CustomerStatus, string> = {
@@ -1427,6 +1462,10 @@ export const statusColors: Record<CustomerStatus, string> = {
   pending_payment: 'bg-amber-100 text-amber-800',
   completed: 'bg-emerald-100 text-emerald-800',
   lost: 'bg-red-100 text-red-800',
+  claim_filed: 'bg-blue-100 text-blue-800',
+  adjuster_scheduled: 'bg-violet-100 text-violet-800',
+  supplement_filed: 'bg-amber-100 text-amber-800',
+  approved: 'bg-teal-100 text-teal-800',
 };
 
 export const roleLabels: Record<UserRole, string> = {
