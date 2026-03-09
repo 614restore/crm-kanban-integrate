@@ -333,13 +333,20 @@ export default function AppointmentModal({
 
         dispatch({ type: 'ADD_APPOINTMENT', payload: newAppointment });
 
-        // If this is an inspection, persist the contact status update to the DB
-        if (type === 'inspection' && contact) {
+        // When any appointment is created for a prospect or lead, advance them to appt_set
+        // so the contact card moves to the Appt Set column on the board automatically
+        if (contact) {
           const shouldAdvanceStatus =
             contact.status === 'prospect' || contact.status === 'lead';
-          db.updateContact(contactId, {
-            status: shouldAdvanceStatus ? 'appt_set' : contact.status,
-          }).catch((err) => console.error('Failed to update contact status:', err));
+          if (shouldAdvanceStatus) {
+            db.updateContact(contactId, { status: 'appt_set' }).catch(
+              (err) => console.error('Failed to update contact status:', err)
+            );
+            dispatch({
+              type: 'UPDATE_CONTACT_STATUS',
+              payload: { contactId, status: 'appt_set' },
+            });
+          }
         }
 
         // If no assignee, create unassigned notification
@@ -455,7 +462,7 @@ export default function AppointmentModal({
             <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
             <select
               value={type}
-              onChange={(e) => setType(e.target.value)}
+              onChange={(e) => setType(e.target.value as typeof type)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
             >
               {appointmentTypeOptions.map((opt) => (

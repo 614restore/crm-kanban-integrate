@@ -28,7 +28,7 @@ export default function QuickAddModal() {
     zip: '',
     leadSource: 'Door Knock',
     assignedTo: state.currentUser?.id || state.teamMembers[0]?.id || '',
-    status: 'lead' as CustomerStatus,
+    status: 'prospect' as CustomerStatus,
     projectType: '',
     projectValue: '',
     isRetail: false,
