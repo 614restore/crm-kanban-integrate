@@ -1,0 +1,817 @@
+{
+  "version": "2.0.0",
+  "generatedAt": "2026-03-09T02:47:55.116Z",
+  "hash": "9a029ec78695fa4e",
+  "meta": {
+    "version": "2.0.0",
+    "generatedAt": "2026-03-09T02:47:55.116Z",
+    "hash": "9a029ec78695fa4e",
+    "sequence": 1,
+    "projectType": "react",
+    "scanDurationMs": 274
+  },
+  "routes": [
+    {
+      "id": "route-0",
+      "method": "GET",
+      "path": "type",
+      "handler": "supabase.ts",
+      "file": "/src/lib/supabase.ts",
+      "framework": "express",
+      "confidence": "medium"
+    },
+    {
+      "id": "route-1",
+      "method": "GET",
+      "path": "eagleview",
+      "handler": "integrationManager.ts",
+      "file": "/src/lib/integrations/integrationManager.ts",
+      "framework": "express",
+      "confidence": "medium"
+    },
+    {
+      "id": "route-2",
+      "method": "GET",
+      "path": "stripe",
+      "handler": "integrationManager.ts",
+      "file": "/src/lib/integrations/integrationManager.ts",
+      "framework": "express",
+      "confidence": "medium"
+    },
+    {
+      "id": "route-3",
+      "method": "GET",
+      "path": "quickbooks",
+      "handler": "integrationManager.ts",
+      "file": "/src/lib/integrations/integrationManager.ts",
+      "framework": "express",
+      "confidence": "medium"
+    },
+    {
+      "id": "route-4",
+      "method": "GET",
+      "path": "twilio",
+      "handler": "integrationManager.ts",
+      "file": "/src/lib/integrations/integrationManager.ts",
+      "framework": "express",
+      "confidence": "medium"
+    },
+    {
+      "id": "route-5",
+      "method": "GET",
+      "path": "openweather",
+      "handler": "integrationManager.ts",
+      "file": "/src/lib/integrations/integrationManager.ts",
+      "framework": "express",
+      "confidence": "medium"
+    },
+    {
+      "id": "route-6",
+      "method": "GET",
+      "path": "hailtrace",
+      "handler": "integrationManager.ts",
+      "file": "/src/lib/integrations/integrationManager.ts",
+      "framework": "express",
+      "confidence": "medium"
+    }
+  ],
+  "env": [
+    {
+      "id": "env-0",
+      "name": "VITE_SUPABASE_URL",
+      "file": ".env",
+      "required": false,
+      "hasDefault": true,
+      "type": "url"
+    },
+    {
+      "id": "env-1",
+      "name": "VITE_SUPABASE_ANON_KEY",
+      "file": ".env",
+      "required": false,
+      "hasDefault": true,
+      "type": "secret"
+    },
+    {
+      "id": "env-2",
+      "name": "VITE_DEMO_MODE",
+      "file": ".env",
+      "required": false,
+      "hasDefault": true,
+      "type": "string"
+    },
+    {
+      "id": "env-3",
+      "name": "VITE_EMAIL_API_BASE_URL",
+      "file": ".env",
+      "required": false,
+      "hasDefault": false,
+      "type": "url"
+    },
+    {
+      "id": "env-4",
+      "name": "VITE_STRIPE_STARTER_MONTHLY",
+      "file": ".env",
+      "required": false,
+      "hasDefault": false,
+      "type": "string"
+    },
+    {
+      "id": "env-5",
+      "name": "VITE_STRIPE_STARTER_YEARLY",
+      "file": ".env",
+      "required": false,
+      "hasDefault": false,
+      "type": "string"
+    },
+    {
+      "id": "env-6",
+      "name": "VITE_STRIPE_PRO_MONTHLY",
+      "file": ".env",
+      "required": false,
+      "hasDefault": false,
+      "type": "string"
+    },
+    {
+      "id": "env-7",
+      "name": "VITE_STRIPE_PRO_YEARLY",
+      "file": ".env",
+      "required": false,
+      "hasDefault": false,
+      "type": "string"
+    },
+    {
+      "id": "env-8",
+      "name": "VITE_STRIPE_BUSINESS_MONTHLY",
+      "file": ".env",
+      "required": false,
+      "hasDefault": false,
+      "type": "string"
+    },
+    {
+      "id": "env-9",
+      "name": "VITE_STRIPE_BUSINESS_YEARLY",
+      "file": ".env",
+      "required": false,
+      "hasDefault": false,
+      "type": "string"
+    },
+    {
+      "id": "env-10",
+      "name": "VITE_STRIPE_ENTERPRISE_MONTHLY",
+      "file": ".env",
+      "required": false,
+      "hasDefault": false,
+      "type": "string"
+    },
+    {
+      "id": "env-11",
+      "name": "VITE_STRIPE_ENTERPRISE_YEARLY",
+      "file": ".env",
+      "required": false,
+      "hasDefault": false,
+      "type": "string"
+    }
+  ],
+  "auth": {
+    "roles": [],
+    "protectedResources": [],
+    "publicPaths": [],
+    "rules": []
+  },
+  "contracts": [],
+  "database": [],
+  "middleware": [],
+  "dependencies": [
+    {
+      "name": "@hookform/resolvers",
+      "version": "^3.9.0",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@radix-ui/react-accordion",
+      "version": "^1.2.0",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@radix-ui/react-alert-dialog",
+      "version": "^1.1.1",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@radix-ui/react-aspect-ratio",
+      "version": "^1.1.0",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@radix-ui/react-avatar",
+      "version": "^1.1.0",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@radix-ui/react-checkbox",
+      "version": "^1.1.1",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@radix-ui/react-collapsible",
+      "version": "^1.1.0",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@radix-ui/react-context-menu",
+      "version": "^2.2.1",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@radix-ui/react-dialog",
+      "version": "^1.1.2",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@radix-ui/react-dropdown-menu",
+      "version": "^2.1.1",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@radix-ui/react-hover-card",
+      "version": "^1.1.1",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@radix-ui/react-label",
+      "version": "^2.1.0",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@radix-ui/react-menubar",
+      "version": "^1.1.1",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@radix-ui/react-navigation-menu",
+      "version": "^1.2.0",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@radix-ui/react-popover",
+      "version": "^1.1.1",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@radix-ui/react-progress",
+      "version": "^1.1.0",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@radix-ui/react-radio-group",
+      "version": "^1.2.0",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@radix-ui/react-scroll-area",
+      "version": "^1.1.0",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@radix-ui/react-select",
+      "version": "^2.1.1",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@radix-ui/react-separator",
+      "version": "^1.1.0",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@radix-ui/react-slider",
+      "version": "^1.2.0",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@radix-ui/react-slot",
+      "version": "^1.1.0",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@radix-ui/react-switch",
+      "version": "^1.1.0",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@radix-ui/react-tabs",
+      "version": "^1.1.0",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@radix-ui/react-toast",
+      "version": "^1.2.1",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@radix-ui/react-toggle",
+      "version": "^1.1.0",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@radix-ui/react-toggle-group",
+      "version": "^1.1.0",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@radix-ui/react-tooltip",
+      "version": "^1.1.4",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@stripe/stripe-js",
+      "version": "^8.9.0",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@supabase/supabase-js",
+      "version": "^2.49.4",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@tanstack/react-query",
+      "version": "^5.56.2",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@types/dexie",
+      "version": "^1.3.32",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@types/uuid",
+      "version": "^10.0.0",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@types/xlsx",
+      "version": "^0.0.35",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "class-variance-authority",
+      "version": "^0.7.1",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "clsx",
+      "version": "^2.1.1",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "cmdk",
+      "version": "^1.0.0",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "date-fns",
+      "version": "^3.6.0",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "dexie",
+      "version": "^4.3.0",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "embla-carousel-react",
+      "version": "^8.3.0",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "highlight.js",
+      "version": "^11.9.0",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "input-otp",
+      "version": "^1.2.4",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "intuit-oauth",
+      "version": "^4.2.2",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "lucide-react",
+      "version": "^0.462.0",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "marked",
+      "version": "^12.0.1",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "next-themes",
+      "version": "^0.3.0",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "node-quickbooks",
+      "version": "^2.0.48",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "react",
+      "version": "^18.3.1",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "react-day-picker",
+      "version": "^8.10.1",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "react-dom",
+      "version": "^18.3.1",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "react-easy-crop",
+      "version": "^5.5.6",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "react-hook-form",
+      "version": "^7.53.0",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "react-resizable-panels",
+      "version": "^2.1.3",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "react-router-dom",
+      "version": "^6.26.2",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "recharts",
+      "version": "^2.12.7",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "sonner",
+      "version": "^1.5.0",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "stripe",
+      "version": "^20.4.1",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "tailwind-merge",
+      "version": "^2.5.2",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "tailwindcss-animate",
+      "version": "^1.0.7",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "uuid",
+      "version": "^11.1.0",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "vaul",
+      "version": "^0.9.3",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "workbox-precaching",
+      "version": "^7.4.0",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "workbox-routing",
+      "version": "^7.4.0",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "workbox-strategies",
+      "version": "^7.4.0",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "xlsx",
+      "version": "^0.18.5",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "zod",
+      "version": "^3.23.8",
+      "type": "production",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@eslint/js",
+      "version": "^9.9.0",
+      "type": "development",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@tailwindcss/typography",
+      "version": "^0.5.16",
+      "type": "development",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@types/node",
+      "version": "^22.5.5",
+      "type": "development",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@types/react",
+      "version": "^18.3.3",
+      "type": "development",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@types/react-dom",
+      "version": "^18.3.0",
+      "type": "development",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@vitejs/plugin-react-swc",
+      "version": "^3.5.0",
+      "type": "development",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "@vitest/ui",
+      "version": "^4.0.18",
+      "type": "development",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "autoprefixer",
+      "version": "^10.4.20",
+      "type": "development",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "eslint",
+      "version": "^9.9.0",
+      "type": "development",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "eslint-plugin-react-hooks",
+      "version": "^5.1.0-rc.0",
+      "type": "development",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "eslint-plugin-react-refresh",
+      "version": "^0.4.9",
+      "type": "development",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "gh-pages",
+      "version": "^6.3.0",
+      "type": "development",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "globals",
+      "version": "^15.9.0",
+      "type": "development",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "postcss",
+      "version": "^8.4.47",
+      "type": "development",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "prettier",
+      "version": "^3.8.1",
+      "type": "development",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "tailwindcss",
+      "version": "^3.4.11",
+      "type": "development",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "terser",
+      "version": "^5.46.0",
+      "type": "development",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "tsx",
+      "version": "^4.20.6",
+      "type": "development",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "typescript",
+      "version": "^5.5.3",
+      "type": "development",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "typescript-eslint",
+      "version": "^8.0.1",
+      "type": "development",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "vite",
+      "version": "^5.4.1",
+      "type": "development",
+      "deprecated": false,
+      "vulnerable": false
+    },
+    {
+      "name": "vitest",
+      "version": "^4.0.18",
+      "type": "development",
+      "deprecated": false,
+      "vulnerable": false
+    }
+  ],
+  "docker": [],
+  "security": [],
+  "graphql": [],
+  "websockets": [],
+  "health": {
+    "overall": 32,
+    "routes": 0,
+    "env": 25,
+    "auth": 0,
+    "contracts": 0,
+    "database": 0,
+    "dependencies": 100,
+    "security": 100
+  }
+}

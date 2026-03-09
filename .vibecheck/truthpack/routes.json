@@ -1,0 +1,68 @@
+{
+  "version": "2.0.0",
+  "routes": [
+    {
+      "id": "route-0",
+      "method": "GET",
+      "path": "type",
+      "handler": "supabase.ts",
+      "file": "/src/lib/supabase.ts",
+      "framework": "express",
+      "confidence": "medium"
+    },
+    {
+      "id": "route-1",
+      "method": "GET",
+      "path": "eagleview",
+      "handler": "integrationManager.ts",
+      "file": "/src/lib/integrations/integrationManager.ts",
+      "framework": "express",
+      "confidence": "medium"
+    },
+    {
+      "id": "route-2",
+      "method": "GET",
+      "path": "stripe",
+      "handler": "integrationManager.ts",
+      "file": "/src/lib/integrations/integrationManager.ts",
+      "framework": "express",
+      "confidence": "medium"
+    },
+    {
+      "id": "route-3",
+      "method": "GET",
+      "path": "quickbooks",
+      "handler": "integrationManager.ts",
+      "file": "/src/lib/integrations/integrationManager.ts",
+      "framework": "express",
+      "confidence": "medium"
+    },
+    {
+      "id": "route-4",
+      "method": "GET",
+      "path": "twilio",
+      "handler": "integrationManager.ts",
+      "file": "/src/lib/integrations/integrationManager.ts",
+      "framework": "express",
+      "confidence": "medium"
+    },
+    {
+      "id": "route-5",
+      "method": "GET",
+      "path": "openweather",
+      "handler": "integrationManager.ts",
+      "file": "/src/lib/integrations/integrationManager.ts",
+      "framework": "express",
+      "confidence": "medium"
+    },
+    {
+      "id": "route-6",
+      "method": "GET",
+      "path": "hailtrace",
+      "handler": "integrationManager.ts",
+      "file": "/src/lib/integrations/integrationManager.ts",
+      "framework": "express",
+      "confidence": "medium"
+    }
+  ]
+}

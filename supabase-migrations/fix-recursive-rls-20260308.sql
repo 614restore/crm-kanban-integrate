@@ -86,9 +86,12 @@ CREATE POLICY "company_admins_write_integrations"
 -- their own company's receipts. Path convention: {company_id}/{filename}
 -- ============================================================
 
--- Remove any existing overly-permissive policies on expense-receipts
+-- Remove any existing policies on expense-receipts (including previously created ones)
 DROP POLICY IF EXISTS "allow_all_expense_receipts" ON storage.objects;
 DROP POLICY IF EXISTS "authenticated_expense_receipts" ON storage.objects;
+DROP POLICY IF EXISTS "expense_receipts_select" ON storage.objects;
+DROP POLICY IF EXISTS "expense_receipts_insert" ON storage.objects;
+DROP POLICY IF EXISTS "expense_receipts_delete" ON storage.objects;
 
 -- SELECT: users can only read files in their own company's folder
 CREATE POLICY "expense_receipts_select"
