@@ -84,20 +84,26 @@ export default async function handler(req, res) {
         let companyId = session.client_reference_id || null;
 
         if (!companyId && session.customer_details?.email) {
-          // Look up auth user by email using the admin API
-          const { data: { users }, error: listErr } = await supabase.auth.admin.listUsers();
-          if (!listErr) {
-            const matchedUser = users.find(
+          // Look up auth user by email using the admin API (paginate to find the right user)
+          let matchedUser = null;
+          let page = 1;
+          const perPage = 1000;
+          while (!matchedUser) {
+            const { data: { users }, error: listErr } = await supabase.auth.admin.listUsers({ page, perPage });
+            if (listErr || !users?.length) break;
+            matchedUser = users.find(
               (u) => u.email?.toLowerCase() === session.customer_details.email.toLowerCase()
             );
-            if (matchedUser) {
-              const { data: profileData } = await supabase
+            if (users.length < perPage) break; // last page
+            page++;
+          }
+          if (matchedUser) {
+            const { data: profileData } = await supabase
                 .from('profiles')
                 .select('company_id')
                 .eq('id', matchedUser.id)
                 .single();
               companyId = profileData?.company_id ?? null;
-            }
           }
         }
 

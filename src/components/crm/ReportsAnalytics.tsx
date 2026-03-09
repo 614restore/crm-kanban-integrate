@@ -265,17 +265,17 @@ const ReportsAnalytics: React.FC = () => {
     const totalRevenue = revenueData.reduce((sum, item) => sum + item.revenue, 0);
     const totalExpenses = revenueData.reduce((sum, item) => sum + item.expenses, 0);
     const totalProfit = totalRevenue - totalExpenses;
-    const avgProfitMargin = (totalProfit / totalRevenue) * 100;
+    const avgProfitMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
     
     const totalProjects = projectData.length;
     const completedProjects = projectData.filter(p => p.status === 'completed').length;
     const activeProjects = projectData.filter(p => p.status === 'active').length;
     
-    const completionRate = (completedProjects / totalProjects) * 100;
+    const completionRate = totalProjects > 0 ? (completedProjects / totalProjects) * 100 : 0;
     
     const totalLeads = leadSources.reduce((sum, source) => sum + source.leads, 0);
     const totalConversions = leadSources.reduce((sum, source) => sum + source.conversions, 0);
-    const overallConversionRate = (totalConversions / totalLeads) * 100;
+    const overallConversionRate = totalLeads > 0 ? (totalConversions / totalLeads) * 100 : 0;
 
     return {
       totalRevenue,
@@ -343,16 +343,15 @@ const ReportsAnalytics: React.FC = () => {
         rows: [
           { Metric: 'Total Revenue', Value: formatCurrency(metrics.totalRevenue) },
           { Metric: 'Total Expenses', Value: formatCurrency(metrics.totalExpenses) },
-          { Metric: 'Net Profit', Value: formatCurrency(metrics.netProfit) },
+          { Metric: 'Net Profit', Value: formatCurrency(metrics.totalProfit) },
           { Metric: 'Total Projects', Value: metrics.totalProjects },
-          { Metric: 'Avg Project Value', Value: formatCurrency(metrics.avgProjectValue) },
-          { Metric: 'Conversion Rate', Value: `${metrics.conversionRate}%` },
-          { Metric: 'Customer Satisfaction', Value: `${metrics.customerSatisfaction}/5` },
+          { Metric: 'Avg Project Value', Value: formatCurrency(metrics.totalProjects > 0 ? metrics.totalRevenue / metrics.totalProjects : 0) },
+          { Metric: 'Conversion Rate', Value: `${metrics.totalLeads > 0 ? metrics.overallConversionRate.toFixed(1) : 0}%` },
         ]
       },
       {
         heading: 'Team Performance',
-        rows: teamPerformanceData.map(t => ({
+        rows: teamPerformance.map(t => ({
           Team_Member: t.name,
           Projects: t.projects,
           Revenue: `$${t.revenue.toLocaleString()}`,

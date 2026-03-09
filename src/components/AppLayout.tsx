@@ -953,12 +953,15 @@ function CRMApp() {
             Your free trial has ended. Subscribe to continue using TrussCTR.
             Use code <strong className="font-mono text-indigo-600">LAUNCH50</strong> for 50% off your first 3 months on any monthly plan.
           </p>
-          <a
-            href="/settings?tab=billing"
+          <button
+            onClick={() => {
+              setSubscriptionBlocked(false);
+              dispatch({ type: 'SET_VIEW', payload: 'settings' });
+            }}
             className="inline-block w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg px-6 py-3 text-sm transition-colors"
           >
             Subscribe Now
-          </a>
+          </button>
           <p className="text-xs text-gray-400 mt-4">
             Already subscribed?{' '}
             <button
