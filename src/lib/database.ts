@@ -1713,9 +1713,9 @@ class DatabaseService {
         supabase.from('estimates').insert(estimate).select().single(),
         10000, 'createEstimate'
       );
-      if (error) { console.error('Error creating estimate:', error); return null; }
+      if (error) throw new Error(error.message);
       return data;
-    } catch (err) { console.error('createEstimate timed out or failed:', err); return null; }
+    } catch (err) { console.error('createEstimate timed out or failed:', err); throw err; }
   }
 
   async updateEstimate(estimateId: string, updates: Partial<DbEstimate>): Promise<DbEstimate | null> {
@@ -1724,9 +1724,9 @@ class DatabaseService {
         supabase.from('estimates').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', estimateId).select().single(),
         10000, 'updateEstimate'
       );
-      if (error) { console.error('Error updating estimate:', error); return null; }
+      if (error) throw new Error(error.message);
       return data;
-    } catch (err) { console.error('updateEstimate timed out or failed:', err); return null; }
+    } catch (err) { console.error('updateEstimate timed out or failed:', err); throw err; }
   }
   async deleteEstimate(estimateId: string): Promise<boolean> {
     const { error } = await supabase
@@ -1811,9 +1811,9 @@ class DatabaseService {
         supabase.from('projects').insert([project]).select().single(),
         10000, 'createProject'
       );
-      if (error) { console.error('Error creating project:', error); return null; }
+      if (error) throw new Error(error.message);
       return data;
-    } catch (err) { console.error('createProject timed out or failed:', err); return null; }
+    } catch (err) { console.error('createProject timed out or failed:', err); throw err; }
   }
 
   async createProjectFromEstimate(estimate: DbEstimate, userId: string): Promise<DbProject | null> {
@@ -1839,9 +1839,9 @@ class DatabaseService {
         supabase.from('projects').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', projectId).select().single(),
         10000, 'updateProject'
       );
-      if (error) { console.error('Error updating project:', error); return null; }
+      if (error) throw new Error(error.message);
       return data;
-    } catch (err) { console.error('updateProject timed out or failed:', err); return null; }
+    } catch (err) { console.error('updateProject timed out or failed:', err); throw err; }
   }
 
   async deleteProject(projectId: string): Promise<boolean> {
