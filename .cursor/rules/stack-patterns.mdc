@@ -1,0 +1,44 @@
+---
+description: Project-specific patterns and conventions for React + typescript + node
+alwaysApply: true
+---
+
+# React Stack Patterns
+
+## Project Identity
+- **Name**: vite_react_shadcn_ts
+- **Stack**: React + typescript + node
+- **Maturity**: growing (62% score)
+- **Structure**: hybrid (319 files, 27 dirs)
+
+## Styling Rules
+- Primary: **Tailwind CSS** with **Radix UI**
+- Use Tailwind utility classes — do NOT write custom CSS unless extending the design system
+- A component library is in use — prefer existing components over building new ones
+
+## State Management
+- Uses: TanStack Query
+- Do NOT introduce additional state management libraries
+- Server state is managed separately from UI state — keep it that way
+
+## Testing Conventions
+- Framework: Vitest
+- No E2E tests — consider adding for critical paths
+- Tests live in `tests/`
+- No coverage configured
+
+## Deployment
+- Targets: Vercel
+- 
+- 
+- 
+
+## Pattern: Schema Validation (Zod)
+- Uses Zod for runtime schema validation
+
+## Pattern: Environment-based Config
+- Uses 2 environment-specific .env files
+- Files: `.env`, `.env.local`
+
+---
+<!-- vibecheck:context-engine:v2 -->

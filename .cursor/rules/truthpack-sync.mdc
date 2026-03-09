@@ -1,0 +1,28 @@
+---
+description: Keeps context items in sync when the truthpack changes
+alwaysApply: true
+---
+
+# Truthpack Sync Hook
+
+## Trigger
+Fires when any file in `.vibecheck/truthpack/` changes.
+
+## Actions
+1. Compare new truthpack hash with stored hash
+2. Identify new/removed/changed routes, env vars, auth rules
+3. Update rules with fresh route/env lists
+4. Give agents updated project context
+5. Refresh skills quick-reference data
+6. Re-analyze project if major changes detected
+7. Re-write context to Cursor, Windsurf, Claude, Copilot, Verdent, Cline
+
+## Change Types
+- **New route** → Update anti-hallucination guard route list
+- **Route removed** → Flag as potential breaking change
+- **New env var** → Update truthpack enforcer
+- **Auth change** → Alert security sentinel
+- **Contract change** → Update drift watcher
+
+---
+<!-- vibecheck:context-engine:v2 -->

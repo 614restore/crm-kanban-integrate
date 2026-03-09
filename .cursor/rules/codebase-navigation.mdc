@@ -1,0 +1,32 @@
+---
+description: Skill to navigate the hybrid-structured React codebase
+globs:
+  - "**/*"
+alwaysApply: false
+---
+
+# Codebase Navigation Skill
+
+## Project Map
+### Structure: hybrid
+Top-level directories: `Mobile App Development Expert/`, `api/`, `public/`, `scripts/`, `src/`, `supabase/`, `supabase-migrations/`, `tests/`, `workflows/`
+
+
+### API Entry Points
+- `GET type` → `/src/lib/supabase.ts`
+- `GET eagleview` → `/src/lib/integrations/integrationManager.ts`
+- `GET stripe` → `/src/lib/integrations/integrationManager.ts`
+- `GET quickbooks` → `/src/lib/integrations/integrationManager.ts`
+- `GET twilio` → `/src/lib/integrations/integrationManager.ts`
+- `GET openweather` → `/src/lib/integrations/integrationManager.ts`
+- `GET hailtrace` → `/src/lib/integrations/integrationManager.ts`
+
+### Key Configuration
+- Package manager: `npm`
+- TypeScript config: `tsconfig.json`
+- Tailwind config: `tailwind.config.*`
+- CI/CD: `GitHub Actions`
+
+
+---
+<!-- vibecheck:context-engine:v2 -->

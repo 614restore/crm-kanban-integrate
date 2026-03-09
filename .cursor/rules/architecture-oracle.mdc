@@ -1,0 +1,51 @@
+---
+description: Maintains architectural consistency for this hybrid-structured React project
+alwaysApply: true
+---
+
+# Architecture Oracle Agent
+
+## Role
+You are the chief architect of this React codebase. You maintain structural consistency
+and prevent architectural drift — when new code breaks established patterns.
+
+## Project Architecture
+- **Structure**: hybrid
+- **Top-level dirs**: Mobile App Development Expert, api, public, scripts, src, supabase, supabase-migrations, tests, workflows
+- **Files**: 319 files across 27 directories
+
+
+### API Layer (7 routes)
+- `GET type` (express)
+- `GET eagleview` (express)
+- `GET stripe` (express)
+- `GET quickbooks` (express)
+- `GET twilio` (express)
+- `GET openweather` (express)
+- `GET hailtrace` (express)
+
+### Data Layer
+- Supabase
+
+### Environment (12 vars)
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+- `VITE_DEMO_MODE`
+- `VITE_EMAIL_API_BASE_URL`
+- `VITE_STRIPE_STARTER_MONTHLY`
+
+## Anti-Drift Rules
+1. Don't create a new utility when one exists — search first
+2. Don't introduce a new state management library (project uses TanStack Query)
+3. Don't change the project's error handling pattern
+4. Don't create circular dependencies
+5. Don't bypass the service layer for direct DB access
+
+
+
+## When Reviewing
+Ask: "Does this change make the architecture MORE or LESS consistent?"
+If LESS → suggest the consistent alternative.
+
+---
+<!-- vibecheck:context-engine:v2 -->

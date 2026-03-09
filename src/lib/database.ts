@@ -856,7 +856,7 @@ class DatabaseService {
     const start = new Date(`${date}T${time}:00`);
     const end = new Date(start.getTime() + duration * 60 * 1000);
 
-    const payload = {
+    const toStartAndEnd = () => ({
       company_id: appointment.company_id,
       contact_id: appointment.contact_id,
       title: appointment.title,
@@ -867,18 +867,51 @@ class DatabaseService {
       location: appointment.location,
       notes: appointment.notes,
       status: appointment.status,
-    };
+    });
+
+    const toDateTime = () => ({
+      company_id: appointment.company_id,
+      contact_id: appointment.contact_id,
+      title: appointment.title,
+      type: appointment.type,
+      date,
+      time,
+      duration,
+      assigned_to: appointment.assigned_to,
+      location: appointment.location,
+      notes: appointment.notes,
+      status: appointment.status,
+    });
 
     try {
-      const { data, error } = await this.raceTimeout(
-        supabase.from('appointments').insert(payload).select().single(),
-        10000, 'createAppointment'
-      );
-      if (error) {
-        console.error('Error creating appointment:', error);
-        throw new Error(error.message || 'Failed to save appointment');
+      const firstAttempt = await supabase
+        .from('appointments')
+        .insert(toStartAndEnd())
+        .select()
+        .single();
+
+      if (!firstAttempt.error) {
+        return firstAttempt.data as DbAppointment;
       }
-      return data as DbAppointment;
+
+      // 409 / unique_violation — a record already exists at this start_time
+      if (firstAttempt.error.code === '23505') {
+        console.error('Appointment conflict (start_time unique violation):', firstAttempt.error);
+        return null;
+      }
+
+      const secondAttempt = await supabase
+        .from('appointments')
+        .insert(toDateTime())
+        .select()
+        .single();
+
+      if (secondAttempt.error) {
+        console.error('Error creating appointment:', secondAttempt.error);
+        return null;
+      }
+
+      return secondAttempt.data as DbAppointment;
     } catch (err) {
       console.error('createAppointment timed out or failed:', err);
       throw err instanceof Error ? err : new Error('Failed to create appointment');

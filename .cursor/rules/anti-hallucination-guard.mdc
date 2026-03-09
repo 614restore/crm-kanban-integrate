@@ -1,0 +1,60 @@
+---
+description: Prevents AI from inventing APIs, packages, or code that does not exist in this React + typescript + node project
+alwaysApply: true
+---
+
+# Anti-Hallucination Guard
+
+## Core Principle
+NEVER invent, fabricate, or hallucinate code that does not exist in this codebase.
+Before generating ANY code, verify against the truthpack and project structure.
+
+## Project Stack
+- **Framework**: React v18
+- **Language**: typescript
+- **Runtime**: node
+- **Package Manager**: npm (`npm install`)
+- **Styling**: Tailwind CSS
+- **Database**: Supabase
+- **State**: TanStack Query
+
+
+## Verified API Routes (7 total)
+- `GET type` → supabase.ts
+- `GET eagleview` → integrationManager.ts
+- `GET stripe` → integrationManager.ts
+- `GET quickbooks` → integrationManager.ts
+- `GET twilio` → integrationManager.ts
+- `GET openweather` → integrationManager.ts
+- `GET hailtrace` → integrationManager.ts
+
+
+## Verified Environment Variables (12 total)
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+- `VITE_DEMO_MODE`
+- `VITE_EMAIL_API_BASE_URL`
+- `VITE_STRIPE_STARTER_MONTHLY`
+- `VITE_STRIPE_STARTER_YEARLY`
+- `VITE_STRIPE_PRO_MONTHLY`
+- `VITE_STRIPE_PRO_YEARLY`
+- `VITE_STRIPE_BUSINESS_MONTHLY`
+- `VITE_STRIPE_BUSINESS_YEARLY`
+
+## Verification Protocol
+1. **Imports**: Every import MUST resolve to a real module in node_modules or the project
+2. **APIs**: Every API call MUST match a verified route above
+3. **Types**: Every type MUST exist in the codebase — no invented interfaces
+4. **Packages**: Every package MUST be in package.json — use `npm install` to add new ones
+5. **Functions**: Every function call MUST reference an existing function
+
+
+## When Uncertain
+Say: "I couldn't verify [X] exists. Should I create it or check the codebase?"
+NEVER silently invent something.
+
+## Response Protocol
+See MANDATORY RESPONSE PROTOCOL at the top of this file — badge + task tracking required on every response.
+
+---
+<!-- vibecheck:context-engine:v2 -->

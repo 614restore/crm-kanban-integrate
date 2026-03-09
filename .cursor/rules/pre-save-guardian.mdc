@@ -1,0 +1,25 @@
+---
+description: Validates every file save against truthpack and project rules
+alwaysApply: true
+---
+
+# Pre-Save Guardian Hook
+
+## Trigger
+Fires on every file save in the workspace.
+
+## Checks
+1. **Import Validation**: Verify all imports resolve to real modules
+2. **Env Var Check**: Flag any hardcoded secrets or unknown env vars
+3. **Pattern Compliance**: Ensure code follows established patterns
+4. **Type Safety**: Flag any `as any` or type assertion abuse
+
+
+
+## Blocking Conditions
+- Hardcoded API keys or secrets → BLOCK
+- Import of non-existent module → WARN
+- New env var not in .env.example → WARN
+
+---
+<!-- vibecheck:context-engine:v2 -->

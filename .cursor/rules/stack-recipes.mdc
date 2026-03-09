@@ -1,0 +1,21 @@
+---
+description: Common recipes and patterns for React + Tailwind CSS
+globs:
+  - "**/*.ts"
+  - "**/*.tsx"
+alwaysApply: false
+---
+
+# React Recipes
+
+### New Test (Vitest)
+- Place in `tests/`
+- Run: `npm run test`
+
+### New Component (Tailwind)
+- Use utility classes — no custom CSS
+- Check Radix UI first
+- Use `cn()` or `clsx()` for conditional classes
+
+---
+<!-- vibecheck:context-engine:v2 -->

@@ -312,7 +312,7 @@ export default function AppointmentModal({
         });
 
         if (!created) {
-          toast.error('Failed to create appointment');
+          toast.error('A booking already exists at that date and time. Please choose a different time slot.');
           return;
         }
 
