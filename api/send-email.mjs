@@ -1,4 +1,4 @@
-import { requireAuth } from './auth-middleware.mjs';
+import { requireAuth } from './_auth-middleware.mjs';
 
 const SENDER = '614 Restore <scopemgr@614restore.com>';
 

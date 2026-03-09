@@ -8,7 +8,7 @@
 
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
-import { requireAuth } from './auth-middleware.mjs';
+import { requireAuth } from './_auth-middleware.mjs';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {

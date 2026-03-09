@@ -4,7 +4,7 @@
 import OAuthClient from 'intuit-oauth';
 import QuickBooks from 'node-quickbooks';
 import { createClient } from '@supabase/supabase-js';
-import { encrypt, decrypt, setNoCacheHeaders } from './crypto-utils.mjs';
+import { encrypt, decrypt, setNoCacheHeaders } from './_crypto-utils.mjs';
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');

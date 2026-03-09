@@ -1,7 +1,7 @@
 // GET /api/quickbooks-auth?company_id=<uuid>
 // Redirects user to Intuit OAuth consent screen
 import OAuthClient from 'intuit-oauth';
-import { createOAuthState, setNoCacheHeaders } from './crypto-utils.mjs';
+import { createOAuthState, setNoCacheHeaders } from './_crypto-utils.mjs';
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');

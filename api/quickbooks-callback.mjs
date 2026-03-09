@@ -2,7 +2,7 @@
 // Exchanges auth code for tokens, saves encrypted tokens to DB, redirects back to app
 import OAuthClient from 'intuit-oauth';
 import { createClient } from '@supabase/supabase-js';
-import { encrypt, verifyOAuthState, setNoCacheHeaders } from './crypto-utils.mjs';
+import { encrypt, verifyOAuthState, setNoCacheHeaders } from './_crypto-utils.mjs';
 
 const SUPABASE_URL = 'https://qgvuzrvpyyrrulhwlzma.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
