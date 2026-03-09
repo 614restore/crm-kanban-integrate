@@ -26,11 +26,8 @@ interface SalesmanCommission {
   name: string;
   email: string;
   role: string;
-  /** % applied to self-generated leads */
   commission_rate_self_gen: number;
-  /** % applied to company-generated leads */
   commission_rate_company: number;
-  /** custom/override % — when > 0 it overrides both */
   commission_rate_custom: number;
   jobs: CommissionJob[];
   totalRevenue: number;
@@ -49,7 +46,6 @@ interface CommissionJob {
   address?: string;
 }
 
-// Statuses that count as "sold / commissionable"
 const COMMISSIONABLE_STATUSES = [
   'signed',
   'in_progress',
@@ -58,6 +54,19 @@ const COMMISSIONABLE_STATUSES = [
   'invoicing',
   'pending_payment',
   'completed',
+];
+
+// Every role name variant used across the app — cast wide net so no one is missed
+const COMMISSIONABLE_ROLES = [
+  'owner',
+  'admin',
+  'manager',
+  'sales_manager',
+  'sales',
+  'sales_rep',
+  'canvas',
+  'canvasser',
+  'office_staff',
 ];
 
 const STATUS_LABELS: Record<string, string> = {
@@ -76,7 +85,6 @@ export default function CommissionPayrollView() {
   const { state } = useCRM();
   const { profile } = useAuth();
 
-  // Date range: default to current month
   const today = new Date();
   const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
   const todayStr = today.toISOString().split('T')[0];
@@ -87,11 +95,12 @@ export default function CommissionPayrollView() {
   const [expandedSalesman, setExpandedSalesman] = useState<string | null>(null);
   const [salesmen, setSalesmen] = useState<SalesmanCommission[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  // Toggle: show all team members vs only those with commission data
+  const [showAll, setShowAll] = useState(true);
 
   const companyId = state.companyId || profile?.company_id;
   const userRole = state.currentUser?.role || profile?.role || 'owner';
 
-  // Only owners, admins, managers can view this page
   const canView = ['owner', 'admin', 'manager', 'sales_manager', 'office_staff'].includes(userRole);
 
   const loadData = useCallback(async () => {
@@ -99,7 +108,7 @@ export default function CommissionPayrollView() {
     setIsLoading(true);
 
     try {
-      // Load profiles with commission_rate for sales roles
+      // Load ALL active team members across all commissionable roles
       const { data: profiles, error: profilesError } = await withTimeout(
         Promise.resolve(
           supabase
@@ -107,14 +116,13 @@ export default function CommissionPayrollView() {
             .select('id, first_name, last_name, email, role, commission_rate_self_gen, commission_rate_company, commission_rate_custom')
             .eq('company_id', companyId)
             .eq('is_active', true)
-            .in('role', ['owner', 'admin', 'manager', 'sales', 'canvas'])
+            .in('role', COMMISSIONABLE_ROLES)
         ) as Promise<any>,
         10000,
         'loadCommissionProfiles'
       ) as { data: any[] | null; error: any };
       if (profilesError) throw profilesError;
 
-      // Load commissionable contacts in date range
       const { data: contacts, error: contactsError } = await withTimeout(
         Promise.resolve(
           supabase
@@ -130,7 +138,6 @@ export default function CommissionPayrollView() {
       ) as { data: any[] | null; error: any };
       if (contactsError) throw contactsError;
 
-      // Build per-salesman commission data
       const result: SalesmanCommission[] = (profiles ?? []).map((p) => {
         const self_gen_rate = Number(p.commission_rate_self_gen ?? 0);
         const company_rate  = Number(p.commission_rate_company  ?? 0);
@@ -142,7 +149,6 @@ export default function CommissionPayrollView() {
         const jobs: CommissionJob[] = assignedContacts.map((c) => {
           const value = Number(c.project_value ?? 0);
           const leadSource = c.lead_source ?? '';
-          // Custom overrides everything when set; otherwise self-gen vs company
           const rateUsed = custom_rate > 0
             ? custom_rate
             : leadSource === 'Self Generated'
@@ -161,31 +167,22 @@ export default function CommissionPayrollView() {
           };
         });
 
-        const totalRevenue = jobs.reduce((sum, j) => sum + j.projectValue, 0);
-        const totalCommission = jobs.reduce((sum, j) => sum + j.commissionEarned, 0);
-
         return {
           id: p.id,
           name: `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() || p.email,
           email: p.email,
-          role: p.role ?? 'sales',
+          role: p.role ?? 'sales_rep',
           commission_rate_self_gen: self_gen_rate,
           commission_rate_company:  company_rate,
           commission_rate_custom:   custom_rate,
           jobs,
-          totalRevenue,
-          totalCommission,
+          totalRevenue: jobs.reduce((sum, j) => sum + j.projectValue, 0),
+          totalCommission: jobs.reduce((sum, j) => sum + j.commissionEarned, 0),
         };
       });
 
-      // Only show salesmen who have jobs OR have a commission rate set
-      const filtered = result.filter((s) =>
-        s.jobs.length > 0 ||
-        s.commission_rate_self_gen > 0 ||
-        s.commission_rate_company > 0 ||
-        s.commission_rate_custom > 0
-      );
-      setSalesmen(filtered);
+      // Always store ALL members — filter in render based on showAll toggle
+      setSalesmen(result);
     } catch (err) {
       console.error('Error loading commission data:', err);
       toast.error('Failed to load commission data');
@@ -198,19 +195,33 @@ export default function CommissionPayrollView() {
     loadData();
   }, [loadData]);
 
-  const filteredSalesmen = salesmen.filter((s) =>
-    s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const displayedSalesmen = salesmen
+    .filter((s) => {
+      if (!showAll) {
+        // Filtered mode: only show members with a rate set OR jobs this period
+        return (
+          s.jobs.length > 0 ||
+          s.commission_rate_self_gen > 0 ||
+          s.commission_rate_company > 0 ||
+          s.commission_rate_custom > 0
+        );
+      }
+      return true; // Show all mode
+    })
+    .filter(
+      (s) =>
+        s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.email.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
-  const grandTotalRevenue = filteredSalesmen.reduce((sum, s) => sum + s.totalRevenue, 0);
-  const grandTotalCommission = filteredSalesmen.reduce((sum, s) => sum + s.totalCommission, 0);
+  const grandTotalRevenue = displayedSalesmen.reduce((sum, s) => sum + s.totalRevenue, 0);
+  const grandTotalCommission = displayedSalesmen.reduce((sum, s) => sum + s.totalCommission, 0);
 
   const exportCSV = () => {
     const rows: string[] = [
       'Salesman,Email,Role,Self Gen Rate (%),Company Rate (%),Custom Rate (%),# Jobs,Total Revenue,Total Commission',
     ];
-    for (const s of filteredSalesmen) {
+    for (const s of displayedSalesmen) {
       rows.push(
         `"${s.name}","${s.email}","${s.role}",${s.commission_rate_self_gen},${s.commission_rate_company},${s.commission_rate_custom},${s.jobs.length},${s.totalRevenue.toFixed(2)},${s.totalCommission.toFixed(2)}`
       );
@@ -224,8 +235,7 @@ export default function CommissionPayrollView() {
       }
     }
     rows.push('');
-    rows.push(`Totals,,,,${filteredSalesmen.reduce((s, x) => s + x.jobs.length, 0)},${grandTotalRevenue.toFixed(2)},${grandTotalCommission.toFixed(2)}`);
-
+    rows.push(`Totals,,,,${displayedSalesmen.reduce((s, x) => s + x.jobs.length, 0)},${grandTotalRevenue.toFixed(2)},${grandTotalCommission.toFixed(2)}`);
     const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -254,13 +264,11 @@ export default function CommissionPayrollView() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Commission Payroll</h1>
-            <p className="text-sm text-gray-500 mt-0.5">
-              Sales commissions for closed jobs — owners and management only
-            </p>
+            <p className="text-sm text-gray-500 mt-0.5">Sales commissions for closed jobs — owners and management only</p>
           </div>
           <button
             onClick={exportCSV}
-            disabled={filteredSalesmen.length === 0}
+            disabled={displayedSalesmen.length === 0}
             className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium disabled:opacity-50"
           >
             <Download size={16} />
@@ -275,37 +283,35 @@ export default function CommissionPayrollView() {
           <div className="flex items-center gap-2">
             <Calendar size={16} className="text-gray-400" />
             <label className="text-sm font-medium text-gray-600">From:</label>
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-            />
+            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
+              className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none" />
           </div>
           <div className="flex items-center gap-2">
             <label className="text-sm font-medium text-gray-600">To:</label>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-            />
+            <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
+              className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none" />
           </div>
           <div className="flex items-center gap-2 flex-1 max-w-xs">
             <Search size={16} className="text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search salesman…"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-            />
+            <input type="text" placeholder="Search salesman…" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none" />
           </div>
-          <button
-            onClick={loadData}
-            disabled={isLoading}
-            className="flex items-center gap-2 px-4 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-50"
-          >
+          {/* Show All toggle */}
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <div
+              onClick={() => setShowAll(!showAll)}
+              className={`relative w-10 h-5 rounded-full transition-colors ${
+                showAll ? 'bg-blue-600' : 'bg-gray-300'
+              }`}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                showAll ? 'translate-x-5' : 'translate-x-0'
+              }`} />
+            </div>
+            <span className="text-sm font-medium text-gray-600">Show all team members</span>
+          </label>
+          <button onClick={loadData} disabled={isLoading}
+            className="flex items-center gap-2 px-4 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-50">
             {isLoading ? <Loader2 size={14} className="animate-spin" /> : null}
             {isLoading ? 'Loading…' : 'Apply'}
           </button>
@@ -319,8 +325,8 @@ export default function CommissionPayrollView() {
             <Users size={20} className="text-blue-600" />
           </div>
           <div>
-            <p className="text-xs text-gray-500 font-medium">Total Salesmen</p>
-            <p className="text-2xl font-bold text-gray-900">{filteredSalesmen.length}</p>
+            <p className="text-xs text-gray-500 font-medium">Team Members</p>
+            <p className="text-2xl font-bold text-gray-900">{displayedSalesmen.length}</p>
           </div>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4 flex items-center gap-3">
@@ -343,26 +349,24 @@ export default function CommissionPayrollView() {
         </div>
       </div>
 
-      {/* Salesman Rows */}
+      {/* Member rows */}
       <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-3">
         {isLoading ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 size={32} className="animate-spin text-blue-500" />
           </div>
-        ) : filteredSalesmen.length === 0 ? (
+        ) : displayedSalesmen.length === 0 ? (
           <div className="text-center py-16 text-gray-400">
             <DollarSign size={48} className="mx-auto mb-3 opacity-30" />
-            <p className="font-medium">No commission data for this period</p>
-            <p className="text-sm mt-1">
-              Adjust the date range or ensure salesmen have a commission rate set in Team settings.
-            </p>
+            <p className="font-medium">No team members found</p>
+            <p className="text-sm mt-1">Toggle "Show all team members" or adjust the date range.</p>
           </div>
         ) : (
-          filteredSalesmen.map((salesman) => {
+          displayedSalesmen.map((salesman) => {
             const isExpanded = expandedSalesman === salesman.id;
+            const hasCommission = salesman.commission_rate_self_gen > 0 || salesman.commission_rate_company > 0 || salesman.commission_rate_custom > 0;
             return (
               <div key={salesman.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                {/* Salesman header row */}
                 <button
                   onClick={() => setExpandedSalesman(isExpanded ? null : salesman.id)}
                   className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors text-left"
@@ -373,7 +377,12 @@ export default function CommissionPayrollView() {
                     </div>
                     <div>
                       <p className="font-semibold text-gray-900">{salesman.name}</p>
-                      <p className="text-xs text-gray-500">{salesman.email}</p>
+                      <p className="text-xs text-gray-500 capitalize">
+                        {salesman.email} · {salesman.role.replace(/_/g, ' ')}
+                        {!hasCommission && (
+                          <span className="ml-2 px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-xs">No rate set</span>
+                        )}
+                      </p>
                     </div>
                   </div>
 
@@ -385,7 +394,10 @@ export default function CommissionPayrollView() {
                         <span className="font-semibold text-gray-900">
                           {salesman.commission_rate_custom > 0
                             ? `Custom: ${salesman.commission_rate_custom}%`
-                            : `SG: ${salesman.commission_rate_self_gen}% / Co: ${salesman.commission_rate_company}%`}
+                            : hasCommission
+                              ? `SG: ${salesman.commission_rate_self_gen}% / Co: ${salesman.commission_rate_company}%`
+                              : <span className="text-gray-400 text-xs">Not set — go to Team</span>
+                          }
                         </span>
                       </div>
                     </div>
@@ -402,21 +414,17 @@ export default function CommissionPayrollView() {
                       <p className="font-bold text-green-700 text-lg">{formatCurrency(salesman.totalCommission)}</p>
                     </div>
                     <div className="ml-2">
-                      {isExpanded ? (
-                        <ChevronUp size={18} className="text-gray-400" />
-                      ) : (
-                        <ChevronDown size={18} className="text-gray-400" />
-                      )}
+                      {isExpanded ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
                     </div>
                   </div>
                 </button>
 
-                {/* Job detail rows */}
                 {isExpanded && (
                   <div className="border-t border-gray-100">
                     {salesman.jobs.length === 0 ? (
                       <p className="text-sm text-gray-400 px-5 py-4 text-center">
                         No commissionable jobs in this period.
+                        {!hasCommission && ' Set a commission rate in Team settings to start tracking.'}
                       </p>
                     ) : (
                       <table className="w-full text-sm">
@@ -437,9 +445,7 @@ export default function CommissionPayrollView() {
                             <tr key={job.contactId} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
                               <td className="px-5 py-3 font-medium text-gray-800">{job.contactName}</td>
                               <td className="px-4 py-3 text-gray-500 text-xs">{job.address || '—'}</td>
-                              <td className="px-4 py-3 text-xs text-gray-500">
-                                {job.leadSource || '—'}
-                              </td>
+                              <td className="px-4 py-3 text-xs text-gray-500">{job.leadSource || '—'}</td>
                               <td className="px-4 py-3">
                                 <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
                                   {STATUS_LABELS[job.status] ?? job.status}
@@ -454,9 +460,7 @@ export default function CommissionPayrollView() {
                         </tbody>
                         <tfoot>
                           <tr className="border-t border-gray-200 bg-gray-50">
-                            <td colSpan={4} className="px-5 py-2 text-sm font-semibold text-gray-700">
-                              Totals ({salesman.jobs.length} jobs)
-                            </td>
+                            <td colSpan={4} className="px-5 py-2 text-sm font-semibold text-gray-700">Totals ({salesman.jobs.length} jobs)</td>
                             <td className="px-4 py-2 text-right font-bold text-gray-800">{formatCurrency(salesman.totalRevenue)}</td>
                             <td />
                             <td className="px-4 py-2 text-right font-bold text-green-700">{formatCurrency(salesman.totalCommission)}</td>
