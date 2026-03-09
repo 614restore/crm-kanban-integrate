@@ -28,16 +28,18 @@ import { aiConfigurationManager } from '@/lib/aiConfigurationManager';
 import { useAuth } from '@/lib/authContext';
 import { useCRM } from '@/lib/crmStore';
 
+type AIProvider = 'openai' | 'anthropic' | 'google';
+
 interface AIConfigDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave?: (config: any) => void;
+  onSave?: (config: unknown) => void;
 }
 
 export default function AIConfigDialog({ open, onOpenChange, onSave }: AIConfigDialogProps) {
   const { profile } = useAuth();
   const { state } = useCRM();
-  const [provider, setProvider] = useState<'openai' | 'anthropic' | 'google'>('openai');
+  const [provider, setProvider] = useState<AIProvider>('openai');
   const [apiKey, setApiKey] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
   const [organizationId, setOrganizationId] = useState('');
@@ -60,15 +62,16 @@ export default function AIConfigDialog({ open, onOpenChange, onSave }: AIConfigD
   const [testStatus, setTestStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [testMessage, setTestMessage] = useState('');
 
-  const providerModels: Record<string, string[]> = {
+  const providerModels: Record<AIProvider, string[]> = {
     openai: ['gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo'],
     anthropic: ['claude-3-opus', 'claude-3-sonnet', 'claude-3-haiku'],
     google: ['gemini-pro', 'gemini-1.5-pro'],
   };
 
   const handleProviderChange = (newProvider: string) => {
-    setProvider(newProvider as any);
-    setModel(providerModels[newProvider]?.[0] || 'gpt-4');
+    const p = newProvider as AIProvider;
+    setProvider(p);
+    setModel(providerModels[p]?.[0] || 'gpt-4');
     setOrganizationId('');
     setRegion('');
   };
@@ -198,7 +201,7 @@ export default function AIConfigDialog({ open, onOpenChange, onSave }: AIConfigD
     setTestMessage('');
   };
 
-  const providerDocs: Record<string, string> = {
+  const providerDocs: Record<AIProvider, string> = {
     openai: 'https://platform.openai.com/api-keys',
     anthropic: 'https://console.anthropic.com/account/keys',
     google: 'https://makersuite.google.com/app/apikey',
