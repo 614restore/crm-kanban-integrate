@@ -2,7 +2,7 @@
   "name": "614 Restore CRM",
   "short_name": "614 Restore",
   "description": "Professional CRM for Restoration Contractors",
-  "start_url": "/crm-kanban-integrate/",
+  "start_url": "/quotes-customize-manage/",
   "display": "standalone",
   "background_color": "#0f172a",
   "theme_color": "#3b82f6",
@@ -10,49 +10,49 @@
   "categories": ["business", "productivity"],
   "icons": [
     {
-      "src": "/crm-kanban-integrate/icons/icon-72x72.png",
+      "src": "/quotes-customize-manage/icons/icon-72x72.png",
       "sizes": "72x72",
       "type": "image/png",
       "purpose": "maskable any"
     },
     {
-      "src": "/crm-kanban-integrate/icons/icon-96x96.png", 
+      "src": "/quotes-customize-manage/icons/icon-96x96.png", 
       "sizes": "96x96",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/crm-kanban-integrate/icons/icon-128x128.png",
+      "src": "/quotes-customize-manage/icons/icon-128x128.png",
       "sizes": "128x128", 
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/crm-kanban-integrate/icons/icon-144x144.png",
+      "src": "/quotes-customize-manage/icons/icon-144x144.png",
       "sizes": "144x144",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/crm-kanban-integrate/icons/icon-152x152.png",
+      "src": "/quotes-customize-manage/icons/icon-152x152.png",
       "sizes": "152x152",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/crm-kanban-integrate/icons/icon-192x192.png",
+      "src": "/quotes-customize-manage/icons/icon-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/crm-kanban-integrate/icons/icon-384x384.png",
+      "src": "/quotes-customize-manage/icons/icon-384x384.png",
       "sizes": "384x384", 
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/crm-kanban-integrate/icons/icon-512x512.png",
+      "src": "/quotes-customize-manage/icons/icon-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
@@ -62,24 +62,24 @@
     {
       "name": "Add New Contact",
       "short_name": "New Contact",
-      "url": "/crm-kanban-integrate/contacts/new",
-      "icons": [{"src": "/crm-kanban-integrate/icons/contact-shortcut.png", "sizes": "96x96"}]
+      "url": "/quotes-customize-manage/contacts/new",
+      "icons": [{"src": "/quotes-customize-manage/icons/contact-shortcut.png", "sizes": "96x96"}]
     },
     {
       "name": "Take Photos", 
       "short_name": "Photos",
-      "url": "/crm-kanban-integrate/photos/capture",
-      "icons": [{"src": "/crm-kanban-integrate/icons/camera-shortcut.png", "sizes": "96x96"}]
+      "url": "/quotes-customize-manage/photos/capture",
+      "icons": [{"src": "/quotes-customize-manage/icons/camera-shortcut.png", "sizes": "96x96"}]
     },
     {
       "name": "View Pipeline",
       "short_name": "Pipeline", 
-      "url": "/crm-kanban-integrate/pipeline",
-      "icons": [{"src": "/crm-kanban-integrate/icons/pipeline-shortcut.png", "sizes": "96x96"}]
+      "url": "/quotes-customize-manage/pipeline",
+      "icons": [{"src": "/quotes-customize-manage/icons/pipeline-shortcut.png", "sizes": "96x96"}]
     }
   ],
   "share_target": {
-    "action": "/crm-kanban-integrate/share",
+    "action": "/quotes-customize-manage/share",
     "method": "POST",
     "enctype": "multipart/form-data",
     "params": {
