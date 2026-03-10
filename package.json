@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "vite build",
     "build:dev": "vite build --mode development",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings 500",
     "test": "node --import tsx --test tests/**/*.test.ts",
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
