@@ -3,6 +3,7 @@ import { useCRM, canManageTeam, getAssignableRoles, canModifyMember, canAssignRo
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
 import { supabase } from '@/lib/supabase';
+import { sendEmail } from '@/lib/emailApi';
 import { TeamMember, formatCurrency, roleLabels, UserRole } from '@/lib/crmData';
 import { toast } from 'sonner';
 import PermissionsEditor from '../settings/PermissionsEditor';
@@ -155,32 +156,18 @@ export default function TeamView() {
         return;
       }
 
-
-      // Send email via our Vercel API (Resend)
+      // Send email via emailApi helper (handles origin detection correctly on all deployments)
       const inviteUrl = `${window.location.origin}${window.location.pathname}#/join?token=${token}`;
-      const emailRes = await fetch(`${window.location.origin}/api/send-email`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token || ''}`,
-        },
-        body: JSON.stringify({
-          to: inviteEmail.trim().toLowerCase(),
-          subject: `You're invited to join ${state.currentUser?.name || 'TrussCTR'}`,
-          html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto">
+      await sendEmail({
+        to: inviteEmail.trim().toLowerCase(),
+        subject: `You're invited to join ${state.currentUser?.name || 'TrussCTR'}`,
+        html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto">
             <h2>You've been invited!</h2>
             <p>You've been invited to join as a <strong>${inviteRole.replace('_', ' ')}</strong>.</p>
             <p><a href="${inviteUrl}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:white;border-radius:8px;text-decoration:none;font-weight:600">Accept Invitation</a></p>
             <p style="color:#6b7280;font-size:13px">This invite expires in 7 days.</p>
           </div>`,
-        }),
       });
-
-      if (!emailRes.ok) {
-        clearTimeout(timeoutId);
-        toast.error('Failed to send invitation email.');
-        return;
-      }
       
       toast.success(`Invitation email sent to ${inviteEmail}!`);
 
