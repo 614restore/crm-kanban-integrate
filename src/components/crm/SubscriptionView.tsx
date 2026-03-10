@@ -199,7 +199,7 @@ export default function SubscriptionView() {
 
       {/* Comparison chart callout */}
       <a
-        href="/crm-user-tier-comparison.html"
+        href="https://614restore.github.io/crm-user-tier-comparison.html"
         target="_blank"
         rel="noopener noreferrer"
         className="flex items-center justify-between gap-4 px-5 py-4 bg-blue-50 border border-blue-200 rounded-xl hover:bg-blue-100 hover:border-blue-300 transition-colors group"
