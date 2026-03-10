@@ -419,17 +419,22 @@ const PlanComparisonChart: React.FC = () => {
                             color: ci === 0 ? '#60a5fa' : '#64748b',
                             background: ci === 0 ? '#0f2040' : undefined,
                           }}>
-                            {col}{ci === 0 && <span style={{
-                              display: 'inline-block',
-                              background: '#1e40af',
-                              color: '#93c5fd',
-                              fontSize: '0.6rem',
-                              fontWeight: 700,
-                              padding: '1px 6px',
-                              borderRadius: 999,
-                              marginLeft: 5,
-                              textTransform: 'uppercase',
-                            }}>You</span>}
+                            <>
+                              {col}
+                              {ci === 0 && (
+                                <span style={{
+                                  display: 'inline-block',
+                                  background: '#1e40af',
+                                  color: '#93c5fd',
+                                  fontSize: '0.6rem',
+                                  fontWeight: 700,
+                                  padding: '1px 6px',
+                                  borderRadius: 999,
+                                  marginLeft: 5,
+                                  textTransform: 'uppercase',
+                                }}>You</span>
+                              )}
+                            </>
                           </th>
                         ))}
                       </tr>
