@@ -12,18 +12,19 @@ import {
   Users,
   ArrowRight,
   Star,
+  Shield,
 } from 'lucide-react';
 
 const PLANS = [
   {
     key: 'starter' as const,
     name: 'Starter',
-    price: 49,
-    userLimit: 3,
-    contactLimit: 100,
+    price: 29,
+    userLimit: 2,
+    contactLimit: Infinity,
     features: [
-      'Up to 3 users',
-      '100 contacts',
+      'Up to 2 users',
+      'Unlimited contacts',
       'Core CRM features',
       'Pipeline board',
       'Invoicing',
@@ -32,35 +33,51 @@ const PLANS = [
     icon: <Zap className="w-5 h-5 text-blue-500" />,
   },
   {
-    key: 'professional' as const,
-    name: 'Professional',
+    key: 'pro' as const,
+    name: 'Pro',
+    price: 59,
+    userLimit: 5,
+    contactLimit: Infinity,
+    features: [
+      'Up to 5 users',
+      'Unlimited contacts',
+      'Full pipeline visibility',
+      'Insurance claim tracking',
+      'Supplement tracking',
+      'Team reporting',
+    ],
+    icon: <Star className="w-5 h-5 text-indigo-500" />,
+    highlight: true,
+  },
+  {
+    key: 'business' as const,
+    name: 'Business',
     price: 99,
     userLimit: 10,
     contactLimit: Infinity,
     features: [
       'Up to 10 users',
       'Unlimited contacts',
-      'All features',
       'AI assistant',
-      'Automations',
-      'Priority email support',
+      'Advanced analytics',
+      'Material order templates',
+      'Priority support',
     ],
-    icon: <Star className="w-5 h-5 text-indigo-500" />,
-    highlight: true,
+    icon: <Shield className="w-5 h-5 text-emerald-500" />,
   },
   {
     key: 'enterprise' as const,
     name: 'Enterprise',
-    price: 199,
+    price: 179,
     userLimit: Infinity,
     contactLimit: Infinity,
     features: [
       'Unlimited users',
       'Unlimited contacts',
       'All features',
+      'Custom onboarding',
+      'Dedicated support',
       'QuickBooks sync',
-      'Priority support',
-      'Dedicated onboarding',
     ],
     icon: <Users className="w-5 h-5 text-purple-500" />,
   },
@@ -103,13 +120,9 @@ export default function SubscriptionView() {
   const status = company?.subscription_status ?? 'trialing';
   const daysLeft = trialDaysRemaining(company?.trial_ends_at);
 
-  const contactCount = state.contacts.length;
   const userCount = state.teamMembers.length || 1;
 
-  const currentPlanIndex = PLANS.findIndex((p) => p.key === plan);
-
   function handleManageBilling() {
-    // Use anchor navigation to avoid popup blocker issues
     const a = document.createElement('a');
     a.href = 'https://billing.stripe.com/p/login/aFa9AVb73faq5vsfmw6Na00';
     a.target = '_blank';
@@ -120,7 +133,6 @@ export default function SubscriptionView() {
   }
 
   function handlePlanAction(_planKey: string) {
-    // Scroll to the Stripe pricing table below
     document.querySelector('stripe-pricing-table')?.scrollIntoView({ behavior: 'smooth' });
   }
 
@@ -153,16 +165,14 @@ export default function SubscriptionView() {
           </button>
         </div>
 
-        {/* Usage stats */}
+        {/* Usage stats — users only, contacts are unlimited */}
         {plan !== 'trial' && (
           <div className="mt-5 grid grid-cols-2 gap-4">
             {(() => {
               const current = PLANS.find((p) => p.key === plan);
               if (!current) return null;
               const userLimitLabel = current.userLimit === Infinity ? '∞' : String(current.userLimit);
-              const contactLimitLabel = current.contactLimit === Infinity ? '∞' : String(current.contactLimit);
               const userPct = current.userLimit === Infinity ? 0 : Math.min(100, (userCount / current.userLimit) * 100);
-              const contactPct = current.contactLimit === Infinity ? 0 : Math.min(100, (contactCount / current.contactLimit) * 100);
               return (
                 <>
                   <div>
@@ -179,13 +189,8 @@ export default function SubscriptionView() {
                   <div>
                     <div className="flex justify-between text-sm mb-1">
                       <span className="text-gray-600">Contacts</span>
-                      <span className="font-medium text-gray-900">{contactCount} / {contactLimitLabel}</span>
+                      <span className="font-medium text-gray-900">Unlimited</span>
                     </div>
-                    {current.contactLimit !== Infinity && (
-                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-blue-500 rounded-full" style={{ width: `${contactPct}%` }} />
-                      </div>
-                    )}
                   </div>
                 </>
               );
