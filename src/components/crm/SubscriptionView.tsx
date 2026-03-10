@@ -10,6 +10,7 @@ import {
   Star,
   Shield,
   ExternalLink,
+  BarChart2,
 } from 'lucide-react';
 
 const PLANS = [
@@ -196,21 +197,27 @@ export default function SubscriptionView() {
         )}
       </div>
 
-      {/* Subtle comparison chart link */}
-      <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg">
-        <p className="text-xs text-gray-500">
-          Wondering how TrussCTR stacks up against other roofing CRMs?
-        </p>
-        <a
-          href="/crm-user-tier-comparison.html"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 whitespace-nowrap ml-4"
-        >
-          View comparison chart
-          <ExternalLink className="w-3 h-3" />
-        </a>
-      </div>
+      {/* Comparison chart callout */}
+      <a
+        href="/crm-user-tier-comparison.html"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center justify-between gap-4 px-5 py-4 bg-blue-50 border border-blue-200 rounded-xl hover:bg-blue-100 hover:border-blue-300 transition-colors group"
+      >
+        <div className="flex items-center gap-3">
+          <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-blue-100 group-hover:bg-blue-200 flex items-center justify-center transition-colors">
+            <BarChart2 className="w-5 h-5 text-blue-600" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-blue-900">How does TrussCTR compare?</p>
+            <p className="text-xs text-blue-600 mt-0.5">See how our plans stack up against AccuLynx, JobNimbus, Roofr &amp; more</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5 text-sm font-medium text-blue-600 group-hover:text-blue-700 whitespace-nowrap">
+          View chart
+          <ExternalLink className="w-4 h-4" />
+        </div>
+      </a>
 
       {/* Stripe Pricing Table */}
       <div>
