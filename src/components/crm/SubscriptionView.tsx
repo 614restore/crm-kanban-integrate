@@ -86,6 +86,9 @@ function trialDaysRemaining(trialEndsAt?: string): number | null {
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
 }
 
+// Resolves the correct URL for a public asset regardless of Vite base path
+const chartSrc = `${import.meta.env.BASE_URL}crm-user-tier-comparison.html`.replace('//', '/');
+
 export default function SubscriptionView() {
   const { state } = useCRM();
   const { profile } = useAuth();
@@ -99,7 +102,6 @@ export default function SubscriptionView() {
     db.getCompany(companyId).then((c) => { if (c) setCompany(c); });
   }, [profile?.company_id, state.companyId]);
 
-  // Reveal scroll-down banner once the chart section enters the viewport
   useEffect(() => {
     const el = chartRef.current;
     if (!el) return;
@@ -248,7 +250,6 @@ export default function SubscriptionView() {
 
       {/* Scroll-down banner + embedded comparison chart */}
       <div ref={chartRef} className="space-y-3">
-        {/* Animated banner — fades in when chart section enters viewport */}
         <div
           className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-semibold tracking-wide shadow transition-all duration-700 ${
             chartVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'
@@ -259,10 +260,9 @@ export default function SubscriptionView() {
           <ChevronDown className="w-4 h-4 animate-bounce" />
         </div>
 
-        {/* Comparison chart iframe */}
         <div className="w-full rounded-xl overflow-hidden border border-gray-200 shadow-sm">
           <iframe
-            src="/crm-user-tier-comparison.html"
+            src={chartSrc}
             title="TrussCTR Plan Feature Comparison"
             className="w-full"
             style={{ height: '900px', border: 'none' }}
