@@ -157,6 +157,7 @@ export default function SubscriptionView() {
 
   return (
     <div className="space-y-6">
+
       {/* Current plan header */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <div className="flex items-center justify-between flex-wrap gap-4">
@@ -213,28 +214,6 @@ export default function SubscriptionView() {
         })()}
       </div>
 
-      {/* Comparison chart callout */}
-      <a
-        href="/crm-user-tier-comparison.html"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="flex items-center justify-between gap-4 px-5 py-4 bg-blue-50 border border-blue-200 rounded-xl hover:bg-blue-100 hover:border-blue-300 transition-colors group"
-      >
-        <div className="flex items-center gap-3">
-          <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-blue-100 group-hover:bg-blue-200 flex items-center justify-center transition-colors">
-            <BarChart2 className="w-5 h-5 text-blue-600" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-blue-900">How does TrussCTR compare?</p>
-            <p className="text-xs text-blue-600 mt-0.5">See how our plans stack up against AccuLynx, JobNimbus, Roofr &amp; more</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-1.5 text-sm font-medium text-blue-600 group-hover:text-blue-700 whitespace-nowrap">
-          View chart
-          <ExternalLink className="w-4 h-4" />
-        </div>
-      </a>
-
       {/* Custom pricing grid */}
       <div>
         <h4 className="text-base font-semibold text-gray-900 mb-4">Available Plans</h4>
@@ -281,6 +260,29 @@ export default function SubscriptionView() {
           ))}
         </div>
       </div>
+
+      {/* Comparison chart callout — below pricing grid */}
+      <a
+        href="/crm-user-tier-comparison.html"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center justify-between gap-4 px-5 py-4 bg-blue-50 border border-blue-200 rounded-xl hover:bg-blue-100 hover:border-blue-300 transition-colors group"
+      >
+        <div className="flex items-center gap-3">
+          <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-blue-100 group-hover:bg-blue-200 flex items-center justify-center transition-colors">
+            <BarChart2 className="w-5 h-5 text-blue-600" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-blue-900">How does TrussCTR compare?</p>
+            <p className="text-xs text-blue-600 mt-0.5">See how our plans stack up against AccuLynx, JobNimbus, Roofr &amp; more</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5 text-sm font-medium text-blue-600 group-hover:text-blue-700 whitespace-nowrap">
+          View chart
+          <ExternalLink className="w-4 h-4" />
+        </div>
+      </a>
+
     </div>
   );
 }
