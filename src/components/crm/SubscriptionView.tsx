@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db, DbCompany } from '@/lib/database';
@@ -8,9 +8,8 @@ import {
   Users,
   Star,
   Shield,
-  ExternalLink,
-  BarChart2,
   Check,
+  ChevronDown,
 } from 'lucide-react';
 
 const PLANS = [
@@ -22,14 +21,7 @@ const PLANS = [
     annualTotal: 290,
     userLimit: 2,
     checkoutUrl: 'https://checkout.stripe.com/c/pay/cs_live_a1lVAavUvt9xYretp7T0BHll2l5Kylc9ZosPvSYeU8AllloRXyeT78O5v0#fidkdWxOYHwnPyd1blppbHNgWjA0UT1cfGRUMXRnRHA0QTdWUWZkakR2fW90VmZzR2JzUXFxYzVuMEFddT1xNUdnQXZyRlwzTXRhcWE9NEhKaVJgVHRVR0JGbkRDR3FEbGFIMEN2ZD1rNU9ONTUzTjNnNVBzMicpJ2ZpbGBrcVdgY2B3YGtmYExhJz9rcGlpKSdmcHZxamhgd0BoZGxpJz8nb2BjY3dgfEUzNDF3YHZxandgK2ZqaCcpJ2FgY2RwaXFUcGRrcWxxfCc%2Fa3BpaSkndnBndmZ3bHVxbGprUGtsdHBga2B2dkBrZGdpYGEnP2NkaXZgeCUl',
-    features: [
-      'Up to 2 users',
-      'Unlimited contacts',
-      'Core CRM features',
-      'Pipeline board',
-      'Invoicing',
-      'Email support',
-    ],
+    features: ['Up to 2 users','Unlimited contacts','Core CRM features','Pipeline board','Invoicing','Email support'],
     icon: <Zap className="w-5 h-5 text-blue-500" />,
     color: 'blue',
   },
@@ -41,14 +33,7 @@ const PLANS = [
     annualTotal: 590,
     userLimit: 5,
     checkoutUrl: 'https://checkout.stripe.com/c/pay/cs_live_b13lZDaKn9TxoLZeJTVhNOc9RAPYAyttYb6IIxba59QrnkJl1we7jV7eGM#fidkdWxOYHwnPyd1blppbHNgWjA0UT1cfGRUMXRnRHA0QTdWUWZkakR2fW90VmZzR2JzUXFxYzVuMEFddT1xNUdnQXZyRlwzTXRhcWE9NEhKaVJgVHRVR0JGbkRDR3FEbGFIMEN2ZD1rNU9ONTUzTjNnNVBzMicpJ3ZwZ3Zmd2x1cWxqa1BrbHRwYGtgdnZAa2RnaWBhJz9jZGl2YHgl',
-    features: [
-      'Up to 5 users',
-      'Unlimited contacts',
-      'Full pipeline visibility',
-      'Insurance claim tracking',
-      'Supplement tracking',
-      'Team reporting',
-    ],
+    features: ['Up to 5 users','Unlimited contacts','Full pipeline visibility','Insurance claim tracking','Supplement tracking','Team reporting'],
     icon: <Star className="w-5 h-5 text-indigo-500" />,
     highlight: true,
     color: 'indigo',
@@ -61,14 +46,7 @@ const PLANS = [
     annualTotal: 990,
     userLimit: 10,
     checkoutUrl: 'https://checkout.stripe.com/c/pay/cs_live_a1in9NCQ6zK8m9Pk9U9X4qFeSdVYrGaVrQ9vI95lJ8MfrxxUbcGCflWLi5#fidkdWxOYHwnPyd1blppbHNgWjA0UT1cfGRUMXRnRHA0QTdWUWZkakR2fW90VmZzR2JzUXFxYzVuMEFddT1xNUdnQXZyRlwzTXRhcWE9NEhKaVJgVHRVR0JGbkRDR3FEbGFIMEN2ZD1rNU9ONTUzTjNnNVBzMicpJ2ZpbGBrcVdgY2B3YGtmYExhJz9rcGlpKSdmcHZxamhgd0BoZGxpJz8nb2BjY3dgfEUzNDF3YHZxandgK2ZqaCcpJ2FgY2RwaXFUcGRrcWxxfCc%2Fa3BpaSkndnBndmZ3bHVxbGprUGtsdHBga2B2dkBrZGdpYGEnP2NkaXZgeCUl',
-    features: [
-      'Up to 10 users',
-      'Unlimited contacts',
-      'AI assistant',
-      'Advanced analytics',
-      'Material order templates',
-      'Priority support',
-    ],
+    features: ['Up to 10 users','Unlimited contacts','AI assistant','Advanced analytics','Material order templates','Priority support'],
     icon: <Shield className="w-5 h-5 text-emerald-500" />,
     color: 'emerald',
   },
@@ -80,14 +58,7 @@ const PLANS = [
     annualTotal: 1790,
     userLimit: Infinity,
     checkoutUrl: 'https://checkout.stripe.com/c/pay/cs_live_a1MQMNSLfrqdeCjmXx3EGEirNW9EhSEFzXxbaOUtOkFw09ZWR88FayUx0A#fidkdWxOYHwnPyd1blppbHNgWjA0UT1cfGRUMXRnRHA0QTdWUWZkakR2fW90VmZzR2JzUXFxYzVuMEFddT1xNUdnQXZyRlwzTXRhcWE9NEhKaVJgVHRVR0JGbkRDR3FEbGFIMEN2ZD1rNU9ONTUzTjNnNVBzMicpJ2ZpbGBrcVdgY2B3YGtmYExhJz9rcGlpKSdmcHZxamhgd0BoZGxpJz8nb2BjY3dgfEUzNDF3YHZxandgK2ZqaCcpJ2FgY2RwaXFUcGRrcWxxfCc%2Fa3BpaSkndnBndmZ3bHVxbGprUGtsdHBga2B2dkBrZGdpYGEnP2NkaXZgeCUl',
-    features: [
-      'Unlimited users',
-      'Unlimited contacts',
-      'All features included',
-      'Custom onboarding',
-      'Dedicated support',
-      'QuickBooks sync',
-    ],
+    features: ['Unlimited users','Unlimited contacts','All features included','Custom onboarding','Dedicated support','QuickBooks sync'],
     icon: <Users className="w-5 h-5 text-purple-500" />,
     color: 'purple',
   },
@@ -119,12 +90,26 @@ export default function SubscriptionView() {
   const { state } = useCRM();
   const { profile } = useAuth();
   const [company, setCompany] = useState<DbCompany | null>(null);
+  const [chartVisible, setChartVisible] = useState(false);
+  const chartRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const companyId = profile?.company_id || state.companyId;
     if (!companyId) return;
     db.getCompany(companyId).then((c) => { if (c) setCompany(c); });
   }, [profile?.company_id, state.companyId]);
+
+  // Reveal scroll-down banner once the chart section enters the viewport
+  useEffect(() => {
+    const el = chartRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) setChartVisible(true); },
+      { threshold: 0.15 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   const plan = company?.subscription_plan ?? 'trial';
   const status = company?.subscription_status ?? 'trialing';
@@ -163,9 +148,7 @@ export default function SubscriptionView() {
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
             <h3 className="text-xl font-semibold text-gray-900 mb-1">
-              {plan === 'trial'
-                ? 'Free Trial'
-                : `${plan.charAt(0).toUpperCase() + plan.slice(1)} Plan`}
+              {plan === 'trial' ? 'Free Trial' : `${plan.charAt(0).toUpperCase() + plan.slice(1)} Plan`}
             </h3>
             <div className="flex items-center gap-2">
               <StatusBadge status={status} />
@@ -214,16 +197,14 @@ export default function SubscriptionView() {
         })()}
       </div>
 
-      {/* Custom pricing grid */}
+      {/* Pricing grid */}
       <div>
         <h4 className="text-base font-semibold text-gray-900 mb-4">Available Plans</h4>
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           {PLANS.map((p) => (
             <div
               key={p.key}
-              className={`relative rounded-xl border-2 p-5 flex flex-col gap-4 transition-shadow hover:shadow-md ${
-                highlightColors[p.color]
-              }`}
+              className={`relative rounded-xl border-2 p-5 flex flex-col gap-4 transition-shadow hover:shadow-md ${highlightColors[p.color]}`}
             >
               {p.highlight && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-xs font-bold px-3 py-0.5 rounded-full whitespace-nowrap">
@@ -235,8 +216,12 @@ export default function SubscriptionView() {
                 <span className="font-semibold text-gray-900 text-sm">{p.name}</span>
               </div>
               <div>
-                <div className="text-2xl font-bold text-gray-900">${p.price}<span className="text-sm font-normal text-gray-500">/mo</span></div>
-                <div className="text-xs text-gray-500 mt-0.5">${p.annualPrice}/mo annual (${p.annualTotal.toLocaleString()}/yr)</div>
+                <div className="text-2xl font-bold text-gray-900">
+                  ${p.price}<span className="text-sm font-normal text-gray-500">/mo</span>
+                </div>
+                <div className="text-xs text-gray-500 mt-0.5">
+                  ${p.annualPrice}/mo annual (${p.annualTotal.toLocaleString()}/yr)
+                </div>
               </div>
               <ul className="space-y-1.5 flex-1">
                 {p.features.map((f) => (
@@ -261,27 +246,30 @@ export default function SubscriptionView() {
         </div>
       </div>
 
-      {/* Comparison chart callout — below pricing grid */}
-      <a
-        href="/crm-user-tier-comparison.html"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="flex items-center justify-between gap-4 px-5 py-4 bg-blue-50 border border-blue-200 rounded-xl hover:bg-blue-100 hover:border-blue-300 transition-colors group"
-      >
-        <div className="flex items-center gap-3">
-          <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-blue-100 group-hover:bg-blue-200 flex items-center justify-center transition-colors">
-            <BarChart2 className="w-5 h-5 text-blue-600" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-blue-900">How does TrussCTR compare?</p>
-            <p className="text-xs text-blue-600 mt-0.5">See how our plans stack up against AccuLynx, JobNimbus, Roofr &amp; more</p>
-          </div>
+      {/* Scroll-down banner + embedded comparison chart */}
+      <div ref={chartRef} className="space-y-3">
+        {/* Animated banner — fades in when chart section enters viewport */}
+        <div
+          className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-semibold tracking-wide shadow transition-all duration-700 ${
+            chartVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'
+          }`}
+        >
+          <ChevronDown className="w-4 h-4 animate-bounce" />
+          SCROLL DOWN TO COMPARE FEATURES
+          <ChevronDown className="w-4 h-4 animate-bounce" />
         </div>
-        <div className="flex items-center gap-1.5 text-sm font-medium text-blue-600 group-hover:text-blue-700 whitespace-nowrap">
-          View chart
-          <ExternalLink className="w-4 h-4" />
+
+        {/* Comparison chart iframe */}
+        <div className="w-full rounded-xl overflow-hidden border border-gray-200 shadow-sm">
+          <iframe
+            src="/crm-user-tier-comparison.html"
+            title="TrussCTR Plan Feature Comparison"
+            className="w-full"
+            style={{ height: '900px', border: 'none' }}
+            loading="lazy"
+          />
         </div>
-      </a>
+      </div>
 
     </div>
   );
