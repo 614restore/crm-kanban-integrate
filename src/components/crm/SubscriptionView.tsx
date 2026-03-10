@@ -5,14 +5,11 @@ import { db, DbCompany } from '@/lib/database';
 import { toast } from 'sonner';
 import {
   CreditCard,
-  CheckCircle,
-  XCircle,
-  AlertCircle,
   Zap,
   Users,
-  ArrowRight,
   Star,
   Shield,
+  ExternalLink,
 } from 'lucide-react';
 
 const PLANS = [
@@ -197,6 +194,22 @@ export default function SubscriptionView() {
             })()}
           </div>
         )}
+      </div>
+
+      {/* Subtle comparison chart link */}
+      <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg">
+        <p className="text-xs text-gray-500">
+          Wondering how TrussCTR stacks up against other roofing CRMs?
+        </p>
+        <a
+          href="/crm-user-tier-comparison.html"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 whitespace-nowrap ml-4"
+        >
+          View comparison chart
+          <ExternalLink className="w-3 h-3" />
+        </a>
       </div>
 
       {/* Stripe Pricing Table */}
