@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db, DbCompany } from '@/lib/database';
-import { toast } from 'sonner';
 import {
   CreditCard,
   Zap,
@@ -11,6 +10,7 @@ import {
   Shield,
   ExternalLink,
   BarChart2,
+  Check,
 } from 'lucide-react';
 
 const PLANS = [
@@ -18,8 +18,10 @@ const PLANS = [
     key: 'starter' as const,
     name: 'Starter',
     price: 29,
+    annualPrice: 24.17,
+    annualTotal: 290,
     userLimit: 2,
-    contactLimit: Infinity,
+    checkoutUrl: 'https://checkout.stripe.com/c/pay/cs_live_a1lVAavUvt9xYretp7T0BHll2l5Kylc9ZosPvSYeU8AllloRXyeT78O5v0#fidkdWxOYHwnPyd1blppbHNgWjA0UT1cfGRUMXRnRHA0QTdWUWZkakR2fW90VmZzR2JzUXFxYzVuMEFddT1xNUdnQXZyRlwzTXRhcWE9NEhKaVJgVHRVR0JGbkRDR3FEbGFIMEN2ZD1rNU9ONTUzTjNnNVBzMicpJ2ZpbGBrcVdgY2B3YGtmYExhJz9rcGlpKSdmcHZxamhgd0BoZGxpJz8nb2BjY3dgfEUzNDF3YHZxandgK2ZqaCcpJ2FgY2RwaXFUcGRrcWxxfCc%2Fa3BpaSkndnBndmZ3bHVxbGprUGtsdHBga2B2dkBrZGdpYGEnP2NkaXZgeCUl',
     features: [
       'Up to 2 users',
       'Unlimited contacts',
@@ -29,13 +31,16 @@ const PLANS = [
       'Email support',
     ],
     icon: <Zap className="w-5 h-5 text-blue-500" />,
+    color: 'blue',
   },
   {
     key: 'pro' as const,
     name: 'Pro',
     price: 59,
+    annualPrice: 49.17,
+    annualTotal: 590,
     userLimit: 5,
-    contactLimit: Infinity,
+    checkoutUrl: 'https://checkout.stripe.com/c/pay/cs_live_b13lZDaKn9TxoLZeJTVhNOc9RAPYAyttYb6IIxba59QrnkJl1we7jV7eGM#fidkdWxOYHwnPyd1blppbHNgWjA0UT1cfGRUMXRnRHA0QTdWUWZkakR2fW90VmZzR2JzUXFxYzVuMEFddT1xNUdnQXZyRlwzTXRhcWE9NEhKaVJgVHRVR0JGbkRDR3FEbGFIMEN2ZD1rNU9ONTUzTjNnNVBzMicpJ3ZwZ3Zmd2x1cWxqa1BrbHRwYGtgdnZAa2RnaWBhJz9jZGl2YHgl',
     features: [
       'Up to 5 users',
       'Unlimited contacts',
@@ -46,13 +51,16 @@ const PLANS = [
     ],
     icon: <Star className="w-5 h-5 text-indigo-500" />,
     highlight: true,
+    color: 'indigo',
   },
   {
     key: 'business' as const,
     name: 'Business',
     price: 99,
+    annualPrice: 82.50,
+    annualTotal: 990,
     userLimit: 10,
-    contactLimit: Infinity,
+    checkoutUrl: 'https://checkout.stripe.com/c/pay/cs_live_a1in9NCQ6zK8m9Pk9U9X4qFeSdVYrGaVrQ9vI95lJ8MfrxxUbcGCflWLi5#fidkdWxOYHwnPyd1blppbHNgWjA0UT1cfGRUMXRnRHA0QTdWUWZkakR2fW90VmZzR2JzUXFxYzVuMEFddT1xNUdnQXZyRlwzTXRhcWE9NEhKaVJgVHRVR0JGbkRDR3FEbGFIMEN2ZD1rNU9ONTUzTjNnNVBzMicpJ2ZpbGBrcVdgY2B3YGtmYExhJz9rcGlpKSdmcHZxamhgd0BoZGxpJz8nb2BjY3dgfEUzNDF3YHZxandgK2ZqaCcpJ2FgY2RwaXFUcGRrcWxxfCc%2Fa3BpaSkndnBndmZ3bHVxbGprUGtsdHBga2B2dkBrZGdpYGEnP2NkaXZgeCUl',
     features: [
       'Up to 10 users',
       'Unlimited contacts',
@@ -62,22 +70,26 @@ const PLANS = [
       'Priority support',
     ],
     icon: <Shield className="w-5 h-5 text-emerald-500" />,
+    color: 'emerald',
   },
   {
     key: 'enterprise' as const,
     name: 'Enterprise',
     price: 179,
+    annualPrice: 149.17,
+    annualTotal: 1790,
     userLimit: Infinity,
-    contactLimit: Infinity,
+    checkoutUrl: 'https://checkout.stripe.com/c/pay/cs_live_a1MQMNSLfrqdeCjmXx3EGEirNW9EhSEFzXxbaOUtOkFw09ZWR88FayUx0A#fidkdWxOYHwnPyd1blppbHNgWjA0UT1cfGRUMXRnRHA0QTdWUWZkakR2fW90VmZzR2JzUXFxYzVuMEFddT1xNUdnQXZyRlwzTXRhcWE9NEhKaVJgVHRVR0JGbkRDR3FEbGFIMEN2ZD1rNU9ONTUzTjNnNVBzMicpJ2ZpbGBrcVdgY2B3YGtmYExhJz9rcGlpKSdmcHZxamhgd0BoZGxpJz8nb2BjY3dgfEUzNDF3YHZxandgK2ZqaCcpJ2FgY2RwaXFUcGRrcWxxfCc%2Fa3BpaSkndnBndmZ3bHVxbGprUGtsdHBga2B2dkBrZGdpYGEnP2NkaXZgeCUl',
     features: [
       'Unlimited users',
       'Unlimited contacts',
-      'All features',
+      'All features included',
       'Custom onboarding',
       'Dedicated support',
       'QuickBooks sync',
     ],
     icon: <Users className="w-5 h-5 text-purple-500" />,
+    color: 'purple',
   },
 ];
 
@@ -117,7 +129,6 @@ export default function SubscriptionView() {
   const plan = company?.subscription_plan ?? 'trial';
   const status = company?.subscription_status ?? 'trialing';
   const daysLeft = trialDaysRemaining(company?.trial_ends_at);
-
   const userCount = state.teamMembers.length || 1;
 
   function handleManageBilling() {
@@ -130,9 +141,19 @@ export default function SubscriptionView() {
     document.body.removeChild(a);
   }
 
-  function handlePlanAction(_planKey: string) {
-    document.querySelector('stripe-pricing-table')?.scrollIntoView({ behavior: 'smooth' });
-  }
+  const highlightColors: Record<string, string> = {
+    blue: 'border-blue-200 bg-blue-50',
+    indigo: 'border-indigo-400 bg-indigo-50 ring-2 ring-indigo-400',
+    emerald: 'border-emerald-200 bg-emerald-50',
+    purple: 'border-purple-200 bg-purple-50',
+  };
+
+  const btnColors: Record<string, string> = {
+    blue: 'bg-blue-600 hover:bg-blue-700',
+    indigo: 'bg-indigo-600 hover:bg-indigo-700',
+    emerald: 'bg-emerald-600 hover:bg-emerald-700',
+    purple: 'bg-purple-600 hover:bg-purple-700',
+  };
 
   return (
     <div className="space-y-6">
@@ -163,43 +184,38 @@ export default function SubscriptionView() {
           </button>
         </div>
 
-        {/* Usage stats */}
-        {plan !== 'trial' && (
-          <div className="mt-5 grid grid-cols-2 gap-4">
-            {(() => {
-              const current = PLANS.find((p) => p.key === plan);
-              if (!current) return null;
-              const userLimitLabel = current.userLimit === Infinity ? '\u221e' : String(current.userLimit);
-              const userPct = current.userLimit === Infinity ? 0 : Math.min(100, (userCount / current.userLimit) * 100);
-              return (
-                <>
-                  <div>
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="text-gray-600">Users</span>
-                      <span className="font-medium text-gray-900">{userCount} / {userLimitLabel}</span>
-                    </div>
-                    {current.userLimit !== Infinity && (
-                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-blue-500 rounded-full" style={{ width: `${userPct}%` }} />
-                      </div>
-                    )}
+        {plan !== 'trial' && (() => {
+          const current = PLANS.find((p) => p.key === plan);
+          if (!current) return null;
+          const userLimitLabel = current.userLimit === Infinity ? '\u221e' : String(current.userLimit);
+          const userPct = current.userLimit === Infinity ? 0 : Math.min(100, (userCount / current.userLimit) * 100);
+          return (
+            <div className="mt-5 grid grid-cols-2 gap-4">
+              <div>
+                <div className="flex justify-between text-sm mb-1">
+                  <span className="text-gray-600">Users</span>
+                  <span className="font-medium text-gray-900">{userCount} / {userLimitLabel}</span>
+                </div>
+                {current.userLimit !== Infinity && (
+                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-full bg-blue-500 rounded-full" style={{ width: `${userPct}%` }} />
                   </div>
-                  <div>
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="text-gray-600">Contacts</span>
-                      <span className="font-medium text-gray-900">Unlimited</span>
-                    </div>
-                  </div>
-                </>
-              );
-            })()}
-          </div>
-        )}
+                )}
+              </div>
+              <div>
+                <div className="flex justify-between text-sm mb-1">
+                  <span className="text-gray-600">Contacts</span>
+                  <span className="font-medium text-gray-900">Unlimited</span>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Comparison chart callout */}
       <a
-        href="https://614restore.github.io/crm-user-tier-comparison.html"
+        href="/crm-user-tier-comparison.html"
         target="_blank"
         rel="noopener noreferrer"
         className="flex items-center justify-between gap-4 px-5 py-4 bg-blue-50 border border-blue-200 rounded-xl hover:bg-blue-100 hover:border-blue-300 transition-colors group"
@@ -219,16 +235,50 @@ export default function SubscriptionView() {
         </div>
       </a>
 
-      {/* Stripe Pricing Table */}
+      {/* Custom pricing grid */}
       <div>
         <h4 className="text-base font-semibold text-gray-900 mb-4">Available Plans</h4>
-        <div className="bg-white rounded-xl border border-gray-200 p-4 overflow-x-auto">
-          {/* @ts-expect-error stripe-pricing-table is a custom element */}
-          <stripe-pricing-table
-            pricing-table-id="prctbl_1T8ahXQ4qbAu1D2SCifFughX"
-            publishable-key="pk_live_51T8YyaQ4qbAu1D2STcaoAsxjqScvBgvTttf0k5DXp8t0BbDswCY6Hqdtd81MOlWeQqPBGCkAFBtAidM5Fsa8n0JK006K6b0Uv7"
-            customer-email={profile?.email ?? ''}
-          />
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          {PLANS.map((p) => (
+            <div
+              key={p.key}
+              className={`relative rounded-xl border-2 p-5 flex flex-col gap-4 transition-shadow hover:shadow-md ${
+                highlightColors[p.color]
+              }`}
+            >
+              {p.highlight && (
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-xs font-bold px-3 py-0.5 rounded-full whitespace-nowrap">
+                  Most Popular
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                {p.icon}
+                <span className="font-semibold text-gray-900 text-sm">{p.name}</span>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-gray-900">${p.price}<span className="text-sm font-normal text-gray-500">/mo</span></div>
+                <div className="text-xs text-gray-500 mt-0.5">${p.annualPrice}/mo annual (${p.annualTotal.toLocaleString()}/yr)</div>
+              </div>
+              <ul className="space-y-1.5 flex-1">
+                {p.features.map((f) => (
+                  <li key={f} className="flex items-start gap-2 text-xs text-gray-700">
+                    <Check className="w-3.5 h-3.5 text-green-500 mt-0.5 flex-shrink-0" />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <a
+                href={p.checkoutUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`w-full text-center py-2 px-4 rounded-lg text-white text-sm font-medium transition-colors ${btnColors[p.color]} ${
+                  plan === p.key ? 'opacity-50 pointer-events-none' : ''
+                }`}
+              >
+                {plan === p.key ? 'Current Plan' : 'Get Started'}
+              </a>
+            </div>
+          ))}
         </div>
       </div>
     </div>
