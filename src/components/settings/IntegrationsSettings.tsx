@@ -20,7 +20,9 @@ import {
   Calculator,
   Zap,
   Plus,
-  Edit3
+  Edit3,
+  Link2,
+  Unlink
 } from 'lucide-react';
 import { BaseIntegration } from '../../lib/integrations/apiTypes';
 import { integrationManager } from '../../lib/integrations/integrationManager';
@@ -31,9 +33,21 @@ const IntegrationsSettings: React.FC = () => {
   const [selectedIntegration, setSelectedIntegration] = useState<BaseIntegration | null>(null);
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [qbBanner, setQbBanner] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   useEffect(() => {
     initializeIntegrations();
+
+    // Handle QuickBooks OAuth redirect params
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('qb_connected') === '1') {
+      setQbBanner({ type: 'success', message: 'QuickBooks connected successfully!' });
+      // Clean URL
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (params.get('qb_error')) {
+      setQbBanner({ type: 'error', message: `QuickBooks connection failed: ${decodeURIComponent(params.get('qb_error')!)}` });
+      window.history.replaceState({}, '', window.location.pathname);
+    }
   }, []);
 
   const initializeIntegrations = async () => {
@@ -52,7 +66,7 @@ const IntegrationsSettings: React.FC = () => {
   const handleToggleIntegration = async (id: string, enabled: boolean) => {
     try {
       await integrationManager.toggleIntegration(id, enabled);
-      await initializeIntegrations(); // Refresh
+      await initializeIntegrations();
     } catch (error) {
       console.error('Failed to toggle integration:', error);
     }
@@ -115,6 +129,23 @@ const IntegrationsSettings: React.FC = () => {
           aerial imagery, weather tracking, accounting, and communication services.
         </p>
       </div>
+
+      {/* QuickBooks OAuth banner */}
+      {qbBanner && (
+        <div className={`mb-6 flex items-center gap-3 px-4 py-3 rounded-lg border ${
+          qbBanner.type === 'success'
+            ? 'bg-green-50 border-green-200 text-green-800'
+            : 'bg-red-50 border-red-200 text-red-800'
+        }`}>
+          {qbBanner.type === 'success'
+            ? <Check className="w-5 h-5 flex-shrink-0" />
+            : <AlertCircle className="w-5 h-5 flex-shrink-0" />}
+          <span className="text-sm font-medium">{qbBanner.message}</span>
+          <button onClick={() => setQbBanner(null)} className="ml-auto text-current opacity-60 hover:opacity-100">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Integration Categories */}
       <div className="space-y-8">
@@ -253,11 +284,46 @@ const IntegrationConfigModal: React.FC<IntegrationConfigModalProps> = ({ integra
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<any>(null);
   const [saving, setSaving] = useState(false);
+  const [qbConnecting, setQbConnecting] = useState(false);
+
+  const isQuickBooks = integration.id === 'quickbooks';
+  const isQbConnected = integration.status === 'connected';
+
+  const handleConnectQuickBooks = async () => {
+    setQbConnecting(true);
+    try {
+      const token = (await import('../../lib/supabaseClient')).supabase.auth.getSession
+        ? (await (await import('../../lib/supabaseClient')).supabase.auth.getSession()).data.session?.access_token
+        : null;
+
+      const res = await fetch('/api/quickbooks-auth', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(err.error || `Server error ${res.status}`);
+      }
+
+      const { authUri } = await res.json();
+      if (authUri) {
+        window.location.href = authUri;
+      } else {
+        throw new Error('No auth URI returned from server');
+      }
+    } catch (err) {
+      alert(`Could not start QuickBooks connection: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      setQbConnecting(false);
+    }
+  };
 
   const handleTest = async () => {
     setTesting(true);
     setTestResult(null);
-    
     try {
       const result = await integrationManager.testIntegration(integration.id, credentials, settings);
       setTestResult(result);
@@ -274,7 +340,6 @@ const IntegrationConfigModal: React.FC<IntegrationConfigModalProps> = ({ integra
 
   const handleSave = async () => {
     setSaving(true);
-    
     try {
       await integrationManager.configureIntegration(integration.id, credentials, settings);
       onSave();
@@ -358,42 +423,76 @@ const IntegrationConfigModal: React.FC<IntegrationConfigModalProps> = ({ integra
             <h3 className="text-lg font-semibold text-gray-900">Configure {integration.name}</h3>
             <p className="text-sm text-gray-600 mt-1">{integration.description}</p>
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <div className="p-6 max-h-[calc(90vh-140px)] overflow-y-auto">
-          <div className="space-y-4">
-            {renderConfigFields()}
-          </div>
+          {/* QuickBooks OAuth UI */}
+          {isQuickBooks ? (
+            <div className="space-y-4">
+              {isQbConnected ? (
+                <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-lg">
+                  <Check className="w-5 h-5 text-green-600 flex-shrink-0" />
+                  <div>
+                    <p className="font-medium text-green-900">QuickBooks is connected</p>
+                    <p className="text-sm text-green-700 mt-0.5">Your account is linked and syncing. You can reconnect below if needed.</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0" />
+                  <div>
+                    <p className="font-medium text-yellow-900">Not connected</p>
+                    <p className="text-sm text-yellow-700 mt-0.5">Click below to authorize TrussCTR to access your QuickBooks account.</p>
+                  </div>
+                </div>
+              )}
 
-          {/* Test Results */}
-          {testResult && (
-            <div className={`mt-6 p-4 rounded-lg ${
-              testResult.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
-            }`}>
-              <div className="flex items-center gap-2 mb-2">
-                {testResult.success ? (
-                  <Check className="w-5 h-5 text-green-600" />
-                ) : (
-                  <AlertCircle className="w-5 h-5 text-red-600" />
-                )}
-                <span className={`font-medium ${testResult.success ? 'text-green-900' : 'text-red-900'}`}>
-                  {testResult.success ? 'Connection Successful' : 'Connection Failed'}
-                </span>
-              </div>
-              <p className={`text-sm ${testResult.success ? 'text-green-700' : 'text-red-700'}`}>
-                {testResult.message}
+              <p className="text-sm text-gray-500">
+                QuickBooks uses OAuth 2.0 — you'll be redirected to Intuit to securely authorize the connection. No passwords are stored.
               </p>
-              {testResult.details && (
-                <div className="mt-2 text-sm text-gray-600">
-                  {Object.entries(testResult.details).map(([key, value]) => (
-                    <div key={key}>{key}: {String(value)}</div>
-                  ))}
+
+              <button
+                onClick={handleConnectQuickBooks}
+                disabled={qbConnecting}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#2CA01C] hover:bg-[#248018] text-white font-semibold rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {qbConnecting
+                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Redirecting to Intuit...</>
+                  : <><Link2 className="w-4 h-4" /> {isQbConnected ? 'Reconnect QuickBooks' : 'Connect QuickBooks'}</>
+                }
+              </button>
+            </div>
+          ) : (
+            /* Standard API key fields for all other integrations */
+            <div className="space-y-4">
+              {renderConfigFields()}
+
+              {/* Test Results */}
+              {testResult && (
+                <div className={`mt-6 p-4 rounded-lg ${
+                  testResult.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
+                }`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    {testResult.success
+                      ? <Check className="w-5 h-5 text-green-600" />
+                      : <AlertCircle className="w-5 h-5 text-red-600" />}
+                    <span className={`font-medium ${testResult.success ? 'text-green-900' : 'text-red-900'}`}>
+                      {testResult.success ? 'Connection Successful' : 'Connection Failed'}
+                    </span>
+                  </div>
+                  <p className={`text-sm ${testResult.success ? 'text-green-700' : 'text-red-700'}`}>
+                    {testResult.message}
+                  </p>
+                  {testResult.details && (
+                    <div className="mt-2 text-sm text-gray-600">
+                      {Object.entries(testResult.details).map(([key, value]) => (
+                        <div key={key}>{key}: {String(value)}</div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -401,30 +500,31 @@ const IntegrationConfigModal: React.FC<IntegrationConfigModalProps> = ({ integra
         </div>
 
         <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50">
-          <button
-            onClick={handleTest}
-            disabled={testing}
-            className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:text-blue-700 font-medium"
-          >
-            {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <TestTube className="w-4 h-4" />}
-            {testing ? 'Testing...' : 'Test Connection'}
-          </button>
+          {!isQuickBooks ? (
+            <button
+              onClick={handleTest}
+              disabled={testing}
+              className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:text-blue-700 font-medium"
+            >
+              {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <TestTube className="w-4 h-4" />}
+              {testing ? 'Testing...' : 'Test Connection'}
+            </button>
+          ) : <div />}
 
           <div className="flex gap-3">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-gray-600 hover:text-gray-700 font-medium"
-            >
-              Cancel
+            <button onClick={onClose} className="px-4 py-2 text-gray-600 hover:text-gray-700 font-medium">
+              {isQuickBooks ? 'Close' : 'Cancel'}
             </button>
-            <button
-              onClick={handleSave}
-              disabled={saving || !testResult?.success}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-              {saving ? 'Saving...' : 'Save Configuration'}
-            </button>
+            {!isQuickBooks && (
+              <button
+                onClick={handleSave}
+                disabled={saving || !testResult?.success}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                {saving ? 'Saving...' : 'Save Configuration'}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -462,19 +562,6 @@ const getConfigFieldsForIntegration = (integrationId: string) => {
         { name: 'currency', label: 'Default Currency', type: 'select', category: 'setting', options: [
           { value: 'usd', label: 'US Dollar' },
           { value: 'cad', label: 'Canadian Dollar' }
-        ]}
-      ];
-      
-    case 'quickbooks':
-      return [
-        { name: 'clientId', label: 'Client ID', type: 'text', required: true, category: 'credential' },
-        { name: 'clientSecret', label: 'Client Secret', type: 'password', required: true, category: 'credential' },
-        { name: 'accessToken', label: 'Access Token', type: 'password', required: true, category: 'credential' },
-        { name: 'refreshToken', label: 'Refresh Token', type: 'password', required: true, category: 'credential' },
-        { name: 'companyId', label: 'Company ID', type: 'text', required: true, category: 'credential' },
-        { name: 'environment', label: 'Environment', type: 'select', required: true, category: 'credential', options: [
-          { value: 'sandbox', label: 'Sandbox' },
-          { value: 'production', label: 'Production' }
         ]}
       ];
       
