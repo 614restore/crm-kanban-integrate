@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Settings, 
-  Plug, 
   Check, 
   X, 
   AlertCircle, 
@@ -9,23 +7,20 @@ import {
   Eye,
   EyeOff,
   TestTube,
-  RefreshCw,
-  ExternalLink,
   Cloud,
   CreditCard,
   Mail,
-  Phone,
   Shield,
   MapPin,
   Calculator,
   Zap,
   Plus,
   Edit3,
-  Link2,
-  Unlink
+  Link2
 } from 'lucide-react';
 import { BaseIntegration } from '../../lib/integrations/apiTypes';
 import { integrationManager } from '../../lib/integrations/integrationManager';
+import { supabase } from '../../lib/supabase';
 
 // Integration Settings Main Component
 const IntegrationsSettings: React.FC = () => {
@@ -42,7 +37,6 @@ const IntegrationsSettings: React.FC = () => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('qb_connected') === '1') {
       setQbBanner({ type: 'success', message: 'QuickBooks connected successfully!' });
-      // Clean URL
       window.history.replaceState({}, '', window.location.pathname);
     } else if (params.get('qb_error')) {
       setQbBanner({ type: 'error', message: `QuickBooks connection failed: ${decodeURIComponent(params.get('qb_error')!)}` });
@@ -101,16 +95,6 @@ const IntegrationsSettings: React.FC = () => {
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'connected': return 'text-green-600 bg-green-100';
-      case 'disconnected': return 'text-gray-600 bg-gray-100';
-      case 'error': return 'text-red-600 bg-red-100';
-      case 'pending': return 'text-yellow-600 bg-yellow-100';
-      default: return 'text-gray-600 bg-gray-100';
-    }
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -125,7 +109,7 @@ const IntegrationsSettings: React.FC = () => {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900 mb-2">API Integrations</h1>
         <p className="text-gray-600">
-          Connect your CRM with essential business tools and services. Configure payment processing, 
+          Connect your CRM with essential business tools and services. Configure payment processing,
           aerial imagery, weather tracking, accounting, and communication services.
         </p>
       </div>
@@ -162,7 +146,6 @@ const IntegrationsSettings: React.FC = () => {
                 </span>
               </div>
             </div>
-
             <div className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {categoryIntegrations.map((integration) => (
@@ -183,6 +166,7 @@ const IntegrationsSettings: React.FC = () => {
       {showConfigModal && selectedIntegration && (
         <IntegrationConfigModal
           integration={selectedIntegration}
+          supabaseClient={supabase}
           onClose={() => {
             setShowConfigModal(false);
             setSelectedIntegration(null);
@@ -198,7 +182,7 @@ const IntegrationsSettings: React.FC = () => {
   );
 };
 
-// Individual Integration Card Component
+// Individual Integration Card
 interface IntegrationCardProps {
   integration: BaseIntegration;
   onToggle: (id: string, enabled: boolean) => void;
@@ -225,7 +209,6 @@ const IntegrationCard: React.FC<IntegrationCardProps> = ({ integration, onToggle
         <div className="flex-1">
           <h3 className="font-semibold text-gray-900 mb-1">{integration.name}</h3>
           <p className="text-sm text-gray-600 mb-2">{integration.description}</p>
-          
           <div className="flex items-center gap-2">
             <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
               getStatusColor(integration.status)
@@ -237,7 +220,6 @@ const IntegrationCard: React.FC<IntegrationCardProps> = ({ integration, onToggle
             </span>
           </div>
         </div>
-
         <div className="flex flex-col items-end gap-2">
           <button
             onClick={handleToggle}
@@ -250,7 +232,6 @@ const IntegrationCard: React.FC<IntegrationCardProps> = ({ integration, onToggle
               integration.isEnabled ? 'translate-x-6' : 'translate-x-1'
             }`} />
           </button>
-
           <button
             onClick={onConfigure}
             className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center gap-1"
@@ -260,7 +241,6 @@ const IntegrationCard: React.FC<IntegrationCardProps> = ({ integration, onToggle
           </button>
         </div>
       </div>
-
       {integration.lastSync && (
         <div className="text-xs text-gray-500 border-t border-gray-100 pt-2">
           Last sync: {new Date(integration.lastSync).toLocaleDateString()}
@@ -273,11 +253,12 @@ const IntegrationCard: React.FC<IntegrationCardProps> = ({ integration, onToggle
 // Integration Configuration Modal
 interface IntegrationConfigModalProps {
   integration: BaseIntegration;
+  supabaseClient: any;
   onClose: () => void;
   onSave: () => void;
 }
 
-const IntegrationConfigModal: React.FC<IntegrationConfigModalProps> = ({ integration, onClose, onSave }) => {
+const IntegrationConfigModal: React.FC<IntegrationConfigModalProps> = ({ integration, supabaseClient, onClose, onSave }) => {
   const [credentials, setCredentials] = useState<Record<string, any>>(integration.credentials || {});
   const [settings, setSettings] = useState<Record<string, any>>(integration.settings || {});
   const [showPassword, setShowPassword] = useState<Record<string, boolean>>({});
@@ -292,9 +273,8 @@ const IntegrationConfigModal: React.FC<IntegrationConfigModalProps> = ({ integra
   const handleConnectQuickBooks = async () => {
     setQbConnecting(true);
     try {
-      const token = (await import('../../lib/supabaseClient')).supabase.auth.getSession
-        ? (await (await import('../../lib/supabaseClient')).supabase.auth.getSession()).data.session?.access_token
-        : null;
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      const token = session?.access_token;
 
       const res = await fetch('/api/quickbooks-auth', {
         method: 'POST',
@@ -357,7 +337,6 @@ const IntegrationConfigModal: React.FC<IntegrationConfigModalProps> = ({ integra
           {field.label}
           {field.required && <span className="text-red-500 ml-1">*</span>}
         </label>
-        
         {field.type === 'password' ? (
           <div className="relative">
             <input
@@ -407,7 +386,6 @@ const IntegrationConfigModal: React.FC<IntegrationConfigModalProps> = ({ integra
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
         )}
-        
         {field.help && (
           <p className="mt-1 text-sm text-gray-500">{field.help}</p>
         )}
@@ -429,7 +407,6 @@ const IntegrationConfigModal: React.FC<IntegrationConfigModalProps> = ({ integra
         </div>
 
         <div className="p-6 max-h-[calc(90vh-140px)] overflow-y-auto">
-          {/* QuickBooks OAuth UI */}
           {isQuickBooks ? (
             <div className="space-y-4">
               {isQbConnected ? (
@@ -437,7 +414,7 @@ const IntegrationConfigModal: React.FC<IntegrationConfigModalProps> = ({ integra
                   <Check className="w-5 h-5 text-green-600 flex-shrink-0" />
                   <div>
                     <p className="font-medium text-green-900">QuickBooks is connected</p>
-                    <p className="text-sm text-green-700 mt-0.5">Your account is linked and syncing. You can reconnect below if needed.</p>
+                    <p className="text-sm text-green-700 mt-0.5">Your account is linked and syncing. Reconnect below if needed.</p>
                   </div>
                 </div>
               ) : (
@@ -449,11 +426,9 @@ const IntegrationConfigModal: React.FC<IntegrationConfigModalProps> = ({ integra
                   </div>
                 </div>
               )}
-
               <p className="text-sm text-gray-500">
                 QuickBooks uses OAuth 2.0 — you'll be redirected to Intuit to securely authorize the connection. No passwords are stored.
               </p>
-
               <button
                 onClick={handleConnectQuickBooks}
                 disabled={qbConnecting}
@@ -466,11 +441,8 @@ const IntegrationConfigModal: React.FC<IntegrationConfigModalProps> = ({ integra
               </button>
             </div>
           ) : (
-            /* Standard API key fields for all other integrations */
             <div className="space-y-4">
               {renderConfigFields()}
-
-              {/* Test Results */}
               {testResult && (
                 <div className={`mt-6 p-4 rounded-lg ${
                   testResult.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
@@ -510,7 +482,6 @@ const IntegrationConfigModal: React.FC<IntegrationConfigModalProps> = ({ integra
               {testing ? 'Testing...' : 'Test Connection'}
             </button>
           ) : <div />}
-
           <div className="flex gap-3">
             <button onClick={onClose} className="px-4 py-2 text-gray-600 hover:text-gray-700 font-medium">
               {isQuickBooks ? 'Close' : 'Cancel'}
@@ -543,13 +514,11 @@ const getConfigFieldsForIntegration = (integrationId: string) => {
           { value: 'sandbox', label: 'Sandbox (Testing)' },
           { value: 'production', label: 'Production' }
         ]},
-        { name: 'autoOrderReports', label: 'Auto-order Reports', type: 'checkbox', category: 'setting' },
         { name: 'defaultReportType', label: 'Default Report Type', type: 'select', category: 'setting', options: [
           { value: 'standard', label: 'Standard Report' },
           { value: 'premium', label: 'Premium Report' }
         ]}
       ];
-      
     case 'stripe':
       return [
         { name: 'publishableKey', label: 'Publishable Key', type: 'text', required: true, category: 'credential', placeholder: 'pk_test_...' },
@@ -564,14 +533,12 @@ const getConfigFieldsForIntegration = (integrationId: string) => {
           { value: 'cad', label: 'Canadian Dollar' }
         ]}
       ];
-      
     case 'twilio':
       return [
         { name: 'accountSid', label: 'Account SID', type: 'text', required: true, category: 'credential' },
         { name: 'authToken', label: 'Auth Token', type: 'password', required: true, category: 'credential' },
         { name: 'fromNumber', label: 'From Phone Number', type: 'tel', required: true, category: 'setting', placeholder: '+1234567890' }
       ];
-      
     default:
       return [
         { name: 'apiKey', label: 'API Key', type: 'password', required: true, category: 'credential' }
