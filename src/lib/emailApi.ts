@@ -6,7 +6,7 @@ export interface SendEmailPayload {
   html: string;
 }
 
-function getApiBaseUrl(): string | null {
+function getApiBaseUrl(): string {
   const configuredBase =
     (import.meta.env.VITE_EMAIL_API_BASE_URL as string | undefined)?.trim() ||
     (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim();
@@ -15,22 +15,12 @@ function getApiBaseUrl(): string | null {
     return configuredBase.replace(/\/$/, '');
   }
 
-  const host = window.location.hostname;
-
-  // Same-origin API works for local dev and Vercel hosting
-  if (host === 'localhost' || host.endsWith('.vercel.app')) {
-    return window.location.origin;
-  }
-
-  // GitHub Pages is static-only; require explicit API base URL config
-  return null;
+  // Always fall back to same-origin — works for Vercel, preview deploys, localhost, and custom domains
+  return window.location.origin;
 }
 
 export async function sendEmail(payload: SendEmailPayload, timeoutMs: number = 12000) {
   const baseUrl = getApiBaseUrl();
-  if (!baseUrl) {
-    throw new Error('Email API is not configured. Set VITE_EMAIL_API_BASE_URL to your Vercel app URL.');
-  }
 
   const { data: { session } } = await supabase.auth.getSession();
   const accessToken = session?.access_token || '';
