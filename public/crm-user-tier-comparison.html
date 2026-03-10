@@ -10,13 +10,10 @@
     header { text-align: center; margin-bottom: 32px; }
     header h1 { font-size: 2rem; font-weight: 800; background: linear-gradient(135deg, #3b82f6, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 8px; }
     header p { color: #94a3b8; font-size: 0.95rem; }
-
     .badge { display: inline-block; background: #1e40af; color: #93c5fd; font-size: 0.7rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.05em; margin-left: 8px; vertical-align: middle; }
-
     .controls { display: flex; justify-content: center; gap: 10px; margin-bottom: 24px; flex-wrap: wrap; }
     .ctrl-btn { padding: 8px 20px; background: #1e293b; color: #94a3b8; border: 1px solid #334155; border-radius: 8px; font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: all 0.15s; }
     .ctrl-btn:hover { background: #334155; color: #e2e8f0; }
-
     .section { border: 1px solid #1e293b; border-radius: 14px; margin-bottom: 12px; overflow: hidden; }
     .section-toggle { width: 100%; background: #1e293b; border: none; color: #e2e8f0; padding: 14px 20px; font-size: 0.88rem; font-weight: 700; text-align: left; cursor: pointer; display: flex; align-items: center; justify-content: space-between; letter-spacing: 0.03em; transition: background 0.15s; }
     .section-toggle:hover { background: #273549; }
@@ -24,7 +21,6 @@
     .section.open .section-toggle .arrow { transform: rotate(180deg); }
     .section-body { display: none; overflow-x: auto; }
     .section.open .section-body { display: block; }
-
     table { width: 100%; border-collapse: collapse; min-width: 860px; }
     thead tr { background: #0f172a; }
     thead th { padding: 11px 14px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #64748b; text-align: center; border-bottom: 1px solid #1e293b; }
@@ -34,25 +30,21 @@
     tbody tr:hover { background: #1e293b80; }
     tbody td { padding: 12px 14px; font-size: 0.85rem; text-align: center; color: #cbd5e1; vertical-align: middle; }
     tbody td:first-child { text-align: left; font-weight: 600; color: #e2e8f0; }
-
     .crm-name { display: flex; align-items: center; gap: 10px; }
     .crm-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
     .plan-label { font-size: 0.73rem; color: #64748b; display: block; font-weight: 400; margin-top: 2px; }
     .pricing-note { color: #64748b; font-size: 0.76rem; }
-
     .trussctr-row { background: linear-gradient(135deg, #0f2040, #0f1d3d); }
     .trussctr-row td:first-child { color: #60a5fa; }
     .highlight { color: #34d399 !important; font-weight: 700; }
     .limited { color: #f87171; }
     .neutral { color: #94a3b8; }
-
     .summary { background: linear-gradient(135deg,#1e3a5f22,#1e1b4b22); border: 1px solid #1e40af44; border-radius: 16px; padding: 28px 32px; max-width: 940px; margin: 24px auto 0; }
     .summary h2 { color: #60a5fa; font-size: 1.05rem; margin-bottom: 16px; }
     .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
     .summary-card { background: #1e293b; border-radius: 10px; padding: 16px; }
     .summary-card .val { color: #34d399; font-size: 1.4rem; font-weight: 800; }
     .summary-card .desc { color: #94a3b8; font-size: 0.8rem; margin-top: 4px; }
-
     footer { text-align: center; margin-top: 32px; color: #475569; font-size: 0.78rem; }
     footer span { color: #3b82f6; }
     @media (max-width: 600px) { header h1 { font-size: 1.4rem; } .summary { padding: 20px 16px; } }
@@ -95,17 +87,17 @@
           </td>
           <td>
             <span class="highlight">2 users</span><br>
-            <span class="highlight" style="font-size:0.78rem;">500 contacts</span><br>
+            <span class="highlight" style="font-size:0.78rem;">Unlimited contacts</span><br>
             <span class="pricing-note">$29/mo &middot; $24.17/mo annual ($290/yr)</span>
           </td>
           <td>
             <span class="highlight">5 users</span><br>
-            <span class="highlight" style="font-size:0.78rem;">1,500 contacts</span><br>
+            <span class="highlight" style="font-size:0.78rem;">Unlimited contacts</span><br>
             <span class="pricing-note">$59/mo &middot; $49.17/mo annual ($590/yr)</span>
           </td>
           <td>
             <span class="highlight">10 users</span><br>
-            <span class="highlight" style="font-size:0.78rem;">5,000 contacts</span><br>
+            <span class="highlight" style="font-size:0.78rem;">Unlimited contacts</span><br>
             <span class="pricing-note">$99/mo &middot; $82.50/mo annual ($990/yr)</span>
           </td>
           <td>
@@ -274,7 +266,7 @@
   <div class="summary-grid">
     <div class="summary-card"><div class="val">ALL features</div><div class="desc">Every plan includes every feature — no feature-gating</div></div>
     <div class="summary-card"><div class="val">$29–$179</div><div class="desc">vs $398–$800+/mo for ServiceTitan &amp; HubSpot at comparable size</div></div>
-    <div class="summary-card"><div class="val">500–Unlimited</div><div class="desc">Contact limits scale with your plan — Unlimited on Enterprise</div></div>
+    <div class="summary-card"><div class="val">Unlimited Contacts</div><div class="desc">No contact caps on any plan — grow without limits</div></div>
     <div class="summary-card"><div class="val">Built for Roofers</div><div class="desc">Insurance claims, supplements, HailTrace — not generic CRM</div></div>
   </div>
 </div>

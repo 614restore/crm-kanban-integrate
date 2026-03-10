@@ -19,10 +19,10 @@ const PLANS = [
     name: 'Starter',
     price: 29,
     userLimit: 2,
-    contactLimit: 500,
+    contactLimit: Infinity,
     features: [
       'Up to 2 users',
-      '500 contacts',
+      'Unlimited contacts',
       'Core CRM features',
       'Pipeline board',
       'Invoicing',
@@ -35,10 +35,10 @@ const PLANS = [
     name: 'Pro',
     price: 59,
     userLimit: 5,
-    contactLimit: 1500,
+    contactLimit: Infinity,
     features: [
       'Up to 5 users',
-      '1,500 contacts',
+      'Unlimited contacts',
       'Full pipeline visibility',
       'Insurance claim tracking',
       'Supplement tracking',
@@ -52,10 +52,10 @@ const PLANS = [
     name: 'Business',
     price: 99,
     userLimit: 10,
-    contactLimit: 5000,
+    contactLimit: Infinity,
     features: [
       'Up to 10 users',
-      '5,000 contacts',
+      'Unlimited contacts',
       'AI assistant',
       'Advanced analytics',
       'Material order templates',
@@ -170,7 +170,6 @@ export default function SubscriptionView() {
               const current = PLANS.find((p) => p.key === plan);
               if (!current) return null;
               const userLimitLabel = current.userLimit === Infinity ? '\u221e' : String(current.userLimit);
-              const contactLimitLabel = current.contactLimit === Infinity ? 'Unlimited' : current.contactLimit.toLocaleString();
               const userPct = current.userLimit === Infinity ? 0 : Math.min(100, (userCount / current.userLimit) * 100);
               return (
                 <>
@@ -188,7 +187,7 @@ export default function SubscriptionView() {
                   <div>
                     <div className="flex justify-between text-sm mb-1">
                       <span className="text-gray-600">Contacts</span>
-                      <span className="font-medium text-gray-900">{contactLimitLabel}</span>
+                      <span className="font-medium text-gray-900">Unlimited</span>
                     </div>
                   </div>
                 </>
