@@ -40,7 +40,7 @@ serve(async (req) => {
     }
 
     // Get app URL from environment
-    const APP_URL = Deno.env.get('VITE_APP_URL') || 'https://614restore.github.io/crm-kanban-integrate'
+    const APP_URL = Deno.env.get('VITE_APP_URL') || 'https://614restore.github.io/quotes-customize-manage'
     const inviteUrl = `${APP_URL}?invite=${encodeURIComponent(token)}&company=${encodeURIComponent(companyId)}`
 
     // Send email via Resend

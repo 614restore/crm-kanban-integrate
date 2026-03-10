@@ -49,8 +49,8 @@ class ServiceWorkerManager {
 
     try {
       
-      const registration = await navigator.serviceWorker.register('/crm-kanban-integrate/sw.js', {
-        scope: '/crm-kanban-integrate/'
+      const registration = await navigator.serviceWorker.register('/quotes-customize-manage/sw.js', {
+        scope: '/quotes-customize-manage/'
       });
 
       this.registration = registration;

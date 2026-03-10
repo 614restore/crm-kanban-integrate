@@ -3,9 +3,9 @@
 
 const CACHE_NAME = 'stormcraft-v5';
 const urlsToCache = [
-  '/crm-kanban-integrate/',
-  '/crm-kanban-integrate/index.html',
-  '/crm-kanban-integrate/manifest.json',
+  '/quotes-customize-manage/',
+  '/quotes-customize-manage/index.html',
+  '/quotes-customize-manage/manifest.json',
   // Static assets will be added by Workbox during build
 ];
 
@@ -48,7 +48,7 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
 
   // Only handle requests from our app
-  if (!url.pathname.startsWith('/crm-kanban-integrate/')) {
+  if (!url.pathname.startsWith('/quotes-customize-manage/')) {
     return;
   }
 
@@ -64,13 +64,13 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Never cache HTML - always fetch fresh
-  if (url.pathname.endsWith('.html') || url.pathname === '/crm-kanban-integrate/' || request.mode === 'navigate') {
+  if (url.pathname.endsWith('.html') || url.pathname === '/quotes-customize-manage/' || request.mode === 'navigate') {
     event.respondWith(
       fetch(request, { cache: 'no-store' }).catch(() => {
         // If offline, serve cached HTML
         return caches.match(request).then((cachedPage) => {
           if (cachedPage) return cachedPage;
-          return caches.match('/crm-kanban-integrate/index.html');
+          return caches.match('/quotes-customize-manage/index.html');
         });
       })
     );
@@ -100,7 +100,7 @@ self.addEventListener('fetch', (event) => {
         if (request.mode === 'navigate' || request.destination === 'document') {
           return caches.match(request).then((cachedPage) => {
             if (cachedPage) return cachedPage;
-            return caches.match('/crm-kanban-integrate/index.html');
+            return caches.match('/quotes-customize-manage/index.html');
           });
         }
 
@@ -160,20 +160,20 @@ self.addEventListener('push', (event) => {
   const data = event.data.json();
   const options = {
     body: data.body,
-    icon: '/crm-kanban-integrate/icons/icon-192x192.png',
-    badge: '/crm-kanban-integrate/icons/badge-72x72.png',
+    icon: '/quotes-customize-manage/icons/icon-192x192.png',
+    badge: '/quotes-customize-manage/icons/badge-72x72.png',
     tag: data.tag || 'general',
     renotify: true,
     actions: [
       {
         action: 'view',
         title: 'View',
-        icon: '/crm-kanban-integrate/icons/view-action.png'
+        icon: '/quotes-customize-manage/icons/view-action.png'
       },
       {
         action: 'dismiss',
         title: 'Dismiss',
-        icon: '/crm-kanban-integrate/icons/dismiss-action.png'
+        icon: '/quotes-customize-manage/icons/dismiss-action.png'
       }
     ]
   };
@@ -190,7 +190,7 @@ self.addEventListener('notificationclick', (event) => {
   if (event.action === 'view') {
     // Open the app
     event.waitUntil(
-      clients.openWindow('/crm-kanban-integrate/')
+      clients.openWindow('/quotes-customize-manage/')
     );
   }
 });

@@ -5,9 +5,9 @@ import type { UserConfig } from "vitest/config";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
-  // GitHub Pages needs /crm-kanban-integrate/, Vercel serves from /
-  // Set VITE_BASE_URL=/ in Vercel env vars, leave unset for GitHub Pages builds
-  const base = process.env.VITE_BASE_URL ?? (mode === "production" ? "/crm-kanban-integrate/" : "/");
+<<<<<<< HEAD
+  // GitHub Pages needs the repo subpath; Vercel can set VITE_BASE_URL=/
+  const base = process.env.VITE_BASE_URL ?? (mode === "production" ? "/quotes-customize-manage/" : "/");
 
   return {
     base,
