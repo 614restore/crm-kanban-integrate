@@ -5,7 +5,6 @@ import type { UserConfig } from "vitest/config";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
-<<<<<<< HEAD
   // GitHub Pages needs the repo subpath; Vercel can set VITE_BASE_URL=/
   const base = process.env.VITE_BASE_URL ?? (mode === "production" ? "/quotes-customize-manage/" : "/");
 
