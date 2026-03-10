@@ -11,6 +11,27 @@
     header h1 { font-size: 1.75rem; font-weight: 800; background: linear-gradient(135deg, #3b82f6, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 6px; }
     header p { color: #94a3b8; font-size: 0.9rem; }
     .badge { display: inline-block; background: #1e40af; color: #93c5fd; font-size: 0.68rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.05em; margin-left: 6px; vertical-align: middle; }
+
+    /* ── Pricing cards ── */
+    .pricing-section { margin-bottom: 28px; }
+    .pricing-section h2 { text-align: center; font-size: 0.85rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 14px; }
+    .pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+    .price-card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 16px 12px; text-align: center; position: relative; }
+    .price-card.highlight { background: linear-gradient(135deg, #0f2040, #0f1d3d); border-color: #3b82f6; box-shadow: 0 0 0 2px #3b82f633; }
+    .price-card .crm-name { font-size: 0.8rem; font-weight: 700; color: #e2e8f0; margin-bottom: 10px; }
+    .price-card.highlight .crm-name { color: #60a5fa; }
+    .price-card .price-row { display: flex; flex-direction: column; gap: 4px; }
+    .price-card .plan-pill { display: flex; justify-content: space-between; align-items: center; background: #0f172a; border-radius: 6px; padding: 4px 8px; font-size: 0.72rem; }
+    .price-card.highlight .plan-pill { background: #0a1628; }
+    .plan-pill .plan-name { color: #94a3b8; }
+    .plan-pill .plan-price { font-weight: 700; color: #f87171; }
+    .price-card.highlight .plan-pill .plan-price { color: #34d399; }
+    .price-card .you-tag { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); background: #3b82f6; color: #fff; font-size: 0.62rem; font-weight: 800; padding: 2px 10px; border-radius: 999px; white-space: nowrap; text-transform: uppercase; letter-spacing: 0.05em; }
+    .price-card .savings-note { margin-top: 10px; font-size: 0.68rem; color: #34d399; font-weight: 600; }
+    .price-card .per-user-note { margin-top: 6px; font-size: 0.68rem; color: #f87171; font-weight: 600; }
+    .vs-divider { text-align: center; color: #334155; font-size: 0.75rem; font-weight: 700; margin: 4px 0; letter-spacing: 0.1em; }
+
+    /* ── Feature table ── */
     .controls { display: flex; justify-content: center; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
     .ctrl-btn { padding: 7px 18px; background: #1e293b; color: #94a3b8; border: 1px solid #334155; border-radius: 8px; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.15s; }
     .ctrl-btn:hover { background: #334155; color: #e2e8f0; }
@@ -43,46 +64,125 @@
     .summary-card .desc { color: #94a3b8; font-size: 0.78rem; margin-top: 4px; }
     footer { text-align: center; margin-top: 28px; color: #475569; font-size: 0.75rem; }
     footer span { color: #3b82f6; }
-    @media (max-width: 600px) { header h1 { font-size: 1.3rem; } .summary { padding: 16px; } }
+    @media (max-width: 600px) { header h1 { font-size: 1.3rem; } .summary { padding: 16px; } .pricing-grid { grid-template-columns: repeat(2, 1fr); } }
   </style>
 </head>
 <body>
 
 <header>
   <h1>TrussCTR vs The Competition <span class="badge">2026</span></h1>
-  <p>Built exclusively for roofing &amp; restoration contractors — how do we stack up?</p>
+  <p>Built exclusively for roofing &amp; restoration contractors &mdash; how do we stack up?</p>
 </header>
 
+<!-- ══ PRICING CARDS ══ -->
+<div class="pricing-section">
+  <h2>&#128176; Real-World Monthly Cost for a 5-Person Team</h2>
+  <div class="pricing-grid">
+
+    <!-- TrussCTR -->
+    <div class="price-card highlight">
+      <div class="you-tag">&#9733; Best Value</div>
+      <div class="crm-name">TrussCTR</div>
+      <div class="price-row">
+        <div class="plan-pill"><span class="plan-name">Starter</span><span class="plan-price">$29/mo</span></div>
+        <div class="plan-pill"><span class="plan-name">Pro</span><span class="plan-price">$59/mo</span></div>
+        <div class="plan-pill"><span class="plan-name">Business</span><span class="plan-price">$99/mo</span></div>
+        <div class="plan-pill"><span class="plan-name">Enterprise</span><span class="plan-price">$179/mo</span></div>
+      </div>
+      <div class="savings-note">Flat rate &mdash; all users included</div>
+    </div>
+
+    <!-- JobNimbus -->
+    <div class="price-card">
+      <div class="crm-name">JobNimbus</div>
+      <div class="price-row">
+        <div class="plan-pill"><span class="plan-name">Starter (1)</span><span class="plan-price">$25/mo</span></div>
+        <div class="plan-pill"><span class="plan-name">Pro (3)</span><span class="plan-price">$85/mo</span></div>
+        <div class="plan-pill"><span class="plan-name">5 users</span><span class="plan-price">~$135/mo</span></div>
+        <div class="plan-pill"><span class="plan-name">Unlimited</span><span class="plan-price">$350+/mo</span></div>
+      </div>
+      <div class="per-user-note">+$25&ndash;$35 per extra user</div>
+    </div>
+
+    <!-- AccuLynx -->
+    <div class="price-card">
+      <div class="crm-name">AccuLynx</div>
+      <div class="price-row">
+        <div class="plan-pill"><span class="plan-name">Solo (1)</span><span class="plan-price">~$89/mo</span></div>
+        <div class="plan-pill"><span class="plan-name">5 users</span><span class="plan-price">~$199/mo</span></div>
+        <div class="plan-pill"><span class="plan-name">15 users</span><span class="plan-price">~$399/mo</span></div>
+        <div class="plan-pill"><span class="plan-name">Enterprise</span><span class="plan-price">Custom</span></div>
+      </div>
+      <div class="per-user-note">+~$30 per extra user</div>
+    </div>
+
+    <!-- Roofr -->
+    <div class="price-card">
+      <div class="crm-name">Roofr</div>
+      <div class="price-row">
+        <div class="plan-pill"><span class="plan-name">Starter (1)</span><span class="plan-price">$89/mo</span></div>
+        <div class="plan-pill"><span class="plan-name">Pro (3)</span><span class="plan-price">$159/mo</span></div>
+        <div class="plan-pill"><span class="plan-name">Business (10)</span><span class="plan-price">$299/mo</span></div>
+        <div class="plan-pill"><span class="plan-name">Enterprise</span><span class="plan-price">Custom</span></div>
+      </div>
+      <div class="per-user-note">+$30&ndash;$50 per extra user</div>
+    </div>
+
+    <!-- Jobber -->
+    <div class="price-card">
+      <div class="crm-name">Jobber</div>
+      <div class="price-row">
+        <div class="plan-pill"><span class="plan-name">Core (1)</span><span class="plan-price">$49/mo</span></div>
+        <div class="plan-pill"><span class="plan-name">Connect (5)</span><span class="plan-price">$129/mo</span></div>
+        <div class="plan-pill"><span class="plan-name">Grow (unlimited)</span><span class="plan-price">$249/mo</span></div>
+        <div class="plan-pill"><span class="plan-name">Enterprise</span><span class="plan-price">Custom</span></div>
+      </div>
+      <div class="per-user-note">+$29 per extra user (Core)</div>
+    </div>
+
+    <!-- ServiceTitan -->
+    <div class="price-card">
+      <div class="crm-name">ServiceTitan</div>
+      <div class="price-row">
+        <div class="plan-pill"><span class="plan-name">Starter</span><span class="plan-price">N/A</span></div>
+        <div class="plan-pill"><span class="plan-name">Essentials</span><span class="plan-price">~$398/mo</span></div>
+        <div class="plan-pill"><span class="plan-name">The Works</span><span class="plan-price">~$598/mo</span></div>
+        <div class="plan-pill"><span class="plan-name">Enterprise</span><span class="plan-price">$1,000+/mo</span></div>
+      </div>
+      <div class="per-user-note">Min $398/mo &mdash; no starter plan</div>
+    </div>
+
+  </div>
+</div>
+<!-- ══ END PRICING CARDS ══ -->
+
 <div class="controls">
-  <button class="ctrl-btn" onclick="toggleAll(true)">&#9660; Expand All</button>
+  <button class="ctrl-btn" onclick="toggleAll(true)">&#9660; Expand All Features</button>
   <button class="ctrl-btn" onclick="toggleAll(false)">&#9650; Collapse All</button>
 </div>
 
 <script>
-  // helper
   const Y = '<span class="yes">&#10004;</span>';
   const N = '<span class="no">&#10008;</span>';
   const P = (t) => `<span class="part">${t}</span>`;
-
   const COLS = ['TrussCTR', 'JobNimbus', 'AccuLynx', 'Roofr', 'Jobber', 'ServiceTitan'];
-
   const SECTIONS = [
     {
       id: 'pricing', label: '&#128176; Pricing &amp; Access', open: true,
       rows: [
-        ['Starting Monthly Price',            '$29–$179/mo', P('$25+/user'), P('$85+/user'), P('$89+/mo'), P('$49+/user'), P('$500+/mo')],
-        ['No Per-User Fee (flat rate)',        Y, N, N, N, N, N],
-        ['Free Trial / Demo Available',        Y, Y, P('Demo only'), Y, Y, P('Demo only')],
-        ['Built for Small Roofing Teams',      Y, Y, P('Mid-large'), Y, P('General'), N],
+        ['Starting Monthly Price',         '$29&ndash;$179/mo', P('$25+/user'), P('$85+/user'), P('$89+/mo'), P('$49+/user'), P('$500+/mo')],
+        ['No Per-User Fee (flat rate)',     Y, N, N, N, N, N],
+        ['Free Trial / Demo Available',    Y, Y, P('Demo only'), Y, Y, P('Demo only')],
+        ['Built for Small Roofing Teams',  Y, Y, P('Mid-large'), Y, P('General'), N],
       ]
     },
     {
       id: 'crm', label: '&#128101; CRM &amp; Contact Management', open: true,
       rows: [
-        ['Full CRM (Contacts, Leads, Customers)',  Y, Y, Y, P('Basic'), Y, Y],
-        ['Kanban Pipeline Board',                  Y, Y, Y, P('Limited'), Y, Y],
-        ['Job Status / Lead Progression Tracking', Y, Y, Y, P('Basic'), Y, Y],
-        ['Customer Detail Page w/ Full History',   Y, Y, Y, P('Limited'), Y, Y],
+        ['Full CRM (Contacts, Leads, Customers)',   Y, Y, Y, P('Basic'), Y, Y],
+        ['Kanban Pipeline Board',                   Y, Y, Y, P('Limited'), Y, Y],
+        ['Job Status / Lead Progression Tracking',  Y, Y, Y, P('Basic'), Y, Y],
+        ['Customer Detail Page w/ Full History',    Y, Y, Y, P('Limited'), Y, Y],
       ]
     },
     {
@@ -97,13 +197,13 @@
     {
       id: 'docs', label: '&#128221; Documents &amp; Digital Signatures', open: false,
       rows: [
-        ['Proposal Template (auto-fill)',             Y, Y, Y, Y, P('Basic'), Y],
-        ['Contract Template w/ Signature Blocks',     Y, Y, Y, Y, P('Basic'), Y],
-        ['3-Day Right to Cancel Notice (FTC)',        Y, N, P('Manual'), N, N, N],
-        ['Digital Signature Capture (on-screen)',     Y, Y, Y, Y, P('Add-on'), Y],
-        ['Per-Customer Document Editing',             Y, P('Limited'), P('Limited'), P('Limited'), N, Y],
-        ['Document Duplication &amp; Delete',         Y, P('Basic'), P('Basic'), P('Basic'), N, Y],
-        ['Document Upload (work orders, materials)',  Y, Y, Y, P('Basic'), Y, Y],
+        ['Proposal Template (auto-fill)',            Y, Y, Y, Y, P('Basic'), Y],
+        ['Contract Template w/ Signature Blocks',    Y, Y, Y, Y, P('Basic'), Y],
+        ['3-Day Right to Cancel Notice (FTC)',       Y, N, P('Manual'), N, N, N],
+        ['Digital Signature Capture (on-screen)',    Y, Y, Y, Y, P('Add-on'), Y],
+        ['Per-Customer Document Editing',            Y, P('Limited'), P('Limited'), P('Limited'), N, Y],
+        ['Document Duplication &amp; Delete',        Y, P('Basic'), P('Basic'), P('Basic'), N, Y],
+        ['Document Upload (work orders, materials)', Y, Y, Y, P('Basic'), Y, Y],
       ]
     },
     {
@@ -117,12 +217,12 @@
     {
       id: 'financials', label: '&#128200; Estimates, Invoices &amp; Financials', open: false,
       rows: [
-        ['Estimate Builder',                        Y, Y, Y, Y, Y, Y],
-        ['Invoice Generation',                      Y, Y, Y, Y, Y, Y],
-        ['Financial Dashboard',                     Y, P('Basic'), Y, P('Basic'), Y, Y],
-        ['Expense Tracking',                        Y, P('Limited'), P('Limited'), N, Y, Y],
-        ['QuickBooks Integration',                  Y, Y, Y, P('Limited'), Y, Y],
-        ['Material Orders w/ Pre-Built Roof Templates', Y, P('Basic'), Y, P('Limited'), N, P('Limited')],
+        ['Estimate Builder',                             Y, Y, Y, Y, Y, Y],
+        ['Invoice Generation',                           Y, Y, Y, Y, Y, Y],
+        ['Financial Dashboard',                          Y, P('Basic'), Y, P('Basic'), Y, Y],
+        ['Expense Tracking',                             Y, P('Limited'), P('Limited'), N, Y, Y],
+        ['QuickBooks Integration',                       Y, Y, Y, P('Limited'), Y, Y],
+        ['Material Orders w/ Pre-Built Roof Templates',  Y, P('Basic'), Y, P('Limited'), N, P('Limited')],
       ]
     },
     {
@@ -137,23 +237,23 @@
     {
       id: 'comms', label: '&#128172; Communication &amp; Automation', open: false,
       rows: [
-        ['Communication Hub (SMS, Email, Notes)',  Y, Y, Y, P('Email only'), Y, Y],
-        ['Automated Follow-Up / Workflows',        Y, Y, Y, P('Limited'), Y, Y],
-        ['Google Review Request (1-click)',         Y, P('Add-on'), N, N, P('Add-on'), N],
-        ['Customer Satisfaction Survey',           Y, P('Add-on'), N, N, P('Add-on'), N],
+        ['Communication Hub (SMS, Email, Notes)', Y, Y, Y, P('Email only'), Y, Y],
+        ['Automated Follow-Up / Workflows',       Y, Y, Y, P('Limited'), Y, Y],
+        ['Google Review Request (1-click)',        Y, P('Add-on'), N, N, P('Add-on'), N],
+        ['Customer Satisfaction Survey',          Y, P('Add-on'), N, N, P('Add-on'), N],
       ]
     },
     {
       id: 'tech', label: '&#128295; Technology &amp; Integrations', open: false,
       rows: [
-        ['AI Assistant (built-in)',         Y, P('Basic'), N, N, N, P('Beta')],
-        ['Mobile Friendly (Responsive)',    Y, Y, Y, Y, Y, Y],
-        ['Photo Capture (job site photos)', Y, Y, Y, Y, Y, Y],
-        ['Equipment / Asset Tracking',      Y, P('Limited'), P('Limited'), N, Y, Y],
-        ['Supplier Management',             Y, P('Basic'), P('Basic'), N, P('Basic'), Y],
-        ['API Access &amp; Webhooks',       Y, P('Limited'), P('Limited'), N, P('Limited'), Y],
+        ['AI Assistant (built-in)',           Y, P('Basic'), N, N, N, P('Beta')],
+        ['Mobile Friendly (Responsive)',      Y, Y, Y, Y, Y, Y],
+        ['Photo Capture (job site photos)',   Y, Y, Y, Y, Y, Y],
+        ['Equipment / Asset Tracking',        Y, P('Limited'), P('Limited'), N, Y, Y],
+        ['Supplier Management',               Y, P('Basic'), P('Basic'), N, P('Basic'), Y],
+        ['API Access &amp; Webhooks',         Y, P('Limited'), P('Limited'), N, P('Limited'), Y],
         ['Multi-Company / White Label Ready', Y, N, N, N, N, P('Enterprise')],
-        ['Data Security (Row-Level)',        Y, P('Basic'), P('Basic'), P('Basic'), P('Basic'), Y],
+        ['Data Security (Row-Level)',         Y, P('Basic'), P('Basic'), P('Basic'), P('Basic'), Y],
       ]
     },
   ];
@@ -164,13 +264,11 @@
       const div = document.createElement('div');
       div.className = 'section' + (sec.open ? ' open' : '');
       div.id = 'sec-' + sec.id;
-
       const headerRow = COLS.map((c, i) =>
         i === 0
           ? `<th class="you" style="text-align:left;">TrussCTR <span class="badge">You</span></th>`
           : `<th>${c}</th>`
       ).join('');
-
       const bodyRows = sec.rows.map(row => {
         const feat = row[0];
         const cells = row.slice(1).map((val, i) =>
@@ -178,11 +276,9 @@
         ).join('');
         return `<tr><td>${feat}</td>${cells}</tr>`;
       }).join('');
-
       div.innerHTML = `
         <button class="section-toggle" onclick="toggle('sec-${sec.id}')">
-          <span>${sec.label}</span>
-          <span class="arrow">&#9660;</span>
+          <span>${sec.label}</span><span class="arrow">&#9660;</span>
         </button>
         <div class="section-body">
           <table>
@@ -193,12 +289,8 @@
       container.appendChild(div);
     });
   }
-
   document.addEventListener('DOMContentLoaded', buildSections);
-
-  function toggle(id) {
-    document.getElementById(id).classList.toggle('open');
-  }
+  function toggle(id) { document.getElementById(id).classList.toggle('open'); }
   function toggleAll(open) {
     document.querySelectorAll('.section').forEach(s =>
       open ? s.classList.add('open') : s.classList.remove('open')
@@ -211,10 +303,10 @@
 <div class="summary">
   <h2>&#128161; Why TrussCTR Wins</h2>
   <div class="summary-grid">
-    <div class="summary-card"><div class="val">Flat Rate</div><div class="desc">No per-user fees ever — competitors charge $25–$79 per seat</div></div>
-    <div class="summary-card"><div class="val">$29–$179</div><div class="desc">vs $398–$800+/mo for ServiceTitan at comparable team size</div></div>
-    <div class="summary-card"><div class="val">Insurance</div><div class="desc">Built-in claim &amp; supplement tracking — competitors charge add-ons or don't offer it</div></div>
-    <div class="summary-card"><div class="val">All Features</div><div class="desc">Every plan includes every feature — no feature-gating by tier</div></div>
+    <div class="summary-card"><div class="val">Flat Rate</div><div class="desc">No per-user fees ever &mdash; competitors charge $25&ndash;$79 per seat</div></div>
+    <div class="summary-card"><div class="val">$29&ndash;$179</div><div class="desc">vs $398&ndash;$800+/mo for ServiceTitan at comparable team size</div></div>
+    <div class="summary-card"><div class="val">Insurance</div><div class="desc">Built-in claim &amp; supplement tracking &mdash; competitors charge add-ons or don&rsquo;t offer it</div></div>
+    <div class="summary-card"><div class="val">All Features</div><div class="desc">Every plan includes every feature &mdash; no feature-gating by tier</div></div>
   </div>
 </div>
 
