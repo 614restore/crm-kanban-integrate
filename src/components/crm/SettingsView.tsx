@@ -42,12 +42,13 @@ import {
   Zap,
   Target,
   DollarSign,
+  Receipt,
 } from 'lucide-react';
 import { supabase, isDemoMode } from '@/lib/supabase';
 import { ensureDefaultLeadSources } from '@/lib/setupCompany';
 import ImageCropDialog from '@/components/ui/ImageCropDialog';
 
-type SettingsTab = 'company' | 'profile' | 'integrations' | 'ai-assistant' | 'notifications' | 'security' | 'billing' | 'api';
+type SettingsTab = 'company' | 'profile' | 'integrations' | 'ai-assistant' | 'notifications' | 'security' | 'billing' | 'customer-billing' | 'api';
 
 interface CompanyFormData {
   name: string;
@@ -1234,7 +1235,8 @@ export default function SettingsView() {
     { id: 'ai-assistant', label: 'AI Assistant', icon: <Zap size={18} /> },
     { id: 'notifications', label: 'Notifications', icon: <Bell size={18} /> },
     { id: 'security', label: 'Security', icon: <Shield size={18} /> },
-    { id: 'billing', label: 'Billing', icon: <CreditCard size={18} /> },
+    { id: 'billing', label: 'My Plan', icon: <CreditCard size={18} /> },
+    { id: 'customer-billing', label: 'Customer Billing', icon: <Receipt size={18} /> },
     { id: 'api', label: 'API Access', icon: <Key size={18} /> },
   ];
 
@@ -2091,29 +2093,42 @@ export default function SettingsView() {
           </div>
         )}
 
+        {/* MY PLAN TAB — app subscription only, deep-linked from paywall via tab: 'billing' */}
         {activeTab === 'billing' && (
           <div className="max-w-3xl space-y-6">
             <div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">Billing & Payments</h3>
-              <p className="text-sm text-gray-500">Manage your subscription and payment settings.</p>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">My Plan</h3>
+              <p className="text-sm text-gray-500">Manage your TrussCTR subscription and plan details.</p>
             </div>
             <SubscriptionView />
+          </div>
+        )}
+
+        {/* CUSTOMER BILLING TAB — payment gateway, invoicing, and tax settings */}
+        {activeTab === 'customer-billing' && (
+          <div className="max-w-3xl space-y-6">
+            <div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Customer Billing</h3>
+              <p className="text-sm text-gray-500">Configure how you collect payments from your customers — payment gateway, invoice numbering, and tax settings.</p>
+            </div>
             <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
               <h4 className="text-base font-semibold text-gray-900">Payment Gateway</h4>
+              <p className="text-sm text-gray-500">Select the payment processor your customers will use to pay invoices and estimates.</p>
               <select className="w-full px-3 py-2 border border-gray-300 rounded-lg"><option>Stripe</option><option>Square</option><option>PayPal</option></select>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
               <h4 className="text-base font-semibold text-gray-900">Invoice Settings</h4>
+              <p className="text-sm text-gray-500">Customize your invoice numbering format.</p>
               <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-medium mb-2">Invoice Prefix</label><input type="text" defaultValue="INV-" className="w-full px-3 py-2 border rounded-lg"/></div><div><label className="block text-sm font-medium mb-2">Starting #</label><input type="number" defaultValue="1000" className="w-full px-3 py-2 border rounded-lg"/></div></div>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
               <h4 className="text-base font-semibold text-gray-900">Tax Rate</h4>
+              <p className="text-sm text-gray-500">Default tax rate applied to customer invoices and estimates.</p>
               <input type="number" step="0.01" defaultValue="7.5" className="w-full px-3 py-2 border rounded-lg" placeholder="Tax %"/>
             </div>
           </div>
         )}
 
-        {/* Add other tabs here if needed - api */}
         {activeTab === 'api' && (
           <div className="max-w-3xl space-y-6">
             <div>
