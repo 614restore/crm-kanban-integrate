@@ -19,10 +19,10 @@ const PLANS = [
     name: 'Starter',
     price: 29,
     userLimit: 2,
-    contactLimit: Infinity,
+    contactLimit: 500,
     features: [
       'Up to 2 users',
-      'Unlimited contacts',
+      '500 contacts',
       'Core CRM features',
       'Pipeline board',
       'Invoicing',
@@ -35,10 +35,10 @@ const PLANS = [
     name: 'Pro',
     price: 59,
     userLimit: 5,
-    contactLimit: Infinity,
+    contactLimit: 1500,
     features: [
       'Up to 5 users',
-      'Unlimited contacts',
+      '1,500 contacts',
       'Full pipeline visibility',
       'Insurance claim tracking',
       'Supplement tracking',
@@ -52,10 +52,10 @@ const PLANS = [
     name: 'Business',
     price: 99,
     userLimit: 10,
-    contactLimit: Infinity,
+    contactLimit: 5000,
     features: [
       'Up to 10 users',
-      'Unlimited contacts',
+      '5,000 contacts',
       'AI assistant',
       'Advanced analytics',
       'Material order templates',
@@ -163,13 +163,14 @@ export default function SubscriptionView() {
           </button>
         </div>
 
-        {/* Usage stats — users only, contacts are unlimited */}
+        {/* Usage stats */}
         {plan !== 'trial' && (
           <div className="mt-5 grid grid-cols-2 gap-4">
             {(() => {
               const current = PLANS.find((p) => p.key === plan);
               if (!current) return null;
-              const userLimitLabel = current.userLimit === Infinity ? '∞' : String(current.userLimit);
+              const userLimitLabel = current.userLimit === Infinity ? '\u221e' : String(current.userLimit);
+              const contactLimitLabel = current.contactLimit === Infinity ? 'Unlimited' : current.contactLimit.toLocaleString();
               const userPct = current.userLimit === Infinity ? 0 : Math.min(100, (userCount / current.userLimit) * 100);
               return (
                 <>
@@ -187,7 +188,7 @@ export default function SubscriptionView() {
                   <div>
                     <div className="flex justify-between text-sm mb-1">
                       <span className="text-gray-600">Contacts</span>
-                      <span className="font-medium text-gray-900">Unlimited</span>
+                      <span className="font-medium text-gray-900">{contactLimitLabel}</span>
                     </div>
                   </div>
                 </>
