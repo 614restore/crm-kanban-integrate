@@ -14,6 +14,14 @@ export default defineConfig(({ mode }) => {
     server: {
       host: "::",
       port: 8080,
+      proxy: {
+        // Forward /api/* to the Vercel dev server (run `vercel dev` on port 3000)
+        '/api': {
+          target: 'http://localhost:3000',
+          changeOrigin: true,
+          secure: false,
+        },
+      },
     },
     plugins: [react()].filter(Boolean),
     resolve: {
@@ -30,7 +38,6 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         output: {
           manualChunks: {
-            // Core vendor libraries
             'vendor-react': ['react', 'react-dom', 'react-router-dom'],
             'vendor-ui': [
               '@radix-ui/react-dialog',
@@ -56,15 +63,12 @@ export default defineConfig(({ mode }) => {
               '@hookform/resolvers',
               'zod'
             ],
-            // Supabase in separate chunk
             'vendor-supabase': ['@supabase/supabase-js'],
-            // CRM core functionality
             'crm-core': [
               './src/lib/crmStore.ts',
               './src/lib/crmData.ts',
               './src/lib/database.ts'
             ],
-            // Integration modules
             'integrations': [
               './src/lib/integrations/manager.ts',
               './src/lib/integrations/stripe.ts',
@@ -77,9 +81,7 @@ export default defineConfig(({ mode }) => {
           }
         }
       },
-      // Optimize chunk size
       chunkSizeWarningLimit: 500,
-      // Enable minification
       minify: 'terser',
       terserOptions: {
         compress: {
