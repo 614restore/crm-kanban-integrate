@@ -7,35 +7,59 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; padding: 40px 20px; }
-    header { text-align: center; margin-bottom: 40px; }
+    header { text-align: center; margin-bottom: 32px; }
     header h1 { font-size: 2rem; font-weight: 800; background: linear-gradient(135deg, #3b82f6, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 8px; }
     header p { color: #94a3b8; font-size: 0.95rem; }
+
     .badge { display: inline-block; background: #1e40af; color: #93c5fd; font-size: 0.7rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.05em; margin-left: 8px; vertical-align: middle; }
-    .table-wrap { overflow-x: auto; border-radius: 16px; border: 1px solid #1e293b; }
-    table { width: 100%; border-collapse: collapse; min-width: 900px; }
-    thead tr { background: #1e293b; }
-    thead th { padding: 14px 16px; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #94a3b8; text-align: center; border-bottom: 1px solid #334155; }
+
+    /* Controls */
+    .controls { display: flex; justify-content: center; gap: 10px; margin-bottom: 24px; flex-wrap: wrap; }
+    .ctrl-btn { padding: 8px 20px; background: #1e293b; color: #94a3b8; border: 1px solid #334155; border-radius: 8px; font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+    .ctrl-btn:hover { background: #334155; color: #e2e8f0; }
+
+    /* Accordion section */
+    .section { border: 1px solid #1e293b; border-radius: 14px; margin-bottom: 12px; overflow: hidden; }
+    .section-toggle { width: 100%; background: #1e293b; border: none; color: #e2e8f0; padding: 14px 20px; font-size: 0.88rem; font-weight: 700; text-align: left; cursor: pointer; display: flex; align-items: center; justify-content: space-between; letter-spacing: 0.03em; transition: background 0.15s; }
+    .section-toggle:hover { background: #273549; }
+    .section-toggle .arrow { transition: transform 0.2s; font-size: 0.8rem; color: #64748b; }
+    .section.open .section-toggle .arrow { transform: rotate(180deg); }
+    .section-body { display: none; overflow-x: auto; }
+    .section.open .section-body { display: block; }
+
+    /* Table */
+    table { width: 100%; border-collapse: collapse; min-width: 860px; }
+    thead tr { background: #0f172a; }
+    thead th { padding: 11px 14px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #64748b; text-align: center; border-bottom: 1px solid #1e293b; }
     thead th:first-child { text-align: left; }
     tbody tr { border-bottom: 1px solid #1e293b; transition: background 0.15s; }
     tbody tr:last-child { border-bottom: none; }
     tbody tr:hover { background: #1e293b80; }
-    tbody td { padding: 13px 16px; font-size: 0.88rem; text-align: center; color: #cbd5e1; vertical-align: middle; }
+    tbody td { padding: 12px 14px; font-size: 0.85rem; text-align: center; color: #cbd5e1; vertical-align: middle; }
     tbody td:first-child { text-align: left; font-weight: 600; color: #e2e8f0; }
+
     .crm-name { display: flex; align-items: center; gap: 10px; }
-    .crm-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-    .trussctr { background: linear-gradient(135deg, #1e3a5f, #1e2d5f); }
-    .trussctr td:first-child { color: #60a5fa; }
+    .crm-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+    .plan-label { font-size: 0.73rem; color: #64748b; display: block; font-weight: 400; margin-top: 2px; }
+    .pricing-note { color: #64748b; font-size: 0.76rem; }
+
+    .trussctr-row { background: linear-gradient(135deg, #0f2040, #0f1d3d); }
+    .trussctr-row td:first-child { color: #60a5fa; }
     .highlight { color: #34d399 !important; font-weight: 700; }
     .limited { color: #f87171; }
     .neutral { color: #94a3b8; }
-    .section-header { background: #0f172a !important; }
-    .section-header td { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #475569; padding: 10px 16px 6px; }
-    .plan-label { font-size: 0.75rem; color: #64748b; display: block; font-weight: 400; margin-top: 2px; }
-    .pricing-note { color: #64748b; font-size: 0.78rem; }
-    .pricing-main { font-weight: 700; color: #e2e8f0; }
+
+    /* Summary */
+    .summary { background: linear-gradient(135deg,#1e3a5f22,#1e1b4b22); border: 1px solid #1e40af44; border-radius: 16px; padding: 28px 32px; max-width: 940px; margin: 24px auto 0; }
+    .summary h2 { color: #60a5fa; font-size: 1.05rem; margin-bottom: 16px; }
+    .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
+    .summary-card { background: #1e293b; border-radius: 10px; padding: 16px; }
+    .summary-card .val { color: #34d399; font-size: 1.4rem; font-weight: 800; }
+    .summary-card .desc { color: #94a3b8; font-size: 0.8rem; margin-top: 4px; }
+
     footer { text-align: center; margin-top: 32px; color: #475569; font-size: 0.78rem; }
     footer span { color: #3b82f6; }
-    @media (max-width: 600px) { header h1 { font-size: 1.4rem; } }
+    @media (max-width: 600px) { header h1 { font-size: 1.4rem; } .summary { padding: 20px 16px; } }
   </style>
 </head>
 <body>
@@ -45,235 +69,229 @@
   <p>How many users do other CRMs allow per plan — and what do they charge?</p>
 </header>
 
-<div class="table-wrap">
-  <table>
-    <thead>
-      <tr>
-        <th style="text-align:left;">CRM</th>
-        <th>Starter Plan</th>
-        <th>Pro / Growth Plan</th>
-        <th>Business Plan</th>
-        <th>Enterprise</th>
-        <th>Extra User Cost</th>
-        <th>Free Trial</th>
-      </tr>
-    </thead>
-    <tbody>
-
-      <!-- TRUSSCTR -->
-      <tr class="trussctr">
-        <td>
-          <div class="crm-name">
-            <div class="crm-dot" style="background:#3b82f6;"></div>
-            <div>
-              TrussCTR <span class="badge">You</span>
-              <span class="plan-label">Roofing / Contractor CRM</span>
-            </div>
-          </div>
-        </td>
-        <td>
-          <span class="highlight">2 users</span><br>
-          <span class="highlight" style="font-size:0.82rem;">Unlimited contacts</span><br>
-          <span class="pricing-note">$29/mo &nbsp;·&nbsp; $24.17/mo annual</span>
-        </td>
-        <td>
-          <span class="highlight">5 users</span><br>
-          <span class="highlight" style="font-size:0.82rem;">Unlimited contacts</span><br>
-          <span class="pricing-note">$59/mo &nbsp;·&nbsp; $49.17/mo annual</span>
-        </td>
-        <td>
-          <span class="highlight">10 users</span><br>
-          <span class="highlight" style="font-size:0.82rem;">Unlimited contacts</span><br>
-          <span class="pricing-note">$99/mo &nbsp;·&nbsp; $82.50/mo annual</span>
-        </td>
-        <td>
-          <span class="highlight">Unlimited users</span><br>
-          <span class="highlight" style="font-size:0.82rem;">Unlimited contacts</span><br>
-          <span class="pricing-note">$179/mo &nbsp;·&nbsp; $149.17/mo annual</span>
-        </td>
-        <td><span class="highlight">Included in plan</span></td>
-        <td><span class="highlight">14 days</span></td>
-      </tr>
-
-      <!-- SEPARATOR -->
-      <tr class="section-header"><td colspan="7">— Competitors —</td></tr>
-
-      <!-- JobNimbus -->
-      <tr>
-        <td>
-          <div class="crm-name">
-            <div class="crm-dot" style="background:#f59e0b;"></div>
-            <div>JobNimbus<span class="plan-label">Roofing CRM</span></div>
-          </div>
-        </td>
-        <td><span class="limited">1 user</span><br><span class="pricing-note">$25/mo</span></td>
-        <td>3 users<br><span class="pricing-note">$85/mo</span></td>
-        <td>Unlimited<br><span class="pricing-note">$350+/mo</span></td>
-        <td class="neutral">Custom</td>
-        <td class="limited">$25–$35/user</td>
-        <td>14 days</td>
-      </tr>
-
-      <!-- AccuLynx -->
-      <tr>
-        <td>
-          <div class="crm-name">
-            <div class="crm-dot" style="background:#10b981;"></div>
-            <div>AccuLynx<span class="plan-label">Roofing CRM</span></div>
-          </div>
-        </td>
-        <td><span class="limited">1 user</span><br><span class="pricing-note">~$89/mo</span></td>
-        <td>5 users<br><span class="pricing-note">~$199/mo</span></td>
-        <td>15 users<br><span class="pricing-note">~$399/mo</span></td>
-        <td class="neutral">Custom</td>
-        <td class="limited">~$30/user</td>
-        <td class="neutral">Demo only</td>
-      </tr>
-
-      <!-- Roofr -->
-      <tr>
-        <td>
-          <div class="crm-name">
-            <div class="crm-dot" style="background:#0891b2;"></div>
-            <div>Roofr<span class="plan-label">Roofing CRM</span></div>
-          </div>
-        </td>
-        <td><span class="limited">1 user</span><br><span class="pricing-note">$89/mo</span></td>
-        <td>3 users<br><span class="pricing-note">$159/mo</span></td>
-        <td>10 users<br><span class="pricing-note">$299/mo</span></td>
-        <td class="neutral">Custom<br><span class="pricing-note">Contact sales</span></td>
-        <td class="limited">~$30–$50/user add-on</td>
-        <td>14 days</td>
-      </tr>
-
-      <!-- ServiceTitan -->
-      <tr>
-        <td>
-          <div class="crm-name">
-            <div class="crm-dot" style="background:#8b5cf6;"></div>
-            <div>ServiceTitan<span class="plan-label">Field Service CRM</span></div>
-          </div>
-        </td>
-        <td class="limited">No starter<br><span class="pricing-note">Min ~$398/mo</span></td>
-        <td>5 users<br><span class="pricing-note">~$398/mo</span></td>
-        <td>15 users<br><span class="pricing-note">~$598/mo</span></td>
-        <td class="neutral">Custom<br><span class="pricing-note">$1,000+/mo</span></td>
-        <td class="limited">~$19–$49/user</td>
-        <td class="neutral">Demo only</td>
-      </tr>
-
-      <!-- HubSpot -->
-      <tr>
-        <td>
-          <div class="crm-name">
-            <div class="crm-dot" style="background:#f97316;"></div>
-            <div>HubSpot CRM<span class="plan-label">General CRM</span></div>
-          </div>
-        </td>
-        <td>2 users<br><span class="pricing-note">Free tier</span></td>
-        <td>5 users<br><span class="pricing-note">$90/mo</span></td>
-        <td>10 users<br><span class="pricing-note">$800/mo</span></td>
-        <td class="neutral">Custom<br><span class="pricing-note">$3,600+/mo</span></td>
-        <td class="limited">$45–$75/user</td>
-        <td>Free (limited)</td>
-      </tr>
-
-      <!-- Salesforce -->
-      <tr>
-        <td>
-          <div class="crm-name">
-            <div class="crm-dot" style="background:#0ea5e9;"></div>
-            <div>Salesforce<span class="plan-label">Enterprise CRM</span></div>
-          </div>
-        </td>
-        <td><span class="limited">1 user</span><br><span class="pricing-note">$25/user/mo</span></td>
-        <td>Per-user pricing<br><span class="pricing-note">$80/user/mo</span></td>
-        <td>Per-user pricing<br><span class="pricing-note">$165/user/mo</span></td>
-        <td>Per-user pricing<br><span class="pricing-note">$330/user/mo</span></td>
-        <td class="limited">$25–$330/user</td>
-        <td>30 days</td>
-      </tr>
-
-      <!-- Monday CRM -->
-      <tr>
-        <td>
-          <div class="crm-name">
-            <div class="crm-dot" style="background:#ec4899;"></div>
-            <div>Monday.com CRM<span class="plan-label">General CRM</span></div>
-          </div>
-        </td>
-        <td><span class="limited">3 users min</span><br><span class="pricing-note">$36/mo</span></td>
-        <td>Per-seat pricing<br><span class="pricing-note">$54/mo (3 users)</span></td>
-        <td>Per-seat pricing<br><span class="pricing-note">$72/mo (3 users)</span></td>
-        <td>Per-seat pricing<br><span class="pricing-note">Custom</span></td>
-        <td class="limited">$12–$24/seat</td>
-        <td>14 days</td>
-      </tr>
-
-      <!-- Pipedrive -->
-      <tr>
-        <td>
-          <div class="crm-name">
-            <div class="crm-dot" style="background:#14b8a6;"></div>
-            <div>Pipedrive<span class="plan-label">Sales CRM</span></div>
-          </div>
-        </td>
-        <td>Per-user pricing<br><span class="pricing-note">$14/user/mo</span></td>
-        <td>Per-user pricing<br><span class="pricing-note">$34/user/mo</span></td>
-        <td>Per-user pricing<br><span class="pricing-note">$49/user/mo</span></td>
-        <td>Per-user pricing<br><span class="pricing-note">$99/user/mo</span></td>
-        <td class="limited">$14–$99/user</td>
-        <td>14 days</td>
-      </tr>
-
-      <!-- Zoho -->
-      <tr>
-        <td>
-          <div class="crm-name">
-            <div class="crm-dot" style="background:#a78bfa;"></div>
-            <div>Zoho CRM<span class="plan-label">General CRM</span></div>
-          </div>
-        </td>
-        <td><span class="limited">3 users free</span><br><span class="pricing-note">$0 (very limited)</span></td>
-        <td>Per-user pricing<br><span class="pricing-note">$14/user/mo</span></td>
-        <td>Per-user pricing<br><span class="pricing-note">$40/user/mo</span></td>
-        <td>Per-user pricing<br><span class="pricing-note">$52/user/mo</span></td>
-        <td class="limited">$14–$52/user</td>
-        <td>15 days</td>
-      </tr>
-
-    </tbody>
-  </table>
+<div class="controls">
+  <button class="ctrl-btn" onclick="toggleAll(true)">▼ Expand All</button>
+  <button class="ctrl-btn" onclick="toggleAll(false)">▲ Collapse All</button>
 </div>
 
-<br>
+<!-- ===== SECTION: TRUSSCTR ===== -->
+<div class="section open" id="sec-trussctr">
+  <button class="section-toggle" onclick="toggle('sec-trussctr')">
+    <span>🟦 TrussCTR</span>
+    <span class="arrow">▼</span>
+  </button>
+  <div class="section-body">
+    <table>
+      <thead><tr>
+        <th style="text-align:left;">CRM</th>
+        <th>Starter</th><th>Pro</th><th>Business</th><th>Enterprise</th>
+        <th>Extra User Cost</th><th>Free Trial</th>
+      </tr></thead>
+      <tbody>
+        <tr class="trussctr-row">
+          <td>
+            <div class="crm-name">
+              <div class="crm-dot" style="background:#3b82f6;"></div>
+              <div>TrussCTR <span class="badge">You</span>
+                <span class="plan-label">Roofing / Contractor CRM</span>
+              </div>
+            </div>
+          </td>
+          <td><span class="highlight">2 users</span><br><span class="highlight" style="font-size:0.78rem;">Unlimited contacts</span><br><span class="pricing-note">$29/mo &middot; $24.17 annual</span></td>
+          <td><span class="highlight">5 users</span><br><span class="highlight" style="font-size:0.78rem;">Unlimited contacts</span><br><span class="pricing-note">$59/mo &middot; $49.17 annual</span></td>
+          <td><span class="highlight">10 users</span><br><span class="highlight" style="font-size:0.78rem;">Unlimited contacts</span><br><span class="pricing-note">$99/mo &middot; $82.50 annual</span></td>
+          <td><span class="highlight">Unlimited users</span><br><span class="highlight" style="font-size:0.78rem;">Unlimited contacts</span><br><span class="pricing-note">$179/mo &middot; $149.17 annual</span></td>
+          <td><span class="highlight">Included in plan</span></td>
+          <td><span class="highlight">14 days</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ===== SECTION: ROOFING CRMs ===== -->
+<div class="section open" id="sec-roofing">
+  <button class="section-toggle" onclick="toggle('sec-roofing')">
+    <span>🔨 Roofing CRMs</span>
+    <span class="arrow">▼</span>
+  </button>
+  <div class="section-body">
+    <table>
+      <thead><tr>
+        <th style="text-align:left;">CRM</th>
+        <th>Starter</th><th>Pro / Growth</th><th>Business</th><th>Enterprise</th>
+        <th>Extra User Cost</th><th>Free Trial</th>
+      </tr></thead>
+      <tbody>
+        <!-- JobNimbus -->
+        <tr>
+          <td><div class="crm-name"><div class="crm-dot" style="background:#f59e0b;"></div><div>JobNimbus<span class="plan-label">Roofing CRM</span></div></div></td>
+          <td><span class="limited">1 user</span><br><span class="pricing-note">$25/mo</span></td>
+          <td>3 users<br><span class="pricing-note">$85/mo</span></td>
+          <td>Unlimited<br><span class="pricing-note">$350+/mo</span></td>
+          <td class="neutral">Custom</td>
+          <td class="limited">$25–$35/user</td>
+          <td>14 days</td>
+        </tr>
+        <!-- AccuLynx -->
+        <tr>
+          <td><div class="crm-name"><div class="crm-dot" style="background:#10b981;"></div><div>AccuLynx<span class="plan-label">Roofing CRM</span></div></div></td>
+          <td><span class="limited">1 user</span><br><span class="pricing-note">~$89/mo</span></td>
+          <td>5 users<br><span class="pricing-note">~$199/mo</span></td>
+          <td>15 users<br><span class="pricing-note">~$399/mo</span></td>
+          <td class="neutral">Custom</td>
+          <td class="limited">~$30/user</td>
+          <td class="neutral">Demo only</td>
+        </tr>
+        <!-- Roofr -->
+        <tr>
+          <td><div class="crm-name"><div class="crm-dot" style="background:#0891b2;"></div><div>Roofr<span class="plan-label">Roofing CRM</span></div></div></td>
+          <td><span class="limited">1 user</span><br><span class="pricing-note">$89/mo</span></td>
+          <td>3 users<br><span class="pricing-note">$159/mo</span></td>
+          <td>10 users<br><span class="pricing-note">$299/mo</span></td>
+          <td class="neutral">Custom<br><span class="pricing-note">Contact sales</span></td>
+          <td class="limited">~$30–$50/user</td>
+          <td>14 days</td>
+        </tr>
+        <!-- Leap CRM -->
+        <tr>
+          <td><div class="crm-name"><div class="crm-dot" style="background:#f43f5e;"></div><div>Leap CRM<span class="plan-label">Roofing CRM</span></div></div></td>
+          <td><span class="pricing-note">~$79/user/mo</span></td>
+          <td><span class="pricing-note">~$79/user/mo</span></td>
+          <td><span class="pricing-note">~$79/user/mo</span></td>
+          <td class="neutral">Custom</td>
+          <td class="limited">~$79/user</td>
+          <td class="neutral">Demo only</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ===== SECTION: FIELD SERVICE ===== -->
+<div class="section" id="sec-field">
+  <button class="section-toggle" onclick="toggle('sec-field')">
+    <span>⚙️ Field Service Platforms</span>
+    <span class="arrow">▼</span>
+  </button>
+  <div class="section-body">
+    <table>
+      <thead><tr>
+        <th style="text-align:left;">CRM</th>
+        <th>Starter</th><th>Pro / Growth</th><th>Business</th><th>Enterprise</th>
+        <th>Extra User Cost</th><th>Free Trial</th>
+      </tr></thead>
+      <tbody>
+        <!-- ServiceTitan -->
+        <tr>
+          <td><div class="crm-name"><div class="crm-dot" style="background:#8b5cf6;"></div><div>ServiceTitan<span class="plan-label">Field Service CRM</span></div></div></td>
+          <td class="limited">No starter<br><span class="pricing-note">Min ~$398/mo</span></td>
+          <td>5 users<br><span class="pricing-note">~$398/mo</span></td>
+          <td>15 users<br><span class="pricing-note">~$598/mo</span></td>
+          <td class="neutral">Custom<br><span class="pricing-note">$1,000+/mo</span></td>
+          <td class="limited">~$19–$49/user</td>
+          <td class="neutral">Demo only</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ===== SECTION: GENERAL CRMs ===== -->
+<div class="section" id="sec-general">
+  <button class="section-toggle" onclick="toggle('sec-general')">
+    <span>📊 General CRMs</span>
+    <span class="arrow">▼</span>
+  </button>
+  <div class="section-body">
+    <table>
+      <thead><tr>
+        <th style="text-align:left;">CRM</th>
+        <th>Starter</th><th>Pro / Growth</th><th>Business</th><th>Enterprise</th>
+        <th>Extra User Cost</th><th>Free Trial</th>
+      </tr></thead>
+      <tbody>
+        <!-- HubSpot -->
+        <tr>
+          <td><div class="crm-name"><div class="crm-dot" style="background:#f97316;"></div><div>HubSpot CRM<span class="plan-label">General CRM</span></div></div></td>
+          <td>2 users<br><span class="pricing-note">Free tier</span></td>
+          <td>5 users<br><span class="pricing-note">$90/mo</span></td>
+          <td>10 users<br><span class="pricing-note">$800/mo</span></td>
+          <td class="neutral">Custom<br><span class="pricing-note">$3,600+/mo</span></td>
+          <td class="limited">$45–$75/user</td>
+          <td>Free (limited)</td>
+        </tr>
+        <!-- Salesforce -->
+        <tr>
+          <td><div class="crm-name"><div class="crm-dot" style="background:#0ea5e9;"></div><div>Salesforce<span class="plan-label">Enterprise CRM</span></div></div></td>
+          <td><span class="limited">1 user</span><br><span class="pricing-note">$25/user/mo</span></td>
+          <td>Per-user<br><span class="pricing-note">$80/user/mo</span></td>
+          <td>Per-user<br><span class="pricing-note">$165/user/mo</span></td>
+          <td>Per-user<br><span class="pricing-note">$330/user/mo</span></td>
+          <td class="limited">$25–$330/user</td>
+          <td>30 days</td>
+        </tr>
+        <!-- Monday -->
+        <tr>
+          <td><div class="crm-name"><div class="crm-dot" style="background:#ec4899;"></div><div>Monday.com CRM<span class="plan-label">General CRM</span></div></div></td>
+          <td><span class="limited">3 users min</span><br><span class="pricing-note">$36/mo</span></td>
+          <td>Per-seat<br><span class="pricing-note">$54/mo (3 users)</span></td>
+          <td>Per-seat<br><span class="pricing-note">$72/mo (3 users)</span></td>
+          <td>Per-seat<br><span class="pricing-note">Custom</span></td>
+          <td class="limited">$12–$24/seat</td>
+          <td>14 days</td>
+        </tr>
+        <!-- Pipedrive -->
+        <tr>
+          <td><div class="crm-name"><div class="crm-dot" style="background:#14b8a6;"></div><div>Pipedrive<span class="plan-label">Sales CRM</span></div></div></td>
+          <td>Per-user<br><span class="pricing-note">$14/user/mo</span></td>
+          <td>Per-user<br><span class="pricing-note">$34/user/mo</span></td>
+          <td>Per-user<br><span class="pricing-note">$49/user/mo</span></td>
+          <td>Per-user<br><span class="pricing-note">$99/user/mo</span></td>
+          <td class="limited">$14–$99/user</td>
+          <td>14 days</td>
+        </tr>
+        <!-- Zoho -->
+        <tr>
+          <td><div class="crm-name"><div class="crm-dot" style="background:#a78bfa;"></div><div>Zoho CRM<span class="plan-label">General CRM</span></div></div></td>
+          <td><span class="limited">3 users free</span><br><span class="pricing-note">$0 (very limited)</span></td>
+          <td>Per-user<br><span class="pricing-note">$14/user/mo</span></td>
+          <td>Per-user<br><span class="pricing-note">$40/user/mo</span></td>
+          <td>Per-user<br><span class="pricing-note">$52/user/mo</span></td>
+          <td class="limited">$14–$52/user</td>
+          <td>15 days</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
 
 <!-- SUMMARY CALLOUT -->
-<div style="background:linear-gradient(135deg,#1e3a5f22,#1e1b4b22);border:1px solid #1e40af44;border-radius:16px;padding:28px 32px;max-width:900px;margin:0 auto;">
-  <h2 style="color:#60a5fa;font-size:1.1rem;margin-bottom:16px;">💡 TrussCTR Value Summary</h2>
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;">
-    <div style="background:#1e293b;border-radius:10px;padding:16px;">
-      <div style="color:#34d399;font-size:1.5rem;font-weight:800;">ALL features</div>
-      <div style="color:#94a3b8;font-size:0.82rem;margin-top:4px;">Every plan includes every feature — no feature-gating</div>
-    </div>
-    <div style="background:#1e293b;border-radius:10px;padding:16px;">
-      <div style="color:#34d399;font-size:1.5rem;font-weight:800;">$29–$179</div>
-      <div style="color:#94a3b8;font-size:0.82rem;margin-top:4px;">vs $398–$800+/mo for ServiceTitan &amp; HubSpot at comparable size</div>
-    </div>
-    <div style="background:#1e293b;border-radius:10px;padding:16px;">
-      <div style="color:#34d399;font-size:1.5rem;font-weight:800;">Unlimited Contacts</div>
-      <div style="color:#94a3b8;font-size:0.82rem;margin-top:4px;">No contact caps on any plan — grow without limits</div>
-    </div>
-    <div style="background:#1e293b;border-radius:10px;padding:16px;">
-      <div style="color:#34d399;font-size:1.5rem;font-weight:800;">Built for Roofers</div>
-      <div style="color:#94a3b8;font-size:0.82rem;margin-top:4px;">Insurance claims, supplements, HailTrace — not generic CRM</div>
-    </div>
+<div class="summary">
+  <h2>💡 TrussCTR Value Summary</h2>
+  <div class="summary-grid">
+    <div class="summary-card"><div class="val">ALL features</div><div class="desc">Every plan includes every feature — no feature-gating</div></div>
+    <div class="summary-card"><div class="val">$29–$179</div><div class="desc">vs $398–$800+/mo for ServiceTitan &amp; HubSpot at comparable size</div></div>
+    <div class="summary-card"><div class="val">Unlimited Contacts</div><div class="desc">No contact caps on any plan — grow without limits</div></div>
+    <div class="summary-card"><div class="val">Built for Roofers</div><div class="desc">Insurance claims, supplements, HailTrace — not generic CRM</div></div>
   </div>
 </div>
 
 <footer style="margin-top:32px;">
-  <p>© 2026 <span>TrussCTR</span> by 614 Restore LLC · Competitor data based on publicly available pricing as of early 2026. Subject to change.</p>
+  <p>&copy; 2026 <span>TrussCTR</span> by 614 Restore LLC &middot; Competitor data based on publicly available pricing as of early 2026. Subject to change.</p>
 </footer>
+
+<script>
+  function toggle(id) {
+    const sec = document.getElementById(id);
+    sec.classList.toggle('open');
+  }
+  function toggleAll(open) {
+    document.querySelectorAll('.section').forEach(s => {
+      open ? s.classList.add('open') : s.classList.remove('open');
+    });
+  }
+</script>
 
 </body>
 </html>
