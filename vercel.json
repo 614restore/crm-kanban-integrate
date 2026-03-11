@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "npm install && npm run build",
+  "buildCommand": "VITE_BASE_URL=/ npm run build",
   "outputDirectory": "dist",
   "installCommand": "npm install",
   "framework": "vite",
@@ -22,5 +22,8 @@
   ],
   "rewrites": [
     { "source": "/((?!api/)(?!.*\\.html$).*)", "destination": "/index.html" }
-  ]
+  ],
+  "env": {
+    "VITE_BASE_URL": "/"
+  }
 }

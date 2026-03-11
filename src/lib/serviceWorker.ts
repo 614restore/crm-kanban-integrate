@@ -47,10 +47,17 @@ class ServiceWorkerManager {
       return null;
     }
 
+    // Disable service worker in development
+    if (import.meta.env.DEV) {
+      console.log('🔧 Service Worker disabled in development mode');
+      return null;
+    }
+
     try {
       
-      const registration = await navigator.serviceWorker.register('/quotes-customize-manage/sw.js', {
-        scope: '/quotes-customize-manage/'
+      const base = import.meta.env.BASE_URL || '/';
+      const registration = await navigator.serviceWorker.register(`${base}sw.js`, {
+        scope: base
       });
 
       this.registration = registration;
@@ -228,8 +235,10 @@ export function useServiceWorker() {
     // Set up state listener
     swManager.onStateChange(setState);
 
-    // Register service worker on mount
-    registerServiceWorker();
+    // Register service worker on mount (disabled in dev)
+    if (!import.meta.env.DEV) {
+      registerServiceWorker();
+    }
 
     // Check for updates periodically (every 30 minutes)
     const updateInterval = setInterval(() => {
