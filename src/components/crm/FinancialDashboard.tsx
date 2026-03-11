@@ -298,10 +298,12 @@ export default function FinancialDashboard() {
             <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
               <DollarSign className="text-green-600" size={24} />
             </div>
-            <span className="flex items-center gap-1 text-green-600 text-sm font-medium">
-              <TrendingUp size={16} />
-              12%
-            </span>
+            {financialStats.paidInvoices > 0 && (
+              <span className="flex items-center gap-1 text-green-600 text-sm font-medium">
+                <TrendingUp size={16} />
+                Paid
+              </span>
+            )}
           </div>
           <p className="text-3xl font-bold text-gray-900 mt-4">
             {formatCurrency(financialStats.totalRevenue)}
@@ -314,10 +316,12 @@ export default function FinancialDashboard() {
             <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
               <CreditCard className="text-blue-600" size={24} />
             </div>
-            <span className="flex items-center gap-1 text-green-600 text-sm font-medium">
-              <TrendingUp size={16} />
-              8%
-            </span>
+            {financialStats.acceptedEstimatesTotal > 0 && (
+              <span className="flex items-center gap-1 text-blue-600 text-sm font-medium">
+                <FileText size={16} />
+                Signed
+              </span>
+            )}
           </div>
           <p className="text-3xl font-bold text-gray-900 mt-4">
             {formatCurrency(financialStats.depositsCollected)}
@@ -330,10 +334,12 @@ export default function FinancialDashboard() {
             <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center">
               <Clock className="text-amber-600" size={24} />
             </div>
-            <span className="flex items-center gap-1 text-amber-600 text-sm font-medium">
-              <TrendingDown size={16} />
-              3%
-            </span>
+            {financialStats.pendingPayments > 0 && (
+              <span className="flex items-center gap-1 text-amber-600 text-sm font-medium">
+                <TrendingDown size={16} />
+                Pending
+              </span>
+            )}
           </div>
           <p className="text-3xl font-bold text-gray-900 mt-4">
             {formatCurrency(financialStats.pendingPayments)}
@@ -346,6 +352,12 @@ export default function FinancialDashboard() {
             <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
               <AlertCircle className="text-red-600" size={24} />
             </div>
+            {invoiceTotals.overdue > 0 && (
+              <span className="flex items-center gap-1 text-red-600 text-sm font-medium">
+                <AlertCircle size={16} />
+                Overdue
+              </span>
+            )}
           </div>
           <p className="text-3xl font-bold text-gray-900 mt-4">
             {formatCurrency(invoiceTotals.overdue)}
@@ -353,6 +365,36 @@ export default function FinancialDashboard() {
           <p className="text-gray-500 text-sm mt-1">Overdue Invoices</p>
         </div>
       </div>
+
+      {/* Estimates Summary */}
+      {(financialStats.acceptedEstimatesTotal > 0 || financialStats.pendingEstimatesTotal > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5 flex items-center gap-4">
+            <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center flex-shrink-0">
+              <CheckCircle className="text-emerald-600" size={24} />
+            </div>
+            <div>
+              <p className="text-sm text-emerald-700 font-medium">Accepted / Signed Estimates</p>
+              <p className="text-2xl font-bold text-gray-900">{formatCurrency(financialStats.acceptedEstimatesTotal)}</p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {state.estimates.filter(e => e.status === 'accepted').length} estimate(s) signed
+              </p>
+            </div>
+          </div>
+          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-5 flex items-center gap-4">
+            <div className="w-12 h-12 bg-yellow-100 rounded-xl flex items-center justify-center flex-shrink-0">
+              <Send className="text-yellow-600" size={24} />
+            </div>
+            <div>
+              <p className="text-sm text-yellow-700 font-medium">Pending Estimates (Sent / Viewed)</p>
+              <p className="text-2xl font-bold text-gray-900">{formatCurrency(financialStats.pendingEstimatesTotal)}</p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {state.estimates.filter(e => e.status === 'sent' || e.status === 'viewed').length} estimate(s) awaiting response
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Invoice Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -383,67 +425,56 @@ export default function FinancialDashboard() {
       </div>
 
       {/* Project Cost Breakdown — visible in Projects view */}
-      {financialView === 'projects' && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Project Cost Breakdown</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="p-4 bg-blue-50 rounded-xl">
-              <p className="text-sm text-blue-600 font-medium">Materials</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">
-                {formatCurrency(
-                  state.contacts
-                    .filter((c) => c.status === 'in_progress' || c.status === 'build_phase' || c.status === 'completed')
-                    .reduce((sum, c) => sum + ((c as any).materialCost || 0), 0)
-                )}
-              </p>
-              <p className="text-xs text-gray-500 mt-1">Lumber, shingles, underlayment, etc.</p>
-            </div>
-            <div className="p-4 bg-orange-50 rounded-xl">
-              <p className="text-sm text-orange-600 font-medium">Sub-Contractor Costs</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">
-                {formatCurrency(
-                  state.contacts
-                    .filter((c) => c.status === 'in_progress' || c.status === 'build_phase' || c.status === 'completed')
-                    .reduce((sum, c) => sum + ((c as any).subContractorCost || 0), 0)
-                )}
-              </p>
-              <p className="text-xs text-gray-500 mt-1">Electrical, plumbing, HVAC subs</p>
-            </div>
-            <div className="p-4 bg-purple-50 rounded-xl">
-              <p className="text-sm text-purple-600 font-medium">Payroll / Labor</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">
-                {formatCurrency(
-                  state.contacts
-                    .filter((c) => c.status === 'in_progress' || c.status === 'build_phase' || c.status === 'completed')
-                    .reduce((sum, c) => sum + ((c as any).payrollCost || 0), 0)
-                )}
-              </p>
-              <p className="text-xs text-gray-500 mt-1">Crew wages, overtime, benefits</p>
-            </div>
-            <div className="p-4 bg-green-50 rounded-xl">
-              <p className="text-sm text-green-600 font-medium">Profit Margin</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">
-                {(() => {
-                  const revenue = financialStats.totalRevenue;
-                  const costs = state.contacts
-                    .filter((c) => c.status === 'in_progress' || c.status === 'build_phase' || c.status === 'completed')
-                    .reduce(
-                      (sum, c) =>
-                        sum +
-                        ((c as any).materialCost || 0) +
-                        ((c as any).subContractorCost || 0) +
-                        ((c as any).payrollCost || 0),
-                      0
-                    );
-                  const margin = revenue > 0 ? ((revenue - costs) / revenue) * 100 : 0;
-                  return `${margin.toFixed(1)}%`;
-                })()}
-              </p>
-              <p className="text-xs text-gray-500 mt-1">Revenue minus all project costs</p>
+      {financialView === 'projects' && (() => {
+        const activeStatuses = ['in_progress', 'build_phase', 'cleanup', 'completed'];
+        const activeContactIds = new Set(
+          state.contacts
+            .filter((c) => activeStatuses.includes(c.status))
+            .map((c) => c.id)
+        );
+        const materialCost = state.materialOrders
+          .filter((o) => o.status !== 'cancelled' && (o.contactId ? activeContactIds.has(o.contactId) : true))
+          .reduce((sum, o) => sum + o.total, 0);
+        const subCost = state.projects
+          .reduce((sum, p) => sum + (p.actualSubcontractorCost || 0), 0);
+        const laborCost = state.workOrders
+          .filter((wo) => wo.status === 'completed' || wo.status === 'in_progress')
+          .reduce((sum, wo) => sum + (wo.laborCost || 0), 0);
+        const totalCosts = materialCost + subCost + laborCost;
+        const margin = financialStats.totalRevenue > 0
+          ? ((financialStats.totalRevenue - totalCosts) / financialStats.totalRevenue) * 100
+          : 0;
+        return (
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Project Cost Breakdown</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="p-4 bg-blue-50 rounded-xl">
+                <p className="text-sm text-blue-600 font-medium">Materials</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(materialCost)}</p>
+                <p className="text-xs text-gray-500 mt-1">Lumber, shingles, underlayment, etc.</p>
+              </div>
+              <div className="p-4 bg-orange-50 rounded-xl">
+                <p className="text-sm text-orange-600 font-medium">Sub-Contractor Costs</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(subCost)}</p>
+                <p className="text-xs text-gray-500 mt-1">Electrical, plumbing, HVAC subs</p>
+              </div>
+              <div className="p-4 bg-purple-50 rounded-xl">
+                <p className="text-sm text-purple-600 font-medium">Payroll / Labor</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(laborCost)}</p>
+                <p className="text-xs text-gray-500 mt-1">Crew wages, overtime, benefits</p>
+              </div>
+              <div className="p-4 bg-green-50 rounded-xl">
+                <p className="text-sm text-green-600 font-medium">Profit Margin</p>
+                <p className={`text-2xl font-bold mt-1 ${margin >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                  {margin.toFixed(1)}%
+                </p>
+                <p className="text-xs text-gray-500 mt-1">Revenue minus all project costs</p>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
+
 
       {/* QuickBooks Integration Banner */}
       <div className="bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl p-6 text-white">

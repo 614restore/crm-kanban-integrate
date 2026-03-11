@@ -679,42 +679,89 @@ export function usePipelineStats() {
 
 export function useFinancialStats() {
   const { state } = useCRM();
-  
+
   const stats = {
+    // Revenue
     totalRevenue: 0,
     pendingPayments: 0,
     depositsCollected: 0,
     outstandingInvoices: 0,
     paidInvoices: 0,
     overdueInvoices: 0,
+    // Estimates (signed quotes)
+    acceptedEstimatesTotal: 0,
+    pendingEstimatesTotal: 0,
+    // Material orders
+    deliveredMaterialCost: 0,
+    pendingMaterialCost: 0,
+    // Project / work-order costs
+    totalSubcontractorCost: 0,
+    totalLaborCost: 0,
   };
-  
+
+  // ── Contacts: deposits & final payments ──────────────────────────────────
   state.contacts.forEach((c) => {
     if (c.depositPaid && c.depositAmount) {
       stats.depositsCollected += c.depositAmount;
     }
     if (c.finalPaymentPaid && c.finalPaymentAmount) {
-      stats.totalRevenue += c.finalPaymentAmount;
+      // Final payment is revenue; deposit was a partial payment toward this
+      // so we only count the remaining balance to avoid double-adding the deposit
+      const depositAlreadyCounted = c.depositPaid ? (c.depositAmount || 0) : 0;
+      stats.totalRevenue += c.finalPaymentAmount - depositAlreadyCounted;
     }
     if (!c.finalPaymentPaid && c.finalPaymentAmount) {
       stats.pendingPayments += c.finalPaymentAmount;
     }
   });
-  
+
+  // Add deposits to total revenue (they are confirmed received cash)
+  stats.totalRevenue += stats.depositsCollected;
+
+  // ── Invoices ─────────────────────────────────────────────────────────────
   state.invoices.forEach((inv) => {
     if (inv.status === 'paid') {
       stats.paidInvoices += inv.amount;
+      stats.totalRevenue += inv.amount;
     } else if (inv.status === 'overdue') {
       stats.overdueInvoices += inv.amount;
     } else if (inv.status === 'sent') {
       stats.outstandingInvoices += inv.amount;
     }
   });
-  
-  stats.totalRevenue += stats.depositsCollected + stats.paidInvoices;
-  
+
+  // ── Estimates ────────────────────────────────────────────────────────────
+  state.estimates.forEach((est) => {
+    if (est.status === 'accepted') {
+      stats.acceptedEstimatesTotal += est.total;
+    } else if (est.status === 'sent' || est.status === 'viewed') {
+      stats.pendingEstimatesTotal += est.total;
+    }
+  });
+
+  // ── Material Orders ───────────────────────────────────────────────────────
+  state.materialOrders.forEach((order) => {
+    if (order.status === 'cancelled') return;
+    if (order.status === 'delivered') {
+      stats.deliveredMaterialCost += order.total;
+    } else {
+      stats.pendingMaterialCost += order.total;
+    }
+  });
+
+  // ── Projects (subcontractor costs) ────────────────────────────────────────
+  state.projects.forEach((p) => {
+    stats.totalSubcontractorCost += (p.actualSubcontractorCost || 0);
+  });
+
+  // ── Work Orders (labor costs) ─────────────────────────────────────────────
+  state.workOrders.forEach((wo) => {
+    stats.totalLaborCost += (wo.laborCost || 0);
+  });
+
   return stats;
 }
+
 
 // Permission helpers
 export function canCreateBoard(role: UserRole): boolean {

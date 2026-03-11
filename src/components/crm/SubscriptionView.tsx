@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db, DbCompany } from '@/lib/database';
@@ -10,7 +10,19 @@ import {
   Shield,
   Check,
   ChevronDown,
+  Loader2,
 } from 'lucide-react';
+
+// Price IDs come from Vite env vars (set in Vercel dashboard for live, .env.local for dev)
+const PRICE_IDS: Record<string, string> = {
+  starter:    import.meta.env.VITE_STRIPE_STARTER_MONTHLY  || '',
+  pro:        import.meta.env.VITE_STRIPE_PRO_MONTHLY      || '',
+  business:   import.meta.env.VITE_STRIPE_BUSINESS_MONTHLY || '',
+  enterprise: import.meta.env.VITE_STRIPE_ENTERPRISE_MONTHLY || '',
+};
+
+// Vercel API base (empty on GitHub Pages static hosting — falls back to billing portal)
+const API_BASE: string = import.meta.env.VITE_EMAIL_API_BASE_URL || '';
 
 const PLANS = [
   {
@@ -20,7 +32,6 @@ const PLANS = [
     annualPrice: 24.17,
     annualTotal: 290,
     userLimit: 2,
-    checkoutUrl: 'https://checkout.stripe.com/c/pay/cs_live_a1lVAavUvt9xYretp7T0BHll2l5Kylc9ZosPvSYeU8AllloRXyeT78O5v0#fidkdWxOYHwnPyd1blppbHNgWjA0UT1cfGRUMXRnRHA0QTdWUWZkakR2fW90VmZzR2JzUXFxYzVuMEFddT1xNUdnQXZyRlwzTXRhcWE9NEhKaVJgVHRVR0JGbkRDR3FEbGFIMEN2ZD1rNU9ONTUzTjNnNVBzMicpJ2ZpbGBrcVdgY2B3YGtmYExhJz9rcGlpKSdmcHZxamhgd0BoZGxpJz8nb2BjY3dgfEUzNDF3YHZxandgK2ZqaCcpJ2FgY2RwaXFUcGRrcWxxfCc%2Fa3BpaSkndnBndmZ3bHVxbGprUGtsdHBga2B2dkBrZGdpYGEnP2NkaXZgeCUl',
     features: ['Up to 2 users','Unlimited contacts','Core CRM features','Pipeline board','Invoicing','Email support'],
     icon: <Zap className="w-5 h-5 text-blue-500" />,
     color: 'blue',
@@ -32,7 +43,6 @@ const PLANS = [
     annualPrice: 49.17,
     annualTotal: 590,
     userLimit: 5,
-    checkoutUrl: 'https://checkout.stripe.com/c/pay/cs_live_b13lZDaKn9TxoLZeJTVhNOc9RAPYAyttYb6IIxba59QrnkJl1we7jV7eGM#fidkdWxOYHwnPyd1blppbHNgWjA0UT1cfGRUMXRnRHA0QTdWUWZkakR2fW90VmZzR2JzUXFxYzVuMEFddT1xNUdnQXZyRlwzTXRhcWE9NEhKaVJgVHRVR0JGbkRDR3FEbGFIMEN2ZD1rNU9ONTUzTjNnNVBzMicpJ3ZwZ3Zmd2x1cWxqa1BrbHRwYGtgdnZAa2RnaWBhJz9jZGl2YHgl',
     features: ['Up to 5 users','Unlimited contacts','Full pipeline visibility','Insurance claim tracking','Supplement tracking','Team reporting'],
     icon: <Star className="w-5 h-5 text-indigo-500" />,
     highlight: true,
@@ -45,7 +55,6 @@ const PLANS = [
     annualPrice: 82.50,
     annualTotal: 990,
     userLimit: 10,
-    checkoutUrl: 'https://checkout.stripe.com/c/pay/cs_live_a1in9NCQ6zK8m9Pk9U9X4qFeSdVYrGaVrQ9vI95lJ8MfrxxUbcGCflWLi5#fidkdWxOYHwnPyd1blppbHNgWjA0UT1cfGRUMXRnRHA0QTdWUWZkakR2fW90VmZzR2JzUXFxYzVuMEFddT1xNUdnQXZyRlwzTXRhcWE9NEhKaVJgVHRVR0JGbkRDR3FEbGFIMEN2ZD1rNU9ONTUzTjNnNVBzMicpJ2ZpbGBrcVdgY2B3YGtmYExhJz9rcGlpKSdmcHZxamhgd0BoZGxpJz8nb2BjY3dgfEUzNDF3YHZxandgK2ZqaCcpJ2FgY2RwaXFUcGRrcWxxfCc%2Fa3BpaSkndnBndmZ3bHVxbGprUGtsdHBga2B2dkBrZGdpYGEnP2NkaXZgeCUl',
     features: ['Up to 10 users','Unlimited contacts','AI assistant','Advanced analytics','Material order templates','Priority support'],
     icon: <Shield className="w-5 h-5 text-emerald-500" />,
     color: 'emerald',
@@ -57,7 +66,6 @@ const PLANS = [
     annualPrice: 149.17,
     annualTotal: 1790,
     userLimit: Infinity,
-    checkoutUrl: 'https://checkout.stripe.com/c/pay/cs_live_a1MQMNSLfrqdeCjmXx3EGEirNW9EhSEFzXxbaOUtOkFw09ZWR88FayUx0A#fidkdWxOYHwnPyd1blppbHNgWjA0UT1cfGRUMXRnRHA0QTdWUWZkakR2fW90VmZzR2JzUXFxYzVuMEFddT1xNUdnQXZyRlwzTXRhcWE9NEhKaVJgVHRVR0JGbkRDR3FEbGFIMEN2ZD1rNU9ONTUzTjNnNVBzMicpJ2ZpbGBrcVdgY2B3YGtmYExhJz9rcGlpKSdmcHZxamhgd0BoZGxpJz8nb2BjY3dgfEUzNDF3YHZxandgK2ZqaCcpJ2FgY2RwaXFUcGRrcWxxfCc%2Fa3BpaSkndnBndmZ3bHVxbGprUGtsdHBga2B2dkBrZGdpYGEnP2NkaXZgeCUl',
     features: ['Unlimited users','Unlimited contacts','All features included','Custom onboarding','Dedicated support','QuickBooks sync'],
     icon: <Users className="w-5 h-5 text-purple-500" />,
     color: 'purple',
@@ -95,6 +103,8 @@ export default function SubscriptionView() {
   const [company, setCompany] = useState<DbCompany | null>(null);
   const [chartVisible, setChartVisible] = useState(false);
   const chartRef = useRef<HTMLDivElement>(null);
+  const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   useEffect(() => {
     const companyId = profile?.company_id || state.companyId;
@@ -127,6 +137,34 @@ export default function SubscriptionView() {
     a.click();
     document.body.removeChild(a);
   }
+
+  const handleCheckout = useCallback(async (planKey: string) => {
+    setCheckoutError(null);
+    const priceId = PRICE_IDS[planKey];
+
+    // If we have an API base and a priceId, create a fresh Stripe session
+    if (API_BASE && priceId) {
+      setLoadingPlan(planKey);
+      try {
+        const res = await fetch(`${API_BASE}/api/stripe-checkout`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ priceId, planId: planKey }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to start checkout');
+        window.location.href = data.url;
+      } catch (err) {
+        setCheckoutError(err instanceof Error ? err.message : 'Checkout failed. Please try again.');
+      } finally {
+        setLoadingPlan(null);
+      }
+      return;
+    }
+
+    // Fallback: send user to the Stripe billing portal to subscribe
+    window.open('https://billing.stripe.com/p/login/aFa9AVb73faq5vsfmw6Na00', '_blank', 'noopener,noreferrer');
+  }, []);
 
   const highlightColors: Record<string, string> = {
     blue: 'border-blue-200 bg-blue-50',
@@ -233,20 +271,27 @@ export default function SubscriptionView() {
                   </li>
                 ))}
               </ul>
-              <a
-                href={p.checkoutUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={`w-full text-center py-2 px-4 rounded-lg text-white text-sm font-medium transition-colors ${btnColors[p.color]} ${
-                  plan === p.key ? 'opacity-50 pointer-events-none' : ''
+              <button
+                onClick={() => handleCheckout(p.key)}
+                disabled={plan === p.key || loadingPlan === p.key}
+                className={`w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg text-white text-sm font-medium transition-colors ${btnColors[p.color]} ${
+                  (plan === p.key || loadingPlan === p.key) ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
               >
-                {plan === p.key ? 'Current Plan' : 'Get Started'}
-              </a>
+                {loadingPlan === p.key && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                {plan === p.key ? 'Current Plan' : loadingPlan === p.key ? 'Redirecting…' : 'Get Started'}
+              </button>
             </div>
           ))}
         </div>
       </div>
+
+      {/* Checkout error banner */}
+      {checkoutError && (
+        <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+          {checkoutError}
+        </div>
+      )}
 
       {/* Scroll-down banner + embedded comparison chart */}
       <div ref={chartRef} className="space-y-3">

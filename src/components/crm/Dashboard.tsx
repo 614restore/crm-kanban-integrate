@@ -396,7 +396,7 @@ export default function Dashboard() {
             View Details <ChevronRight size={16} />
           </button>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
           <div>
             <p className="text-slate-400 text-sm">Total Revenue</p>
             <p className="text-2xl font-bold mt-1">{formatCurrency(financialStats.totalRevenue)}</p>
@@ -419,8 +419,21 @@ export default function Dashboard() {
               {formatCurrency(financialStats.outstandingInvoices)}
             </p>
           </div>
+          <div>
+            <p className="text-slate-400 text-sm">Signed Estimates</p>
+            <p className="text-2xl font-bold mt-1 text-emerald-400">
+              {formatCurrency(financialStats.acceptedEstimatesTotal)}
+            </p>
+          </div>
+          <div>
+            <p className="text-slate-400 text-sm">Material Costs</p>
+            <p className="text-2xl font-bold mt-1 text-red-400">
+              {formatCurrency(financialStats.deliveredMaterialCost + financialStats.pendingMaterialCost)}
+            </p>
+          </div>
         </div>
       </div>
+
     </div>
   );
 }
