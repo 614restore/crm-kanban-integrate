@@ -520,7 +520,7 @@ export default function PipelineBoard() {
             ))}
           </div>
         ) : (
-        <div className="flex gap-4 h-full min-w-max">
+          <div className="flex gap-4 h-full min-w-max">
           {currentBoard?.columns.map((column) => {
 
             const contacts = getColumnContacts(column);
@@ -657,6 +657,7 @@ export default function PipelineBoard() {
             );
           })}
         </div>
+        )}
       </div>
 
       {showBoardEditor && editingBoard && (
