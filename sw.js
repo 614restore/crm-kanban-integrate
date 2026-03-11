@@ -1,7 +1,7 @@
 // Basic service worker for StormCraft CRM
 // This provides offline caching and PWA functionality
 
-const CACHE_NAME = 'stormcraft-v5';
+const CACHE_NAME = 'stormcraft-v6';
 const urlsToCache = [
   '/quotes-customize-manage/',
   '/quotes-customize-manage/index.html',
@@ -47,8 +47,22 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Only handle requests from our app
-  if (!url.pathname.startsWith('/quotes-customize-manage/')) {
+  const isSameOrigin = url.origin === self.location.origin;
+  const isAppPath = url.pathname.startsWith('/quotes-customize-manage/');
+
+  // Provide safe fallback for missing JSON assets requested by the app
+  if (isSameOrigin && url.pathname.endsWith('.json') && request.method === 'GET') {
+    event.respondWith(
+      fetch(request).catch(() => {
+        const body = JSON.stringify({ output: '', data: null });
+        return new Response(body, { status: 200, headers: { 'Content-Type': 'application/json' } });
+      })
+    );
+    return;
+  }
+
+  // Only handle requests from our app path for the rest
+  if (!isAppPath) {
     return;
   }
 
