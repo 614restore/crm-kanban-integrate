@@ -394,17 +394,29 @@ export default function ContactDetail() {
         zip: editedContact.zip,
         lead_source: editedContact.leadSource,
         assigned_to: editedContact.assignedTo,
+        tags: editedContact.tags || [],
+        // Project / Financial fields — critical for pipeline board dollar totals
+        project_type: editedContact.projectType,
+        project_value: editedContact.projectValue ?? null,
+        deposit_amount: editedContact.depositAmount ?? null,
+        deposit_paid: editedContact.depositPaid ?? false,
+        deposit_date: editedContact.depositDate ?? null,
+        final_payment_amount: editedContact.finalPaymentAmount ?? null,
+        final_payment_paid: editedContact.finalPaymentPaid ?? false,
+        final_payment_date: editedContact.finalPaymentDate ?? null,
+        // Insurance fields
         insurance_company: editedContact.insuranceCompany,
         policy_number: editedContact.policyNumber,
         claim_number: editedContact.claimNumber,
         adjuster_name: editedContact.adjusterName,
         adjuster_phone: editedContact.adjusterPhone,
         adjuster_email: editedContact.adjusterEmail,
-        deductible: editedContact.deductible,
-        is_retail: editedContact.isRetail,
+        deductible: editedContact.deductible ?? null,
+        is_retail: editedContact.isRetail ?? false,
         retail_notes: editedContact.retailNotes,
         notes: editedContact.notes,
       });
+
 
       if (!updated) {
         toast.error('Failed to save contact changes');
