@@ -26,7 +26,9 @@ import {
   Loader2,
   ArrowUp,
   ArrowDown,
+  LayoutGrid,
 } from 'lucide-react';
+
 
 function getStageAlert(contact: Contact): { label: string; className: string } | null {
   const since = contact.statusChangedAt || contact.updatedAt || contact.createdAt;
@@ -49,6 +51,8 @@ export default function PipelineBoard() {
   const [showBoardEditor, setShowBoardEditor] = useState(false);
   const [editingBoard, setEditingBoard] = useState<KanbanBoard | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [showAllBoards, setShowAllBoards] = useState(false);
+
 
   const userRole = (state.currentUser?.role || profile?.role || 'owner') as any;
   const canCreate = canCreateBoard(userRole);
@@ -311,7 +315,14 @@ export default function PipelineBoard() {
                 onClick={() => setShowBoardSelector(!showBoardSelector)}
                 className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
               >
-                <span className="font-semibold text-gray-900">{currentBoard?.name || 'Select Board'}</span>
+                {showAllBoards ? (
+                  <>
+                    <LayoutGrid size={16} className="text-indigo-600" />
+                    <span className="font-semibold text-indigo-700">All Boards</span>
+                  </>
+                ) : (
+                  <span className="font-semibold text-gray-900">{currentBoard?.name || 'Select Board'}</span>
+                )}
                 <ChevronDown size={18} className="text-gray-500" />
               </button>
 
@@ -326,6 +337,7 @@ export default function PipelineBoard() {
                         <button
                           onClick={() => {
                             dispatch({ type: 'SELECT_BOARD', payload: board.id });
+                            setShowAllBoards(false);
                             setShowBoardSelector(false);
                           }}
                           className="flex-1 text-left"
@@ -366,6 +378,21 @@ export default function PipelineBoard() {
                       </div>
                     ))}
                   </div>
+                  {/* View All Boards option */}
+                  <div className="border-t border-gray-100 p-2">
+                    <button
+                      onClick={() => {
+                        setShowAllBoards(true);
+                        setShowBoardSelector(false);
+                      }}
+                      className={`w-full flex items-center gap-2 p-2 rounded-lg transition-colors ${
+                        showAllBoards ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      <LayoutGrid size={16} />
+                      <span className="font-medium">View All Boards</span>
+                    </button>
+                  </div>
                   {canCreate && (
                     <div className="border-t border-gray-100 p-2">
                       <button
@@ -398,8 +425,104 @@ export default function PipelineBoard() {
       </div>
 
       <div className="flex-1 overflow-x-auto p-6 bg-gray-50">
+        {showAllBoards ? (
+          /* ── All Boards view ─────────────────────────────────────── */
+          <div className="flex flex-col gap-8 h-full">
+            {state.boards.map((board) => (
+              <div key={board.id}>
+                {/* Board header */}
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="flex items-center gap-2">
+                    <LayoutGrid size={16} className="text-indigo-500" />
+                    <h2 className="font-bold text-gray-800 text-base">{board.name}</h2>
+                    <span className="text-xs text-gray-400 capitalize">({board.type})</span>
+                  </div>
+                  <div className="flex-1 h-px bg-gray-200" />
+                  <button
+                    onClick={() => {
+                      dispatch({ type: 'SELECT_BOARD', payload: board.id });
+                      setShowAllBoards(false);
+                    }}
+                    className="text-xs text-blue-600 hover:underline"
+                  >
+                    View only
+                  </button>
+                </div>
+                {/* Board columns */}
+                <div className="flex gap-4 overflow-x-auto pb-2">
+                  {board.columns.map((column) => {
+                    const contacts = getColumnContacts(column);
+                    const columnValue = contacts.reduce((sum, c) => {
+                      if (c.projectValue && c.projectValue > 0) return sum + c.projectValue;
+                      const bestEstimate = state.estimates
+                        .filter(e => e.contactId === c.id && e.status !== 'declined')
+                        .reduce((max, e) => Math.max(max, Number(e.total || 0)), 0);
+                      return sum + bestEstimate;
+                    }, 0);
+                    return (
+                      <div
+                        key={column.id}
+                        className={`w-72 flex-shrink-0 flex flex-col bg-gray-100 rounded-xl transition-colors ${
+                          dragOverColumn === column.id ? 'ring-2 ring-blue-500 bg-blue-50' : ''
+                        }`}
+                        onDragOver={(e) => handleDragOver(e, column.id)}
+                        onDragLeave={handleDragLeave}
+                        onDrop={(e) => handleDrop(e, column)}
+                      >
+                        <div className="p-3 border-b border-gray-200">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: column.color }} />
+                            <h3 className="font-semibold text-gray-900 text-sm">{column.title}</h3>
+                            <span className="px-1.5 py-0.5 bg-gray-200 rounded-full text-xs font-medium text-gray-600">{contacts.length}</span>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">{formatCurrency(columnValue)}</p>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-2 space-y-2 max-h-64">
+                          {contacts.map((contact) => {
+                            const assignee = state.teamMembers.find((tm) => tm.id === contact.assignedTo);
+                            const stageAlert = getStageAlert(contact);
+                            return (
+                              <div
+                                key={contact.id}
+                                draggable
+                                onDragStart={(e) => handleDragStart(e, contact)}
+                                onClick={() => handleContactClick(contact.id)}
+                                className="bg-white rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer border border-gray-100"
+                              >
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0 flex-1">
+                                    <p className="font-medium text-gray-900 text-sm truncate">{getContactFullName(contact)}</p>
+                                    {contact.projectValue ? (
+                                      <p className="text-xs font-semibold text-green-600">{formatCurrency(contact.projectValue)}</p>
+                                    ) : null}
+                                    {contact.address && (
+                                      <p className="text-xs text-gray-500 flex items-center gap-1 mt-1 truncate">
+                                        <MapPin size={10} />{contact.address}
+                                      </p>
+                                    )}
+                                  </div>
+                                  {stageAlert && (
+                                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 ${stageAlert.className}`}>{stageAlert.label}</span>
+                                  )}
+                                </div>
+                                {assignee && (
+                                  <p className="text-xs text-gray-400 mt-1">{assignee.name}</p>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
         <div className="flex gap-4 h-full min-w-max">
           {currentBoard?.columns.map((column) => {
+
             const contacts = getColumnContacts(column);
             // Sum each contact's project value; fall back to their largest non-declined estimate total
             const columnValue = contacts.reduce((sum, c) => {
