@@ -1,12 +1,11 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
-import type { UserConfig } from "vitest/config";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   // GitHub Pages needs the repo subpath; Vercel can set VITE_BASE_URL=/
-  const base = process.env.VITE_BASE_URL ?? (mode === "production" ? "/quotes-customize-manage/" : "/");
+  const base = process.env.VITE_BASE_URL ?? (mode === "production" ? "/crm-kanban-integrate/" : "/");
 
   return {
     base,
@@ -32,7 +31,7 @@ export default defineConfig(({ mode }) => {
       globals: true,
       environment: "jsdom",
       include: ["src/**/*.{test,spec}.{ts,tsx}", "tests/**/*.{test,spec}.{ts,tsx}"],
-    } as UserConfig["test"],
+    },
     build: {
       rollupOptions: {
         output: {
