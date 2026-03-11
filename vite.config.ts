@@ -4,8 +4,8 @@ import path from "path";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
-  // GitHub Pages needs the repo subpath; Vercel can set VITE_BASE_URL=/
-  const base = process.env.VITE_BASE_URL ?? (mode === "production" ? "/crm-kanban-integrate/" : "/");
+  // Default to root path; GitHub Pages can override with VITE_BASE_URL=/crm-kanban-integrate/
+  const base = process.env.VITE_BASE_URL ?? "/";
 
   return {
     base,
