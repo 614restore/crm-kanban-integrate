@@ -554,7 +554,14 @@ export default function PipelineBoard() {
                       </span>
                     </div>
                     <button
-                      onClick={() => { if (canEdit && currentBoard) { setEditingBoard(currentBoard); setShowBoardEditor(true); } else { toast.info('Board editing requires manager, admin, or owner access'); } }}
+                      onClick={() => {
+                        if (canEdit && currentBoard) {
+                          setEditingBoard(currentBoard);
+                          setShowBoardEditor(true);
+                        } else {
+                          toast.info('Board editing requires manager, admin, or owner access');
+                        }
+                      }}
                       className="p-1 hover:bg-gray-200 rounded transition-colors"
                     >
                       <MoreVertical size={16} className="text-gray-400" />
