@@ -15,18 +15,11 @@ import {
   Eye,
   Star,
   StarOff,
-  Calendar,
-  DollarSign,
-  Briefcase,
-  FileSignature,
-  ClipboardList,
-  Wrench,
   User,
   Folder,
   FolderOpen,
   FolderPlus,
   FolderX,
-  ChevronRight,
   X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -46,14 +39,27 @@ import { db, DbCompany } from '@/lib/database';
 import { useCRM } from '@/lib/crmStore';
 import { getContactFullName } from '@/lib/crmData';
 import { getContractorEstimateTemplates } from '@/lib/contractorTemplates';
+import { DOCUMENT_CATEGORIES, type DocumentCategoryId } from '@/lib/documentCategories';
+import { getCertificateOfCompletionTemplate } from '@/lib/certificateTemplate';
+import DocumentEditor from './DocumentEditor';
+
+interface DocumentField {
+  key: string;
+  label: string;
+  type: 'text' | 'textarea' | 'date' | 'number';
+  defaultValue?: string;
+  required?: boolean;
+  placeholder?: string;
+}
 
 interface DocumentTemplate {
   id: string;
   name: string;
   description: string;
-  category: 'estimate' | 'invoice' | 'contract' | 'work-order' | 'proposal' | 'change-order' | 'safety' | 'other';
+  category: DocumentCategoryId;
   content: string;
   variables: string[]; // e.g., ['CLIENT_NAME', 'PROJECT_ADDRESS', 'TOTAL_AMOUNT']
+  fields?: DocumentField[]; // Simple form fields for easy editing
   favorite: boolean;
   isDefault: boolean;
   tags: string[];
@@ -86,6 +92,8 @@ const DocumentTemplates: React.FC = () => {
   const [customerEditMode, setCustomerEditMode] = useState(false);
   const [selectedContactId, setSelectedContactId] = useState<string>('');
   const [editedContent, setEditedContent] = useState<string>('');
+  const [showSimpleEditor, setShowSimpleEditor] = useState(false);
+  const [editorTemplate, setEditorTemplate] = useState<DocumentTemplate | null>(null);
 
   // ── Folder state ────────────────────────────────────────────────────────
   // 'all' = show everything; 'cat:CATEGORY_ID' = system folder; custom string = user folder
@@ -172,17 +180,13 @@ const DocumentTemplates: React.FC = () => {
     localStorage.removeItem('dt_folder_map');
   }, [customFolders, templateFolderMap, folderPrefsLoaded, profile?.id]);
 
-  // Template categories for contractors
-  const templateCategories = [
-    { id: 'estimate', label: 'Estimates', icon: <DollarSign className="w-4 h-4" />, color: 'bg-green-100 text-green-800' },
-    { id: 'invoice', label: 'Invoices', icon: <FileText className="w-4 h-4" />, color: 'bg-blue-100 text-blue-800' },
-    { id: 'contract', label: 'Contracts', icon: <FileSignature className="w-4 h-4" />, color: 'bg-purple-100 text-purple-800' },
-    { id: 'work-order', label: 'Work Orders', icon: <ClipboardList className="w-4 h-4" />, color: 'bg-orange-100 text-orange-800' },
-    { id: 'proposal', label: 'Proposals', icon: <Briefcase className="w-4 h-4" />, color: 'bg-indigo-100 text-indigo-800' },
-    { id: 'change-order', label: 'Change Orders', icon: <Edit className="w-4 h-4" />, color: 'bg-yellow-100 text-yellow-800' },
-    { id: 'safety', label: 'Safety Forms', icon: <Wrench className="w-4 h-4" />, color: 'bg-red-100 text-red-800' },
-    { id: 'other', label: 'Other', icon: <FileText className="w-4 h-4" />, color: 'bg-gray-100 text-gray-800' }
-  ];
+  // Use centralized category configuration
+  const templateCategories = DOCUMENT_CATEGORIES.map(cat => ({
+    id: cat.id,
+    label: cat.label,
+    icon: <cat.icon className="w-4 h-4" />,
+    color: cat.color
+  }));
 
   // Load templates from storage/API
   const loadTemplates = async () => {
@@ -2476,7 +2480,8 @@ const DocumentTemplates: React.FC = () => {
       fileType: 'html'
     }
       ];
-      const allTemplates = [...mockTemplates, ...(getContractorEstimateTemplates() as DocumentTemplate[])];
+      const certTemplate = getCertificateOfCompletionTemplate();
+      const allTemplates = [...mockTemplates, certTemplate, ...(getContractorEstimateTemplates() as DocumentTemplate[])];
       setTemplates(allTemplates);
       setFilteredTemplates(allTemplates);
     } catch (error) {
@@ -3104,18 +3109,32 @@ const DocumentTemplates: React.FC = () => {
                     </div>
 
                     <div className="flex gap-2">
-                      <Button 
-                        size="sm" 
-                        variant="outline" 
-                        className="flex-1"
-                        onClick={() => {
-                          setSelectedTemplate(template);
-                          setPreviewMode(true);
-                        }}
-                      >
-                        <Eye className="w-4 h-4 mr-1" />
-                        Preview
-                      </Button>
+                      {template.fields && template.fields.length > 0 ? (
+                        <Button 
+                          size="sm" 
+                          className="flex-1"
+                          onClick={() => {
+                            setEditorTemplate(template);
+                            setShowSimpleEditor(true);
+                          }}
+                        >
+                          <Edit className="w-4 h-4 mr-1" />
+                          Edit & Use
+                        </Button>
+                      ) : (
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="flex-1"
+                          onClick={() => {
+                            setSelectedTemplate(template);
+                            setPreviewMode(true);
+                          }}
+                        >
+                          <Eye className="w-4 h-4 mr-1" />
+                          Preview
+                        </Button>
+                      )}
                       <Button 
                         size="sm" 
                         variant="outline"
@@ -3188,6 +3207,41 @@ const DocumentTemplates: React.FC = () => {
           </div>  {/* end templates grid */}
         </div>  {/* end main content */}
       </div>  {/* end flex row with sidebar */}
+
+      {/* Simple Document Editor */}
+      {showSimpleEditor && editorTemplate && editorTemplate.fields && (
+        <DocumentEditor
+          templateName={editorTemplate.name}
+          templateContent={(() => {
+            // Pre-fill company information from profile
+            let content = editorTemplate.content;
+            if (companyProfile) {
+              const companyData: Record<string, string> = {
+                'COMPANY_NAME': companyProfile.name || 'Your Company',
+                'COMPANY_LOGO_URL': companyProfile.logo_url || '',
+                'CONTRACTOR_LICENSE': companyProfile.contractor_license || '[LICENSE]'
+              };
+              Object.entries(companyData).forEach(([key, value]) => {
+                content = content.replace(new RegExp(`{{${key}}}`, 'g'), value);
+              });
+            }
+            return content;
+          })()}
+          fields={editorTemplate.fields}
+          onSave={(data) => {
+            console.log('Document saved:', data);
+            toast({ title: 'Saved', description: 'Document has been saved successfully.' });
+          }}
+          onSend={(data) => {
+            console.log('Document sent:', data);
+            toast({ title: 'Sent', description: 'Document has been sent to the customer.' });
+          }}
+          onClose={() => {
+            setShowSimpleEditor(false);
+            setEditorTemplate(null);
+          }}
+        />
+      )}
 
       {/* Template Preview Modal */}
       {selectedTemplate && previewMode && (
