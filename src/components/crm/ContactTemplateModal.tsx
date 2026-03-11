@@ -51,6 +51,25 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
   const [isSaving, setIsSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>('all');
+  const iframeRef = React.useRef<HTMLIFrameElement>(null);
+
+  // Push preview HTML to iframe without remounting it (avoids losing input focus)
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    if (!iframe || !selected) return;
+    // Use srcdoc attribute update rather than remounting
+    try {
+      const doc = iframe.contentDocument || iframe.contentWindow?.document;
+      if (doc) {
+        doc.open();
+        doc.write(previewContent);
+        doc.close();
+      }
+    } catch {
+      // Cross-origin fallback — just set srcDoc
+      iframe.srcdoc = previewContent;
+    }
+  }, [previewContent, selected]);
 
   // Load company profile once
   useEffect(() => {
@@ -290,8 +309,7 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
         {/* Right: HTML preview */}
         <div className="flex-1 overflow-hidden">
           <iframe
-            key={previewContent.length}
-            srcDoc={previewContent}
+            ref={iframeRef}
             className="w-full h-full border-0"
             title="Document Preview"
             sandbox="allow-same-origin"
