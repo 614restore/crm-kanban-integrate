@@ -108,8 +108,16 @@ export default function ContactDetail() {
   const [showSurveyModal, setShowSurveyModal] = useState(false);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   
+  const [showNewEstimateModal, setShowNewEstimateModal] = useState(false);
+  const [newEstTitle, setNewEstTitle] = useState('');
+  const [newEstItems, setNewEstItems] = useState<{id: string; description: string; quantity: number; unit: string; unitPrice: number; total: number}[]>([{id: crypto.randomUUID(), description: '', quantity: 1, unit: 'ea', unitPrice: 0, total: 0}]);
+  const [newEstNotes, setNewEstNotes] = useState('');
+  const [newEstTax, setNewEstTax] = useState(0);
+  const [isSavingEstimate, setIsSavingEstimate] = useState(false);
+  const [showTemplateForEstimate, setShowTemplateForEstimate] = useState(false);
   const noteInputRef = useRef<HTMLInputElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
+
   const mentionTargets = useMemo(() => getMentionTargets(state.teamMembers), [state.teamMembers]);
   const contactId = contact?.id;
   const contactNotes = contact?.notes ?? '';
@@ -1551,9 +1559,40 @@ export default function ContactDetail() {
               </div>
             </div>
 
+            {/* Estimates list */}
+            {contactEstimates.length > 0 && (
+              <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Estimates</h3>
+                <div className="space-y-3">
+                  {contactEstimates.map((est: any) => (
+                    <div key={est.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div>
+                        <p className="font-medium text-gray-900 text-sm">{est.title}</p>
+                        <p className="text-xs text-gray-500">{est.estimateNumber} · <span className="capitalize">{est.status}</span></p>
+                      </div>
+                      <p className="font-bold text-blue-600">{formatCurrency(est.total || 0)}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Payment Actions</h3>
-              <div className="flex gap-3">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Actions</h3>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={() => {
+                    setNewEstTitle('');
+                    setNewEstItems([{id: crypto.randomUUID(), description: '', quantity: 1, unit: 'ea', unitPrice: 0, total: 0}]);
+                    setNewEstNotes('');
+                    setNewEstTax(0);
+                    setShowNewEstimateModal(true);
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+                >
+                  <Plus size={18} />
+                  New Estimate
+                </button>
                 <button
                   onClick={() => dispatch({ type: 'TOGGLE_INVOICE_MODAL' })}
                   className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -1569,6 +1608,160 @@ export default function ContactDetail() {
             </div>
           </div>
         )}
+
+        {/* Inline New Estimate Modal */}
+        {showNewEstimateModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl shadow-2xl flex flex-col w-full max-w-3xl max-h-[90vh] overflow-hidden">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+                <div>
+                  <h2 className="text-lg font-bold text-gray-900">New Estimate — {contact.firstName} {contact.lastName}</h2>
+                  <p className="text-sm text-gray-500 mt-0.5">Create a new estimate pre-linked to this customer</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowTemplateForEstimate(true)}
+                    className="flex items-center gap-2 px-3 py-2 text-sm border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 transition-colors"
+                  >
+                    <FileText size={16} />
+                    Use Template
+                  </button>
+                  <button onClick={() => setShowNewEstimateModal(false)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                    <X size={20} className="text-gray-500" />
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+                  <input
+                    type="text"
+                    value={newEstTitle}
+                    onChange={e => setNewEstTitle(e.target.value)}
+                    placeholder="e.g. Roof Replacement — 123 Main St"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-medium text-gray-700">Line Items</label>
+                    <button
+                      onClick={() => setNewEstItems(prev => [...prev, {id: crypto.randomUUID(), description: '', quantity: 1, unit: 'ea', unitPrice: 0, total: 0}])}
+                      className="text-xs text-blue-600 hover:underline"
+                    >+ Add Row</button>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-12 gap-2 text-xs font-medium text-gray-500 px-2">
+                      <span className="col-span-5">Description</span>
+                      <span className="col-span-2 text-center">Qty</span>
+                      <span className="col-span-2">Unit</span>
+                      <span className="col-span-2 text-right">Price</span>
+                      <span className="col-span-1" />
+                    </div>
+                    {newEstItems.map((item, idx) => (
+                      <div key={item.id} className="grid grid-cols-12 gap-2 items-center">
+                        <input value={item.description} onChange={e => { const n=[...newEstItems]; n[idx]={...n[idx],description:e.target.value}; setNewEstItems(n); }} placeholder="Description" className="col-span-5 px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                        <input type="number" value={item.quantity} onChange={e => { const q=Number(e.target.value); const n=[...newEstItems]; n[idx]={...n[idx],quantity:q,total:q*n[idx].unitPrice}; setNewEstItems(n); }} className="col-span-2 px-2 py-1.5 border border-gray-200 rounded text-sm text-center focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                        <input value={item.unit} onChange={e => { const n=[...newEstItems]; n[idx]={...n[idx],unit:e.target.value}; setNewEstItems(n); }} className="col-span-2 px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                        <input type="number" value={item.unitPrice} onChange={e => { const p=Number(e.target.value); const n=[...newEstItems]; n[idx]={...n[idx],unitPrice:p,total:n[idx].quantity*p}; setNewEstItems(n); }} className="col-span-2 px-2 py-1.5 border border-gray-200 rounded text-sm text-right focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                        <button onClick={() => newEstItems.length > 1 && setNewEstItems(prev => prev.filter((_,i)=>i!==idx))} className="col-span-1 flex justify-center text-red-400 hover:text-red-600"><X size={14} /></button>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Totals */}
+                  <div className="mt-3 pt-3 border-t border-gray-100 space-y-1 text-sm">
+                    {(() => {
+                      const subtotal = newEstItems.reduce((s,i)=>s+i.total,0);
+                      const tax = subtotal*(newEstTax/100);
+                      return (<>
+                        <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
+                        <div className="flex justify-between items-center text-gray-600">
+                          <span>Tax <input type="number" value={newEstTax} onChange={e=>setNewEstTax(Number(e.target.value))} className="w-14 ml-1 px-1 py-0.5 border border-gray-200 rounded text-xs" />%</span>
+                          <span>{formatCurrency(tax)}</span>
+                        </div>
+                        <div className="flex justify-between font-bold text-gray-900 text-base"><span>Total</span><span className="text-blue-600">{formatCurrency(subtotal+tax)}</span></div>
+                      </>);
+                    })()}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                  <textarea value={newEstNotes} onChange={e=>setNewEstNotes(e.target.value)} rows={2} placeholder="Optional notes for the customer..." className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none resize-none text-sm" />
+                </div>
+              </div>
+              <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+                <button onClick={() => setShowNewEstimateModal(false)} className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-sm">Cancel</button>
+                <button
+                  disabled={isSavingEstimate || !newEstTitle.trim()}
+                  onClick={async () => {
+                    if (!profile?.company_id || !newEstTitle.trim()) return;
+                    setIsSavingEstimate(true);
+                    try {
+                      const subtotal = newEstItems.reduce((s,i)=>s+i.total,0);
+                      const tax = subtotal*(newEstTax/100);
+                      const total = subtotal+tax;
+                      const created = await db.createEstimate({
+                        company_id: profile.company_id,
+                        contact_id: contact.id,
+                        estimate_number: `EST-${Date.now().toString().slice(-6)}`,
+                        title: newEstTitle,
+                        items: newEstItems,
+                        subtotal,
+                        tax,
+                        total,
+                        status: 'draft',
+                        notes: newEstNotes || undefined,
+                        created_by: profile.id,
+                      });
+                      if (created) {
+                        const appEst = {
+                          id: created.id,
+                          contactId: created.contact_id,
+                          contactName: `${contact.firstName} ${contact.lastName}`,
+                          estimateNumber: created.estimate_number,
+                          title: created.title,
+                          description: created.description,
+                          status: created.status as any,
+                          amount: Number(created.subtotal || 0),
+                          tax: Number(created.tax || 0),
+                          total: Number(created.total || 0),
+                          validUntil: created.valid_until || created.validity_date,
+                          createdAt: created.created_at,
+                          items: created.items || [],
+                          terms: created.terms || created.terms_and_conditions,
+                          notes: created.notes,
+                          createdBy: created.created_by,
+                          updatedAt: created.updated_at,
+                        };
+                        dispatch({ type: 'ADD_ESTIMATE', payload: appEst });
+                        setContactEstimates(prev => [appEst, ...prev]);
+                        toast.success('Estimate created — go to Estimates to send it');
+                        setShowNewEstimateModal(false);
+                      } else { toast.error('Failed to create estimate'); }
+                    } catch (err: any) { toast.error(err?.message || 'Failed to create estimate'); }
+                    finally { setIsSavingEstimate(false); }
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm disabled:opacity-50"
+                >
+                  {isSavingEstimate ? <><Loader2 size={16} className="animate-spin" /> Saving…</> : <><Save size={16} /> Save Estimate</>}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ContactTemplateModal triggered for estimate creation */}
+        {showTemplateForEstimate && (
+          <ContactTemplateModal
+            contact={contact}
+            onClose={() => setShowTemplateForEstimate(false)}
+            onDocumentSaved={(doc) => {
+              setContactDocuments(prev => [doc, ...prev]);
+              setShowTemplateForEstimate(false);
+            }}
+          />
+        )}
+
 
 {activeTab === 'projects' && (
           <div className="space-y-6">

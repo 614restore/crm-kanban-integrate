@@ -1794,10 +1794,33 @@ class DatabaseService {
 
   // Update estimate status with tracking
   async markEstimateSent(estimateId: string): Promise<DbEstimate | null> {
-    return this.updateEstimate(estimateId, {
+    const updated = await this.updateEstimate(estimateId, {
       status: 'sent',
       sent_at: new Date().toISOString(),
     });
+    // Sync contact: move to estimate_sent stage and set project_value
+    if (updated?.contact_id) {
+      try {
+        const { data: currentContact } = await supabase
+          .from('contacts')
+          .select('project_value, status')
+          .eq('id', updated.contact_id)
+          .single();
+        const estimateTotal = Number(updated.total || 0);
+        const currentValue = Number(currentContact?.project_value || 0);
+        await supabase
+          .from('contacts')
+          .update({
+            status: 'estimate_sent',
+            project_value: Math.max(currentValue, estimateTotal),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', updated.contact_id);
+      } catch (err) {
+        console.warn('[DB] Failed to sync contact status after estimate sent:', err);
+      }
+    }
+    return updated;
   }
 
   async markEstimateViewed(estimateId: string): Promise<DbEstimate | null> {
@@ -1808,12 +1831,29 @@ class DatabaseService {
   }
 
   async markEstimateAccepted(estimateId: string, signedBy: string, signatureData?: string): Promise<DbEstimate | null> {
-    return this.updateEstimate(estimateId, {
+    const updated = await this.updateEstimate(estimateId, {
       status: 'accepted',
       accepted_at: new Date().toISOString(),
       signed_by: signedBy,
       signature_data: signatureData,
     });
+    // Sync contact: move to signed stage and set project_value from estimate total
+    if (updated?.contact_id) {
+      try {
+        const estimateTotal = Number(updated.total || 0);
+        await supabase
+          .from('contacts')
+          .update({
+            status: 'signed',
+            project_value: estimateTotal > 0 ? estimateTotal : undefined,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', updated.contact_id);
+      } catch (err) {
+        console.warn('[DB] Failed to sync contact status after estimate accepted:', err);
+      }
+    }
+    return updated;
   }
 
   async requestEstimateSignature(estimateId: string, token: string): Promise<DbEstimate | null> {

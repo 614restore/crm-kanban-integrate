@@ -353,6 +353,19 @@ export default function EstimatesView() {
       const updated = await db.markEstimateSent(estimateId);
       if (updated) {
         dispatch({ type: 'UPDATE_ESTIMATE', payload: mapDbEstimateToApp(updated) });
+        // Sync contact status + projectValue in local state immediately
+        const c = state.contacts.find(x => x.id === updated.contact_id);
+        if (c) {
+          dispatch({
+            type: 'UPDATE_CONTACT',
+            payload: {
+              ...c,
+              status: 'estimate_sent',
+              projectValue: Math.max(Number(c.projectValue || 0), Number(updated.total || 0)),
+              updatedAt: new Date().toISOString(),
+            },
+          });
+        }
       }
       toast.success(`Estimate emailed to ${contact.email}`);
     } catch (error) {
@@ -405,6 +418,19 @@ export default function EstimatesView() {
       const updated = await db.markEstimateAccepted(estimate.id, profile.id);
       if (updated) {
         dispatch({ type: 'UPDATE_ESTIMATE', payload: mapDbEstimateToApp(updated) });
+        // Sync contact status + projectValue in local state immediately
+        const c = state.contacts.find(x => x.id === updated.contact_id);
+        if (c) {
+          dispatch({
+            type: 'UPDATE_CONTACT',
+            payload: {
+              ...c,
+              status: 'signed',
+              projectValue: Number(updated.total || c.projectValue || 0),
+              updatedAt: new Date().toISOString(),
+            },
+          });
+        }
         // Auto-create project on acceptance
         const dbEstimate = { ...updated, company_id: profile.company_id } as any;
         const project = await db.createProjectFromEstimate(dbEstimate, profile.id);
@@ -429,6 +455,19 @@ export default function EstimatesView() {
       if (updated) {
         const appEstimate = mapDbEstimateToApp(updated);
         dispatch({ type: 'UPDATE_ESTIMATE', payload: appEstimate });
+        // Sync contact status + projectValue in local state immediately
+        const c = state.contacts.find(x => x.id === updated.contact_id);
+        if (c) {
+          dispatch({
+            type: 'UPDATE_CONTACT',
+            payload: {
+              ...c,
+              status: 'signed',
+              projectValue: Number(updated.total || c.projectValue || 0),
+              updatedAt: new Date().toISOString(),
+            },
+          });
+        }
         const dbEstimate = { ...updated, company_id: profile.company_id } as any;
         const project = await db.createProjectFromEstimate(dbEstimate, profile.id);
         if (project) {

@@ -401,7 +401,15 @@ export default function PipelineBoard() {
         <div className="flex gap-4 h-full min-w-max">
           {currentBoard?.columns.map((column) => {
             const contacts = getColumnContacts(column);
-            const columnValue = contacts.reduce((sum, c) => sum + (c.projectValue || 0), 0);
+            // Sum each contact's project value; fall back to their largest non-declined estimate total
+            const columnValue = contacts.reduce((sum, c) => {
+              if (c.projectValue && c.projectValue > 0) return sum + c.projectValue;
+              const bestEstimate = state.estimates
+                .filter(e => e.contactId === c.id && e.status !== 'declined')
+                .reduce((max, e) => Math.max(max, Number(e.total || 0)), 0);
+              return sum + bestEstimate;
+            }, 0);
+
 
             return (
               <div
