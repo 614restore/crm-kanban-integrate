@@ -2874,11 +2874,20 @@ const DocumentTemplates: React.FC = () => {
               onClick={() => dispatch({ type: 'SET_VIEW', payload: 'settings' })}
               className="font-medium underline underline-offset-2 hover:text-amber-900"
             >
-              Go to Settings &rsaquo; Company Profile to upload your logo
+              Go to Settings › Company Profile to upload your logo
             </button>
           </span>
         </div>
       )}
+
+      {/* Info banner explaining document templates */}
+      <div className="flex items-center gap-3 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+        <FileText className="w-4 h-4 shrink-0" />
+        <span>
+          <strong>Document Templates</strong> are HTML-based templates for generating professional PDFs, estimates, invoices, and contracts. 
+          Click <strong>"Preview"</strong> to see the rendered document, or <strong>"Create"</strong> to fill it with customer data.
+        </span>
+      </div>
 
       {/* Main layout: folder sidebar + templates */}
       <div className="flex gap-6 items-start">
@@ -3257,12 +3266,12 @@ const DocumentTemplates: React.FC = () => {
           setPreviewMode(false);
           setSelectedTemplate(null);
         }}>
-          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
             <DialogHeader>
               <DialogTitle>{selectedTemplate.name} - Preview</DialogTitle>
             </DialogHeader>
             
-            <div className="space-y-4">
+            <div className="flex-1 overflow-y-auto space-y-4">
               <div className="bg-gray-50 p-4 rounded">
                 <Label>Variables in this template:</Label>
                 <div className="flex flex-wrap gap-1 mt-2">
@@ -3274,23 +3283,17 @@ const DocumentTemplates: React.FC = () => {
                 </div>
               </div>
               
-              <div className="border rounded p-4 bg-white">
-                {selectedTemplate.content.trim().startsWith('<!DOCTYPE') || selectedTemplate.content.trim().startsWith('<html') ? (
-                  <iframe
-                    srcDoc={getPreviewContent(selectedTemplate)}
-                    className="w-full border-0 rounded"
-                    style={{ minHeight: '600px', height: '70vh' }}
-                    title={`Preview: ${selectedTemplate.name}`}
-                    sandbox="allow-same-origin"
-                  />
-                ) : (
-                  <pre className="whitespace-pre-wrap font-mono text-sm">
-                    {getPreviewContent(selectedTemplate)}
-                  </pre>
-                )}
+              <div className="border rounded bg-white" style={{ minHeight: '500px' }}>
+                <iframe
+                  srcDoc={getPreviewContent(selectedTemplate)}
+                  className="w-full border-0 rounded"
+                  style={{ minHeight: '500px', height: '60vh' }}
+                  title={`Preview: ${selectedTemplate.name}`}
+                  sandbox="allow-same-origin"
+                />
               </div>
               
-              <div className="flex justify-end gap-2">
+              <div className="flex justify-end gap-2 pb-4">
                 <Button variant="outline" onClick={() => duplicateTemplate(selectedTemplate)}>
                   <Copy className="w-4 h-4 mr-2" />
                   Duplicate
@@ -3312,11 +3315,11 @@ const DocumentTemplates: React.FC = () => {
       {/* Per-Customer Template Editor */}
       {customerEditMode && selectedTemplate && (
         <Dialog open={customerEditMode} onOpenChange={() => setCustomerEditMode(false)}>
-          <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col">
             <DialogHeader>
               <DialogTitle>Edit "{selectedTemplate.name}" for Customer</DialogTitle>
             </DialogHeader>
-            <div className="space-y-4">
+            <div className="flex-1 overflow-hidden flex flex-col space-y-4">
               <div>
                 <Label>Customer</Label>
                 <select
@@ -3333,16 +3336,39 @@ const DocumentTemplates: React.FC = () => {
                   ))}
                 </select>
               </div>
-              <div>
-                <Label>Document Content (editable)</Label>
-                <Textarea
-                  value={editedContent}
-                  onChange={(e) => setEditedContent(e.target.value)}
-                  className="mt-1 font-mono text-xs"
-                  rows={20}
-                />
-              </div>
-              <div className="flex justify-end gap-2">
+              
+              <Tabs defaultValue="preview" className="flex-1 flex flex-col overflow-hidden">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="preview">Preview</TabsTrigger>
+                  <TabsTrigger value="html">HTML Source</TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="preview" className="flex-1 overflow-y-auto mt-4">
+                  <div className="border rounded bg-white" style={{ minHeight: '500px' }}>
+                    <iframe
+                      srcDoc={editedContent}
+                      className="w-full border-0 rounded"
+                      style={{ minHeight: '500px', height: '60vh' }}
+                      title={`Preview: ${selectedTemplate.name}`}
+                      sandbox="allow-same-origin"
+                    />
+                  </div>
+                </TabsContent>
+                
+                <TabsContent value="html" className="flex-1 overflow-y-auto mt-4">
+                  <div>
+                    <Label>Document HTML (editable)</Label>
+                    <Textarea
+                      value={editedContent}
+                      onChange={(e) => setEditedContent(e.target.value)}
+                      className="mt-1 font-mono text-xs"
+                      rows={20}
+                    />
+                  </div>
+                </TabsContent>
+              </Tabs>
+              
+              <div className="flex justify-end gap-2 pt-4 border-t">
                 <Button variant="outline" onClick={() => setCustomerEditMode(false)}>Cancel</Button>
                 <Button
                   onClick={() => {

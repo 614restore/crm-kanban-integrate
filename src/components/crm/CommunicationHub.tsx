@@ -452,11 +452,7 @@ export default function CommunicationHub() {
   };
 
   const handleCompose = () => {
-    if (!selectedCommData?.contact) {
-      toast.error('Select a contact thread before composing');
-      return;
-    }
-    setComposeContactId(selectedCommData.contact.id);
+    setComposeContactId(selectedCommData?.contact?.id || '');
     setComposeText('');
     setComposeType('note');
     setShowComposeModal(true);
@@ -571,10 +567,15 @@ export default function CommunicationHub() {
                 <span className="font-medium">Templates</span>
               </button>
               <button
-                onClick={handleCompose}
-                disabled={!hasSelectedThread}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
-                title={!hasSelectedThread ? 'Select a contact thread first' : 'Compose new message'}
+                onClick={() => {
+                  if (!hasSelectedThread) {
+                    setShowComposeModal(true);
+                  } else {
+                    handleCompose();
+                  }
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                title="Compose new message"
               >
                 <Plus size={18} />
                 <span className="font-medium">Compose</span>

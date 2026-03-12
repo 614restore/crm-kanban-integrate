@@ -44,6 +44,6 @@ dist-ssr
 .islstudio/
 .vibecheck/
 .windsurf/
-workflows/
+/workflows/
 summary.section-label*
 public/crm-user-tier-comparison.html
