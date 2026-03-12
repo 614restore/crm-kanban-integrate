@@ -876,11 +876,31 @@ function CRMApp() {
     if (!profile?.company_id) return;
     const handleVisible = () => {
       if (document.visibilityState === 'visible') {
+        console.log('[AppLayout] Tab visible — refreshing data');
         requestSoftReload();
       }
     };
     document.addEventListener('visibilitychange', handleVisible);
     return () => document.removeEventListener('visibilitychange', handleVisible);
+  }, [profile?.company_id, requestSoftReload]);
+
+  // Add manual refresh on window focus as additional safeguard
+  useEffect(() => {
+    if (!profile?.company_id) return;
+    const handleFocus = () => {
+      console.log('[AppLayout] Window focused — refreshing data');
+      requestSoftReload();
+    };
+    const handleForceRefresh = () => {
+      console.log('[AppLayout] Manual refresh triggered');
+      requestSoftReload();
+    };
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('crm-force-refresh', handleForceRefresh);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('crm-force-refresh', handleForceRefresh);
+    };
   }, [profile?.company_id, requestSoftReload]);
 
   // Fail-safe: avoid getting stuck on the loading screen if initial data calls stall
