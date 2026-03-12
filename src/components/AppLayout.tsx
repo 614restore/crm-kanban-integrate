@@ -424,9 +424,10 @@ function CRMApp() {
   const loadData = useCallback(async (options?: { silent?: boolean }) => {
     const silent = options?.silent ?? false;
     if (!profile?.company_id) {
-      // If auth is still loading, don't mark as done — wait for profile to arrive
+      // If auth is still loading, keep waiting — don't show empty state
       if (!authLoading && !silent) {
-        dispatch({ type: 'SET_LOADING', payload: false });
+        console.warn('[AppLayout] No company_id available — cannot load data');
+        // Don't set loading to false yet — keep showing loading screen
       }
       return;
     }
@@ -887,9 +888,11 @@ function CRMApp() {
     if (!state.isLoading || state.isInitialized) return;
     // Don't start the timeout until auth has finished loading
     if (authLoading) return;
+    // Don't timeout if we're still waiting for profile/company_id
+    if (!profile?.company_id) return;
 
     const timer = window.setTimeout(() => {
-      console.warn('Initial CRM data load timed out after 8 s; showing app shell with empty data.');
+      console.warn('[AppLayout] Initial CRM data load timed out after 12s; showing app shell with empty data.');
       dispatch({
         type: 'INITIALIZE_DATA',
         payload: {
@@ -909,10 +912,10 @@ function CRMApp() {
           companyGoals: [],
         },
       });
-    }, 8000);
+    }, 12000);
 
     return () => window.clearTimeout(timer);
-  }, [state.isLoading, state.isInitialized, authLoading]);
+  }, [state.isLoading, state.isInitialized, authLoading, profile?.company_id]);
 
   // Check subscription status after data loads — enforce paywall on expired/canceled accounts
   useEffect(() => {

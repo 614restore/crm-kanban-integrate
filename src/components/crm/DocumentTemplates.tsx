@@ -42,6 +42,7 @@ import { getContractorEstimateTemplates } from '@/lib/contractorTemplates';
 import { DOCUMENT_CATEGORIES, type DocumentCategoryId } from '@/lib/documentCategories';
 import { getCertificateOfCompletionTemplate } from '@/lib/certificateTemplate';
 import DocumentEditor from './DocumentEditor';
+import InlineDocumentEditor from './InlineDocumentEditor';
 
 interface DocumentField {
   key: string;
@@ -3119,7 +3120,7 @@ const DocumentTemplates: React.FC = () => {
                           }}
                         >
                           <Edit className="w-4 h-4 mr-1" />
-                          Edit & Use
+                          Fill & Use
                         </Button>
                       ) : (
                         <Button 
@@ -3208,9 +3209,9 @@ const DocumentTemplates: React.FC = () => {
         </div>  {/* end main content */}
       </div>  {/* end flex row with sidebar */}
 
-      {/* Simple Document Editor */}
+      {/* Inline Document Editor */}
       {showSimpleEditor && editorTemplate && editorTemplate.fields && (
-        <DocumentEditor
+        <InlineDocumentEditor
           templateName={editorTemplate.name}
           templateContent={(() => {
             // Pre-fill company information from profile
