@@ -170,15 +170,13 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
     return ['all', ...Array.from(cats)];
   }, [templates]);
 
-  const unfilledFields = useMemo(() => {
+  const editableFields = useMemo(() => {
     if (!selected) return [];
-    // Only show fields defined in the template's fields array
+    // Show ALL fields defined in the template, not just unfilled ones
     if (selected.fields && selected.fields.length > 0) {
-      return selected.fields
-        .filter(f => !fieldValues[f.key] && !f.defaultValue)
-        .map(f => f.key);
+      return selected.fields.map(f => f.key);
     }
-    // Fallback: show all unfilled variables
+    // Fallback: show all variables found in template
     const base = buildContactOverrides(
       contact,
       companyProfile,
@@ -187,7 +185,11 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
     const merged = { ...base, ...fieldValues };
     const html = fillTemplateVars(selected.content, merged);
     return getUnfilledVars(html);
-  }, [selected, contact, companyProfile, profile, fieldValues]);
+  }, [selected, contact, companyProfile, profile]);
+
+  const unfilledCount = useMemo(() => {
+    return editableFields.filter(field => !fieldValues[field]).length;
+  }, [editableFields, fieldValues]);
 
   // Template list view
   const renderList = () => (
@@ -284,12 +286,13 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
           </p>
         </div>
 
-        {unfilledFields.length > 0 && (
+        {editableFields.length > 0 && (
           <div className="space-y-3">
-            {unfilledFields.map(field => (
+            {editableFields.map(field => (
               <div key={field}>
                 <label className="block text-xs font-medium text-gray-700 mb-1">
                   {field.replace(/_/g, ' ')}
+                  {fieldValues[field] && <span className="ml-1 text-green-600">✓</span>}
                 </label>
                 <input
                   type="text"
@@ -303,7 +306,7 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
           </div>
         )}
 
-        {unfilledFields.length === 0 && (
+        {unfilledCount === 0 && editableFields.length > 0 && (
           <div className="bg-green-50 border border-green-200 rounded-lg p-3">
             <p className="text-xs font-medium text-green-900 mb-1">✓ All fields filled</p>
             <p className="text-xs text-green-700">Document is ready to save.</p>
@@ -315,9 +318,9 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
       <div className="flex-1 flex flex-col overflow-hidden bg-white">
         <div className="p-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
           <p className="text-xs font-medium text-gray-600">Live Document Preview</p>
-          {unfilledFields.length > 0 && (
+          {unfilledCount > 0 && (
             <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
-              {unfilledFields.length} field(s) still blank
+              {unfilledCount} field(s) still blank
             </span>
           )}
         </div>
@@ -367,8 +370,8 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
         {selected && (
           <div className="p-4 border-t border-gray-200 flex items-center justify-between gap-3 flex-shrink-0">
             <p className="text-xs text-gray-500">
-              {unfilledFields.length > 0
-                ? `${unfilledFields.length} field(s) still blank — please fill them in before saving.`
+              {unfilledCount > 0
+                ? `${unfilledCount} field(s) still blank — please fill them in before saving.`
                 : '✓ All fields filled. Ready to save.'}
             </p>
             <div className="flex gap-2">
