@@ -48,7 +48,6 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
   const [templates] = useState<DocumentTemplate[]>(getContractorEstimateTemplates());
   const [selected, setSelected] = useState<DocumentTemplate | null>(null);
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
-  const [editingField, setEditingField] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>('all');
@@ -61,63 +60,23 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
       .catch(() => {});
   }, [profile?.company_id]);
 
-  // Build preview content with editable placeholders
+  // Build preview content with live values
   const previewContent = useMemo(() => {
     if (!selected) return '';
     const base = buildContactOverrides(contact as any, companyProfile as any, profile as any);
     const merged = { ...base, ...fieldValues };
-    let html = fillTemplateVars(selected.content, merged);
-    
-    // Find remaining unfilled variables and make them clickable
-    const unfilled = getUnfilledVars(html);
-    unfilled.forEach(varName => {
-      const placeholder = `{{${varName}}}`;
-      const clickableSpan = `<span class="editable-field" data-field="${varName}" style="background:#fef3c7;border:1px dashed #f59e0b;padding:2px 6px;border-radius:3px;cursor:pointer;display:inline-block;min-width:60px;text-align:center;font-size:13px;color:#92400e;" title="Click to edit ${varName.replace(/_/g, ' ').toLowerCase()}">${fieldValues[varName] || placeholder}</span>`;
-      html = html.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'), clickableSpan);
-    });
-
-    // Add click handler script
-    html += `
-      <script>
-        document.addEventListener('click', function(e) {
-          if (e.target.classList.contains('editable-field')) {
-            const field = e.target.getAttribute('data-field');
-            window.parent.postMessage({ type: 'EDIT_FIELD', field: field }, '*');
-          }
-        });
-      </script>
-    `;
-
-    return html;
+    return fillTemplateVars(selected.content, merged);
   }, [selected, companyProfile, profile, fieldValues, contact]);
-
-  // Listen for click events from iframe
-  useEffect(() => {
-    const handleMessage = (e: MessageEvent) => {
-      if (e.data?.type === 'EDIT_FIELD') {
-        setEditingField(e.data.field);
-      }
-    };
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, []);
 
   const handleSelect = (t: DocumentTemplate) => {
     setSelected(t);
     setFieldValues({});
-    setEditingField(null);
   };
 
   const handleBack = () => {
     setSelected(null);
     setFieldValues({});
-    setEditingField(null);
   };
-
-  const handleFieldUpdate = useCallback((field: string, value: string) => {
-    setFieldValues(prev => ({ ...prev, [field]: value }));
-    setEditingField(null);
-  }, []);
 
   const handleSave = async () => {
     if (!selected || !profile?.company_id) {
@@ -284,8 +243,8 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
   // Document editor view
   const renderEditor = () => (
     <div className="flex h-full">
-      {/* Left sidebar: Quick fill panel */}
-      <div className="w-72 flex-shrink-0 border-r border-gray-200 overflow-y-auto p-4 space-y-4 bg-gray-50">
+      {/* Left sidebar: Form fields */}
+      <div className="w-80 flex-shrink-0 border-r border-gray-200 overflow-y-auto p-4 space-y-4 bg-gray-50">
         <button
           onClick={handleBack}
           className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 mb-2"
@@ -296,37 +255,32 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
         
         <div>
           <h3 className="font-semibold text-gray-900 mb-1">{selected!.name}</h3>
-          <p className="text-xs text-gray-500">For {getContactFullName(contact)}</p>
+          <p className="text-xs text-gray-500">Filling in data for {getContactFullName(contact)}</p>
         </div>
 
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-          <p className="text-xs font-medium text-blue-900 mb-1">💡 How to use</p>
+          <p className="text-xs font-medium text-blue-900 mb-1">📝 Fill In Values</p>
           <p className="text-xs text-blue-700 leading-relaxed">
-            Click on any highlighted field in the document to edit it. Customer and company info is already filled in.
+            Customer and company info is auto-filled. Enter project-specific values below to complete the document.
           </p>
         </div>
 
         {unfilledFields.length > 0 && (
-          <div>
-            <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">
-              Fields to fill ({unfilledFields.length})
-            </p>
-            <div className="space-y-1">
-              {unfilledFields.slice(0, 10).map(field => (
-                <button
-                  key={field}
-                  onClick={() => setEditingField(field)}
-                  className="w-full text-left px-3 py-2 text-xs bg-white border border-gray-200 rounded-lg hover:border-blue-400 hover:bg-blue-50 transition-colors"
-                >
+          <div className="space-y-3">
+            {unfilledFields.map(field => (
+              <div key={field}>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
                   {field.replace(/_/g, ' ')}
-                </button>
-              ))}
-              {unfilledFields.length > 10 && (
-                <p className="text-xs text-gray-500 px-3 py-1">
-                  +{unfilledFields.length - 10} more fields
-                </p>
-              )}
-            </div>
+                </label>
+                <input
+                  type="text"
+                  value={fieldValues[field] || ''}
+                  onChange={e => setFieldValues(prev => ({ ...prev, [field]: e.target.value }))}
+                  placeholder={`Enter ${field.replace(/_/g, ' ').toLowerCase()}...`}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            ))}
           </div>
         )}
 
@@ -338,13 +292,13 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
         )}
       </div>
 
-      {/* Right: Document preview with inline editing */}
+      {/* Right: Document preview */}
       <div className="flex-1 flex flex-col overflow-hidden bg-white">
         <div className="p-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
-          <p className="text-xs font-medium text-gray-600">Click highlighted fields to edit</p>
+          <p className="text-xs font-medium text-gray-600">Live Document Preview</p>
           {unfilledFields.length > 0 && (
             <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
-              {unfilledFields.length} fields remaining
+              {unfilledFields.length} field(s) still blank
             </span>
           )}
         </div>
@@ -359,44 +313,6 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
           </div>
         </div>
       </div>
-
-      {/* Editing popup */}
-      {editingField && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setEditingField(null)}>
-          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
-            <h3 className="font-semibold text-gray-900 mb-1">
-              {editingField.replace(/_/g, ' ')}
-            </h3>
-            <p className="text-xs text-gray-500 mb-4">Enter value for this field</p>
-            <input
-              type="text"
-              autoFocus
-              value={fieldValues[editingField] || ''}
-              onChange={e => setFieldValues(prev => ({ ...prev, [editingField]: e.target.value }))}
-              onKeyDown={e => {
-                if (e.key === 'Enter') handleFieldUpdate(editingField, fieldValues[editingField] || '');
-                if (e.key === 'Escape') setEditingField(null);
-              }}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
-              placeholder={`Enter ${editingField.replace(/_/g, ' ').toLowerCase()}...`}
-            />
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => setEditingField(null)}
-                className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleFieldUpdate(editingField, fieldValues[editingField] || '')}
-                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-              >
-                Save
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 
@@ -433,8 +349,8 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
           <div className="p-4 border-t border-gray-200 flex items-center justify-between gap-3 flex-shrink-0">
             <p className="text-xs text-gray-500">
               {unfilledFields.length > 0
-                ? `${unfilledFields.length} field(s) remaining — click highlighted areas to fill them in`
-                : '✓ All fields complete — ready to save'}
+                ? `${unfilledFields.length} field(s) still blank — document will save with placeholders if left empty.`
+                : '✓ All fields filled. Ready to save.'}
             </p>
             <div className="flex gap-2">
               <button
