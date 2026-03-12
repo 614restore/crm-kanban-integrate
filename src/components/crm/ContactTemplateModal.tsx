@@ -1,19 +1,16 @@
-// ContactTemplateModal — User-friendly document template editor with inline editing
-import React, { useState, useEffect, useMemo } from 'react';
+// ContactTemplateModal — Inline document editor with click-to-edit placeholders
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { X, FileText, ChevronLeft, Search, DollarSign, Save, Loader2, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/authContext';
 import { db, DbCompany } from '@/lib/database';
 import { uploadDocument } from '@/lib/storage';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import {
   DocumentTemplate,
-  DocumentField,
   getContractorEstimateTemplates,
   buildContactOverrides,
   fillTemplateVars,
+  getUnfilledVars,
 } from '@/lib/contractorTemplates';
 import { Contact, Document, getContactFullName } from '@/lib/crmData';
 
@@ -51,10 +48,10 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
   const [templates] = useState<DocumentTemplate[]>(getContractorEstimateTemplates());
   const [selected, setSelected] = useState<DocumentTemplate | null>(null);
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
+  const [editingField, setEditingField] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>('all');
-  const iframeRef = React.useRef<HTMLIFrameElement>(null);
 
   // Load company profile
   useEffect(() => {
@@ -64,62 +61,84 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
       .catch(() => {});
   }, [profile?.company_id]);
 
-  // Initialize field values when template selected
-  useEffect(() => {
-    if (!selected?.fields) return;
-    const initial: Record<string, string> = {};
-    selected.fields.forEach(f => {
-      initial[f.key] = f.defaultValue || '';
-    });
-    setFieldValues(initial);
-  }, [selected]);
-
-  // Build and render preview
+  // Build preview content with editable placeholders
   const previewContent = useMemo(() => {
     if (!selected) return '';
     const base = buildContactOverrides(contact as any, companyProfile as any, profile as any);
     const merged = { ...base, ...fieldValues };
-    return fillTemplateVars(selected.content, merged);
+    let html = fillTemplateVars(selected.content, merged);
+    
+    // Find remaining unfilled variables and make them clickable
+    const unfilled = getUnfilledVars(html);
+    unfilled.forEach(varName => {
+      const placeholder = `{{${varName}}}`;
+      const clickableSpan = `<span class="editable-field" data-field="${varName}" style="background:#fef3c7;border:1px dashed #f59e0b;padding:2px 6px;border-radius:3px;cursor:pointer;display:inline-block;min-width:60px;text-align:center;font-size:13px;color:#92400e;" title="Click to edit ${varName.replace(/_/g, ' ').toLowerCase()}">${fieldValues[varName] || placeholder}</span>`;
+      html = html.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'), clickableSpan);
+    });
+
+    // Add click handler script
+    html += `
+      <script>
+        document.addEventListener('click', function(e) {
+          if (e.target.classList.contains('editable-field')) {
+            const field = e.target.getAttribute('data-field');
+            window.parent.postMessage({ type: 'EDIT_FIELD', field: field }, '*');
+          }
+        });
+      </script>
+    `;
+
+    return html;
   }, [selected, companyProfile, profile, fieldValues, contact]);
 
-  // Update iframe
+  // Listen for click events from iframe
   useEffect(() => {
-    const iframe = iframeRef.current;
-    if (!iframe || !selected) return;
-    try {
-      const doc = iframe.contentDocument || iframe.contentWindow?.document;
-      if (doc) {
-        doc.open();
-        doc.write(previewContent);
-        doc.close();
+    const handleMessage = (e: MessageEvent) => {
+      if (e.data?.type === 'EDIT_FIELD') {
+        setEditingField(e.data.field);
       }
-    } catch {
-      iframe.srcdoc = previewContent;
-    }
-  }, [previewContent, selected]);
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
 
   const handleSelect = (t: DocumentTemplate) => {
     setSelected(t);
     setFieldValues({});
+    setEditingField(null);
   };
 
   const handleBack = () => {
     setSelected(null);
     setFieldValues({});
+    setEditingField(null);
   };
 
-  const handleFieldChange = (key: string, value: string) => {
-    setFieldValues(prev => ({ ...prev, [key]: value }));
-  };
+  const handleFieldUpdate = useCallback((field: string, value: string) => {
+    setFieldValues(prev => ({ ...prev, [field]: value }));
+    setEditingField(null);
+  }, []);
 
   const handleSave = async () => {
     if (!selected || !profile?.company_id) {
       toast.error('Unable to save — missing company context.');
       return;
     }
+
+    // Check for unfilled required fields
+    const base = buildContactOverrides(contact as any, companyProfile as any, profile as any);
+    const merged = { ...base, ...fieldValues };
+    const finalHtml = fillTemplateVars(selected.content, merged);
+    const stillUnfilled = getUnfilledVars(finalHtml);
+    
+    if (stillUnfilled.length > 0) {
+      toast.error(`Please fill in: ${stillUnfilled.slice(0, 3).join(', ')}${stillUnfilled.length > 3 ? '...' : ''}`);
+      return;
+    }
+
     setIsSaving(true);
     try {
-      const blob = new Blob([previewContent], { type: 'text/html' });
+      const blob = new Blob([finalHtml], { type: 'text/html' });
       const contactName = getContactFullName(contact).replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
       const timestamp = new Date().toISOString().slice(0, 10);
       const fileName = `${selected.name.replace(/\s+/g, '_')}_${contactName}_${timestamp}.html`;
@@ -183,6 +202,14 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
     const cats = new Set(templates.map(t => t.category));
     return ['all', ...Array.from(cats)];
   }, [templates]);
+
+  const unfilledFields = useMemo(() => {
+    if (!selected) return [];
+    const base = buildContactOverrides(contact as any, companyProfile as any, profile as any);
+    const merged = { ...base, ...fieldValues };
+    const html = fillTemplateVars(selected.content, merged);
+    return getUnfilledVars(html);
+  }, [selected, contact, companyProfile, profile, fieldValues]);
 
   // Template list view
   const renderList = () => (
@@ -257,8 +284,8 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
   // Document editor view
   const renderEditor = () => (
     <div className="flex h-full">
-      {/* Left: Form fields */}
-      <div className="w-80 flex-shrink-0 border-r border-gray-200 overflow-y-auto p-4 space-y-4 bg-gray-50">
+      {/* Left sidebar: Quick fill panel */}
+      <div className="w-72 flex-shrink-0 border-r border-gray-200 overflow-y-auto p-4 space-y-4 bg-gray-50">
         <button
           onClick={handleBack}
           className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 mb-2"
@@ -272,60 +299,110 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
           <p className="text-xs text-gray-500">For {getContactFullName(contact)}</p>
         </div>
 
-        {selected!.fields && selected!.fields.length > 0 ? (
-          <div className="space-y-3">
-            <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Fill in Details</p>
-            {selected!.fields.map((field: DocumentField) => (
-              <div key={field.key}>
-                <Label className="text-xs font-medium text-gray-700">
-                  {field.label}
-                  {field.required && <span className="text-red-500 ml-1">*</span>}
-                </Label>
-                {field.type === 'textarea' ? (
-                  <Textarea
-                    value={fieldValues[field.key] || ''}
-                    onChange={(e) => handleFieldChange(field.key, e.target.value)}
-                    placeholder={field.placeholder}
-                    className="mt-1 text-sm"
-                    rows={3}
-                  />
-                ) : (
-                  <Input
-                    type={field.type}
-                    value={fieldValues[field.key] || ''}
-                    onChange={(e) => handleFieldChange(field.key, e.target.value)}
-                    placeholder={field.placeholder}
-                    className="mt-1 text-sm"
-                  />
-                )}
-              </div>
-            ))}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+          <p className="text-xs font-medium text-blue-900 mb-1">💡 How to use</p>
+          <p className="text-xs text-blue-700 leading-relaxed">
+            Click on any highlighted field in the document to edit it. Customer and company info is already filled in.
+          </p>
+        </div>
+
+        {unfilledFields.length > 0 && (
+          <div>
+            <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">
+              Fields to fill ({unfilledFields.length})
+            </p>
+            <div className="space-y-1">
+              {unfilledFields.slice(0, 10).map(field => (
+                <button
+                  key={field}
+                  onClick={() => setEditingField(field)}
+                  className="w-full text-left px-3 py-2 text-xs bg-white border border-gray-200 rounded-lg hover:border-blue-400 hover:bg-blue-50 transition-colors"
+                >
+                  {field.replace(/_/g, ' ')}
+                </button>
+              ))}
+              {unfilledFields.length > 10 && (
+                <p className="text-xs text-gray-500 px-3 py-1">
+                  +{unfilledFields.length - 10} more fields
+                </p>
+              )}
+            </div>
           </div>
-        ) : (
-          <p className="text-xs text-gray-500">No additional fields required. Customer and company info auto-filled.</p>
+        )}
+
+        {unfilledFields.length === 0 && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+            <p className="text-xs font-medium text-green-900 mb-1">✓ All fields filled</p>
+            <p className="text-xs text-green-700">Document is ready to save.</p>
+          </div>
         )}
       </div>
 
-      {/* Right: Live preview */}
+      {/* Right: Document preview with inline editing */}
       <div className="flex-1 flex flex-col overflow-hidden bg-white">
-        <div className="p-3 border-b border-gray-200 bg-gray-50">
-          <p className="text-xs font-medium text-gray-600">Live Preview</p>
+        <div className="p-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
+          <p className="text-xs font-medium text-gray-600">Click highlighted fields to edit</p>
+          {unfilledFields.length > 0 && (
+            <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
+              {unfilledFields.length} fields remaining
+            </span>
+          )}
         </div>
-        <div className="flex-1 overflow-auto p-4">
-          <iframe
-            ref={iframeRef}
-            className="w-full h-full border border-gray-200 rounded-lg bg-white"
-            title="Document Preview"
-            sandbox="allow-same-origin"
-          />
+        <div className="flex-1 overflow-auto p-6 bg-gray-100">
+          <div className="max-w-4xl mx-auto bg-white shadow-lg rounded-lg overflow-hidden">
+            <iframe
+              srcDoc={previewContent}
+              className="w-full h-full min-h-[800px] border-0"
+              title="Document Preview"
+              sandbox="allow-scripts allow-same-origin"
+            />
+          </div>
         </div>
       </div>
+
+      {/* Editing popup */}
+      {editingField && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setEditingField(null)}>
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <h3 className="font-semibold text-gray-900 mb-1">
+              {editingField.replace(/_/g, ' ')}
+            </h3>
+            <p className="text-xs text-gray-500 mb-4">Enter value for this field</p>
+            <input
+              type="text"
+              autoFocus
+              value={fieldValues[editingField] || ''}
+              onChange={e => setFieldValues(prev => ({ ...prev, [editingField]: e.target.value }))}
+              onKeyDown={e => {
+                if (e.key === 'Enter') handleFieldUpdate(editingField, fieldValues[editingField] || '');
+                if (e.key === 'Escape') setEditingField(null);
+              }}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
+              placeholder={`Enter ${editingField.replace(/_/g, ' ').toLowerCase()}...`}
+            />
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setEditingField(null)}
+                className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleFieldUpdate(editingField, fieldValues[editingField] || '')}
+                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl flex flex-col w-full max-w-6xl" style={{ height: '90vh' }}>
+      <div className="bg-white rounded-2xl shadow-2xl flex flex-col w-full max-w-7xl" style={{ height: '90vh' }}>
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
           <div>
@@ -353,25 +430,32 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
 
         {/* Footer (only show when editing) */}
         {selected && (
-          <div className="p-4 border-t border-gray-200 flex items-center justify-end gap-3 flex-shrink-0">
-            <button
-              onClick={onClose}
-              disabled={isSaving}
-              className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={isSaving}
-              className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSaving ? (
-                <><Loader2 size={16} className="animate-spin" /> Saving…</>
-              ) : (
-                <><Save size={16} /> Save to {getContactFullName(contact)}</>
-              )}
-            </button>
+          <div className="p-4 border-t border-gray-200 flex items-center justify-between gap-3 flex-shrink-0">
+            <p className="text-xs text-gray-500">
+              {unfilledFields.length > 0
+                ? `${unfilledFields.length} field(s) remaining — click highlighted areas to fill them in`
+                : '✓ All fields complete — ready to save'}
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={onClose}
+                disabled={isSaving}
+                className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={isSaving}
+                className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSaving ? (
+                  <><Loader2 size={16} className="animate-spin" /> Saving…</>
+                ) : (
+                  <><Save size={16} /> Save to {getContactFullName(contact)}</>
+                )}
+              </button>
+            </div>
           </div>
         )}
       </div>
