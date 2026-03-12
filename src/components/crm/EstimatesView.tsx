@@ -225,30 +225,27 @@ export default function EstimatesView() {
   const handleSave = async () => {
     if (!profile?.company_id) return;
     
-    // Validate
+    // Only require a customer and a total > 0 to save as draft
     if (!selectedContactId) {
       toast.error('Please select a customer');
       return;
     }
-    if (!title.trim()) {
-      toast.error('Please enter a title');
-      return;
-    }
-    if (items.some(item => !item.description.trim())) {
-      toast.error('All line items must have a description');
+
+    const { subtotal, tax, total } = calculateTotals();
+
+    if (total <= 0) {
+      toast.error('Please add at least one line item with a total greater than $0');
       return;
     }
 
     setIsSaving(true);
 
     try {
-      const { subtotal, tax, total } = calculateTotals();
-      
       const estimateData = {
         company_id: profile.company_id,
         contact_id: selectedContactId,
         estimate_number: estimateNumber,
-        title,
+        title: title || 'Untitled Estimate',
         items,
         subtotal,
         tax,
@@ -936,7 +933,7 @@ export default function EstimatesView() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Estimate Number *
+                    Estimate Number
                   </label>
                   <input
                     type="text"
@@ -948,7 +945,7 @@ export default function EstimatesView() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Title *
+                    Title
                   </label>
                   <input
                     type="text"
@@ -961,7 +958,7 @@ export default function EstimatesView() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Valid Until *
+                    Valid Until
                   </label>
                   <input
                     type="date"
@@ -992,7 +989,7 @@ export default function EstimatesView() {
                         <div className="col-span-5">
                           <input
                             type="text"
-                            placeholder="Description *"
+                            placeholder="Description"
                             value={item.description}
                             onChange={(e) => updateItem(index, 'description', e.target.value)}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
