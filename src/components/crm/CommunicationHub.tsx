@@ -41,93 +41,232 @@ const communicationTemplates = [
     id: 'initial-contact',
     title: 'Initial Contact',
     type: 'email',
-    subject: 'Your Storm Damage Assessment Request',
-    content: `Hi {{CUSTOMER_NAME}},
+    subject: 'Your Storm Damage Assessment - Next Steps',
+    content: `Dear {{CUSTOMER_NAME}},
 
-Thank you for reaching out about storm damage assessment. We understand how stressful property damage can be, and we're here to help.
+Thank you for contacting us regarding your storm damage assessment. We understand that dealing with property damage can be stressful, and we're committed to making this process as smooth as possible for you.
 
-Our next available inspection slot is {{INSPECTION_DATE}}. During this comprehensive assessment, we will:
+We would like to schedule a comprehensive inspection of your property at your earliest convenience. Our certified inspectors will:
 
-- Thoroughly inspect all affected areas
-- Document damage with detailed photos  
-- Provide a detailed estimate for insurance
-- Coordinate directly with your insurance adjuster
+• Conduct a thorough assessment of all affected areas
+• Document damage with detailed photographs and measurements
+• Provide a comprehensive estimate for insurance purposes
+• Coordinate directly with your insurance adjuster to expedite your claim
 
-Please confirm this appointment time works for you. We look forward to helping restore your property.
+Our next available inspection slots are:
+• [Please provide 2-3 specific date/time options]
+
+Please reply to this email or call us at {{PHONE}} to confirm which time works best for you. If none of these times are suitable, we'll be happy to arrange an alternative.
+
+We look forward to helping restore your property to its original condition.
 
 Best regards,
-{{AGENT_NAME}}`
+{{AGENT_NAME}}
+{{PHONE}}`
   },
   {
     id: 'insurance-claim',
     title: 'Insurance Claim Update',
     type: 'email',
-    subject: 'Insurance Claim Status Update - Claim #{{CLAIM_NUMBER}}',
-    content: `Hi {{CUSTOMER_NAME}},
+    subject: 'Update on Your Insurance Claim #{{CLAIM_NUMBER}}',
+    content: `Dear {{CUSTOMER_NAME}},
 
-I wanted to update you on the progress of your insurance claim (#{{CLAIM_NUMBER}}).
+I wanted to provide you with an update on the progress of your insurance claim (#{{CLAIM_NUMBER}}).
 
-Current Status: {{STATUS}}
-Next Steps: {{NEXT_STEPS}}
+Current Status: [Please specify current status - e.g., "Under review by adjuster", "Approved", "Additional documentation requested"]
 
-We're working closely with {{ADJUSTER_NAME}} to ensure your claim is processed quickly and fairly. 
+Recent Activity:
+• [List recent developments]
+• [Any communications with insurance company]
+• [Documents submitted or pending]
 
-If you have any questions, please don't hesitate to reach out.
+Next Steps:
+• [Clearly outline what happens next]
+• [Any action items for the customer]
+• [Expected timeline]
+
+We are working closely with {{ADJUSTER_NAME}} at your insurance company to ensure your claim is processed efficiently and fairly. Our goal is to secure the full coverage you're entitled to under your policy.
+
+If you have any questions or concerns about your claim, please don't hesitate to reach out. We're here to advocate for you throughout this entire process.
 
 Best regards,
-{{AGENT_NAME}}`
+{{AGENT_NAME}}
+{{PHONE}}`
   },
   {
     id: 'estimate-ready',
     title: 'Estimate Ready for Review',
     type: 'email',
-    subject: 'Your Storm Damage Estimate is Ready',
-    content: `Hi {{CUSTOMER_NAME}},
+    subject: 'Your Detailed Storm Damage Estimate is Ready',
+    content: `Dear {{CUSTOMER_NAME}},
 
-Great news! We've completed our assessment and your storm damage estimate is ready for review.
+Great news! We have completed our comprehensive assessment, and your detailed storm damage estimate is now ready for your review.
 
-Total Estimate: {{ESTIMATE_AMOUNT}}
-Insurance Deductible: {{DEDUCTIBLE}}
+Estimate Summary:
+• Total Estimated Cost: {{ESTIMATE_AMOUNT}}
+• Insurance Deductible: {{DEDUCTIBLE}}
+• Estimated Out-of-Pocket: [Calculate if possible]
 
-The estimate has been sent to your insurance adjuster and is attached for your records. We recommend reviewing it carefully and let us know if you have any questions.
+The complete estimate has been:
+✓ Sent to your insurance adjuster for review
+✓ Attached to this email for your records
+✓ Uploaded to your customer portal (if applicable)
 
-Next steps:
-1. Review the estimate
-2. Insurance approval process (typically 3-5 business days)
-3. Schedule work commencement
+What Happens Next:
 
-Thank you for choosing us for your restoration needs.
+1. Review Period (1-2 days)
+   Please review the estimate carefully. We're happy to answer any questions you may have.
+
+2. Insurance Approval (3-5 business days)
+   Your insurance company will review and approve the estimate. We'll follow up with them directly.
+
+3. Work Scheduling (Upon approval)
+   Once approved, we'll schedule your project at a time that's convenient for you.
+
+Our estimate includes all necessary materials, labor, and permits required to restore your property to pre-loss condition. We use only high-quality materials and our work is backed by our comprehensive warranty.
+
+Please feel free to call me directly at {{PHONE}} if you have any questions about the estimate or the next steps in the process.
+
+Thank you for choosing us for your restoration needs. We're committed to delivering exceptional results.
 
 Best regards,
-{{AGENT_NAME}}`
+{{AGENT_NAME}}
+{{PHONE}}`
   },
   {
     id: 'work-scheduled',
-    title: 'Work Scheduled',
-    type: 'sms',
-    subject: '',
-    content: `Hi {{CUSTOMER_NAME}}! Your roof work is scheduled to begin {{START_DATE}}. Our crew will arrive by {{START_TIME}}. Please ensure clear driveway access. Any questions? Call {{PHONE}}.`
+    title: 'Work Scheduled Confirmation',
+    type: 'email',
+    subject: 'Your Project is Scheduled - Important Details Inside',
+    content: `Dear {{CUSTOMER_NAME}},
+
+Excellent news! Your restoration project has been scheduled and we're ready to begin work.
+
+Project Details:
+• Start Date: [SPECIFIC DATE]
+• Estimated Duration: [NUMBER OF DAYS]
+• Crew Arrival Time: [SPECIFIC TIME]
+• Project Manager: {{AGENT_NAME}}
+• Direct Contact: {{PHONE}}
+
+Before We Begin:
+
+Please ensure:
+✓ Clear driveway access for our trucks and equipment
+✓ Pets are secured indoors during work hours
+✓ Vehicles are moved from the immediate work area
+✓ Any valuable outdoor items are stored safely
+
+What to Expect:
+
+• Our crew will arrive promptly and introduce themselves
+• We'll conduct a brief walk-through before starting
+• Daily cleanup will be performed at the end of each workday
+• We'll communicate any unexpected findings immediately
+• A final inspection will be scheduled upon completion
+
+Weather Contingency:
+If weather conditions are unfavorable, we'll contact you by 7:00 AM on the scheduled day to reschedule.
+
+Your project manager, {{AGENT_NAME}}, will be your primary point of contact throughout the project. Please don't hesitate to reach out with any questions or concerns.
+
+We're excited to get started and look forward to delivering exceptional results!
+
+Best regards,
+{{AGENT_NAME}}
+{{PHONE}}`
   },
   {
     id: 'work-complete',
-    title: 'Work Completion',
+    title: 'Project Completion',
     type: 'email',
-    subject: 'Your Roofing Project is Complete!',
-    content: `Hi {{CUSTOMER_NAME}},
+    subject: 'Your Project is Complete - Final Details & Warranty',
+    content: `Dear {{CUSTOMER_NAME}},
 
-Excellent news! We've successfully completed your roofing project.
+We're pleased to inform you that your restoration project has been successfully completed!
 
 Project Summary:
-- Start Date: {{START_DATE}}
-- Completion Date: {{COMPLETION_DATE}}
-- Work Performed: {{WORK_DESCRIPTION}}
+• Start Date: [SPECIFIC DATE]
+• Completion Date: [SPECIFIC DATE]
+• Work Performed: [DETAILED DESCRIPTION]
+• Final Inspection: Passed ✓
 
-Your warranty information and final photos are attached. We'll handle the final insurance paperwork and coordinate payment.
+What's Included:
 
-Thank you for choosing us. We're here if you need anything!
+✓ Detailed completion photos (attached)
+✓ Warranty documentation (attached)
+✓ Maintenance recommendations (attached)
+✓ Final invoice and insurance paperwork
+
+Warranty Information:
+Your work is covered by our comprehensive warranty, which includes:
+• [Specify warranty terms - e.g., "10-year workmanship warranty"]
+• [Material warranties from manufacturers]
+• [Any additional coverage details]
+
+Next Steps:
+
+1. Final Walk-Through
+   We encourage you to inspect the completed work. If you notice anything that needs attention, please contact us immediately.
+
+2. Insurance Finalization
+   We'll coordinate with your insurance company to finalize all paperwork and payment processing.
+
+3. Payment
+   Final payment will be processed according to your insurance settlement. We'll contact you once we receive confirmation from your insurer.
+
+Maintenance Tips:
+[Include 2-3 relevant maintenance recommendations]
+
+Your satisfaction is our top priority. If you have any questions or concerns about the completed work, please don't hesitate to contact me directly at {{PHONE}}.
+
+Thank you for choosing us for your restoration needs. We truly appreciate your business and trust.
+
+If you're satisfied with our work, we would be grateful if you could leave us a review [include link if applicable]. Your feedback helps us serve future customers better.
 
 Best regards,
-{{AGENT_NAME}}`
+{{AGENT_NAME}}
+{{PHONE}}
+
+P.S. We're always here if you need us. Please keep our contact information for any future needs or questions about your warranty.`
+  },
+  {
+    id: 'follow-up',
+    title: 'Post-Project Follow-Up',
+    type: 'email',
+    subject: 'How is Everything Looking? Quick Check-In',
+    content: `Dear {{CUSTOMER_NAME}},
+
+I hope this message finds you well! It's been [TIME PERIOD] since we completed your restoration project, and I wanted to reach out to see how everything is holding up.
+
+Quick Check-In:
+• Are you satisfied with the completed work?
+• Have you noticed any issues or concerns?
+• Do you have any questions about maintenance or your warranty?
+
+Your feedback is incredibly valuable to us. If everything is looking great, we'd love to hear about it. If there's anything that needs attention, please let us know right away so we can address it promptly.
+
+As a reminder, your work is covered by our warranty, and we stand behind every project we complete. Don't hesitate to reach out if you need anything.
+
+Thank you again for choosing us for your restoration needs. It was a pleasure working with you!
+
+Best regards,
+{{AGENT_NAME}}
+{{PHONE}}`
+  },
+  {
+    id: 'appointment-reminder',
+    title: 'Appointment Reminder',
+    type: 'sms',
+    subject: '',
+    content: `Hi {{CUSTOMER_NAME}}! Reminder: We have your inspection scheduled for [DATE] at [TIME]. Our team will arrive promptly. Please call {{PHONE}} if you need to reschedule. Looking forward to seeing you! - {{AGENT_NAME}}`
+  },
+  {
+    id: 'quick-update',
+    title: 'Quick Status Update',
+    type: 'sms',
+    subject: '',
+    content: `Hi {{CUSTOMER_NAME}}! Quick update on your project: [INSERT BRIEF UPDATE]. Everything is progressing well. Call {{PHONE}} with any questions. Thanks! - {{AGENT_NAME}}`
   }
 ];
 
@@ -278,13 +417,15 @@ export default function CommunicationHub() {
 
     // Replace template variables with actual data
     let content = template.content;
+    let subject = template.subject;
+    
     const replacements = {
       '{{CUSTOMER_NAME}}': getContactFullName(contact),
       '{{AGENT_NAME}}': state.currentUser?.name || 'Your Agent',
       '{{PHONE}}': state.currentUser?.phone || '(555) 123-4567',
       '{{CLAIM_NUMBER}}': contact.claimNumber || '[CLAIM_NUMBER]',
       '{{ADJUSTER_NAME}}': contact.adjusterName || '[ADJUSTER_NAME]',
-      '{{DEDUCTIBLE}}': contact.deductible ? `$${contact.deductible}` : '[DEDUCTIBLE]',
+      '{{DEDUCTIBLE}}': contact.deductible ? `$${contact.deductible.toLocaleString()}` : '[DEDUCTIBLE]',
       '{{INSPECTION_DATE}}': '[INSPECTION_DATE]',
       '{{ESTIMATE_AMOUNT}}': contact.projectValue ? `$${contact.projectValue.toLocaleString()}` : '[ESTIMATE_AMOUNT]',
       '{{START_DATE}}': '[START_DATE]',
@@ -297,11 +438,17 @@ export default function CommunicationHub() {
 
     Object.entries(replacements).forEach(([placeholder, value]) => {
       content = content.replace(new RegExp(placeholder, 'g'), value);
+      subject = subject.replace(new RegExp(placeholder, 'g'), value);
     });
 
-    setReplyText(content);
+    // Format for reply field (include subject for emails)
+    const formattedContent = template.type === 'email' && subject
+      ? `Subject: ${subject}\n\n${content}`
+      : content;
+
+    setReplyText(formattedContent);
     setShowTemplates(false);
-    toast.success(`Template "${template.title}" loaded`);
+    toast.success(`Template "${template.title}" loaded - Review and customize before sending`);
   };
 
   const handleCompose = () => {
@@ -371,7 +518,7 @@ export default function CommunicationHub() {
           to: contact.email,
           subject,
           html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto">
-            <p>${body.replace(/\n/g, '<br>')}</p>
+            <p style="white-space:pre-wrap;">${body.replace(/\n/g, '<br>')}</p>
             <p style="margin-top:24px;color:#64748b;font-size:13px">— ${state.currentUser?.name || 'TrussCTR Team'}</p>
           </div>`,
         }).then(() => {
@@ -403,6 +550,8 @@ export default function CommunicationHub() {
     toast.success('Reply saved');
   };
 
+  const hasSelectedThread = !!selectedCommData?.contact;
+
   return (
     <div className="h-full flex">
       {/* Left Panel - Communication List */}
@@ -414,14 +563,18 @@ export default function CommunicationHub() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setShowTemplates(true)}
-                className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                disabled={!hasSelectedThread}
+                className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
+                title={!hasSelectedThread ? 'Select a contact thread first' : 'Browse templates'}
               >
                 <FileText size={18} />
                 <span className="font-medium">Templates</span>
               </button>
               <button
                 onClick={handleCompose}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                disabled={!hasSelectedThread}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
+                title={!hasSelectedThread ? 'Select a contact thread first' : 'Compose new message'}
               >
                 <Plus size={18} />
                 <span className="font-medium">Compose</span>
@@ -507,9 +660,22 @@ export default function CommunicationHub() {
 
           {filteredCommunications.length === 0 && (
             <div className="p-12 text-center">
-              <Inbox size={48} className="mx-auto mb-4 text-gray-300" />
+              <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <Inbox size={32} className="text-gray-400" />
+              </div>
               <h3 className="text-lg font-medium text-gray-900 mb-1">No communications found</h3>
-              <p className="text-gray-500">Try adjusting your search or filter</p>
+              <p className="text-gray-500 mb-4">Try adjusting your search or filter</p>
+              {(searchQuery || filter !== 'all') && (
+                <button
+                  onClick={() => {
+                    setSearchQuery('');
+                    setFilter('all');
+                  }}
+                  className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  Clear filters
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -600,97 +766,202 @@ export default function CommunicationHub() {
 
             {/* Reply Actions */}
             <div className="p-4 bg-white border-t border-gray-200">
+              <div className="mb-2 flex items-center gap-2">
+                <button
+                  onClick={() => setShowTemplates(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors"
+                >
+                  <FileText size={14} />
+                  Use Template
+                </button>
+                <span className="text-xs text-gray-400">or type your own message below</span>
+              </div>
               <div className="flex items-center gap-3">
-                <input
-                  type="text"
+                <textarea
                   placeholder="Type a reply..."
                   value={replyText}
                   onChange={(e) => setReplyText(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
+                    if (e.key === 'Enter' && e.metaKey) {
                       void handleSendReply();
                     }
                   }}
-                  className="flex-1 px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                  rows={3}
+                  className="flex-1 px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none resize-none"
                 />
                 <button
                   onClick={() => void handleSendReply()}
-                  className="p-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  disabled={!replyText.trim()}
+                  className="p-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed self-end"
+                  title="Send reply (⌘+Enter)"
                 >
                   <Send size={20} />
                 </button>
               </div>
+              <p className="text-xs text-gray-400 mt-1.5">Press ⌘+Enter to send</p>
             </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center">
-              <Mail size={48} className="mx-auto mb-4 text-gray-300" />
-              <h3 className="text-lg font-medium text-gray-900 mb-1">Select a communication</h3>
-              <p className="text-gray-500">Choose a message from the list to view details</p>
+          <div className="flex-1 flex items-center justify-center p-8">
+            <div className="text-center max-w-md">
+              <div className="w-20 h-20 bg-gradient-to-br from-blue-100 to-purple-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <Mail size={40} className="text-blue-600" />
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Select a Communication Thread</h3>
+              <p className="text-gray-500 mb-6">Choose a contact from the list to view their communication history and send messages</p>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-left">
+                <p className="text-sm font-medium text-blue-900 mb-2">💡 Quick Tip</p>
+                <p className="text-sm text-blue-700">Once you select a contact, you'll be able to use professional templates, compose custom messages, and track all communication history in one place.</p>
+              </div>
             </div>
           </div>
         )}
       </div>
 
       {/* Template Selection Modal */}
-      {showTemplates && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden">
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xl font-semibold text-gray-900">Communication Templates</h3>
+      {showTemplates && selectedCommData?.contact && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-6 text-white">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
+                    <FileText size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-semibold">Professional Templates</h3>
+                    <p className="text-blue-100 text-sm">Pre-written messages for {getContactFullName(selectedCommData.contact)}</p>
+                  </div>
+                </div>
                 <button
                   onClick={() => setShowTemplates(false)}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="p-2 hover:bg-white/20 rounded-lg transition-colors"
                 >
-                  <X size={20} className="text-gray-500" />
+                  <X size={20} />
                 </button>
               </div>
-              <p className="text-gray-500 mt-1">Choose a template to get started with professional communications</p>
             </div>
             
-            <div className="p-6 max-h-[calc(90vh-120px)] overflow-y-auto">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {communicationTemplates.map((template) => (
-                  <div key={template.id} className="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors cursor-pointer">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        {template.type === 'email' ? (
-                          <Mail size={20} className="text-blue-600" />
-                        ) : (
-                          <MessageSquare size={20} className="text-green-600" />
-                        )}
-                        <h4 className="font-medium text-gray-900">{template.title}</h4>
-                      </div>
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${
-                        template.type === 'email' 
-                          ? 'bg-blue-100 text-blue-800' 
-                          : 'bg-green-100 text-green-800'
-                      }`}>
-                        {template.type.toUpperCase()}
-                      </span>
-                    </div>
-                    
-                    {template.subject && (
-                      <p className="text-sm font-medium text-gray-700 mb-2">
-                        Subject: {template.subject}
-                      </p>
-                    )}
-                    
-                    <p className="text-sm text-gray-600 mb-4 line-clamp-3">
-                      {template.content.substring(0, 150)}...
-                    </p>
-                    
-                    <button
-                      onClick={() => handleUseTemplate(template)}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            {/* Contact Context Bar */}
+            <div className="bg-blue-50 border-b border-blue-100 px-6 py-3">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-sm font-semibold">
+                  {selectedCommData.contact.firstName[0]}{selectedCommData.contact.lastName[0]}
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-900">
+                    Sending to: {getContactFullName(selectedCommData.contact)}
+                  </p>
+                  <p className="text-xs text-gray-600">
+                    {selectedCommData.contact.email} • {selectedCommData.contact.phone1}
+                    {selectedCommData.contact.claimNumber && ` • Claim #${selectedCommData.contact.claimNumber}`}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Templates Grid */}
+            <div className="p-6 max-h-[calc(90vh-200px)] overflow-y-auto">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {communicationTemplates.map((template) => {
+                  // Preview the template with actual data
+                  let previewContent = template.content;
+                  const replacements = {
+                    '{{CUSTOMER_NAME}}': getContactFullName(selectedCommData.contact),
+                    '{{AGENT_NAME}}': state.currentUser?.name || 'Your Agent',
+                    '{{PHONE}}': state.currentUser?.phone || '(555) 123-4467',
+                    '{{CLAIM_NUMBER}}': selectedCommData.contact.claimNumber || '[CLAIM_NUMBER]',
+                    '{{ADJUSTER_NAME}}': selectedCommData.contact.adjusterName || '[ADJUSTER_NAME]',
+                    '{{DEDUCTIBLE}}': selectedCommData.contact.deductible ? `$${selectedCommData.contact.deductible}` : '[DEDUCTIBLE]',
+                    '{{INSPECTION_DATE}}': '[INSPECTION_DATE]',
+                    '{{ESTIMATE_AMOUNT}}': selectedCommData.contact.projectValue ? `$${selectedCommData.contact.projectValue.toLocaleString()}` : '[ESTIMATE_AMOUNT]',
+                    '{{START_DATE}}': '[START_DATE]',
+                    '{{START_TIME}}': '[START_TIME]',
+                    '{{COMPLETION_DATE}}': '[COMPLETION_DATE]',
+                    '{{WORK_DESCRIPTION}}': '[WORK_DESCRIPTION]',
+                    '{{STATUS}}': '[STATUS]',
+                    '{{NEXT_STEPS}}': '[NEXT_STEPS]',
+                  };
+                  Object.entries(replacements).forEach(([placeholder, value]) => {
+                    previewContent = previewContent.replace(new RegExp(placeholder, 'g'), value);
+                  });
+
+                  return (
+                    <div 
+                      key={template.id} 
+                      className="group border-2 border-gray-200 rounded-xl overflow-hidden hover:border-blue-400 hover:shadow-lg transition-all duration-200 bg-white"
                     >
-                      <Zap size={16} />
-                      Use Template
-                    </button>
-                  </div>
-                ))}
+                      {/* Template Header */}
+                      <div className="bg-gradient-to-r from-gray-50 to-gray-100 p-4 border-b border-gray-200">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                              template.type === 'email' ? 'bg-blue-100' : 'bg-green-100'
+                            }`}>
+                              {template.type === 'email' ? (
+                                <Mail size={16} className="text-blue-600" />
+                              ) : (
+                                <MessageSquare size={16} className="text-green-600" />
+                              )}
+                            </div>
+                            <div>
+                              <h4 className="font-semibold text-gray-900">{template.title}</h4>
+                              <span className={`inline-block mt-0.5 px-2 py-0.5 rounded text-xs font-medium ${
+                                template.type === 'email' 
+                                  ? 'bg-blue-100 text-blue-700' 
+                                  : 'bg-green-100 text-green-700'
+                              }`}>
+                                {template.type.toUpperCase()}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {template.subject && (
+                          <div className="mt-2 p-2 bg-white rounded border border-gray-200">
+                            <p className="text-xs text-gray-500 font-medium mb-0.5">Subject:</p>
+                            <p className="text-sm font-medium text-gray-900">{template.subject}</p>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Template Preview */}
+                      <div className="p-4">
+                        <div className="bg-gray-50 rounded-lg p-3 mb-3 max-h-48 overflow-y-auto">
+                          <p className="text-xs text-gray-600 whitespace-pre-wrap leading-relaxed">
+                            {previewContent.substring(0, 300)}{previewContent.length > 300 ? '...' : ''}
+                          </p>
+                        </div>
+                        
+                        {/* Use Template Button */}
+                        <button
+                          onClick={() => handleUseTemplate(template)}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 font-medium shadow-sm hover:shadow group-hover:scale-[1.02]"
+                        >
+                          <Zap size={16} />
+                          Use This Template
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="bg-gray-50 border-t border-gray-200 px-6 py-4">
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2 text-gray-600">
+                  <Sparkles size={16} className="text-blue-600" />
+                  <span>Templates auto-fill with customer data • Review before sending</span>
+                </div>
+                <button
+                  onClick={() => setShowTemplates(false)}
+                  className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg transition-colors font-medium"
+                >
+                  Close
+                </button>
               </div>
             </div>
           </div>
