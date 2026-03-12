@@ -172,6 +172,13 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
 
   const unfilledFields = useMemo(() => {
     if (!selected) return [];
+    // Only show fields defined in the template's fields array
+    if (selected.fields && selected.fields.length > 0) {
+      return selected.fields
+        .filter(f => !fieldValues[f.key] && !f.defaultValue)
+        .map(f => f.key);
+    }
+    // Fallback: show all unfilled variables
     const base = buildContactOverrides(
       contact,
       companyProfile,

@@ -1063,7 +1063,9 @@ export function buildContactOverrides(
   const expiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
     .toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
-  return {
+  // Sample pricing defaults - users can override these
+  const defaults: Record<string, string> = {
+    // Customer & Company (auto-filled)
     CUSTOMER_NAME: fullName,
     CLIENT_NAME: fullName,
     CUSTOMER_PHONE: (contact.phone1 as string) || '',
@@ -1094,10 +1096,57 @@ export function buildContactOverrides(
     ESTIMATE_EXPIRY: expiry,
     PAYMENT_TERMS: '50% deposit at contract signing; balance due upon completion',
     WARRANTY_PERIOD: '2 years',
-    TAX_RATE: '0',
-    TAX_AMOUNT: '$0.00',
+    TAX_RATE: '7.5',
+    TAX_AMOUNT: '$823.20',
+    
+    // Sample project specs (user should override)
+    SHINGLE_BRAND: 'GAF',
+    SHINGLE_STYLE: 'Timberline HDZ',
+    SHINGLE_COLOR: 'Charcoal',
+    SHINGLE_WARRANTY_YEARS: '30',
+    ROOF_SQUARES: '24',
+    ROOF_SQFT: '2,400',
+    ROOF_PITCH: '6/12',
+    STORY_COUNT: '2-story',
+    LAYER_COUNT: '1',
+    ESTIMATE_NUMBER: 'EST-' + Date.now().toString().slice(-6),
+    START_DATE: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+    ESTIMATED_DURATION: '3-5 business days',
+    
+    // Sample pricing (user should override with actual values)
+    TEAROFF_RATE: '$85.00',
+    TEAROFF_TOTAL: '$2,040.00',
+    DECKING_SHEETS: '3',
+    DECKING_RATE: '$65.00',
+    DECKING_TOTAL: '$195.00',
+    ICE_WATER_SQ: '28',
+    ICE_WATER_RATE: '$32.00',
+    ICE_WATER_TOTAL: '$896.00',
+    UNDERLAY_SQ: '28',
+    UNDERLAY_RATE: '$18.00',
+    UNDERLAY_TOTAL: '$504.00',
+    DRIP_EDGE_LF: '310',
+    DRIP_EDGE_RATE: '$4.50',
+    DRIP_EDGE_TOTAL: '$1,395.00',
+    SHINGLE_RATE: '$195.00',
+    SHINGLE_TOTAL: '$4,680.00',
+    RIDGE_LF: '45',
+    RIDGE_RATE: '$12.00',
+    RIDGE_TOTAL: '$540.00',
+    FLASHING_TOTAL: '$450.00',
+    VENT_COUNT: '2',
+    VENT_RATE: '$85.00',
+    VENT_TOTAL: '$170.00',
+    CLEANUP_TOTAL: '$350.00',
+    SUBTOTAL: '$10,976.00',
+    TOTAL_AMOUNT: '$11,799.20',
+    DEPOSIT_AMOUNT: '$5,899.60',
+    BALANCE_DUE: '$5,899.60',
   };
+
+  return defaults;
 }
+
 
 /** Detect remaining unfilled {{VARIABLE}} placeholders in content */
 export function getUnfilledVars(content: string): string[] {
