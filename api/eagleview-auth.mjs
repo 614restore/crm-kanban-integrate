@@ -51,11 +51,9 @@ export default async function handler(req, res) {
   const codeChallenge = base64URLEncode(
     crypto.createHash('sha256').update(codeVerifier).digest()
   );
-
-  // Generate state tied to this user session
   const state = base64URLEncode(crypto.randomBytes(16));
 
-  // Store verifier + state in Supabase temporarily (expires in 10 min)
+  // Store verifier + state in oauth_states (expires in 10 min)
   await supabase
     .from('oauth_states')
     .upsert({

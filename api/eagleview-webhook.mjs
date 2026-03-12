@@ -1,11 +1,10 @@
 // POST /api/eagleview-webhook
 // Receives order completion notifications from EagleView.
-// Updates the job status in Supabase when a measurement report is ready.
+// Updates eagleview_orders and the parent jobs record in Supabase.
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 
 export default async function handler(req, res) {
-  // No cache, no CORS needed (server-to-server)
   res.setHeader('Cache-Control', 'no-store');
 
   if (req.method !== 'POST') {
@@ -42,7 +41,6 @@ export default async function handler(req, res) {
   );
 
   try {
-    // Update the eagleview_orders record
     const updatePayload = {
       status: status.toLowerCase(),
       updated_at: new Date().toISOString(),
@@ -64,25 +62,15 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Database update failed' });
     }
 
-    // If report is completed, also update the parent job record
-    if (status.toUpperCase() === 'COMPLETED' && order?.job_id) {
+    // Update the parent job with the report status
+    if (order?.job_id) {
+      const jobUpdate = { updated_at: new Date().toISOString() };
+      if (status.toUpperCase() === 'COMPLETED') {
+        jobUpdate.notes = `EagleView report ready: ${reportUrl || 'See EagleView portal'}`;
+      }
       await supabase
         .from('jobs')
-        .update({
-          eagleview_status: 'report_ready',
-          eagleview_report_url: reportUrl,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', order.job_id);
-    }
-
-    if (status.toUpperCase() === 'FAILED' && order?.job_id) {
-      await supabase
-        .from('jobs')
-        .update({
-          eagleview_status: 'failed',
-          updated_at: new Date().toISOString(),
-        })
+        .update(jobUpdate)
         .eq('id', order.job_id);
     }
 

@@ -1,7 +1,7 @@
 // GET /api/eagleview-callback
 // Handles the redirect back from EagleView after user login.
 // Exchanges the auth code for an access token using PKCE code_verifier.
-// Stores the user's EagleView tokens in Supabase against their company.
+// Stores the user's EagleView tokens in company_integrations.
 import { createClient } from '@supabase/supabase-js';
 import { setNoCacheHeaders } from './_crypto-utils.mjs';
 
@@ -49,7 +49,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Exchange auth code for tokens using PKCE verifier
+    // Exchange auth code for tokens using PKCE verifier (no client_secret needed)
     const tokenRes = await fetch(EV_TOKEN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -69,20 +69,22 @@ export default async function handler(req, res) {
       return res.redirect(302, `${APP_URL}/settings/integrations?eagleview=error&reason=token_exchange_failed`);
     }
 
-    // Store tokens in integrations table against the company
+    // Store tokens in company_integrations (your existing table)
     await supabase
-      .from('integrations')
+      .from('company_integrations')
       .upsert({
         company_id: oauthState.company_id,
+        integration_type: 'eagleview',
+        is_active: true,
         user_id: oauthState.user_id,
-        provider: 'eagleview',
+        connected: true,
         access_token: tokenData.access_token,
         refresh_token: tokenData.refresh_token || null,
         token_expires_at: new Date(Date.now() + (tokenData.expires_in || 3600) * 1000).toISOString(),
-        environment: EV_ENV,
-        connected: true,
+        credentials: {},
+        settings: { environment: EV_ENV },
         updated_at: new Date().toISOString(),
-      }, { onConflict: 'company_id,provider' });
+      }, { onConflict: 'company_id,integration_type' });
 
     // Clean up the used OAuth state
     await supabase
@@ -91,7 +93,6 @@ export default async function handler(req, res) {
       .eq('user_id', oauthState.user_id)
       .eq('provider', 'eagleview');
 
-    // Redirect back to settings with success
     return res.redirect(302, `${APP_URL}/settings/integrations?eagleview=connected`);
   } catch (err) {
     console.error('EagleView callback error:', err);

@@ -65,12 +65,12 @@ export default async function handler(req, res) {
     return res.status(403).json({ error: 'No company associated with this account' });
   }
 
-  // Get the user's stored EagleView tokens
+  // Get the user's stored EagleView tokens from company_integrations
   const { data: integration } = await supabase
-    .from('integrations')
+    .from('company_integrations')
     .select('access_token, refresh_token, token_expires_at')
     .eq('company_id', profile.company_id)
-    .eq('provider', 'eagleview')
+    .eq('integration_type', 'eagleview')
     .single();
 
   if (!integration?.access_token) {
@@ -89,7 +89,7 @@ export default async function handler(req, res) {
       const refreshed = await refreshAccessToken(integration.refresh_token);
       accessToken = refreshed.access_token;
       await supabase
-        .from('integrations')
+        .from('company_integrations')
         .update({
           access_token: refreshed.access_token,
           refresh_token: refreshed.refresh_token || integration.refresh_token,
@@ -97,7 +97,7 @@ export default async function handler(req, res) {
           updated_at: new Date().toISOString(),
         })
         .eq('company_id', profile.company_id)
-        .eq('provider', 'eagleview');
+        .eq('integration_type', 'eagleview');
     } catch (err) {
       return res.status(403).json({
         error: 'EagleView token expired and refresh failed. Please reconnect.',
@@ -138,7 +138,6 @@ export default async function handler(req, res) {
         report_type: reportType,
         address: `${address}, ${city}, ${state} ${zip}`,
         environment: EV_ENV,
-        created_at: new Date().toISOString(),
       });
 
     return res.json({
