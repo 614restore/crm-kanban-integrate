@@ -1,268 +1,328 @@
-import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { SignaturePad } from '@/components/crm/SignaturePad';
-import { CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+// SignDocument.tsx
+// Public page — customer opens their sign link, reviews the document,
+// draws/types their signature, and submits. No login required.
 
-interface EstimateDetails {
-  id: string;
-  estimate_number: string;
-  title: string;
-  total: number;
-  status: string;
-  contact_id: string;
-}
+import React, { useEffect, useRef, useState } from 'react';
+import { useParams } from 'react-router-dom';
+import { CheckCircle2, XCircle, PenLine, Type, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  getDocumentSendByToken,
+  markDocumentViewed,
+  submitDocumentSignature,
+  type DocumentSend,
+} from '@/lib/documentSends';
+import { sendEmail } from '@/lib/emailApi';
 
-type PageState = 'loading' | 'ready' | 'already_signed' | 'error' | 'success';
+type SignMode = 'draw' | 'type';
 
-function getApiBase(): string {
-  const configured = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim();
-  if (configured) return configured.replace(/\/$/, '');
-  return window.location.origin;
-}
+const SignDocument: React.FC = () => {
+  const { token } = useParams<{ token: string }>();
+  const [send, setSend] = useState<DocumentSend | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [step, setStep] = useState<'review' | 'sign' | 'done'>('review');
+  const [signMode, setSignMode] = useState<SignMode>('draw');
+  const [typedName, setTypedName] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-export default function SignDocument() {
-  const [searchParams] = useSearchParams();
-  const estimateId = searchParams.get('estimateId') || searchParams.get('id') || '';
-  const token = searchParams.get('token') || '';
+  // Canvas drawing
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const drawing = useRef(false);
+  const lastPos = useRef<{ x: number; y: number } | null>(null);
+  const [hasDraw, setHasDraw] = useState(false);
 
-  const [pageState, setPageState] = useState<PageState>('loading');
-  const [estimate, setEstimate] = useState<EstimateDetails | null>(null);
-  const [signerName, setSignerName] = useState('');
-  const [error, setError] = useState('');
-  const [companyName, setCompanyName] = useState('');
-
+  // Load the document
   useEffect(() => {
-    if (!estimateId) {
-      setError('No estimate ID provided in the link.');
-      setPageState('error');
-      return;
+    if (!token) { setError('Invalid link.'); setLoading(false); return; }
+    (async () => {
+      const doc = await getDocumentSendByToken(token);
+      if (!doc) { setError('This signing link is invalid or has expired.'); setLoading(false); return; }
+      if (doc.status === 'signed') { setStep('done'); setSend(doc); setLoading(false); return; }
+      setSend(doc);
+      setLoading(false);
+      // Mark viewed
+      await markDocumentViewed(token);
+    })();
+  }, [token]);
+
+  // Canvas helpers
+  const getPos = (e: React.MouseEvent | React.TouchEvent, canvas: HTMLCanvasElement) => {
+    const rect = canvas.getBoundingClientRect();
+    if ('touches' in e) {
+      return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
     }
-    fetchEstimate();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [estimateId]);
+    return { x: (e as React.MouseEvent).clientX - rect.left, y: (e as React.MouseEvent).clientY - rect.top };
+  };
 
-  const fetchEstimate = async () => {
+  const startDraw = (e: React.MouseEvent | React.TouchEvent) => {
+    drawing.current = true;
+    const canvas = canvasRef.current!;
+    lastPos.current = getPos(e, canvas);
+  };
+
+  const draw = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!drawing.current || !canvasRef.current) return;
+    e.preventDefault();
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d')!;
+    const pos = getPos(e, canvas);
+    ctx.beginPath();
+    ctx.strokeStyle = '#1a1a2e';
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    if (lastPos.current) {
+      ctx.moveTo(lastPos.current.x, lastPos.current.y);
+      ctx.lineTo(pos.x, pos.y);
+    }
+    ctx.stroke();
+    lastPos.current = pos;
+    setHasDraw(true);
+  };
+
+  const stopDraw = () => { drawing.current = false; lastPos.current = null; };
+
+  const clearCanvas = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    canvas.getContext('2d')!.clearRect(0, 0, canvas.width, canvas.height);
+    setHasDraw(false);
+  };
+
+  const getSignatureData = (): string => {
+    if (signMode === 'draw') {
+      return canvasRef.current?.toDataURL('image/png') ?? '';
+    }
+    // Render typed name to canvas
+    const canvas = document.createElement('canvas');
+    canvas.width = 500; canvas.height = 120;
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, 500, 120);
+    ctx.font = 'italic 52px Georgia, serif';
+    ctx.fillStyle = '#1a1a2e';
+    ctx.fillText(typedName, 20, 80);
+    return canvas.toDataURL('image/png');
+  };
+
+  const handleSubmit = async () => {
+    if (!send || !token) return;
+    const signedName = signMode === 'type' ? typedName : typedName;
+    if (!signedName.trim()) { alert('Please enter your full name.'); return; }
+    if (signMode === 'draw' && !hasDraw) { alert('Please draw your signature.'); return; }
+
+    setSubmitting(true);
     try {
-      const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
-      const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+      const sigData = getSignatureData();
+      await submitDocumentSignature({ token, signature_data: sigData, signed_name: signedName });
 
-      if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-        throw new Error('App configuration error.');
-      }
+      // Notify the contractor via email
+      await sendEmail({
+        to: send.sent_to_email, // contractor email stored separately — use company email fallback
+        subject: `✅ Document Signed: ${send.template_name}`,
+        html: `
+          <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:30px">
+            <div style="background:#16a34a;color:#fff;padding:20px;border-radius:8px 8px 0 0;text-align:center">
+              <h2 style="margin:0">Document Signed</h2>
+            </div>
+            <div style="background:#f9fafb;padding:25px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
+              <p style="font-size:16px;color:#374151">Good news! <strong>${signedName}</strong> has signed the document:</p>
+              <div style="background:#fff;border:1px solid #d1fae5;border-left:4px solid #16a34a;padding:15px;border-radius:6px;margin:15px 0">
+                <strong style="color:#065f46">${send.template_name}</strong><br>
+                <span style="color:#6b7280;font-size:14px">Signed on ${new Date().toLocaleString()}</span>
+              </div>
+              <p style="color:#6b7280;font-size:14px">Log in to your CRM to view the signed document and download a copy.</p>
+            </div>
+          </div>
+        `,
+      }).catch(() => {}); // non-blocking — don't fail the sign flow if email fails
 
-      const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/estimates?id=eq.${encodeURIComponent(estimateId)}&select=id,estimate_number,title,total,status,sign_token,contact_id`,
-        {
-          headers: {
-            apikey: SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-          },
-        }
-      );
-
-      const data = await res.json();
-      if (!Array.isArray(data) || data.length === 0) {
-        throw new Error('Estimate not found.');
-      }
-
-      const est = data[0];
-
-      if (est.status === 'accepted') {
-        setEstimate(est);
-        setPageState('already_signed');
-        return;
-      }
-
-      if (!['sent', 'viewed'].includes(est.status)) {
-        throw new Error(`This estimate cannot be signed (status: ${est.status}).`);
-      }
-
-      // Validate token if one is stored
-      if (est.sign_token && token !== est.sign_token) {
-        throw new Error('This signing link is invalid or has expired.');
-      }
-
-      setEstimate(est);
-      setPageState('ready');
-
-      // Try to fetch company name for display
-      try {
-        const cRes = await fetch(
-          `${SUPABASE_URL}/rest/v1/estimates?id=eq.${encodeURIComponent(estimateId)}&select=company_id`,
-          { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } }
-        );
-        const cData = await cRes.json();
-        if (cData?.[0]?.company_id) {
-          const compRes = await fetch(
-            `${SUPABASE_URL}/rest/v1/companies?id=eq.${cData[0].company_id}&select=name`,
-            { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } }
-          );
-          const compData = await compRes.json();
-          if (compData?.[0]?.name) setCompanyName(compData[0].name);
-        }
-      } catch {
-        // Non-critical
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to load estimate.');
-      setPageState('error');
+      setSend(prev => prev ? { ...prev, status: 'signed', signed_name: signedName } : prev);
+      setStep('done');
+    } catch (err) {
+      alert('Something went wrong. Please try again.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  const handleSign = async (signatureData: string) => {
-    if (!signerName.trim()) return;
-    if (!estimate) return;
-
-    try {
-      const apiBase = getApiBase();
-      const res = await fetch(`${apiBase}/api/sign-document`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          estimateId: estimate.id,
-          signedBy: signerName.trim(),
-          signatureData,
-          token,
-        }),
-      });
-
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(body.error || `Failed to save signature (${res.status})`);
-      }
-
-      setPageState('success');
-    } catch (err: any) {
-      setError(err.message || 'Failed to save your signature. Please try again.');
-    }
-  };
-
-  if (pageState === 'loading') {
+  // ── Loading / Error ──
+  if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3 text-gray-500">
-          <Loader2 size={32} className="animate-spin text-blue-600" />
-          <p>Loading estimate…</p>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Loader2 className="w-8 h-8 animate-spin text-green-600" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
+        <div className="text-center">
+          <XCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-gray-800 mb-2">Link Not Found</h2>
+          <p className="text-gray-500">{error}</p>
         </div>
       </div>
     );
   }
 
-  if (pageState === 'error') {
+  // ── Done state ──
+  if (step === 'done') {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full text-center">
-          <AlertCircle size={48} className="text-red-500 mx-auto mb-4" />
-          <h1 className="text-xl font-bold text-gray-900 mb-2">Unable to Load Estimate</h1>
-          <p className="text-gray-600">{error}</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (pageState === 'already_signed') {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full text-center">
-          <CheckCircle size={48} className="text-green-500 mx-auto mb-4" />
-          <h1 className="text-xl font-bold text-gray-900 mb-2">Already Signed</h1>
-          <p className="text-gray-600">
-            Estimate <strong>{estimate?.estimate_number}</strong> has already been signed and accepted.
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
+        <div className="bg-white rounded-2xl shadow-lg p-10 max-w-md w-full text-center">
+          <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Document Signed!</h2>
+          <p className="text-gray-500 mb-6">
+            Thank you, <strong>{send?.signed_name ?? 'you'}</strong>. A copy has been sent to the contractor.
           </p>
+          <p className="text-sm text-gray-400">You may now close this window.</p>
         </div>
       </div>
     );
   }
 
-  if (pageState === 'success') {
+  // ── Review step ──
+  if (step === 'review') {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full text-center">
-          <CheckCircle size={64} className="text-green-500 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Thank You!</h1>
-          <p className="text-gray-600 mb-4">
-            Your signature has been saved for estimate <strong>{estimate?.estimate_number}</strong>.
-          </p>
-          <p className="text-sm text-gray-500">
-            {companyName || 'The contractor'} will be notified and will follow up shortly.
-          </p>
+      <div className="min-h-screen bg-gray-100 flex flex-col">
+        {/* Banner */}
+        <div className="bg-green-700 text-white px-6 py-4 flex items-center justify-between sticky top-0 z-10 shadow">
+          <div>
+            <div className="font-bold text-lg">{send?.template_name}</div>
+            <div className="text-green-200 text-sm">Please review this document before signing</div>
+          </div>
+          <Button
+            className="bg-white text-green-700 hover:bg-green-50 font-bold px-6"
+            onClick={() => setStep('sign')}
+          >
+            <PenLine className="w-4 h-4 mr-2" />
+            Proceed to Sign
+          </Button>
+        </div>
+
+        {/* Document */}
+        <div className="flex-1 overflow-auto py-8 px-4">
+          <div
+            className="bg-white max-w-4xl mx-auto shadow-lg rounded-lg p-10"
+            dangerouslySetInnerHTML={{ __html: send?.document_html ?? '' }}
+          />
+        </div>
+
+        <div className="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4 flex justify-center">
+          <Button
+            className="bg-green-600 hover:bg-green-700 text-white px-10 py-3 text-base font-bold"
+            onClick={() => setStep('sign')}
+          >
+            <PenLine className="w-5 h-5 mr-2" />
+            Sign This Document
+          </Button>
         </div>
       </div>
     );
   }
 
-  // pageState === 'ready'
+  // ── Sign step ──
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
-      <div className="max-w-lg mx-auto">
-        {/* Header */}
-        <div className="text-center mb-6">
-          {companyName && (
-            <p className="text-sm text-gray-500 mb-1">{companyName}</p>
-          )}
-          <h1 className="text-2xl font-bold text-gray-900">Sign Estimate</h1>
+    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6">
+      <div className="bg-white rounded-2xl shadow-lg p-8 max-w-lg w-full">
+        <h2 className="text-xl font-bold text-gray-800 mb-1">Sign Document</h2>
+        <p className="text-sm text-gray-500 mb-6">{send?.template_name}</p>
+
+        {/* Full name */}
+        <div className="mb-5">
+          <Label className="text-sm font-medium text-gray-700 mb-1.5 block">Full Name <span className="text-red-500">*</span></Label>
+          <Input
+            value={typedName}
+            onChange={e => setTypedName(e.target.value)}
+            placeholder="Type your full legal name"
+            className="focus:ring-green-500 focus:border-green-500"
+          />
         </div>
 
-        <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-          {/* Estimate summary */}
-          <div className="bg-blue-50 border-b border-blue-100 p-6">
-            <p className="text-xs font-semibold text-blue-500 uppercase tracking-wider mb-1">
-              {estimate?.estimate_number}
-            </p>
-            <h2 className="text-lg font-bold text-gray-900">{estimate?.title}</h2>
-            <p className="text-2xl font-bold text-blue-700 mt-2">
-              ${Number(estimate?.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-            </p>
-          </div>
+        {/* Mode toggle */}
+        <div className="flex gap-2 mb-4">
+          <button
+            onClick={() => setSignMode('draw')}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
+              signMode === 'draw'
+                ? 'bg-green-600 text-white border-green-600'
+                : 'text-gray-600 border-gray-300 hover:bg-gray-50'
+            }`}
+          >
+            <PenLine className="w-4 h-4" /> Draw
+          </button>
+          <button
+            onClick={() => setSignMode('type')}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
+              signMode === 'type'
+                ? 'bg-green-600 text-white border-green-600'
+                : 'text-gray-600 border-gray-300 hover:bg-gray-50'
+            }`}
+          >
+            <Type className="w-4 h-4" /> Type
+          </button>
+        </div>
 
-          <div className="p-6 space-y-6">
-            {/* Signer name */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Your Full Name <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={signerName}
-                onChange={e => setSignerName(e.target.value)}
-                placeholder="Enter your full name"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+        {/* Signature input */}
+        {signMode === 'draw' ? (
+          <div className="mb-5">
+            <div className="border-2 border-dashed border-gray-300 rounded-xl overflow-hidden bg-gray-50 relative">
+              <canvas
+                ref={canvasRef}
+                width={460}
+                height={160}
+                className="w-full touch-none cursor-crosshair"
+                onMouseDown={startDraw}
+                onMouseMove={draw}
+                onMouseUp={stopDraw}
+                onMouseLeave={stopDraw}
+                onTouchStart={startDraw}
+                onTouchMove={draw}
+                onTouchEnd={stopDraw}
               />
+              {!hasDraw && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <span className="text-gray-400 text-sm">Draw your signature here</span>
+                </div>
+              )}
             </div>
-
-            {/* Signature pad */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Draw Your Signature <span className="text-red-500">*</span>
-              </label>
-              <p className="text-xs text-gray-500 mb-2">
-                Use your mouse or finger to draw your signature below.
-              </p>
-              <SignaturePad
-                onSave={dataUrl => {
-                  if (!signerName.trim()) {
-                    setError('Please enter your full name before signing.');
-                    return;
-                  }
-                  setError('');
-                  handleSign(dataUrl);
-                }}
-              />
-            </div>
-
-            {error && (
-              <p className="text-sm text-red-600 flex items-center gap-1">
-                <AlertCircle size={14} />
-                {error}
-              </p>
-            )}
-
-            <p className="text-xs text-gray-400 text-center">
-              By saving your signature, you agree to the terms of this estimate.
-            </p>
+            <button onClick={clearCanvas} className="mt-2 text-xs text-gray-400 hover:text-gray-600 underline">Clear</button>
           </div>
+        ) : (
+          <div className="mb-5">
+            <div
+              className="border-2 border-dashed border-gray-300 rounded-xl p-6 bg-gray-50 text-center"
+              style={{ fontFamily: 'Georgia, serif', fontStyle: 'italic', fontSize: '2rem', color: '#1a1a2e', minHeight: 80 }}
+            >
+              {typedName || <span className="text-gray-300 text-base not-italic" style={{ fontFamily: 'inherit' }}>Your signature will appear here</span>}
+            </div>
+          </div>
+        )}
+
+        {/* Legal notice */}
+        <p className="text-xs text-gray-400 mb-6">
+          By clicking "Submit Signature" you agree that this electronic signature is the legal equivalent of your handwritten signature.
+        </p>
+
+        <div className="flex gap-3">
+          <Button variant="outline" onClick={() => setStep('review')} className="flex-1">Back to Review</Button>
+          <Button
+            onClick={handleSubmit}
+            disabled={submitting || !typedName.trim() || (signMode === 'draw' && !hasDraw)}
+            className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold"
+          >
+            {submitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+            {submitting ? 'Submitting…' : 'Submit Signature'}
+          </Button>
         </div>
       </div>
     </div>
   );
-}
+};
+
+export default SignDocument;
