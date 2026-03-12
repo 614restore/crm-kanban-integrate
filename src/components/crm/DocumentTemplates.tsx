@@ -2642,9 +2642,18 @@ const DocumentTemplates: React.FC = () => {
 
   // Open per-customer editor
   const openCustomerEdit = (template: DocumentTemplate) => {
+    if (crmState.contacts.length === 0) {
+      toast({
+        title: 'No Customers Found',
+        description: 'Please add customers to your CRM before creating documents.',
+        variant: 'destructive'
+      });
+      return;
+    }
     const contactId = selectedContactId || crmState.contacts[0]?.id || '';
     setSelectedContactId(contactId);
     setEditedContent(fillTemplateForContact(template, contactId));
+    setSelectedTemplate(template);
     setCustomerEditMode(true);
   };
 

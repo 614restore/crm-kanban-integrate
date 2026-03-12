@@ -270,11 +270,11 @@ export default function CommunicationHub() {
   };
 
   const handleUseTemplate = (template: typeof communicationTemplates[0]) => {
-    const contact = selectedCommData?.contact || state.contacts[0];
-    if (!contact) {
-      toast.error('No contact selected');
+    if (!selectedCommData?.contact) {
+      toast.error('Select a contact thread before using a template');
       return;
     }
+    const contact = selectedCommData.contact;
 
     // Replace template variables with actual data
     let content = template.content;
@@ -305,8 +305,11 @@ export default function CommunicationHub() {
   };
 
   const handleCompose = () => {
-    const defaultContact = selectedCommData?.contact || state.contacts[0];
-    setComposeContactId(defaultContact?.id || '');
+    if (!selectedCommData?.contact) {
+      toast.error('Select a contact thread before composing');
+      return;
+    }
+    setComposeContactId(selectedCommData.contact.id);
     setComposeText('');
     setComposeType('note');
     setShowComposeModal(true);

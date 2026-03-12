@@ -1,6 +1,15 @@
 // Contractor Estimate Templates — shared between DocumentTemplates tab and Customer Detail modal
 // Templates use {{VARIABLE}} syntax; contact/company vars are auto-filled, totals are user-supplied.
 
+export interface DocumentField {
+  key: string;
+  label: string;
+  type: 'text' | 'textarea' | 'date' | 'number';
+  defaultValue?: string;
+  required?: boolean;
+  placeholder?: string;
+}
+
 export interface DocumentTemplate {
   id: string;
   name: string;
@@ -8,6 +17,7 @@ export interface DocumentTemplate {
   category: 'estimate' | 'invoice' | 'contract' | 'work-order' | 'proposal' | 'change-order' | 'safety' | 'other';
   content: string;
   variables: string[];
+  fields?: DocumentField[];
   favorite: boolean;
   isDefault: boolean;
   tags: string[];
@@ -171,6 +181,20 @@ export function getContractorEstimateTemplates(): DocumentTemplate[] {
       name: 'Asphalt Shingle Roof Replacement',
       description: 'Full tear-off and replacement estimate for architectural / 3-tab asphalt shingle roofing',
       category: 'estimate',
+      fields: [
+        { key: 'SHINGLE_BRAND', label: 'Shingle Brand', type: 'text', placeholder: 'GAF, Owens Corning, CertainTeed...', required: true },
+        { key: 'SHINGLE_STYLE', label: 'Shingle Style', type: 'text', placeholder: 'Timberline HDZ, Duration, Landmark...', required: true },
+        { key: 'SHINGLE_COLOR', label: 'Shingle Color', type: 'text', placeholder: 'Charcoal, Weathered Wood...', required: true },
+        { key: 'SHINGLE_WARRANTY_YEARS', label: 'Warranty (years)', type: 'number', defaultValue: '30', required: true },
+        { key: 'ROOF_SQUARES', label: 'Roof Area (squares)', type: 'number', placeholder: '24', required: true },
+        { key: 'ROOF_SQFT', label: 'Roof Area (sq ft)', type: 'number', placeholder: '2400', required: true },
+        { key: 'ROOF_PITCH', label: 'Roof Pitch', type: 'text', placeholder: '6/12', required: true },
+        { key: 'STORY_COUNT', label: 'Stories', type: 'text', placeholder: '2-story', required: true },
+        { key: 'LAYER_COUNT', label: 'Layers to Remove', type: 'number', defaultValue: '1', required: true },
+        { key: 'ESTIMATE_NUMBER', label: 'Estimate Number', type: 'text', defaultValue: 'EST-' + Date.now().toString().slice(-6), required: true },
+        { key: 'START_DATE', label: 'Proposed Start Date', type: 'date', required: true },
+        { key: 'ESTIMATED_DURATION', label: 'Estimated Duration', type: 'text', placeholder: '3-5 business days', required: true },
+      ],
       content: header('Asphalt Shingle Roof Replacement Estimate') + `
 <div class="sec">
   <h3>Project Specifications</h3>
