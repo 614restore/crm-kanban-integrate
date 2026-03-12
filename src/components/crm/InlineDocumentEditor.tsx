@@ -77,32 +77,38 @@ export const InlineDocumentEditor: React.FC<InlineDocumentEditorProps> = ({
   const generateDocument = () => {
     let content = templateContent;
     
-    // Replace all form fields with clickable spans
+    // Replace all form fields
     fields.forEach(field => {
       const value = formData[field.key];
       const isFilled = value && value.trim() !== '';
       const isRequired = field.required;
       
-      // Create a styled span that's clickable
-      const replacement = isFilled
-        ? `<span 
+      if (isFilled) {
+        // Field is filled - show the value with green highlight
+        const replacement = `<span 
             class="editable-field filled" 
             data-field="${field.key}"
             title="Click to edit ${field.label}"
-          >${value}</span>`
-        : `<span 
-            class="editable-field empty ${isRequired ? 'required' : ''}" 
+          >${value}</span>`;
+        content = content.replace(new RegExp(`{{${field.key}}}`, 'g'), replacement);
+      } else if (isRequired) {
+        // Required but empty - show clickable placeholder
+        const replacement = `<span 
+            class="editable-field empty required" 
             data-field="${field.key}"
-            title="Click to fill in ${field.label}${isRequired ? ' (Required)' : ''}"
-          >[Click to fill: ${field.label}]</span>`;
-      
-      content = content.replace(new RegExp(`{{${field.key}}}`, 'g'), replacement);
+            title="Required: Click to fill in ${field.label}"
+          >[${field.label}]</span>`;
+        content = content.replace(new RegExp(`{{${field.key}}}`, 'g'), replacement);
+      } else {
+        // Optional and empty - just remove it completely
+        content = content.replace(new RegExp(`{{${field.key}}}`, 'g'), '');
+      }
     });
     
     // Replace any remaining system variables
     Object.entries(formData).forEach(([key, value]) => {
       if (!fields.find(f => f.key === key)) {
-        content = content.replace(new RegExp(`{{${key}}}`, 'g'), value || `[${key}]`);
+        content = content.replace(new RegExp(`{{${key}}}`, 'g'), value || '');
       }
     });
     
@@ -115,19 +121,13 @@ export const InlineDocumentEditor: React.FC<InlineDocumentEditorProps> = ({
           border-radius: 3px;
           transition: all 0.2s;
           display: inline-block;
-          position: relative;
-        }
-        .editable-field.empty {
-          background: #fef3c7;
-          border: 2px dashed #f59e0b;
-          color: #92400e;
-          font-weight: 600;
-          animation: pulse 2s infinite;
         }
         .editable-field.empty.required {
           background: #fee2e2;
-          border-color: #ef4444;
+          border: 2px solid #ef4444;
           color: #991b1b;
+          font-weight: 600;
+          animation: pulse 2s infinite;
         }
         .editable-field.filled {
           background: #d1fae5;
@@ -138,9 +138,9 @@ export const InlineDocumentEditor: React.FC<InlineDocumentEditorProps> = ({
           transform: scale(1.02);
           box-shadow: 0 2px 8px rgba(0,0,0,0.15);
         }
-        .editable-field.empty:hover {
-          background: #fde68a;
-          border-color: #d97706;
+        .editable-field.empty.required:hover {
+          background: #fecaca;
+          border-color: #dc2626;
         }
         .editable-field.filled:hover {
           background: #a7f3d0;
@@ -327,21 +327,71 @@ export const InlineDocumentEditor: React.FC<InlineDocumentEditorProps> = ({
 
         {/* Instructions */}
         <div className="px-4 py-3 bg-blue-50 border-b border-blue-200 text-sm text-blue-800">
-          <strong>💡 How to use:</strong> Click on any highlighted field in the document below to fill it in. 
-          Required fields are shown in red, optional fields in yellow.
+          <strong>💡 How to use:</strong> Click on any red highlighted field to fill it in. 
+          Optional fields are hidden until you fill them. Green fields are complete.
         </div>
 
-        {/* Document Preview */}
-        <div className="flex-1 overflow-y-auto p-4">
-          <div className="max-w-4xl mx-auto bg-white shadow-lg">
-            <iframe
-              ref={iframeRef}
-              srcDoc={generateDocument()}
-              className="w-full border-0"
-              style={{ minHeight: '800px', height: 'calc(90vh - 250px)' }}
-              title="Document Preview"
-              sandbox="allow-same-origin allow-scripts"
-            />
+        {/* Main Content Area */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* Quick Fill Sidebar */}
+          <div className="w-64 border-r bg-gray-50 p-4 overflow-y-auto">
+            <h3 className="font-semibold text-sm text-gray-700 mb-3">Quick Fill</h3>
+            <p className="text-xs text-gray-500 mb-4">Fill in the required fields below, or click directly in the document.</p>
+            
+            <div className="space-y-3">
+              {fields.filter(f => f.required).map(field => {
+                const isFilled = formData[field.key] && formData[field.key].trim() !== '';
+                return (
+                  <div key={field.key} className="space-y-1">
+                    <Label className="text-xs flex items-center gap-1">
+                      {isFilled ? (
+                        <CheckCircle2 className="w-3 h-3 text-green-600" />
+                      ) : (
+                        <AlertCircle className="w-3 h-3 text-red-600" />
+                      )}
+                      {field.label}
+                    </Label>
+                    {field.type === 'textarea' ? (
+                      <Textarea
+                        value={formData[field.key]}
+                        onChange={(e) => {
+                          setFormData(prev => ({ ...prev, [field.key]: e.target.value }));
+                          setFilledFields(prev => new Set([...prev, field.key]));
+                        }}
+                        placeholder={field.placeholder}
+                        rows={2}
+                        className="text-xs"
+                      />
+                    ) : (
+                      <Input
+                        type={field.type}
+                        value={formData[field.key]}
+                        onChange={(e) => {
+                          setFormData(prev => ({ ...prev, [field.key]: e.target.value }));
+                          setFilledFields(prev => new Set([...prev, field.key]));
+                        }}
+                        placeholder={field.placeholder}
+                        className="text-xs h-8"
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Document Preview */}
+          <div className="flex-1 overflow-y-auto p-4">
+            <div className="max-w-4xl mx-auto bg-white shadow-lg">
+              <iframe
+                ref={iframeRef}
+                srcDoc={generateDocument()}
+                className="w-full border-0"
+                style={{ minHeight: '800px', height: 'calc(90vh - 250px)' }}
+                title="Document Preview"
+                sandbox="allow-same-origin allow-scripts"
+              />
+            </div>
           </div>
         </div>
 
