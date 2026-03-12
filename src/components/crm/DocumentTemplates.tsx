@@ -3093,18 +3093,7 @@ const DocumentTemplates: React.FC = () => {
                       </span>
                     </div>
 
-                    <div className="flex flex-wrap gap-1">
-                      {template.tags.slice(0, 3).map(tag => (
-                        <Badge key={tag} variant="outline" className="text-xs">
-                          {tag}
-                        </Badge>
-                      ))}
-                      {template.tags.length > 3 && (
-                        <Badge variant="outline" className="text-xs">
-                          +{template.tags.length - 3}
-                        </Badge>
-                      )}
-                    </div>
+
 
                     <div className="flex items-center justify-between text-xs text-gray-500">
                       <span>Modified {new Date(template.lastModified).toLocaleDateString()}</span>
@@ -3125,18 +3114,26 @@ const DocumentTemplates: React.FC = () => {
                           Fill & Use
                         </Button>
                       ) : (
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
-                          className="flex-1"
-                          onClick={() => {
-                            setSelectedTemplate(template);
-                            setPreviewMode(true);
-                          }}
-                        >
-                          <Eye className="w-4 h-4 mr-1" />
-                          Preview
-                        </Button>
+                        <>
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            onClick={() => {
+                              setSelectedTemplate(template);
+                              setPreviewMode(true);
+                            }}
+                          >
+                            <Eye className="w-4 h-4 mr-1" />
+                            Preview
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            onClick={() => openCustomerEdit(template)}
+                          >
+                            <User className="w-4 h-4 mr-1" />
+                            Create
+                          </Button>
+                        </>
                       )}
                       <Button 
                         size="sm" 
