@@ -43,6 +43,7 @@ import { DOCUMENT_CATEGORIES, type DocumentCategoryId } from '@/lib/documentCate
 import { getCertificateOfCompletionTemplate } from '@/lib/certificateTemplate';
 import DocumentEditor from './DocumentEditor';
 import InlineDocumentEditor from './InlineDocumentEditor';
+import SimpleDocumentEditor from './SimpleDocumentEditor';
 
 interface DocumentField {
   key: string;
@@ -3209,9 +3210,9 @@ const DocumentTemplates: React.FC = () => {
         </div>  {/* end main content */}
       </div>  {/* end flex row with sidebar */}
 
-      {/* Inline Document Editor */}
+      {/* Simple Side-by-Side Editor */}
       {showSimpleEditor && editorTemplate && editorTemplate.fields && (
-        <InlineDocumentEditor
+        <SimpleDocumentEditor
           templateName={editorTemplate.name}
           templateContent={(() => {
             // Pre-fill company information from profile
