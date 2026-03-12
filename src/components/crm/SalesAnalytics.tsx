@@ -107,23 +107,21 @@ function PipelineBar({ status, count, total }: { status: string; count: number; 
   );
 }
 
+const PERIOD_MS: Record<Period, number> = {
+  '7d': 7 * 24 * 60 * 60 * 1000,
+  '30d': 30 * 24 * 60 * 60 * 1000,
+  '90d': 90 * 24 * 60 * 60 * 1000,
+  all: Infinity,
+};
+
 export default function SalesAnalytics() {
   const { state } = useCRM();
   const [period, setPeriod] = useState<Period>('30d');
 
-  const periodMs: Record<Period, number> = {
-    '7d': 7 * 24 * 60 * 60 * 1000,
-    '30d': 30 * 24 * 60 * 60 * 1000,
-    '90d': 90 * 24 * 60 * 60 * 1000,
-    all: Infinity,
-  };
-
-  const cutoff = period === 'all' ? new Date(0) : new Date(Date.now() - periodMs[period]);
-
-  const filtered = useMemo(
-    () => state.contacts.filter((c) => new Date(c.createdAt) >= cutoff),
-    [state.contacts, cutoff]
-  );
+  const filtered = useMemo(() => {
+    const cutoff = period === 'all' ? new Date(0) : new Date(Date.now() - PERIOD_MS[period]);
+    return state.contacts.filter((c) => new Date(c.createdAt) >= cutoff);
+  }, [state.contacts, period]);
 
   const completed = filtered.filter((c) => c.status === 'completed' || c.status === 'paid');
   const lost = filtered.filter((c) => c.status === 'lost');
@@ -133,14 +131,12 @@ export default function SalesAnalytics() {
     ? (completed.length / (completed.length + lost.length)) * 100
     : 0;
 
-  // Pipeline breakdown
   const byStatus = useMemo(() => {
     const map: Record<string, number> = {};
     filtered.forEach((c) => { map[c.status] = (map[c.status] || 0) + 1; });
     return Object.entries(map).sort((a, b) => b[1] - a[1]);
   }, [filtered]);
 
-  // Rep performance
   const byRep = useMemo(() => {
     const map: Record<string, { name: string; leads: number; closed: number; revenue: number }> = {};
     filtered.forEach((c) => {
@@ -157,7 +153,6 @@ export default function SalesAnalytics() {
     return Object.values(map).sort((a, b) => b.revenue - a.revenue);
   }, [filtered, state.teamMembers]);
 
-  // Lead source breakdown
   const bySource = useMemo(() => {
     const map: Record<string, number> = {};
     filtered.forEach((c) => {
@@ -209,31 +204,13 @@ export default function SalesAnalytics() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Total Leads" value={filtered.length.toString()} icon={Users} color="blue" />
-        <StatCard
-          label="Revenue Closed"
-          value={fmt(totalRevenue)}
-          sub={`${completed.length} deals closed`}
-          icon={DollarSign}
-          color="green"
-        />
-        <StatCard
-          label="Conversion Rate"
-          value={`${convRate.toFixed(1)}%`}
-          sub={`${lost.length} lost`}
-          icon={Target}
-          color="purple"
-        />
-        <StatCard
-          label="Avg Deal Size"
-          value={fmt(avgDeal)}
-          icon={TrendingUp}
-          color="orange"
-        />
+        <StatCard label="Revenue Closed" value={fmt(totalRevenue)} sub={`${completed.length} deals closed`} icon={DollarSign} color="green" />
+        <StatCard label="Conversion Rate" value={`${convRate.toFixed(1)}%`} sub={`${lost.length} lost`} icon={Target} color="purple" />
+        <StatCard label="Avg Deal Size" value={fmt(avgDeal)} icon={TrendingUp} color="orange" />
       </div>
 
       {/* Pipeline + Lead Sources */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Pipeline Breakdown */}
         <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
           <div className="flex items-center gap-2 mb-4">
             <BarChart2 size={18} className="text-blue-500" />
@@ -250,7 +227,6 @@ export default function SalesAnalytics() {
           )}
         </div>
 
-        {/* Lead Sources */}
         <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
           <div className="flex items-center gap-2 mb-4">
             <Calendar size={18} className="text-purple-500" />
@@ -291,9 +267,11 @@ export default function SalesAnalytics() {
               <tbody>
                 {byRep.map((rep, i) => (
                   <tr key={rep.name} className={`border-b border-gray-50 ${i === 0 ? 'bg-yellow-50/50' : 'hover:bg-gray-50'}`}>
-                    <td className="py-2.5 px-3 font-medium text-gray-900 flex items-center gap-2">
-                      {i === 0 && <Award size={13} className="text-yellow-500" />}
-                      {rep.name}
+                    <td className="py-2.5 px-3 font-medium text-gray-900">
+                      <div className="flex items-center gap-2">
+                        {i === 0 && <Award size={13} className="text-yellow-500" />}
+                        {rep.name}
+                      </div>
                     </td>
                     <td className="py-2.5 px-3 text-right text-gray-600">{rep.leads}</td>
                     <td className="py-2.5 px-3 text-right text-gray-600">{rep.closed}</td>
