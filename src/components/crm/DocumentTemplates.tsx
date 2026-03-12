@@ -20,7 +20,8 @@ import {
   FolderOpen,
   FolderPlus,
   FolderX,
-  X
+  X,
+  MoreVertical
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,6 +31,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
@@ -3128,8 +3130,8 @@ const DocumentTemplates: React.FC = () => {
                             setShowSimpleEditor(true);
                           }}
                         >
-                          <Edit className="w-4 h-4 mr-1" />
-                          Fill & Use
+                          <User className="w-4 h-4 mr-1" />
+                          Create
                         </Button>
                       ) : (
                         <>
@@ -3153,68 +3155,71 @@ const DocumentTemplates: React.FC = () => {
                           </Button>
                         </>
                       )}
-                      <Button 
-                        size="sm" 
-                        variant="outline"
-                        onClick={() => duplicateTemplate(template)}
-                      >
-                        <Copy className="w-4 h-4" />
-                      </Button>
-                      {/* Move to folder button */}
-                      <div className="relative">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          title={templateFolderMap[template.id] ? `In folder: ${templateFolderMap[template.id]}` : 'Move to folder'}
-                          onClick={() => setMovingTemplateId(movingTemplateId === template.id ? null : template.id)}
-                          className={templateFolderMap[template.id] ? 'text-blue-600 border-blue-300 bg-blue-50' : ''}
-                        >
-                          <FolderPlus className="w-4 h-4" />
-                        </Button>
-                        {movingTemplateId === template.id && (
-                          <div className="absolute bottom-full mb-1 right-0 z-20 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[160px]">
-                            <div className="px-3 py-1 text-xs font-semibold text-gray-500 border-b">Move to folder</div>
-                            {customFolders.length === 0 ? (
-                              <div className="px-3 py-2 text-xs text-gray-400">No folders yet — create one in the sidebar</div>
-                            ) : customFolders.map(f => (
-                              <button
-                                key={f}
-                                onClick={() => moveToFolder(template.id, f)}
-                                className={`w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 flex items-center gap-2 ${templateFolderMap[template.id] === f ? 'text-blue-600 font-medium' : 'text-gray-700'}`}
+                      
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="sm" variant="outline">
+                            <MoreVertical className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuItem onClick={() => duplicateTemplate(template)}>
+                            <Copy className="w-4 h-4 mr-2" />
+                            Duplicate
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setMovingTemplateId(movingTemplateId === template.id ? null : template.id)}>
+                            <FolderPlus className="w-4 h-4 mr-2" />
+                            {templateFolderMap[template.id] ? `In: ${templateFolderMap[template.id]}` : 'Move to folder'}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem>
+                            <Download className="w-4 h-4 mr-2" />
+                            Download
+                          </DropdownMenuItem>
+                          {!template.isDefault && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem 
+                                onClick={() => deleteTemplate(template)}
+                                className="text-red-600 focus:text-red-600 focus:bg-red-50"
                               >
-                                <Folder className="w-3.5 h-3.5" />
-                                {f}
-                                {templateFolderMap[template.id] === f && <span className="ml-auto text-xs">✓</span>}
+                                <Trash2 className="w-4 h-4 mr-2" />
+                                Delete
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                      
+                      {movingTemplateId === template.id && (
+                        <div className="absolute bottom-full mb-1 right-0 z-20 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[160px]">
+                          <div className="px-3 py-1 text-xs font-semibold text-gray-500 border-b">Move to folder</div>
+                          {customFolders.length === 0 ? (
+                            <div className="px-3 py-2 text-xs text-gray-400">No folders yet — create one in the sidebar</div>
+                          ) : customFolders.map(f => (
+                            <button
+                              key={f}
+                              onClick={() => moveToFolder(template.id, f)}
+                              className={`w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 flex items-center gap-2 ${templateFolderMap[template.id] === f ? 'text-blue-600 font-medium' : 'text-gray-700'}`}
+                            >
+                              <Folder className="w-3.5 h-3.5" />
+                              {f}
+                              {templateFolderMap[template.id] === f && <span className="ml-auto text-xs">✓</span>}
+                            </button>
+                          ))}
+                          {templateFolderMap[template.id] && (
+                            <>
+                              <div className="border-t my-1" />
+                              <button
+                                onClick={() => moveToFolder(template.id, null)}
+                                className="w-full text-left px-3 py-1.5 text-sm text-red-500 hover:bg-red-50 flex items-center gap-2"
+                              >
+                                <FolderX className="w-3.5 h-3.5" />
+                                Remove from folder
                               </button>
-                            ))}
-                            {templateFolderMap[template.id] && (
-                              <>
-                                <div className="border-t my-1" />
-                                <button
-                                  onClick={() => moveToFolder(template.id, null)}
-                                  className="w-full text-left px-3 py-1.5 text-sm text-red-500 hover:bg-red-50 flex items-center gap-2"
-                                >
-                                  <FolderX className="w-3.5 h-3.5" />
-                                  Remove from folder
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      {!template.isDefault && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-red-500 hover:bg-red-50 hover:border-red-300"
-                          onClick={() => deleteTemplate(template)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                            </>
+                          )}
+                        </div>
                       )}
-                      <Button size="sm">
-                        <Download className="w-4 h-4" />
-                      </Button>
                     </div>
                   </div>
                 </CardContent>
