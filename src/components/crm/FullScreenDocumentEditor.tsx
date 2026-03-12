@@ -1,34 +1,28 @@
-// FullScreenDocumentEditor.tsx
-// Full-screen document template editor — replaces the old modal/side-panel Edit flow.
-// All green brand colors, seamless state carry-over, live preview.
+// FullScreenDocumentEditor.tsx  v2
+// Click-directly-on-the-document-to-type experience.
+// Every {{VARIABLE}} renders as a contenteditable inline field.
+// Line items (qty × unit price) auto-calculate the line total and grand total.
 
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import {
   ArrowLeft,
   Eye,
   EyeOff,
-  Edit3,
   Download,
   Printer,
   Send,
   Save,
-  Search,
-  CheckCircle2,
-  Circle,
-  ChevronDown,
-  ChevronRight,
+  Plus,
+  Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { DbCompany } from '@/lib/database';
 import { getContactFullName } from '@/lib/crmData';
 import { DOCUMENT_CATEGORIES } from '@/lib/documentCategories';
 import { useToast } from '@/hooks/use-toast';
 
-// ─── Types ──────────────────────────────────────────────────────────────────
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 interface DocumentField {
   key: string;
@@ -65,106 +59,47 @@ export interface FullScreenDocumentEditorProps {
   initialContent?: string;
 }
 
-// ─── Variable grouping ───────────────────────────────────────────────────────
-
-const COMPANY_VARS = [
-  'COMPANY_NAME', 'COMPANY_TAGLINE', 'COMPANY_ADDRESS', 'COMPANY_CITY',
-  'COMPANY_STATE', 'COMPANY_ZIP', 'COMPANY_PHONE', 'COMPANY_EMAIL',
-  'COMPANY_LOGO', 'COMPANY_WEBSITE', 'CONTRACTOR_LICENSE', 'REP_NAME',
-  'SUPERVISOR_NAME', 'SUPERVISOR_PHONE', 'SUPERVISOR_EMAIL',
-];
-
-const CUSTOMER_VARS = [
-  'CUSTOMER_NAME', 'CLIENT_NAME', 'CUSTOMER_PHONE', 'CUSTOMER_EMAIL',
-  'PROPERTY_ADDRESS', 'PROPERTY_CITY', 'PROPERTY_STATE', 'PROPERTY_ZIP',
-  'JOB_SITE_ADDRESS', 'JOB_SITE_CITY', 'JOB_SITE_STATE', 'JOB_SITE_ZIP',
-  'EMERGENCY_CONTACT', 'ACCESS_INSTRUCTIONS',
-];
-
-const INSURANCE_VARS = [
-  'INSURANCE_COMPANY', 'POLICY_NUMBER', 'CLAIM_NUMBER',
-  'ADJUSTER_NAME', 'ADJUSTER_PHONE', 'DEDUCTIBLE_AMOUNT',
-];
-
-const DATE_VARS = [
-  'ESTIMATE_DATE', 'START_DATE', 'COMPLETION_DATE', 'STORM_DATE',
-  'REQUESTED_START', 'BACKUP_DATE', 'CHANGE_DATE', 'INSPECTION_DATE',
-  'ORIGINAL_COMPLETION', 'NEW_COMPLETION',
-];
-
-const FINANCIAL_VARS = [
-  'TOTAL_AMOUNT', 'SUBTOTAL', 'TAX_RATE', 'TAX_AMOUNT',
-  'TOTAL_ADDITIONAL_COST', 'REVISED_CONTRACT_TOTAL',
-  'ADDITIONAL_MATERIALS_COST', 'ADDITIONAL_LABOR_COST', 'PERMIT_FEES',
-  'WARRANTY_PERIOD',
-];
-
-function groupVar(varName: string): string {
-  if (COMPANY_VARS.includes(varName)) return 'Company Info';
-  if (CUSTOMER_VARS.includes(varName)) return 'Customer Info';
-  if (INSURANCE_VARS.includes(varName)) return 'Insurance';
-  if (DATE_VARS.includes(varName)) return 'Dates';
-  if (FINANCIAL_VARS.includes(varName)) return 'Financial';
-  return 'Project Details';
+interface LineItem {
+  id: string;
+  description: string;
+  qty: string;
+  unit: string;
+  unitPrice: string;
+  total: string; // auto-calculated
 }
 
-const GROUP_ORDER = ['Company Info', 'Customer Info', 'Insurance', 'Dates', 'Financial', 'Project Details'];
-
-const GROUP_COLORS: Record<string, string> = {
-  'Company Info': 'text-green-700',
-  'Customer Info': 'text-green-700',
-  'Insurance': 'text-green-700',
-  'Dates': 'text-green-700',
-  'Financial': 'text-green-700',
-  'Project Details': 'text-green-700',
-};
-
-function varToLabel(v: string): string {
-  return v
-    .replace(/_/g, ' ')
-    .toLowerCase()
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function isTextareaVar(v: string): boolean {
-  return ['SCOPE_OF_WORK', 'WORK_DESCRIPTION', 'REASON_FOR_CHANGE',
-    'ORIGINAL_SCOPE', 'ADDITIONAL_WORK', 'MATERIALS_LIST',
-    'CREW_ASSIGNMENTS', 'COST_BREAKDOWN_ITEMS', 'ADDITIONAL_COST_ITEMS',
-    'ADDITIONAL_SAFETY_REQUIREMENTS', 'WORK_TO_BE_PERFORMED'].includes(v);
-}
-
-// ─── Seed company values ──────────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function seedFromCompany(company: DbCompany | null): Record<string, string> {
   if (!company) return {};
+  const c = company as any;
   return {
-    COMPANY_NAME: (company as any).name ?? '',
-    COMPANY_TAGLINE: (company as any).tagline ?? '',
-    COMPANY_ADDRESS: (company as any).address ?? '',
-    COMPANY_CITY: (company as any).city ?? '',
-    COMPANY_STATE: (company as any).state ?? '',
-    COMPANY_ZIP: (company as any).zip ?? '',
-    COMPANY_PHONE: (company as any).phone ?? '',
-    COMPANY_EMAIL: (company as any).email ?? '',
-    CONTRACTOR_LICENSE: (company as any).contractor_license ?? '',
-    COMPANY_LOGO: (company as any).logo_url ? `<img src="${(company as any).logo_url}" style="max-height:60px" />` : 'LOGO',
+    COMPANY_NAME: c.name ?? '',
+    COMPANY_TAGLINE: c.tagline ?? '',
+    COMPANY_ADDRESS: c.address ?? '',
+    COMPANY_CITY: c.city ?? '',
+    COMPANY_STATE: c.state ?? '',
+    COMPANY_ZIP: c.zip ?? '',
+    COMPANY_PHONE: c.phone ?? '',
+    COMPANY_EMAIL: c.email ?? '',
+    CONTRACTOR_LICENSE: c.contractor_license ?? '',
+    COMPANY_LOGO: c.logo_url ?? '',
   };
 }
 
 function seedFromContact(contact: any): Record<string, string> {
   if (!contact) return {};
   const fullName = getContactFullName(contact);
-  const address = `${contact.address ?? ''}`;
   return {
     CUSTOMER_NAME: fullName,
     CLIENT_NAME: fullName,
     CUSTOMER_PHONE: contact.phone1 ?? contact.phone ?? '',
     CUSTOMER_EMAIL: contact.email ?? '',
-    PROPERTY_ADDRESS: address,
+    PROPERTY_ADDRESS: contact.address ?? '',
     PROPERTY_CITY: contact.city ?? '',
     PROPERTY_STATE: contact.state ?? '',
     PROPERTY_ZIP: contact.zip ?? '',
-    JOB_SITE_ADDRESS: address,
+    JOB_SITE_ADDRESS: contact.address ?? '',
     JOB_SITE_CITY: contact.city ?? '',
     JOB_SITE_STATE: contact.state ?? '',
     JOB_SITE_ZIP: contact.zip ?? '',
@@ -174,13 +109,94 @@ function seedFromContact(contact: any): Record<string, string> {
   };
 }
 
-// ─── Replace {{VARS}} in template content ─────────────────────────────────────
-
-function applyVars(content: string, values: Record<string, string>): string {
-  return content.replace(/\{\{([A-Z0-9_]+)\}\}/g, (_, key) => values[key] ?? `{{${key}}}`);
+function calcLineTotal(qty: string, unitPrice: string): string {
+  const q = parseFloat(qty) || 0;
+  const p = parseFloat(unitPrice.replace(/[^0-9.]/g, '')) || 0;
+  if (q === 0 || p === 0) return '';
+  return '$' + (q * p).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-// ─── Main component ───────────────────────────────────────────────────────────
+function calcSubtotal(items: LineItem[]): string {
+  const sum = items.reduce((acc, item) => {
+    const val = parseFloat(item.total.replace(/[^0-9.]/g, '')) || 0;
+    return acc + val;
+  }, 0);
+  if (sum === 0) return '';
+  return '$' + sum.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function newLineItem(): LineItem {
+  return { id: crypto.randomUUID(), description: '', qty: '', unit: '', unitPrice: '', total: '' };
+}
+
+const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+// ─── Inline editable field ────────────────────────────────────────────────────
+// Renders as plain underlined text when not focused; input when focused.
+
+interface InlineFieldProps {
+  value: string;
+  onChange: (val: string) => void;
+  placeholder?: string;
+  multiline?: boolean;
+  className?: string;
+  numeric?: boolean;
+  printMode?: boolean;
+}
+
+const InlineField: React.FC<InlineFieldProps> = ({
+  value, onChange, placeholder = 'Click to type…', multiline = false,
+  className = '', numeric = false, printMode = false,
+}) => {
+  const [focused, setFocused] = useState(false);
+
+  const baseClass = [
+    'inline-block min-w-[80px] outline-none transition-all duration-150',
+    printMode ? '' : 'border-b border-dashed',
+    focused
+      ? 'border-green-500 bg-green-50 rounded px-1'
+      : value
+        ? 'border-gray-300 text-gray-900'
+        : 'border-gray-300 text-gray-400',
+    className,
+  ].join(' ');
+
+  if (multiline) {
+    return (
+      <textarea
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        placeholder={printMode ? '' : placeholder}
+        rows={3}
+        className={[
+          baseClass,
+          'w-full resize-none text-sm leading-relaxed block',
+          printMode ? 'border-none bg-transparent' : '',
+        ].join(' ')}
+      />
+    );
+  }
+
+  return (
+    <input
+      type={numeric ? 'number' : 'text'}
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      placeholder={printMode ? '' : placeholder}
+      className={[
+        baseClass,
+        'text-sm h-auto py-0.5',
+        printMode ? 'border-none bg-transparent' : '',
+      ].join(' ')}
+    />
+  );
+};
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 const FullScreenDocumentEditor: React.FC<FullScreenDocumentEditorProps> = ({
   template,
@@ -188,103 +204,72 @@ const FullScreenDocumentEditor: React.FC<FullScreenDocumentEditorProps> = ({
   companyProfile,
   contacts,
   initialContactId = '',
-  initialContent,
 }) => {
   const { toast } = useToast();
+  const printRef = useRef<HTMLDivElement>(null);
 
-  // Seed initial values from company + selected contact
   const selectedContact = useMemo(
     () => contacts.find((c) => c.id === initialContactId) ?? null,
     [contacts, initialContactId]
   );
 
-  const initialValues = useMemo(() => {
+  // Seeded values
+  const seed = useMemo(() => ({
+    ...seedFromCompany(companyProfile),
+    ...seedFromContact(selectedContact),
+    ESTIMATE_DATE: today,
+    INSPECTION_DATE: today,
+    CHANGE_DATE: today,
+  }), [companyProfile, selectedContact]);
+
+  // ── Field values ──
+  const [vals, setVals] = useState<Record<string, string>>(() => {
     const base: Record<string, string> = {};
-    template.variables.forEach((v) => { base[v] = ''; });
-    // Seed from company
-    Object.assign(base, seedFromCompany(companyProfile));
-    // Seed from contact
-    Object.assign(base, seedFromContact(selectedContact));
-    // Seed today's date for common date fields
-    const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-    if (base.ESTIMATE_DATE === '') base.ESTIMATE_DATE = today;
-    if (base.INSPECTION_DATE === '') base.INSPECTION_DATE = today;
-    if (base.CHANGE_DATE === '') base.CHANGE_DATE = today;
+    template.variables.forEach(v => { base[v] = seed[v] ?? ''; });
     return base;
-  }, [template.variables, companyProfile, selectedContact]);
+  });
 
-  const [values, setValues] = useState<Record<string, string>>(initialValues);
-  const [search, setSearch] = useState('');
-  const [previewMode, setPreviewMode] = useState(false);
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
-  const [saved, setSaved] = useState(false);
-
-  // Update a single variable field
-  const handleChange = useCallback((key: string, val: string) => {
-    setValues((prev) => ({ ...prev, [key]: val }));
-    setSaved(false);
+  const set = useCallback((key: string, val: string) => {
+    setVals(prev => ({ ...prev, [key]: val }));
   }, []);
 
-  // Rendered HTML with all vars replaced
-  const renderedHtml = useMemo(() => applyVars(template.content, values), [template.content, values]);
+  // ── Line items ──
+  const [lineItems, setLineItems] = useState<LineItem[]>([newLineItem(), newLineItem(), newLineItem()]);
 
-  // Group variables
-  const grouped = useMemo(() => {
-    const map: Record<string, string[]> = {};
-    template.variables.forEach((v) => {
-      const g = groupVar(v);
-      if (!map[g]) map[g] = [];
-      map[g].push(v);
-    });
-    return map;
-  }, [template.variables]);
+  const updateLineItem = useCallback((id: string, field: keyof LineItem, value: string) => {
+    setLineItems(prev => prev.map(item => {
+      if (item.id !== id) return item;
+      const updated = { ...item, [field]: value };
+      if (field === 'qty' || field === 'unitPrice') {
+        updated.total = calcLineTotal(
+          field === 'qty' ? value : item.qty,
+          field === 'unitPrice' ? value : item.unitPrice
+        );
+      }
+      return updated;
+    }));
+  }, []);
 
-  const filteredGrouped = useMemo(() => {
-    if (!search.trim()) return grouped;
-    const q = search.toLowerCase();
-    const result: Record<string, string[]> = {};
-    Object.entries(grouped).forEach(([group, vars]) => {
-      const filtered = vars.filter(
-        (v) => v.toLowerCase().includes(q) || varToLabel(v).toLowerCase().includes(q)
-      );
-      if (filtered.length > 0) result[group] = filtered;
-    });
-    return result;
-  }, [grouped, search]);
+  const addLineItem = () => setLineItems(prev => [...prev, newLineItem()]);
+  const removeLineItem = (id: string) => setLineItems(prev => prev.filter(i => i.id !== id));
 
-  // Completion stats
-  const totalVars = template.variables.length;
-  const filledVars = template.variables.filter((v) => values[v]?.trim()).length;
-  const completionPct = totalVars > 0 ? Math.round((filledVars / totalVars) * 100) : 0;
+  // Auto-update subtotal / total in vals whenever line items change
+  useEffect(() => {
+    const sub = calcSubtotal(lineItems);
+    setVals(prev => ({ ...prev, SUBTOTAL: sub, TOTAL_AMOUNT: sub }));
+  }, [lineItems]);
 
-  // Category badge
-  const cat = DOCUMENT_CATEGORIES.find((c) => c.id === template.category);
-
-  // Toggle group collapse
-  const toggleGroup = (g: string) => {
-    setCollapsedGroups((prev) => {
-      const next = new Set(prev);
-      next.has(g) ? next.delete(g) : next.add(g);
-      return next;
-    });
-  };
-
-  const handleSave = () => {
-    setSaved(true);
-    toast({ title: 'Draft saved', description: `${template.name} has been saved.` });
-  };
+  // ── Print / Preview mode ──
+  const [printMode, setPrintMode] = useState(false);
 
   const handlePrint = () => {
-    const win = window.open('', '_blank');
-    if (!win) return;
-    win.document.write(renderedHtml);
-    win.document.close();
-    win.focus();
-    win.print();
+    window.print();
   };
 
   const handleDownload = () => {
-    const blob = new Blob([renderedHtml], { type: 'text/html' });
+    if (!printRef.current) return;
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${template.name}</title><style>body{font-family:Arial,sans-serif;padding:40px;max-width:900px;margin:0 auto;color:#111}input,textarea{border:none;border-bottom:1px solid #ccc;background:transparent;outline:none;font-family:inherit;font-size:inherit;color:inherit;width:100%}table{width:100%;border-collapse:collapse}th,td{padding:8px;border:1px solid #ddd;text-align:left}th{background:#f5f5f5}</style></head><body>${printRef.current.innerHTML}</body></html>`;
+    const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -293,219 +278,328 @@ const FullScreenDocumentEditor: React.FC<FullScreenDocumentEditorProps> = ({
     URL.revokeObjectURL(url);
   };
 
+  const cat = DOCUMENT_CATEGORIES.find(c => c.id === template.category);
+  const logoUrl = (companyProfile as any)?.logo_url ?? '';
+  const filledCount = template.variables.filter(v => vals[v]?.trim()).length;
+
+  // ── Field shorthand ──
+  const F = (key: string, placeholder?: string, opts?: { multiline?: boolean; numeric?: boolean; className?: string }) => (
+    <InlineField
+      value={vals[key] ?? ''}
+      onChange={v => set(key, v)}
+      placeholder={placeholder ?? `${key.replace(/_/g, ' ').toLowerCase()}…`}
+      multiline={opts?.multiline}
+      numeric={opts?.numeric}
+      className={opts?.className}
+      printMode={printMode}
+    />
+  );
+
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-white">
+    <div className="fixed inset-0 z-50 flex flex-col bg-gray-100">
+
       {/* ── Toolbar ── */}
-      <div className="flex items-center justify-between px-4 py-3 bg-white border-b-2 border-green-600 shadow-sm flex-shrink-0">
-        {/* Left: back + title */}
-        <div className="flex items-center gap-3 min-w-0">
+      <div className="flex items-center justify-between px-5 py-2.5 bg-white border-b-2 border-green-600 shadow-sm flex-shrink-0 print:hidden">
+        <div className="flex items-center gap-3">
           <button
             onClick={onBack}
-            className="flex items-center gap-1.5 text-green-700 hover:text-green-800 font-medium text-sm transition-colors"
+            className="flex items-center gap-1.5 text-green-700 hover:text-green-800 font-medium text-sm"
           >
             <ArrowLeft className="w-4 h-4" />
             Back to Templates
           </button>
           <span className="text-gray-300">|</span>
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="font-semibold text-gray-800 truncate text-sm">{template.name}</span>
-            {cat && (
-              <Badge
-                className="text-xs shrink-0"
-                style={{ backgroundColor: cat.color + '22', color: cat.color, border: `1px solid ${cat.color}44` }}
-              >
-                {cat.label}
-              </Badge>
-            )}
-          </div>
+          <span className="font-semibold text-gray-800 text-sm">{template.name}</span>
+          {cat && (
+            <Badge className="text-xs" style={{ backgroundColor: cat.color + '22', color: cat.color, border: `1px solid ${cat.color}44` }}>
+              {cat.label}
+            </Badge>
+          )}
+          <span className="text-xs text-green-600 font-medium">{filledCount} / {template.variables.length} filled</span>
         </div>
 
-        {/* Right: action buttons */}
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {/* Completion counter */}
-          <span className="text-xs text-green-700 font-medium hidden sm:block">
-            {filledVars} / {totalVars} fields filled
-          </span>
-
-          {/* Preview toggle */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setPreviewMode((p) => !p)}
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm"
+            onClick={() => setPrintMode(p => !p)}
             className="border-green-300 text-green-700 hover:bg-green-50 gap-1.5"
           >
-            {previewMode ? (
-              <><Edit3 className="w-3.5 h-3.5" /> Edit Mode</>
-            ) : (
-              <><Eye className="w-3.5 h-3.5" /> Preview Mode</>
-            )}
+            {printMode ? <><EyeOff className="w-3.5 h-3.5" /> Edit Mode</> : <><Eye className="w-3.5 h-3.5" /> Preview</>}
           </Button>
-
-          {/* Print */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handlePrint}
-            className="border-green-300 text-green-700 hover:bg-green-50"
-          >
+          <Button variant="outline" size="sm" onClick={handlePrint}
+            className="border-green-300 text-green-700 hover:bg-green-50">
             <Printer className="w-3.5 h-3.5" />
           </Button>
-
-          {/* Download */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleDownload}
-            className="border-green-300 text-green-700 hover:bg-green-50 gap-1.5"
-          >
+          <Button variant="outline" size="sm" onClick={handleDownload}
+            className="border-green-300 text-green-700 hover:bg-green-50 gap-1.5">
             <Download className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Download</span>
+            Download
           </Button>
-
-          {/* Save Draft */}
-          <Button
-            size="sm"
-            onClick={handleSave}
-            className={`gap-1.5 ${
-              saved
-                ? 'bg-green-100 text-green-700 border border-green-300'
-                : 'bg-green-600 hover:bg-green-700 text-white'
-            }`}
-          >
+          <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white gap-1.5"
+            onClick={() => toast({ title: 'Draft saved', description: template.name })}>
             <Save className="w-3.5 h-3.5" />
-            {saved ? 'Saved' : 'Save Draft'}
+            Save Draft
           </Button>
-
-          {/* Send to Customer */}
-          <Button
-            size="sm"
-            className="bg-green-600 hover:bg-green-700 text-white gap-1.5"
-            onClick={() => toast({ title: 'Coming soon', description: 'Send to customer functionality is coming soon.' })}
-          >
+          <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white gap-1.5"
+            onClick={() => toast({ title: 'Coming soon', description: 'Send to customer is coming soon.' })}>
             <Send className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Send to Customer</span>
+            Send to Customer
           </Button>
         </div>
       </div>
 
-      {/* ── Body ── */}
-      <div className="flex flex-1 overflow-hidden">
-
-        {/* ── Left panel: variable fields ── */}
+      {/* ── Document canvas ── */}
+      <div className="flex-1 overflow-auto py-8 px-4">
         <div
-          className={`flex flex-col bg-gray-50 border-r border-gray-200 transition-all duration-300 overflow-hidden ${
-            previewMode ? 'w-0 opacity-0 pointer-events-none' : 'w-72 opacity-100'
-          }`}
+          ref={printRef}
+          className="bg-white max-w-4xl mx-auto shadow-lg rounded-lg p-12 print:shadow-none print:rounded-none"
+          style={{ minHeight: '1100px' }}
         >
-          {/* Panel header */}
-          <div className="px-4 pt-4 pb-3 border-b border-gray-200 flex-shrink-0">
-            {/* Progress bar */}
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-green-700">{filledVars} / {totalVars} filled</span>
-              <span className="text-xs text-gray-500">{completionPct}%</span>
+
+          {/* ══ HEADER ══ */}
+          <div className="flex justify-between items-start border-b-4 border-green-600 pb-6 mb-8">
+            <div className="flex-1">
+              <div className="text-3xl font-extrabold text-green-700 mb-1">
+                {F('COMPANY_NAME', '614 Restore LLC', { className: 'text-3xl font-extrabold text-green-700 w-64' })}
+              </div>
+              <div className="text-sm text-gray-500 italic mb-3">
+                {F('COMPANY_TAGLINE', 'Professional Contractor Services', { className: 'text-sm w-72' })}
+              </div>
+              <div className="text-sm text-gray-700 space-y-0.5">
+                <div><strong>{F('REP_NAME', 'Your name', { className: 'font-semibold w-48' })}</strong></div>
+                <div>{F('COMPANY_ADDRESS', 'Street address', { className: 'w-56' })}, {F('COMPANY_CITY', 'City', { className: 'w-28' })}, {F('COMPANY_STATE', 'ST', { className: 'w-10' })} {F('COMPANY_ZIP', 'ZIP', { className: 'w-16' })}</div>
+                <div>Phone: {F('COMPANY_PHONE', '(000) 000-0000', { className: 'w-36' })} | Email: {F('COMPANY_EMAIL', 'email@company.com', { className: 'w-48' })}</div>
+                <div>License: {F('CONTRACTOR_LICENSE', 'License number', { className: 'w-40' })}</div>
+              </div>
             </div>
-            <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-green-500 rounded-full transition-all duration-300"
-                style={{ width: `${completionPct}%` }}
-              />
+            {logoUrl ? (
+              <img src={logoUrl} alt="Logo" className="w-24 h-16 object-contain ml-6" />
+            ) : (
+              <div className="w-24 h-16 border-2 border-dashed border-gray-300 flex items-center justify-center text-xs text-gray-400 ml-6 rounded">
+                Logo
+              </div>
+            )}
+          </div>
+
+          {/* ══ DOCUMENT TITLE ══ */}
+          <div className="text-center text-2xl font-bold text-gray-800 mb-8 uppercase tracking-wide">
+            {template.name}
+          </div>
+
+          {/* ══ CUSTOMER + PROJECT INFO ══ */}
+          <div className="grid grid-cols-2 gap-6 mb-8">
+            {/* Customer */}
+            <div className="bg-gray-50 rounded-lg p-5 border-l-4 border-green-600">
+              <div className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-4 border-b border-gray-200 pb-2">Customer Information</div>
+              <table className="w-full text-sm">
+                <tbody>
+                  {[
+                    ['Name', 'CUSTOMER_NAME', 'Full name'],
+                    ['Phone', 'CUSTOMER_PHONE', '(000) 000-0000'],
+                    ['Email', 'CUSTOMER_EMAIL', 'email@example.com'],
+                    ['Property', 'PROPERTY_ADDRESS', 'Street address'],
+                    ['City/State', 'PROPERTY_CITY', 'City'],
+                    ['Insurance', 'INSURANCE_COMPANY', 'Insurance company'],
+                    ['Policy #', 'POLICY_NUMBER', 'Policy number'],
+                    ['Claim #', 'CLAIM_NUMBER', 'Claim number'],
+                    ['Adjuster', 'ADJUSTER_NAME', 'Adjuster name'],
+                    ['Adj. Phone', 'ADJUSTER_PHONE', '(000) 000-0000'],
+                  ].filter(([, key]) => template.variables.includes(key as string)).map(([label, key, ph]) => (
+                    <tr key={key} className="border-b border-gray-100 last:border-0">
+                      <td className="py-1.5 pr-3 text-gray-500 font-medium w-28 whitespace-nowrap">{label}:</td>
+                      <td className="py-1.5">{F(key as string, ph as string, { className: 'w-full' })}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
 
-            {/* Search */}
-            <div className="relative mt-3">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-              <Input
-                placeholder="Search fields…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-8 h-8 text-xs focus:ring-green-500 focus:border-green-500"
-              />
+            {/* Project */}
+            <div className="bg-gray-50 rounded-lg p-5 border-l-4 border-green-600">
+              <div className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-4 border-b border-gray-200 pb-2">Project Details</div>
+              <table className="w-full text-sm">
+                <tbody>
+                  {[
+                    ['Est. Date', 'ESTIMATE_DATE', 'Date'],
+                    ['Estimate #', 'ESTIMATE_NUMBER', 'EST-000000'],
+                    ['Project Type', 'PROJECT_TYPE', 'Roof replacement'],
+                    ['Storm Date', 'STORM_DATE', 'Date of storm'],
+                    ['Damage Type', 'DAMAGE_TYPE', 'Hail / Wind'],
+                    ['Start Date', 'REQUESTED_START', 'Requested start'],
+                    ['Duration', 'ESTIMATED_DURATION', '1-2 days'],
+                    ['Deductible', 'DEDUCTIBLE_AMOUNT', '$0.00'],
+                    ['Work Order #', 'WORK_ORDER_NUMBER', 'WO-000000'],
+                    ['Priority', 'PRIORITY_LEVEL', 'Normal'],
+                    ['Warranty', 'WARRANTY_PERIOD', '10 years'],
+                  ].filter(([, key]) => template.variables.includes(key as string)).map(([label, key, ph]) => (
+                    <tr key={key} className="border-b border-gray-100 last:border-0">
+                      <td className="py-1.5 pr-3 text-gray-500 font-medium w-28 whitespace-nowrap">{label}:</td>
+                      <td className="py-1.5">{F(key as string, ph as string, { className: 'w-full' })}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
 
-          {/* Variable groups */}
-          <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1">
-            {GROUP_ORDER.filter((g) => filteredGrouped[g]?.length).map((group) => {
-              const vars = filteredGrouped[group];
-              const isCollapsed = collapsedGroups.has(group);
-              const groupFilled = vars.filter((v) => values[v]?.trim()).length;
+          {/* ══ SCOPE OF WORK ══ */}
+          {template.variables.includes('SCOPE_OF_WORK') && (
+            <div className="mb-8">
+              <div className="text-base font-bold text-gray-800 mb-3 border-b-2 border-green-600 pb-1">Scope of Work</div>
+              {F('SCOPE_OF_WORK', 'Describe the full scope of work to be completed…', { multiline: true, className: 'w-full text-sm' })}
+            </div>
+          )}
 
-              return (
-                <div key={group} className="rounded-lg border border-gray-200 bg-white overflow-hidden">
-                  {/* Group header */}
-                  <button
-                    onClick={() => toggleGroup(group)}
-                    className="w-full flex items-center justify-between px-3 py-2 hover:bg-green-50 transition-colors"
-                  >
-                    <span className={`text-xs font-semibold uppercase tracking-wide ${GROUP_COLORS[group]}`}>
-                      {group}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-400">{groupFilled}/{vars.length}</span>
-                      {isCollapsed
-                        ? <ChevronRight className="w-3 h-3 text-gray-400" />
-                        : <ChevronDown className="w-3 h-3 text-gray-400" />}
-                    </div>
-                  </button>
+          {template.variables.includes('WORK_DESCRIPTION') && (
+            <div className="mb-8">
+              <div className="text-base font-bold text-gray-800 mb-3 border-b-2 border-green-600 pb-1">Work to be Performed</div>
+              {F('WORK_DESCRIPTION', 'Describe the work to be performed…', { multiline: true, className: 'w-full text-sm' })}
+            </div>
+          )}
 
-                  {/* Fields */}
-                  {!isCollapsed && (
-                    <div className="px-3 pb-3 space-y-2 border-t border-gray-100">
-                      {vars.map((varName) => {
-                        const filled = !!values[varName]?.trim();
-                        const isTextarea = isTextareaVar(varName);
-                        return (
-                          <div key={varName} className="pt-2">
-                            <div className="flex items-center gap-1.5 mb-1">
-                              {filled
-                                ? <CheckCircle2 className="w-3 h-3 text-green-500 flex-shrink-0" />
-                                : <Circle className="w-3 h-3 text-gray-300 flex-shrink-0" />}
-                              <Label className="text-xs text-gray-600 font-medium leading-none">
-                                {varToLabel(varName)}
-                              </Label>
-                            </div>
-                            {isTextarea ? (
-                              <Textarea
-                                value={values[varName] ?? ''}
-                                onChange={(e) => handleChange(varName, e.target.value)}
-                                placeholder={`Enter ${varToLabel(varName).toLowerCase()}…`}
-                                rows={3}
-                                className={`text-xs resize-none focus:ring-green-500 focus:border-green-500 ${
-                                  !filled ? 'bg-yellow-50 border-yellow-200' : ''
-                                }`}
-                              />
-                            ) : (
-                              <Input
-                                value={values[varName] ?? ''}
-                                onChange={(e) => handleChange(varName, e.target.value)}
-                                placeholder={`Enter ${varToLabel(varName).toLowerCase()}…`}
-                                className={`h-7 text-xs focus:ring-green-500 focus:border-green-500 ${
-                                  !filled ? 'bg-yellow-50 border-yellow-200' : ''
-                                }`}
-                              />
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+          {/* ══ COST BREAKDOWN ══ */}
+          <div className="mb-8">
+            <div className="text-base font-bold text-gray-800 mb-3 border-b-2 border-green-600 pb-1">Cost Breakdown</div>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-100">
+                  <th className="text-left py-2.5 px-3 font-semibold text-gray-700 rounded-tl-lg">Description</th>
+                  <th className="text-center py-2.5 px-3 font-semibold text-gray-700 w-20">Qty</th>
+                  <th className="text-left py-2.5 px-3 font-semibold text-gray-700 w-24">Unit</th>
+                  <th className="text-right py-2.5 px-3 font-semibold text-gray-700 w-28">Unit Price</th>
+                  <th className="text-right py-2.5 px-3 font-semibold text-gray-700 w-28 rounded-tr-lg">Total</th>
+                  {!printMode && <th className="w-8"></th>}
+                </tr>
+              </thead>
+              <tbody>
+                {lineItems.map((item, idx) => (
+                  <tr key={item.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                    <td className="py-2 px-3">
+                      <InlineField
+                        value={item.description}
+                        onChange={v => updateLineItem(item.id, 'description', v)}
+                        placeholder="Item description…"
+                        className="w-full"
+                        printMode={printMode}
+                      />
+                    </td>
+                    <td className="py-2 px-3 text-center">
+                      <InlineField
+                        value={item.qty}
+                        onChange={v => updateLineItem(item.id, 'qty', v)}
+                        placeholder="0"
+                        numeric
+                        className="w-16 text-center"
+                        printMode={printMode}
+                      />
+                    </td>
+                    <td className="py-2 px-3">
+                      <InlineField
+                        value={item.unit}
+                        onChange={v => updateLineItem(item.id, 'unit', v)}
+                        placeholder="sq ft"
+                        className="w-20"
+                        printMode={printMode}
+                      />
+                    </td>
+                    <td className="py-2 px-3 text-right">
+                      <InlineField
+                        value={item.unitPrice}
+                        onChange={v => updateLineItem(item.id, 'unitPrice', v)}
+                        placeholder="$0.00"
+                        className="w-24 text-right"
+                        printMode={printMode}
+                      />
+                    </td>
+                    <td className="py-2 px-3 text-right font-semibold text-green-700">
+                      {item.total || <span className="text-gray-300 font-normal text-xs">auto</span>}
+                    </td>
+                    {!printMode && (
+                      <td className="py-2 px-1">
+                        <button
+                          onClick={() => removeLineItem(item.id)}
+                          className="text-gray-300 hover:text-red-400 transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {!printMode && (
+              <button
+                onClick={addLineItem}
+                className="mt-2 flex items-center gap-1.5 text-sm text-green-600 hover:text-green-700 font-medium transition-colors"
+              >
+                <Plus className="w-4 h-4" /> Add line item
+              </button>
+            )}
+
+            {/* Totals */}
+            <div className="mt-4 flex justify-end">
+              <div className="w-72 space-y-2">
+                <div className="flex justify-between text-sm border-b border-gray-200 pb-2">
+                  <span className="text-gray-600">Subtotal</span>
+                  <span className="font-semibold">{calcSubtotal(lineItems) || '—'}</span>
                 </div>
-              );
-            })}
+                <div className="flex justify-between text-sm border-b border-gray-200 pb-2">
+                  <span className="text-gray-600">Tax ({F('TAX_RATE', '0', { className: 'w-10 text-center' })}%)</span>
+                  <span>{F('TAX_AMOUNT', '$0.00', { className: 'w-24 text-right' })}</span>
+                </div>
+                {template.variables.includes('DEDUCTIBLE_AMOUNT') && (
+                  <div className="flex justify-between text-sm border-b border-gray-200 pb-2">
+                    <span className="text-gray-600">Insurance Deductible</span>
+                    <span className="text-red-500">-{vals['DEDUCTIBLE_AMOUNT'] || '—'}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-base font-bold bg-green-600 text-white px-4 py-3 rounded-lg">
+                  <span>TOTAL</span>
+                  <span>{calcSubtotal(lineItems) || '—'}</span>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
 
-        {/* ── Right panel: live preview ── */}
-        <div className="flex-1 bg-gray-100 overflow-auto">
-          <div
-            className="max-w-4xl mx-auto my-6 bg-white shadow-lg rounded-lg overflow-hidden"
-            style={{ minHeight: '1100px' }}
-          >
-            <div
-              className="w-full h-full"
-              dangerouslySetInnerHTML={{ __html: renderedHtml }}
-            />
+          {/* ══ ADDITIONAL FIELDS ══ */}
+          {[
+            ['REASON_FOR_CHANGE', 'Reason for Change'],
+            ['ORIGINAL_SCOPE', 'Original Scope'],
+            ['ADDITIONAL_WORK', 'Additional Work Required'],
+            ['MATERIALS_LIST', 'Materials Required'],
+            ['CREW_ASSIGNMENTS', 'Crew Assignment'],
+            ['ADDITIONAL_SAFETY_REQUIREMENTS', 'Additional Safety Requirements'],
+          ].filter(([key]) => template.variables.includes(key)).map(([key, label]) => (
+            <div key={key} className="mb-6">
+              <div className="text-base font-bold text-gray-800 mb-2 border-b-2 border-green-600 pb-1">{label}</div>
+              {F(key, `Enter ${label.toLowerCase()}…`, { multiline: true, className: 'w-full text-sm' })}
+            </div>
+          ))}
+
+          {/* ══ TERMS ══ */}
+          <div className="bg-amber-50 border-l-4 border-amber-400 p-4 rounded-r-lg mb-8 text-sm text-gray-700">
+            <strong>Terms &amp; Conditions:</strong> This estimate is valid for 30 days. All work completed per agreed specifications.
+            Warranty: {F('WARRANTY_PERIOD', '10 years', { className: 'w-24' })}. Payment due upon completion.
           </div>
+
+          {/* ══ SIGNATURES ══ */}
+          <div className="grid grid-cols-2 gap-12 mt-10">
+            <div>
+              <div className="border-b-2 border-gray-400 h-12 mb-2"></div>
+              <div className="text-xs text-gray-500 text-center">Customer Signature / Date</div>
+            </div>
+            <div>
+              <div className="border-b-2 border-gray-400 h-12 mb-2"></div>
+              <div className="text-xs text-gray-500 text-center">Contractor Signature / Date</div>
+            </div>
+          </div>
+
+          {/* ══ FOOTER ══ */}
+          <div className="mt-10 pt-4 border-t border-gray-200 text-center text-xs text-gray-400">
+            Thank you for choosing {vals['COMPANY_NAME'] || 'us'} — we're committed to quality workmanship and customer satisfaction.
+          </div>
+
         </div>
       </div>
     </div>
