@@ -1,5 +1,6 @@
 // POST /api/eagleview-order
-// Places a measurement order with EagleView for a given job/project address.
+// Places a measurement order using the USER's EagleView access token.
+// The order is billed to the user's own EagleView account, not 614 Restore.
 // Body: { jobId, address, city, state, zip, reportType }
 // Requires JWT auth.
 import { createClient } from '@supabase/supabase-js';
@@ -14,21 +15,21 @@ const EV_API_URL = EV_ENV === 'production'
 const EV_TOKEN_URL = EV_ENV === 'production'
   ? 'https://id.eagleview.com/oauth2/v1/token'
   : 'https://id.sandbox.eagleview.com/oauth2/v1/token';
+const EV_CLIENT_ID = process.env.EAGLEVIEW_CLIENT_ID || '0oa19zndpyiFYYMcG2p8';
 
-async function getAccessToken() {
+async function refreshAccessToken(refreshToken) {
   const res = await fetch(EV_TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      grant_type: 'client_credentials',
-      client_id: (process.env.EAGLEVIEW_CLIENT_ID || '').trim(),
-      client_secret: (process.env.EAGLEVIEW_CLIENT_SECRET || '').trim(),
-      scope: 'measurement_orders',
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+      client_id: EV_CLIENT_ID,
     }),
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(`EagleView token failed: ${JSON.stringify(data)}`);
-  return data.access_token;
+  if (!res.ok) throw new Error(`Token refresh failed: ${JSON.stringify(data)}`);
+  return data;
 }
 
 export default async function handler(req, res) {
@@ -64,9 +65,49 @@ export default async function handler(req, res) {
     return res.status(403).json({ error: 'No company associated with this account' });
   }
 
-  try {
-    const accessToken = await getAccessToken();
+  // Get the user's stored EagleView tokens
+  const { data: integration } = await supabase
+    .from('integrations')
+    .select('access_token, refresh_token, token_expires_at')
+    .eq('company_id', profile.company_id)
+    .eq('provider', 'eagleview')
+    .single();
 
+  if (!integration?.access_token) {
+    return res.status(403).json({
+      error: 'EagleView account not connected',
+      action: 'connect_eagleview',
+      connectUrl: `${APP_URL}/api/eagleview-auth`,
+    });
+  }
+
+  let accessToken = integration.access_token;
+
+  // Auto-refresh token if expired
+  if (integration.refresh_token && new Date(integration.token_expires_at) < new Date()) {
+    try {
+      const refreshed = await refreshAccessToken(integration.refresh_token);
+      accessToken = refreshed.access_token;
+      await supabase
+        .from('integrations')
+        .update({
+          access_token: refreshed.access_token,
+          refresh_token: refreshed.refresh_token || integration.refresh_token,
+          token_expires_at: new Date(Date.now() + (refreshed.expires_in || 3600) * 1000).toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('company_id', profile.company_id)
+        .eq('provider', 'eagleview');
+    } catch (err) {
+      return res.status(403).json({
+        error: 'EagleView token expired and refresh failed. Please reconnect.',
+        action: 'reconnect_eagleview',
+        connectUrl: `${APP_URL}/api/eagleview-auth`,
+      });
+    }
+  }
+
+  try {
     const orderRes = await fetch(`${EV_API_URL}/v1/measurement-orders`, {
       method: 'POST',
       headers: {
@@ -74,12 +115,7 @@ export default async function handler(req, res) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        address: {
-          street: address,
-          city,
-          state,
-          zip,
-        },
+        address: { street: address, city, state, zip },
         reportType,
         callbackUrl: `${APP_URL}/api/eagleview-webhook`,
       }),
@@ -92,7 +128,6 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Failed to place EagleView order', details: orderData });
     }
 
-    // Store the order reference against the job in Supabase
     await supabase
       .from('eagleview_orders')
       .insert({
