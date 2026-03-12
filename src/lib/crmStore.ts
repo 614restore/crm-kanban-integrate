@@ -44,7 +44,8 @@ export type ViewType =
   | 'supplement-tracking'
   | 'crew-schedule'
   | 'equipment'
-  | 'commission-payroll';
+  | 'commission-payroll'
+  | 'sales-analytics';
 
 export interface CRMState {
   // Current user
@@ -292,11 +293,9 @@ export function crmReducer(state: CRMState, action: CRMAction): CRMState {
       const newAppt = action.payload;
       let contactsAfterAdd = state.contacts;
 
-      // When an inspection is scheduled, update the contact's inspection fields and status
       if (newAppt.type === 'inspection') {
         contactsAfterAdd = state.contacts.map((contact) => {
           if (contact.id === newAppt.contactId) {
-            // Only advance status if the contact is still prospect/lead
             const shouldAdvanceStatus =
               contact.status === 'prospect' || contact.status === 'lead';
             return {
@@ -319,14 +318,12 @@ export function crmReducer(state: CRMState, action: CRMAction): CRMState {
     }
     
     case 'UPDATE_APPOINTMENT': {
-      // Handle inspection completion automation
       const updatedAppointment = action.payload;
       const isInspection = updatedAppointment.type === 'inspection';
       const isCompleted = updatedAppointment.status === 'completed';
       
       let updatedContacts = state.contacts;
       
-      // Auto-move customer when inspection is completed
       if (isInspection && isCompleted) {
         updatedContacts = state.contacts.map((contact) => {
           if (contact.id === updatedAppointment.contactId && contact.status === 'appt_set') {
@@ -516,6 +513,37 @@ export function crmReducer(state: CRMState, action: CRMAction): CRMState {
     case 'SET_WORK_ORDERS':
       return { ...state, workOrders: action.payload };
     
+    case 'ADD_DOCUMENT_TEMPLATE':
+      return { ...state, documentTemplates: [...state.documentTemplates, action.payload] };
+    
+    case 'UPDATE_DOCUMENT_TEMPLATE':
+      return {
+        ...state,
+        documentTemplates: state.documentTemplates.map((dt) =>
+          dt.id === action.payload.id ? action.payload : dt
+        ),
+      };
+    
+    case 'DELETE_DOCUMENT_TEMPLATE':
+      return { ...state, documentTemplates: state.documentTemplates.filter((dt) => dt.id !== action.payload) };
+    
+    case 'SET_DOCUMENT_TEMPLATES':
+      return { ...state, documentTemplates: action.payload };
+
+    case 'ADD_COMPANY_GOAL':
+      return { ...state, companyGoals: [...state.companyGoals, action.payload] };
+
+    case 'UPDATE_COMPANY_GOAL':
+      return {
+        ...state,
+        companyGoals: state.companyGoals.map((g) =>
+          g.id === action.payload.id ? action.payload : g
+        ),
+      };
+
+    case 'SET_COMPANY_GOALS':
+      return { ...state, companyGoals: action.payload };
+    
     case 'INITIALIZE_DATA':
       return {
         ...state,
@@ -555,7 +583,6 @@ export function useCRM() {
   return context;
 }
 
-// Helper hooks
 export function useCurrentContact() {
   const { state } = useCRM();
   if (!state.selectedContactId) return null;
@@ -566,7 +593,6 @@ export function useFilteredContacts() {
   const { state } = useCRM();
   let filtered = [...state.contacts];
   
-  // Search filter
   if (state.searchQuery) {
     const query = state.searchQuery.toLowerCase();
     filtered = filtered.filter(
@@ -579,12 +605,10 @@ export function useFilteredContacts() {
     );
   }
   
-  // Status filter
   if (state.filterStatus !== 'all') {
     filtered = filtered.filter((c) => c.status === state.filterStatus);
   }
   
-  // Assignee filter
   if (state.filterAssignee !== 'all') {
     filtered = filtered.filter((c) => c.assignedTo === state.filterAssignee);
   }
@@ -615,7 +639,6 @@ function parseAppointmentDate(appointment: Appointment): Date {
   const raw = appointment.date?.trim();
   if (!raw) return new Date(NaN);
 
-  // Date-only values should count for the whole local day.
   if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
     const [year, month, day] = raw.split('-').map(Number);
     return new Date(year, month - 1, day, 23, 59, 59, 999);
@@ -681,32 +704,25 @@ export function useFinancialStats() {
   const { state } = useCRM();
 
   const stats = {
-    // Revenue
     totalRevenue: 0,
     pendingPayments: 0,
     depositsCollected: 0,
     outstandingInvoices: 0,
     paidInvoices: 0,
     overdueInvoices: 0,
-    // Estimates (signed quotes)
     acceptedEstimatesTotal: 0,
     pendingEstimatesTotal: 0,
-    // Material orders
     deliveredMaterialCost: 0,
     pendingMaterialCost: 0,
-    // Project / work-order costs
     totalSubcontractorCost: 0,
     totalLaborCost: 0,
   };
 
-  // ── Contacts: deposits & final payments ──────────────────────────────────
   state.contacts.forEach((c) => {
     if (c.depositPaid && c.depositAmount) {
       stats.depositsCollected += c.depositAmount;
     }
     if (c.finalPaymentPaid && c.finalPaymentAmount) {
-      // Final payment is revenue; deposit was a partial payment toward this
-      // so we only count the remaining balance to avoid double-adding the deposit
       const depositAlreadyCounted = c.depositPaid ? (c.depositAmount || 0) : 0;
       stats.totalRevenue += c.finalPaymentAmount - depositAlreadyCounted;
     }
@@ -715,10 +731,8 @@ export function useFinancialStats() {
     }
   });
 
-  // Add deposits to total revenue (they are confirmed received cash)
   stats.totalRevenue += stats.depositsCollected;
 
-  // ── Invoices ─────────────────────────────────────────────────────────────
   state.invoices.forEach((inv) => {
     if (inv.status === 'paid') {
       stats.paidInvoices += inv.amount;
@@ -730,7 +744,6 @@ export function useFinancialStats() {
     }
   });
 
-  // ── Estimates ────────────────────────────────────────────────────────────
   state.estimates.forEach((est) => {
     if (est.status === 'accepted') {
       stats.acceptedEstimatesTotal += est.total;
@@ -739,7 +752,6 @@ export function useFinancialStats() {
     }
   });
 
-  // ── Material Orders ───────────────────────────────────────────────────────
   state.materialOrders.forEach((order) => {
     if (order.status === 'cancelled') return;
     if (order.status === 'delivered') {
@@ -749,12 +761,10 @@ export function useFinancialStats() {
     }
   });
 
-  // ── Projects (subcontractor costs) ────────────────────────────────────────
   state.projects.forEach((p) => {
     stats.totalSubcontractorCost += (p.actualSubcontractorCost || 0);
   });
 
-  // ── Work Orders (labor costs) ─────────────────────────────────────────────
   state.workOrders.forEach((wo) => {
     stats.totalLaborCost += (wo.laborCost || 0);
   });
@@ -762,8 +772,6 @@ export function useFinancialStats() {
   return stats;
 }
 
-
-// Permission helpers
 export function canCreateBoard(role: UserRole): boolean {
   return ['owner', 'admin', 'sales_manager', 'production_manager'].includes(role);
 }
@@ -798,7 +806,6 @@ const roleHierarchy: Record<UserRole, number> = {
   sales_rep: 4,
   field_tech: 3,
   subcontractor: 2,
-  // Legacy roles
   manager: 8,
   sales: 4,
   production: 8,
@@ -808,9 +815,7 @@ const roleHierarchy: Record<UserRole, number> = {
 
 export function canAssignRole(actorRole: UserRole, targetRole: UserRole): boolean {
   if (actorRole === 'owner') return true;
-  // Admin can assign any role except owner
   if (actorRole === 'admin') return targetRole !== 'owner';
-  // Managers can assign roles below them
   if (actorRole === 'sales_manager' || actorRole === 'production_manager' || actorRole === 'manager') {
     return roleHierarchy[targetRole] < roleHierarchy[actorRole];
   }
@@ -818,7 +823,6 @@ export function canAssignRole(actorRole: UserRole, targetRole: UserRole): boolea
 }
 
 export function getAssignableRoles(actorRole: UserRole): UserRole[] {
-  // All active roles (excluding legacy)
   const activeRoles: UserRole[] = [
     'owner',
     'admin',
@@ -835,9 +839,7 @@ export function getAssignableRoles(actorRole: UserRole): UserRole[] {
 
 export function canModifyMember(actorRole: UserRole, memberRole: UserRole): boolean {
   if (actorRole === 'owner') return true;
-  // Admin can modify anyone except owner
   if (actorRole === 'admin') return memberRole !== 'owner';
-  // Managers can modify users below them in hierarchy
   if (actorRole === 'sales_manager' || actorRole === 'production_manager' || actorRole === 'manager') {
     return roleHierarchy[memberRole] < roleHierarchy[actorRole];
   }

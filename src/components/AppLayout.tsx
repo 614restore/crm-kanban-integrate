@@ -18,7 +18,6 @@ import {
   Estimate,
 } from '@/lib/crmData';
 
-// Import core components (needed immediately)
 import Sidebar from './crm/Sidebar';
 import TopBar from './crm/TopBar';
 import AuthPage from './crm/AuthPage';
@@ -29,7 +28,6 @@ import ResponsiveLayout from './mobile/ResponsiveLayout';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { Building2, Loader2, Zap, X, Tag } from 'lucide-react';
 
-// Lazy load all CRM view components for better code splitting
 const Dashboard = lazy(() => import('./crm/Dashboard'));
 const PipelineBoard = lazy(() => import('./crm/PipelineBoard'));
 const ContactList = lazy(() => import('./crm/ContactList'));
@@ -55,8 +53,8 @@ const SupplementTrackingView = lazy(() => import('./crm/SupplementTrackingView')
 const CrewScheduleView = lazy(() => import('./crm/CrewScheduleView'));
 const EquipmentView = lazy(() => import('./crm/EquipmentView'));
 const CommissionPayrollView = lazy(() => import('./crm/CommissionPayrollView'));
+const SalesAnalytics = lazy(() => import('./crm/SalesAnalytics'));
 
-// Initial CRM state (completely empty)
 const getInitialView = (): ViewType => {
   try {
     const saved = localStorage.getItem('crm_current_view');
@@ -73,7 +71,7 @@ const initialState: CRMState = {
   selectedBoardId: 'board-retail',
   contacts: [],
   teamMembers: [],
-  boards: defaultBoards, // Use default boards as fallback
+  boards: defaultBoards,
   leadSources: defaultLeadSources,
   appointments: [],
   invoices: [],
@@ -104,65 +102,38 @@ function buildFallbackAvatar(firstName?: string, lastName?: string, email?: stri
   return `https://ui-avatars.com/api/?name=${encodeURIComponent(avatarName)}&background=random`;
 }
 
-// View Router Component
 function ViewRouter() {
   const { state } = React.useContext(CRMContext)!;
 
-  // Wrap each view in Suspense for lazy loading
   const renderView = () => {
     switch (state.currentView) {
-      case 'dashboard':
-        return <Dashboard />;
-      case 'pipeline':
-        return <PipelineBoard />;
-      case 'contacts':
-        return <ContactList />;
-      case 'contact-detail':
-        return <ContactDetail />;
-      case 'communications':
-        return <CommunicationHub />;
-      case 'calendar':
-        return <CalendarView />;
-      case 'documents':
-        return <DocumentCenter />;
-      case 'financial':
-        return <FinancialDashboard />;
-      case 'team':
-        return <TeamView />;
-      case 'automations':
-        return <AutomationsView />;
-      case 'suppliers':
-        return <SuppliersView />;
-      case 'estimates':
-        return <EstimatesView />;
-      case 'projects':
-        return <ProjectsView />;
-      case 'work-orders':
-        return <WorkOrdersView />;
-      case 'material-orders':
-        return <MaterialOrdersView />;
-      case 'expenses':
-        return <ExpenseTracker />;
-      case 'document-templates':
-        return <DocumentTemplates />;
-      case 'reports':
-        return <ReportsAnalytics />;
-      case 'insurance-tracking':
-        return <InsuranceTrackingView />;
-      case 'supplement-tracking':
-        return <SupplementTrackingView />;
-      case 'crew-schedule':
-        return <CrewScheduleView />;
-      case 'equipment':
-        return <EquipmentView />;
-      case 'commission-payroll':
-        return <CommissionPayrollView />;
-      case 'settings':
-        return <SettingsView />;
-      case 'ai-assistant':
-        return <AIAssistant />;
-      default:
-        return <Dashboard />;
+      case 'dashboard': return <Dashboard />;
+      case 'pipeline': return <PipelineBoard />;
+      case 'contacts': return <ContactList />;
+      case 'contact-detail': return <ContactDetail />;
+      case 'communications': return <CommunicationHub />;
+      case 'calendar': return <CalendarView />;
+      case 'documents': return <DocumentCenter />;
+      case 'financial': return <FinancialDashboard />;
+      case 'team': return <TeamView />;
+      case 'automations': return <AutomationsView />;
+      case 'suppliers': return <SuppliersView />;
+      case 'estimates': return <EstimatesView />;
+      case 'projects': return <ProjectsView />;
+      case 'work-orders': return <WorkOrdersView />;
+      case 'material-orders': return <MaterialOrdersView />;
+      case 'expenses': return <ExpenseTracker />;
+      case 'document-templates': return <DocumentTemplates />;
+      case 'reports': return <ReportsAnalytics />;
+      case 'insurance-tracking': return <InsuranceTrackingView />;
+      case 'supplement-tracking': return <SupplementTrackingView />;
+      case 'crew-schedule': return <CrewScheduleView />;
+      case 'equipment': return <EquipmentView />;
+      case 'commission-payroll': return <CommissionPayrollView />;
+      case 'sales-analytics': return <SalesAnalytics />;
+      case 'settings': return <SettingsView />;
+      case 'ai-assistant': return <AIAssistant />;
+      default: return <Dashboard />;
     }
   };
 
@@ -173,7 +144,6 @@ function ViewRouter() {
   );
 }
 
-// Loading fallback for lazy-loaded views
 function ViewLoadingFallback() {
   return (
     <div className="flex items-center justify-center h-full min-h-[400px]">
@@ -185,7 +155,6 @@ function ViewLoadingFallback() {
   );
 }
 
-// Loading Screen
 function LoadingScreen() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center">
@@ -203,7 +172,6 @@ function LoadingScreen() {
   );
 }
 
-// Helper function to convert DB contact to app contact
 function dbContactToAppContact(dbContact: any): Contact {
   return {
     id: dbContact.id,
@@ -259,7 +227,6 @@ function dbCommunicationToAppCommunication(dbCommunication: any, fallbackUserNam
   };
 }
 
-// Helper function to convert DB appointment to app appointment
 function dbAppointmentToAppAppointment(dbAppointment: any, contacts: Contact[]): Appointment {
   const contact = contacts.find(c => c.id === dbAppointment.contact_id);
 
@@ -270,15 +237,12 @@ function dbAppointmentToAppAppointment(dbAppointment: any, contacts: Contact[]):
   if ((!date || !time) && dbAppointment.start_time) {
     const start = new Date(dbAppointment.start_time);
     const end = dbAppointment.end_time ? new Date(dbAppointment.end_time) : null;
-
     date = start.toISOString().split('T')[0];
     time = `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`;
-
     if (!duration) {
-      duration =
-        end && !Number.isNaN(end.getTime())
-          ? Math.max(15, Math.round((end.getTime() - start.getTime()) / (1000 * 60)))
-          : 60;
+      duration = end && !Number.isNaN(end.getTime())
+        ? Math.max(15, Math.round((end.getTime() - start.getTime()) / (1000 * 60)))
+        : 60;
     }
   }
 
@@ -298,7 +262,6 @@ function dbAppointmentToAppAppointment(dbAppointment: any, contacts: Contact[]):
   };
 }
 
-// Helper function to convert DB invoice to app invoice
 function dbInvoiceToAppInvoice(dbInvoice: any, contacts: Contact[]): Invoice {
   const contact = contacts.find(c => c.id === dbInvoice.contact_id);
   return {
@@ -311,15 +274,11 @@ function dbInvoiceToAppInvoice(dbInvoice: any, contacts: Contact[]): Invoice {
     dueDate: dbInvoice.due_date || '',
     createdAt: dbInvoice.created_at,
     paidAt: dbInvoice.paid_at,
-    items: [], // Items loaded separately if needed
+    items: [],
   };
 }
 
-// Trial banner shown when subscription_status is 'trialing'
-// Days 1-7: shows 50% off launch offer with promo code
-// Days 1-3 of trial (>11 days left on 14-day trial): emphasise urgency
 const LAUNCH_PROMO_CODE = 'LAUNCH50';
-const BILLING_SETTINGS_VIEW = 'billing';
 
 function TrialBanner({ companyId }: { companyId: string | null }) {
   const [company, setCompany] = useState<DbCompany | null>(null);
@@ -339,9 +298,7 @@ function TrialBanner({ companyId }: { companyId: string | null }) {
   const daysLeft = Math.ceil((trialEndMs - Date.now()) / (1000 * 60 * 60 * 24));
   if (daysLeft <= 0) return null;
 
-  // Show discount offer during first 7 days of trial (trial days 1-7 = >7 days left on 14-day trial)
   const showDiscount = daysLeft > 7;
-  // Show urgency warning last 7 days
   const showUrgency = daysLeft <= 7;
 
   const handleCopy = () => {
@@ -359,20 +316,12 @@ function TrialBanner({ companyId }: { companyId: string | null }) {
           <span className="truncate">
             <strong>Launch offer:</strong> Get <strong>50% off your first 3 months</strong> on any <strong>monthly</strong> plan — subscribe within your trial week.
           </span>
-          <button
-            onClick={handleCopy}
-            className="flex-shrink-0 flex items-center gap-1 bg-white/20 hover:bg-white/30 border border-white/40 rounded px-2 py-0.5 text-xs font-mono font-bold transition-colors"
-            title="Copy promo code"
-          >
+          <button onClick={handleCopy} className="flex-shrink-0 flex items-center gap-1 bg-white/20 hover:bg-white/30 border border-white/40 rounded px-2 py-0.5 text-xs font-mono font-bold transition-colors" title="Copy promo code">
             {copied ? '✓ Copied!' : LAUNCH_PROMO_CODE}
           </button>
           <span className="text-white/70 text-xs flex-shrink-0">Enter at checkout → Billing</span>
         </div>
-        <button
-          onClick={() => setDismissed(true)}
-          className="flex-shrink-0 p-1 rounded hover:bg-white/20 transition-colors"
-          aria-label="Dismiss"
-        >
+        <button onClick={() => setDismissed(true)} className="flex-shrink-0 p-1 rounded hover:bg-white/20 transition-colors" aria-label="Dismiss">
           <X className="w-3.5 h-3.5" />
         </button>
       </div>
@@ -389,11 +338,7 @@ function TrialBanner({ companyId }: { companyId: string | null }) {
             Use code <strong className="font-mono">{LAUNCH_PROMO_CODE}</strong> at checkout for <strong>50% off 3 months</strong> (monthly plans only).
           </span>
         </div>
-        <button
-          onClick={() => setDismissed(true)}
-          className="flex-shrink-0 p-1 rounded hover:bg-yellow-100 transition-colors"
-          aria-label="Dismiss"
-        >
+        <button onClick={() => setDismissed(true)} className="flex-shrink-0 p-1 rounded hover:bg-yellow-100 transition-colors" aria-label="Dismiss">
           <X className="w-3.5 h-3.5" />
         </button>
       </div>
@@ -403,59 +348,34 @@ function TrialBanner({ companyId }: { companyId: string | null }) {
   return null;
 }
 
-// CRM App (authenticated view)
 function CRMApp() {
   const { profile, user, loading: authLoading } = useAuth();
   const [state, dispatch] = useReducer(crmReducer, initialState);
   const [subscriptionBlocked, setSubscriptionBlocked] = useState(false);
   useEffect(() => {
-    try { localStorage.setItem('crm_current_view', state.currentView); } catch (e) { console.warn('[AppLayout] localStorage write failed (private browsing?):', e); }
+    try { localStorage.setItem('crm_current_view', state.currentView); } catch (e) { console.warn('[AppLayout] localStorage write failed:', e); }
   }, [state.currentView]);
   const realtimeFailedRef = useRef(false);
   const isReloadingRef = useRef(false);
   const queuedReloadRef = useRef(false);
 
-  // Race a DB fetch against a per-query timeout; resolves to fallback on timeout instead of
-  // blocking the whole Promise.all. Prevents a single slow Supabase query from stalling the UI.
   const withFetchTimeout = <T,>(p: Promise<T>, fallback: T, ms = 7000): Promise<T> =>
     Promise.race([p, new Promise<T>(resolve => setTimeout(() => resolve(fallback), ms))]);
 
-  // Load data from database
   const loadData = useCallback(async (options?: { silent?: boolean }) => {
     const silent = options?.silent ?? false;
     if (!profile?.company_id) {
-      // If auth is still loading, keep waiting — don't show empty state
-      if (!authLoading && !silent) {
-        console.warn('[AppLayout] No company_id available — cannot load data');
-        // Don't set loading to false yet — keep showing loading screen
-      }
+      if (!authLoading && !silent) console.warn('[AppLayout] No company_id available');
       return;
     }
-
-    if (!silent) {
-      dispatch({ type: 'SET_LOADING', payload: true });
-    }
+    if (!silent) dispatch({ type: 'SET_LOADING', payload: true });
     dispatch({ type: 'SET_COMPANY_ID', payload: profile.company_id });
 
     try {
-      // Load all data in parallel (including company to pre-warm cache for Sidebar)
-      // Each query is individually capped at 7 s to prevent a single slow call from
-      // blocking the entire load; timed-out queries fall back to their empty value.
       const [
-        dbContacts,
-        dbCommunications,
-        dbAppointments,
-        dbInvoices,
-        dbBoards,
-        dbLeadSources,
-        dbAutomations,
-        dbTeamMembers,
-        , // getCompany result — pre-warm only, not used directly
-        dbEstimates,
-        dbProjects,
-        dbWorkOrders,
-        dbSuppliers,
-        dbMaterialOrders,
+        dbContacts, dbCommunications, dbAppointments, dbInvoices, dbBoards,
+        dbLeadSources, dbAutomations, dbTeamMembers, , dbEstimates,
+        dbProjects, dbWorkOrders, dbSuppliers, dbMaterialOrders,
       ] = await Promise.all([
         withFetchTimeout(db.getContacts(profile.company_id), []),
         withFetchTimeout(db.getCommunications(profile.company_id), []),
@@ -465,7 +385,7 @@ function CRMApp() {
         withFetchTimeout(db.getLeadSources(profile.company_id), []),
         withFetchTimeout(db.getAutomations(profile.company_id), []),
         withFetchTimeout(db.getTeamMembers(profile.company_id), []),
-        withFetchTimeout(db.getCompany(profile.company_id), null), // pre-warm company cache
+        withFetchTimeout(db.getCompany(profile.company_id), null),
         withFetchTimeout(db.getEstimates(profile.company_id), []),
         withFetchTimeout(db.getProjects(profile.company_id), []),
         withFetchTimeout(db.getWorkOrders(profile.company_id), []),
@@ -473,39 +393,20 @@ function CRMApp() {
         withFetchTimeout(db.getMaterialOrders(profile.company_id), []),
       ]);
 
-      // Convert DB contacts to app contacts
       const contacts = dbContacts.map(dbContactToAppContact);
-
-      // Attach communications to contacts
       const communicationsByContact = (dbCommunications || []).reduce((acc, comm) => {
-        if (!acc[comm.contact_id]) {
-          acc[comm.contact_id] = [];
-        }
+        if (!acc[comm.contact_id]) acc[comm.contact_id] = [];
         acc[comm.contact_id].push(comm);
         return acc;
       }, {} as Record<string, any[]>);
 
       const enrichedContacts = contacts.map((contact) => {
         const comms = communicationsByContact[contact.id] || [];
-
-        // Derive inspection state from the appointments for this contact
-        const contactInspections = (dbAppointments || []).filter(
-          (a) => a.contact_id === contact.id && a.type === 'inspection'
-        );
-        const hasScheduledInspection = contactInspections.some(
-          (a) => a.status === 'scheduled' || a.status === 'confirmed'
-        );
-        const hasCompletedInspection = contactInspections.some(
-          (a) => a.status === 'completed'
-        );
-        // Pick the most relevant inspection (completed first, then earliest scheduled)
-        const scheduledInspection = contactInspections.find(
-          (a) => a.status === 'scheduled' || a.status === 'confirmed'
-        );
-        const completedInspection = contactInspections.find(
-          (a) => a.status === 'completed'
-        );
-
+        const contactInspections = (dbAppointments || []).filter((a) => a.contact_id === contact.id && a.type === 'inspection');
+        const hasScheduledInspection = contactInspections.some((a) => a.status === 'scheduled' || a.status === 'confirmed');
+        const hasCompletedInspection = contactInspections.some((a) => a.status === 'completed');
+        const scheduledInspection = contactInspections.find((a) => a.status === 'scheduled' || a.status === 'confirmed');
+        const completedInspection = contactInspections.find((a) => a.status === 'completed');
         return {
           ...contact,
           communications: comms.map((comm) => dbCommunicationToAppCommunication(comm, 'Team Member')),
@@ -517,463 +418,211 @@ function CRMApp() {
         };
       });
 
-      // Convert DB appointments to app appointments
       const appointments = dbAppointments.map(apt => dbAppointmentToAppAppointment(apt, enrichedContacts));
-
-      // Convert DB invoices to app invoices
       const invoices = dbInvoices.map(inv => dbInvoiceToAppInvoice(inv, enrichedContacts));
 
-      // Convert DB boards to app boards (with columns)
-      const boards: KanbanBoard[] = dbBoards.length > 0 
+      const boards: KanbanBoard[] = dbBoards.length > 0
         ? await Promise.all(dbBoards.map(async (board) => {
             const result = await db.getKanbanBoardWithColumns(board.id);
             return {
-              id: board.id,
-              name: board.name,
-              type: board.type as any,
-              visibleTo: board.visible_to as any[],
-              createdBy: board.created_by || '',
+              id: board.id, name: board.name, type: board.type as any,
+              visibleTo: board.visible_to as any[], createdBy: board.created_by || '',
               isDefault: board.is_default,
-              columns: result?.columns.map(col => ({
-                id: col.id,
-                title: col.title,
-                status: col.status as any,
-                color: col.color,
-                order: col.sort_order,
-              })) || [],
+              columns: result?.columns.map(col => ({ id: col.id, title: col.title, status: col.status as any, color: col.color, order: col.sort_order })) || [],
             };
           }))
         : defaultBoards;
 
-      // Convert DB lead sources to app lead sources
       const leadSources: LeadSource[] = dbLeadSources.length > 0
-        ? dbLeadSources.map(ls => ({
-            id: ls.id,
-            name: ls.name,
-            isActive: true,
-            isCustom: ls.is_custom,
-            createdBy: ls.created_by,
-          }))
+        ? dbLeadSources.map(ls => ({ id: ls.id, name: ls.name, isActive: true, isCustom: ls.is_custom, createdBy: ls.created_by }))
         : defaultLeadSources;
 
-      // Convert DB automations to app automations
-      const automations: Automation[] = dbAutomations.map(auto => ({
-        id: auto.id,
-        name: auto.name,
-        trigger: auto.trigger_event,
-        action: auto.action_type,
-        isActive: auto.is_active,
-        createdBy: auto.created_by || '',
-      }));
+      const automations: Automation[] = dbAutomations.map(auto => ({ id: auto.id, name: auto.name, trigger: auto.trigger_event, action: auto.action_type, isActive: auto.is_active, createdBy: auto.created_by || '' }));
 
-      // Convert DB team members to app team members
       const teamMembers: TeamMember[] = dbTeamMembers.map(tm => ({
-        id: tm.id,
-        name: `${tm.first_name || ''} ${tm.last_name || ''}`.trim() || tm.email,
-        email: tm.email,
-        role: (tm.role || 'sales') as any,
+        id: tm.id, name: `${tm.first_name || ''} ${tm.last_name || ''}`.trim() || tm.email,
+        email: tm.email, role: (tm.role || 'sales') as any,
         avatar: tm.avatar_url || buildFallbackAvatar(tm.first_name, tm.last_name, tm.email),
-        phone: tm.phone || '',
-        department: tm.department || 'General',
-        isActive: tm.is_active,
-        commission_rate: tm.commission_rate,
-        commission_rate_self_gen: tm.commission_rate_self_gen,
-        commission_rate_company: tm.commission_rate_company,
-        commission_rate_custom: tm.commission_rate_custom,
-        member_type: tm.member_type,
-        subcontractor_company: tm.subcontractor_company,
+        phone: tm.phone || '', department: tm.department || 'General', isActive: tm.is_active,
+        commission_rate: tm.commission_rate, commission_rate_self_gen: tm.commission_rate_self_gen,
+        commission_rate_company: tm.commission_rate_company, commission_rate_custom: tm.commission_rate_custom,
+        member_type: tm.member_type, subcontractor_company: tm.subcontractor_company,
       }));
 
       const estimates: Estimate[] = (dbEstimates || []).map((e: any) => ({
-        id: e.id,
-        contactId: e.contact_id,
+        id: e.id, contactId: e.contact_id,
         contactName: (() => { const _c = enrichedContacts.find(c => c.id === e.contact_id); return _c ? `${_c.firstName} ${_c.lastName}`.trim() : ''; })(),
-        jobId: e.job_id,
-        estimateNumber: e.estimate_number,
-        title: e.title,
-        description: e.description,
-        status: e.status,
-        amount: Number(e.subtotal || e.amount || 0),
-        tax: Number(e.tax || 0),
-        total: Number(e.total || 0),
-        validUntil: e.valid_until || e.validity_date,
-        createdAt: e.created_at,
-        sentAt: e.sent_at,
-        viewedAt: e.viewed_at,
-        acceptedAt: e.accepted_at,
-        declinedAt: e.declined_at,
-        signedBy: e.signed_by,
-        signatureData: e.signature_data,
-        items: e.items || [],
-        terms: e.terms || e.terms_and_conditions,
-        notes: e.notes,
-        createdBy: e.created_by,
-        updatedAt: e.updated_at,
+        jobId: e.job_id, estimateNumber: e.estimate_number, title: e.title, description: e.description,
+        status: e.status, amount: Number(e.subtotal || e.amount || 0), tax: Number(e.tax || 0), total: Number(e.total || 0),
+        validUntil: e.valid_until || e.validity_date, createdAt: e.created_at, sentAt: e.sent_at,
+        viewedAt: e.viewed_at, acceptedAt: e.accepted_at, declinedAt: e.declined_at,
+        signedBy: e.signed_by, signatureData: e.signature_data, items: e.items || [],
+        terms: e.terms || e.terms_and_conditions, notes: e.notes, createdBy: e.created_by, updatedAt: e.updated_at,
       }));
 
       const projects = (dbProjects || []).map((p: any) => ({
-        id: p.id,
-        projectNumber: p.project_number,
-        name: p.name,
-        contactId: p.contact_id,
+        id: p.id, projectNumber: p.project_number, name: p.name, contactId: p.contact_id,
         contactName: (() => { const _c = enrichedContacts.find(c => c.id === p.contact_id); return _c ? `${_c.firstName} ${_c.lastName}`.trim() : ''; })(),
-        estimateId: p.estimate_id,
-        description: p.description,
-        status: p.status,
-        priority: p.priority,
-        startDate: p.start_date,
-        endDate: p.end_date,
-        completedDate: p.completed_date,
-        estimatedBudget: Number(p.estimated_budget || 0),
-        actualCost: Number(p.actual_cost || 0),
-        materialCostGoal: Number(p.material_cost_goal || 0),
-        subcontractorCostGoal: Number(p.subcontractor_cost_goal || 0),
-        salesRepPayGoal: Number(p.labor_cost_goal || 0),
-        otherExpensesGoal: Number(p.other_cost_goal || 0),
-        actualMaterialCost: Number(p.material_cost || 0),
-        actualSubcontractorCost: Number(p.subcontractor_cost || 0),
-        actualSalesRepPay: Number(p.labor_cost || 0),
-        actualOtherExpenses: Number(p.other_cost || 0),
-        address: p.address,
-        city: p.city,
-        state: p.state,
-        zip: p.zip,
-        projectManagerId: p.project_manager_id,
-        projectManagerName: '',
-        notes: p.notes,
-        tags: p.tags || [],
-        createdBy: p.created_by,
-        createdAt: p.created_at,
-        updatedAt: p.updated_at,
+        estimateId: p.estimate_id, description: p.description, status: p.status, priority: p.priority,
+        startDate: p.start_date, endDate: p.end_date, completedDate: p.completed_date,
+        estimatedBudget: Number(p.estimated_budget || 0), actualCost: Number(p.actual_cost || 0),
+        materialCostGoal: Number(p.material_cost_goal || 0), subcontractorCostGoal: Number(p.subcontractor_cost_goal || 0),
+        salesRepPayGoal: Number(p.labor_cost_goal || 0), otherExpensesGoal: Number(p.other_cost_goal || 0),
+        actualMaterialCost: Number(p.material_cost || 0), actualSubcontractorCost: Number(p.subcontractor_cost || 0),
+        actualSalesRepPay: Number(p.labor_cost || 0), actualOtherExpenses: Number(p.other_cost || 0),
+        address: p.address, city: p.city, state: p.state, zip: p.zip,
+        projectManagerId: p.project_manager_id, projectManagerName: '', notes: p.notes,
+        tags: p.tags || [], createdBy: p.created_by, createdAt: p.created_at, updatedAt: p.updated_at,
       }));
 
       const workOrders = (dbWorkOrders || []).map((wo: any) => ({
-        id: wo.id,
-        workOrderNumber: wo.work_order_number,
-        projectId: wo.project_id,
+        id: wo.id, workOrderNumber: wo.work_order_number, projectId: wo.project_id,
         projectName: projects.find((p: any) => p.id === wo.project_id)?.name || '',
         contactId: wo.contact_id,
         contactName: (() => { const _c = enrichedContacts.find(c => c.id === wo.contact_id); return _c ? `${_c.firstName} ${_c.lastName}`.trim() : ''; })(),
-        title: wo.title,
-        description: wo.description,
-        status: wo.status,
-        priority: wo.priority,
-        scheduledDate: wo.scheduled_date,
-        startedAt: wo.started_at,
-        completedAt: wo.completed_at,
-        assignedTo: wo.assigned_to || [],
-        assignedToNames: [],
+        title: wo.title, description: wo.description, status: wo.status, priority: wo.priority,
+        scheduledDate: wo.scheduled_date, startedAt: wo.started_at, completedAt: wo.completed_at,
+        assignedTo: wo.assigned_to || [], assignedToNames: [],
         estimatedHours: wo.estimated_hours ? Number(wo.estimated_hours) : undefined,
         actualHours: wo.actual_hours ? Number(wo.actual_hours) : undefined,
-        laborCost: Number(wo.labor_cost || 0),
-        materialCost: Number(wo.material_cost || 0),
-        totalCost: Number(wo.total_cost || 0),
-        address: wo.address,
-        city: wo.city,
-        state: wo.state,
-        zip: wo.zip,
-        notes: wo.notes,
-        attachments: wo.attachments || [],
-        checklistItems: wo.checklist_items || [],
-        createdBy: wo.created_by,
-        createdAt: wo.created_at,
-        updatedAt: wo.updated_at,
+        laborCost: Number(wo.labor_cost || 0), materialCost: Number(wo.material_cost || 0), totalCost: Number(wo.total_cost || 0),
+        address: wo.address, city: wo.city, state: wo.state, zip: wo.zip,
+        notes: wo.notes, attachments: wo.attachments || [], checklistItems: wo.checklist_items || [],
+        createdBy: wo.created_by, createdAt: wo.created_at, updatedAt: wo.updated_at,
       }));
 
       const suppliers = (dbSuppliers || []).map((s: any) => ({
-        id: s.id,
-        name: s.name,
-        contactName: s.contact_name,
-        email: s.email,
-        phone: s.phone,
-        address: s.address,
-        city: s.city,
-        state: s.state,
-        zip: s.zip,
-        website: s.website,
-        accountNumber: s.account_number,
-        paymentTerms: s.payment_terms,
-        notes: s.notes,
-        isActive: s.is_active,
-        createdAt: s.created_at,
-        updatedAt: s.updated_at,
+        id: s.id, name: s.name, contactName: s.contact_name, email: s.email, phone: s.phone,
+        address: s.address, city: s.city, state: s.state, zip: s.zip, website: s.website,
+        accountNumber: s.account_number, paymentTerms: s.payment_terms, notes: s.notes,
+        isActive: s.is_active, createdAt: s.created_at, updatedAt: s.updated_at,
       }));
 
       const materialOrders = (dbMaterialOrders || []).map((mo: any) => ({
-        id: mo.id,
-        orderNumber: mo.order_number || '',
-        supplierId: mo.supplier_id,
+        id: mo.id, orderNumber: mo.order_number || '', supplierId: mo.supplier_id,
         supplierName: suppliers.find((s: any) => s.id === mo.supplier_id)?.name || '',
-        contactId: mo.contact_id,
-        projectId: mo.project_id || mo.job_id,
-        jobId: mo.job_id || mo.project_id,
-        status: mo.status,
-        orderDate: mo.order_date,
-        expectedDeliveryDate: mo.expected_delivery_date,
+        contactId: mo.contact_id, projectId: mo.project_id || mo.job_id, jobId: mo.job_id || mo.project_id,
+        status: mo.status, orderDate: mo.order_date, expectedDeliveryDate: mo.expected_delivery_date,
         actualDeliveryDate: mo.actual_delivery_date,
-        subtotal: Number(mo.subtotal || mo.total_cost || 0),
-        tax: Number(mo.tax || 0),
-        shipping: Number(mo.shipping || 0),
-        total: Number(mo.total || mo.total_cost || 0),
-        items: [],
-        notes: mo.notes,
-        createdBy: mo.created_by,
-        createdAt: mo.created_at,
-        updatedAt: mo.updated_at,
+        subtotal: Number(mo.subtotal || mo.total_cost || 0), tax: Number(mo.tax || 0),
+        shipping: Number(mo.shipping || 0), total: Number(mo.total || mo.total_cost || 0),
+        items: [], notes: mo.notes, createdBy: mo.created_by, createdAt: mo.created_at, updatedAt: mo.updated_at,
       }));
 
       dispatch({
         type: 'INITIALIZE_DATA',
-        payload: {
-          contacts: enrichedContacts,
-          appointments,
-          invoices,
-          boards,
-          leadSources,
-          automations,
-          teamMembers,
-          suppliers,
-          materialOrders,
-          estimates,
-          projects,
-          workOrders,
-          documentTemplates: [],
-          companyGoals: [],
-        },
+        payload: { contacts: enrichedContacts, appointments, invoices, boards, leadSources, automations, teamMembers, suppliers, materialOrders, estimates, projects, workOrders, documentTemplates: [], companyGoals: [] },
       });
-
     } catch (error) {
       console.error('Error loading CRM data:', error);
-      // Show empty state on error
-      dispatch({
-        type: 'INITIALIZE_DATA',
-        payload: {
-          contacts: [],
-          appointments: [],
-          invoices: [],
-          boards: defaultBoards,
-          leadSources: defaultLeadSources,
-          automations: [],
-          teamMembers: [],
-          suppliers: [],
-          materialOrders: [],
-          estimates: [],
-          projects: [],
-          workOrders: [],
-          documentTemplates: [],
-          companyGoals: [],
-        },
-      });
+      dispatch({ type: 'INITIALIZE_DATA', payload: { contacts: [], appointments: [], invoices: [], boards: defaultBoards, leadSources: defaultLeadSources, automations: [], teamMembers: [], suppliers: [], materialOrders: [], estimates: [], projects: [], workOrders: [], documentTemplates: [], companyGoals: [] } });
     }
   }, [profile?.company_id, authLoading]);
 
   const requestSoftReload = useCallback(() => {
-    if (isReloadingRef.current) {
-      queuedReloadRef.current = true;
-      return;
-    }
-
+    if (isReloadingRef.current) { queuedReloadRef.current = true; return; }
     isReloadingRef.current = true;
     void loadData({ silent: true }).finally(() => {
       isReloadingRef.current = false;
       if (queuedReloadRef.current) {
         queuedReloadRef.current = false;
-        window.setTimeout(() => {
-          requestSoftReload();
-        }, 150);
+        window.setTimeout(() => { requestSoftReload(); }, 150);
       }
     });
   }, [loadData]);
 
-  // Set up real-time subscriptions (skipped on static GH Pages to avoid noisy websocket failures)
   useEffect(() => {
-    const realtimeDisabled =
-      typeof window !== 'undefined' &&
-      (window.location.hostname.endsWith('github.io') || import.meta.env.VITE_DISABLE_REALTIME === 'true');
-
+    const realtimeDisabled = typeof window !== 'undefined' && (window.location.hostname.endsWith('github.io') || import.meta.env.VITE_DISABLE_REALTIME === 'true');
     if (realtimeDisabled) return;
     if (!profile?.company_id) return;
-
     const channel = db.subscribeToAll(profile.company_id, {
       onContactChange: (payload) => {
         if (payload.eventType === 'INSERT') {
           const newContact = dbContactToAppContact(payload.new);
           dispatch({ type: 'ADD_CONTACT', payload: newContact });
-          dispatch({
-            type: 'ADD_NOTIFICATION',
-            payload: {
-              id: `notif-${Date.now()}`,
-              type: 'info',
-              title: 'New Contact Added',
-              message: `${newContact.firstName} ${newContact.lastName} was added by a team member.`,
-              timestamp: new Date().toISOString(),
-              read: false,
-            },
-          });
+          dispatch({ type: 'ADD_NOTIFICATION', payload: { id: `notif-${Date.now()}`, type: 'info', title: 'New Contact Added', message: `${newContact.firstName} ${newContact.lastName} was added by a team member.`, timestamp: new Date().toISOString(), read: false } });
         } else if (payload.eventType === 'UPDATE') {
-          const updatedContact = dbContactToAppContact(payload.new);
-          dispatch({ type: 'UPDATE_CONTACT', payload: updatedContact });
+          dispatch({ type: 'UPDATE_CONTACT', payload: dbContactToAppContact(payload.new) });
         } else if (payload.eventType === 'DELETE') {
           dispatch({ type: 'DELETE_CONTACT', payload: payload.old.id });
         }
       },
-      onAppointmentChange: (payload) => {
-        // Reload appointments to get contact names
-        requestSoftReload();
-      },
-      onInvoiceChange: (payload) => {
-        // Reload invoices to get contact names
-        requestSoftReload();
-      },
-      onCommunicationChange: (payload) => {
-        requestSoftReload();
-      },
-      onLeadSourceChange: () => {
-        requestSoftReload();
-      },
-      onBoardChange: () => {
-        requestSoftReload();
-      },
-      onTeamMemberChange: () => {
-        requestSoftReload();
-      },
+      onAppointmentChange: () => { requestSoftReload(); },
+      onInvoiceChange: () => { requestSoftReload(); },
+      onCommunicationChange: () => { requestSoftReload(); },
+      onLeadSourceChange: () => { requestSoftReload(); },
+      onBoardChange: () => { requestSoftReload(); },
+      onTeamMemberChange: () => { requestSoftReload(); },
       onStatusChange: (status, error) => {
         if ((status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') && !realtimeFailedRef.current) {
           realtimeFailedRef.current = true;
-          console.warn('Realtime unavailable; continuing with periodic reload fallback.', { status, error });
-          // Keep fallback silent in-app; avoid noisy warning notifications for known websocket issues.
+          console.warn('Realtime unavailable; using polling fallback.', { status, error });
         } else if (status === 'SUBSCRIBED') {
           realtimeFailedRef.current = false;
         }
       },
     });
-
-    return () => {
-      db.unsubscribe(channel);
-    };
+    return () => { db.unsubscribe(channel); };
   }, [profile?.company_id, loadData, requestSoftReload]);
 
-  // Polling fallback when realtime websocket is unavailable.
   useEffect(() => {
     if (!profile?.company_id) return;
-
-    const poller = window.setInterval(() => {
-      if (realtimeFailedRef.current) {
-        requestSoftReload();
-      }
-    }, 20000);
-
+    const poller = window.setInterval(() => { if (realtimeFailedRef.current) requestSoftReload(); }, 20000);
     return () => window.clearInterval(poller);
   }, [profile?.company_id, requestSoftReload]);
 
-  // Load data on mount
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  useEffect(() => { loadData(); }, [loadData]);
 
-  // Re-load data when tab becomes visible (fixes stale/blank state after idle)
   useEffect(() => {
     if (!profile?.company_id) return;
-    const handleVisible = () => {
-      if (document.visibilityState === 'visible') {
-        console.log('[AppLayout] Tab visible — refreshing data');
-        requestSoftReload();
-      }
-    };
+    const handleVisible = () => { if (document.visibilityState === 'visible') requestSoftReload(); };
     document.addEventListener('visibilitychange', handleVisible);
     return () => document.removeEventListener('visibilitychange', handleVisible);
   }, [profile?.company_id, requestSoftReload]);
 
-  // Add manual refresh on window focus as additional safeguard
   useEffect(() => {
     if (!profile?.company_id) return;
-    const handleFocus = () => {
-      console.log('[AppLayout] Window focused — refreshing data');
-      requestSoftReload();
-    };
-    const handleForceRefresh = () => {
-      console.log('[AppLayout] Manual refresh triggered');
-      requestSoftReload();
-    };
+    const handleFocus = () => { requestSoftReload(); };
+    const handleForceRefresh = () => { requestSoftReload(); };
     window.addEventListener('focus', handleFocus);
     window.addEventListener('crm-force-refresh', handleForceRefresh);
-    return () => {
-      window.removeEventListener('focus', handleFocus);
-      window.removeEventListener('crm-force-refresh', handleForceRefresh);
-    };
+    return () => { window.removeEventListener('focus', handleFocus); window.removeEventListener('crm-force-refresh', handleForceRefresh); };
   }, [profile?.company_id, requestSoftReload]);
 
-  // Fail-safe: avoid getting stuck on the loading screen if initial data calls stall
   useEffect(() => {
     if (!state.isLoading || state.isInitialized) return;
-    // Don't start the timeout until auth has finished loading
     if (authLoading) return;
-    // Don't timeout if we're still waiting for profile/company_id
     if (!profile?.company_id) return;
-
     const timer = window.setTimeout(() => {
-      console.warn('[AppLayout] Initial CRM data load timed out after 12s; showing app shell with empty data.');
-      dispatch({
-        type: 'INITIALIZE_DATA',
-        payload: {
-          contacts: [],
-          appointments: [],
-          invoices: [],
-          boards: defaultBoards,
-          leadSources: defaultLeadSources,
-          automations: [],
-          teamMembers: [],
-          suppliers: [],
-          materialOrders: [],
-          estimates: [],
-          projects: [],
-          workOrders: [],
-          documentTemplates: [],
-          companyGoals: [],
-        },
-      });
+      console.warn('[AppLayout] Initial load timed out after 12s.');
+      dispatch({ type: 'INITIALIZE_DATA', payload: { contacts: [], appointments: [], invoices: [], boards: defaultBoards, leadSources: defaultLeadSources, automations: [], teamMembers: [], suppliers: [], materialOrders: [], estimates: [], projects: [], workOrders: [], documentTemplates: [], companyGoals: [] } });
     }, 12000);
-
     return () => window.clearTimeout(timer);
   }, [state.isLoading, state.isInitialized, authLoading, profile?.company_id]);
 
-  // Check subscription status after data loads — enforce paywall on expired/canceled accounts
   useEffect(() => {
     if (!profile?.company_id) return;
     db.getCompany(profile.company_id).then((company) => {
       if (!company) return;
-      const trialExpired =
-        company.subscription_status === 'trialing' &&
-        !!company.trial_ends_at &&
-        new Date(company.trial_ends_at) < new Date();
-      const blocked =
-        trialExpired ||
-        company.subscription_status === 'canceled' ||
-        company.subscription_status === 'past_due';
+      const trialExpired = company.subscription_status === 'trialing' && !!company.trial_ends_at && new Date(company.trial_ends_at) < new Date();
+      const blocked = trialExpired || company.subscription_status === 'canceled' || company.subscription_status === 'past_due';
       setSubscriptionBlocked(blocked);
     });
   }, [profile?.company_id]);
 
-  // Set current user from profile
   useEffect(() => {
     if (profile) {
       const currentUser: TeamMember = {
-        id: profile.id,
-        name: `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || profile.email,
-        email: profile.email,
-        role: (profile.role || 'sales') as any,
+        id: profile.id, name: `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || profile.email,
+        email: profile.email, role: (profile.role || 'sales') as any,
         avatar: profile.avatar_url || buildFallbackAvatar(profile.first_name, profile.last_name, profile.email),
-        phone: profile.phone || '',
-        department: profile.department || 'General',
-        isActive: profile.is_active !== false,
+        phone: profile.phone || '', department: profile.department || 'General', isActive: profile.is_active !== false,
       };
       dispatch({ type: 'SET_CURRENT_USER', payload: currentUser });
     }
   }, [profile]);
 
-  if (state.isLoading && !state.isInitialized) {
-    return <LoadingScreen />;
-  }
+  if (state.isLoading && !state.isInitialized) return <LoadingScreen />;
 
   if (subscriptionBlocked) {
     return (
@@ -984,30 +633,18 @@ function CRMApp() {
           </div>
           <h1 className="text-xl font-bold text-gray-900 mb-2">Subscription Required</h1>
           <p className="text-gray-500 text-sm mb-6">
-            Your free trial has ended. Subscribe to continue using TrussCTR.
-            Use code <strong className="font-mono text-indigo-600">LAUNCH50</strong> for 50% off your first 3 months on any monthly plan.
+            Your free trial has ended. Subscribe to continue using TrussCTR. Use code <strong className="font-mono text-indigo-600">LAUNCH50</strong> for 50% off your first 3 months on any monthly plan.
           </p>
           <button
             onClick={() => {
               setSubscriptionBlocked(false);
               dispatch({ type: 'SET_VIEW', payload: 'settings' });
-              // Navigate to billing tab after SettingsView mounts
-              window.setTimeout(() => {
-                window.dispatchEvent(
-                  new CustomEvent('crm-open-settings-tab', { detail: { tab: 'billing' } })
-                );
-              }, 50);
-              // Re-verify subscription status after a short delay to prevent long-term bypass
+              window.setTimeout(() => { window.dispatchEvent(new CustomEvent('crm-open-settings-tab', { detail: { tab: 'billing' } })); }, 50);
               window.setTimeout(() => {
                 if (profile?.company_id) {
                   db.getCompany(profile.company_id).then((company) => {
                     if (!company) return;
-                    const isBlocked =
-                      company.subscription_status === 'canceled' ||
-                      company.subscription_status === 'past_due' ||
-                      (company.subscription_status === 'trialing' &&
-                        !!company.trial_ends_at &&
-                        new Date(company.trial_ends_at) < new Date());
+                    const isBlocked = company.subscription_status === 'canceled' || company.subscription_status === 'past_due' || (company.subscription_status === 'trialing' && !!company.trial_ends_at && new Date(company.trial_ends_at) < new Date());
                     setSubscriptionBlocked(isBlocked);
                   });
                 }
@@ -1017,15 +654,7 @@ function CRMApp() {
           >
             Subscribe Now
           </button>
-          <p className="text-xs text-gray-400 mt-4">
-            Already subscribed?{' '}
-            <button
-              onClick={() => window.location.reload()}
-              className="text-indigo-500 hover:underline"
-            >
-              Refresh to continue
-            </button>
-          </p>
+          <p className="text-xs text-gray-400 mt-4">Already subscribed?{' '}<button onClick={() => window.location.reload()} className="text-indigo-500 hover:underline">Refresh to continue</button></p>
         </div>
       </div>
     );
@@ -1035,21 +664,10 @@ function CRMApp() {
     <CRMContext.Provider value={{ state, dispatch }}>
       <ResponsiveLayout>
         <div className="flex flex-col h-full">
-          {/* Top bar only on desktop */}
-          <div className="hidden md:block">
-            <TopBar />
-          </div>
-
-          {/* Trial banner (shown when trial ends within 7 days) */}
+          <div className="hidden md:block"><TopBar /></div>
           <TrialBanner companyId={profile?.company_id ?? state.companyId ?? null} />
-          
-          {/* Main content area */}
-          <main className="flex-1 min-h-0 overflow-auto">
-            <ViewRouter />
-          </main>
+          <main className="flex-1 min-h-0 overflow-auto"><ViewRouter /></main>
         </div>
-        
-        {/* Modals */}
         <QuickAddModal />
         <InvoiceModal />
       </ResponsiveLayout>
@@ -1057,26 +675,14 @@ function CRMApp() {
   );
 }
 
-// Auth Gate - shows login or CRM based on auth state
 function AuthGate() {
   const { session, loading, isPasswordReset } = useAuth();
-
-  if (loading) {
-    return <LoadingScreen />;
-  }
-
-  if (isPasswordReset) {
-    return <UpdatePassword />;
-  }
-
-  if (!session) {
-    return <AuthPage />;
-  }
-
+  if (loading) return <LoadingScreen />;
+  if (isPasswordReset) return <UpdatePassword />;
+  if (!session) return <AuthPage />;
   return <CRMApp />;
 }
 
-// Main App Layout with Auth Provider
 export default function AppLayout() {
   return (
     <AuthProvider>
