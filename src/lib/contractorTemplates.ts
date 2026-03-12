@@ -182,6 +182,11 @@ export function getContractorEstimateTemplates(): DocumentTemplate[] {
       description: 'Full tear-off and replacement estimate for architectural / 3-tab asphalt shingle roofing',
       category: 'estimate',
       fields: [
+        { key: 'ESTIMATE_NUMBER', label: 'Estimate Number', type: 'text', defaultValue: 'EST-' + Date.now().toString().slice(-6), required: true },
+        { key: 'START_DATE', label: 'Proposed Start Date', type: 'date', required: true },
+        { key: 'ESTIMATED_DURATION', label: 'Estimated Duration', type: 'text', placeholder: '3-5 business days', required: true },
+        
+        // Project Specifications
         { key: 'SHINGLE_BRAND', label: 'Shingle Brand', type: 'text', placeholder: 'GAF, Owens Corning, CertainTeed...', required: true },
         { key: 'SHINGLE_STYLE', label: 'Shingle Style', type: 'text', placeholder: 'Timberline HDZ, Duration, Landmark...', required: true },
         { key: 'SHINGLE_COLOR', label: 'Shingle Color', type: 'text', placeholder: 'Charcoal, Weathered Wood...', required: true },
@@ -191,9 +196,58 @@ export function getContractorEstimateTemplates(): DocumentTemplate[] {
         { key: 'ROOF_PITCH', label: 'Roof Pitch', type: 'text', placeholder: '6/12', required: true },
         { key: 'STORY_COUNT', label: 'Stories', type: 'text', placeholder: '2-story', required: true },
         { key: 'LAYER_COUNT', label: 'Layers to Remove', type: 'number', defaultValue: '1', required: true },
-        { key: 'ESTIMATE_NUMBER', label: 'Estimate Number', type: 'text', defaultValue: 'EST-' + Date.now().toString().slice(-6), required: true },
-        { key: 'START_DATE', label: 'Proposed Start Date', type: 'date', required: true },
-        { key: 'ESTIMATED_DURATION', label: 'Estimated Duration', type: 'text', placeholder: '3-5 business days', required: true },
+        
+        // Cost Breakdown - Tear-off
+        { key: 'TEAROFF_RATE', label: 'Tear-off Rate (per square)', type: 'text', defaultValue: '$85.00', required: true },
+        { key: 'TEAROFF_TOTAL', label: 'Tear-off Total', type: 'text', defaultValue: '$2,040.00', required: true },
+        
+        // Decking
+        { key: 'DECKING_SHEETS', label: 'Decking Sheets Needed', type: 'number', defaultValue: '3', required: true },
+        { key: 'DECKING_RATE', label: 'Decking Rate (per sheet)', type: 'text', defaultValue: '$65.00', required: true },
+        { key: 'DECKING_TOTAL', label: 'Decking Total', type: 'text', defaultValue: '$195.00', required: true },
+        
+        // Ice & Water Shield
+        { key: 'ICE_WATER_SQ', label: 'Ice & Water Shield (squares)', type: 'number', defaultValue: '28', required: true },
+        { key: 'ICE_WATER_RATE', label: 'Ice & Water Rate (per square)', type: 'text', defaultValue: '$32.00', required: true },
+        { key: 'ICE_WATER_TOTAL', label: 'Ice & Water Total', type: 'text', defaultValue: '$896.00', required: true },
+        
+        // Underlayment
+        { key: 'UNDERLAY_SQ', label: 'Underlayment (squares)', type: 'number', defaultValue: '28', required: true },
+        { key: 'UNDERLAY_RATE', label: 'Underlayment Rate (per square)', type: 'text', defaultValue: '$18.00', required: true },
+        { key: 'UNDERLAY_TOTAL', label: 'Underlayment Total', type: 'text', defaultValue: '$504.00', required: true },
+        
+        // Drip Edge
+        { key: 'DRIP_EDGE_LF', label: 'Drip Edge (linear feet)', type: 'number', defaultValue: '310', required: true },
+        { key: 'DRIP_EDGE_RATE', label: 'Drip Edge Rate (per LF)', type: 'text', defaultValue: '$4.50', required: true },
+        { key: 'DRIP_EDGE_TOTAL', label: 'Drip Edge Total', type: 'text', defaultValue: '$1,395.00', required: true },
+        
+        // Shingles
+        { key: 'SHINGLE_RATE', label: 'Shingle Rate (per square)', type: 'text', defaultValue: '$195.00', required: true },
+        { key: 'SHINGLE_TOTAL', label: 'Shingle Total', type: 'text', defaultValue: '$4,680.00', required: true },
+        
+        // Ridge Cap
+        { key: 'RIDGE_LF', label: 'Ridge Cap (linear feet)', type: 'number', defaultValue: '45', required: true },
+        { key: 'RIDGE_RATE', label: 'Ridge Rate (per LF)', type: 'text', defaultValue: '$12.00', required: true },
+        { key: 'RIDGE_TOTAL', label: 'Ridge Total', type: 'text', defaultValue: '$540.00', required: true },
+        
+        // Other Items
+        { key: 'FLASHING_TOTAL', label: 'Flashings Total', type: 'text', defaultValue: '$450.00', required: true },
+        { key: 'VENT_COUNT', label: 'Number of Vents', type: 'number', defaultValue: '2', required: true },
+        { key: 'VENT_RATE', label: 'Vent Rate (each)', type: 'text', defaultValue: '$85.00', required: true },
+        { key: 'VENT_TOTAL', label: 'Vents Total', type: 'text', defaultValue: '$170.00', required: true },
+        { key: 'CLEANUP_TOTAL', label: 'Cleanup & Haul-away', type: 'text', defaultValue: '$350.00', required: true },
+        
+        // Totals
+        { key: 'SUBTOTAL', label: 'Subtotal', type: 'text', defaultValue: '$10,976.00', required: true },
+        { key: 'TAX_RATE', label: 'Tax Rate (%)', type: 'text', defaultValue: '7.5', required: true },
+        { key: 'TAX_AMOUNT', label: 'Tax Amount', type: 'text', defaultValue: '$823.20', required: true },
+        { key: 'TOTAL_AMOUNT', label: 'Total Amount', type: 'text', defaultValue: '$11,799.20', required: true },
+        { key: 'DEPOSIT_AMOUNT', label: 'Deposit Required', type: 'text', defaultValue: '$5,899.60', required: true },
+        { key: 'BALANCE_DUE', label: 'Balance Due at Completion', type: 'text', defaultValue: '$5,899.60', required: true },
+        
+        // Terms
+        { key: 'WARRANTY_PERIOD', label: 'Warranty Period', type: 'text', defaultValue: '2 years', required: true },
+        { key: 'PAYMENT_TERMS', label: 'Payment Terms', type: 'text', defaultValue: '50% deposit at contract signing; balance due upon completion', required: true },
       ],
       content: header('Asphalt Shingle Roof Replacement Estimate') + `
 <div class="sec">
@@ -1113,35 +1167,35 @@ export function buildContactOverrides(
     START_DATE: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
     ESTIMATED_DURATION: '3-5 business days',
     
-    // Sample pricing (user should override with actual values)
-    TEAROFF_RATE: '$85.00',
-    TEAROFF_TOTAL: '$2,040.00',
-    DECKING_SHEETS: '3',
-    DECKING_RATE: '$65.00',
-    DECKING_TOTAL: '$195.00',
-    ICE_WATER_SQ: '28',
-    ICE_WATER_RATE: '$32.00',
-    ICE_WATER_TOTAL: '$896.00',
-    UNDERLAY_SQ: '28',
-    UNDERLAY_RATE: '$18.00',
-    UNDERLAY_TOTAL: '$504.00',
-    DRIP_EDGE_LF: '310',
-    DRIP_EDGE_RATE: '$4.50',
-    DRIP_EDGE_TOTAL: '$1,395.00',
-    SHINGLE_RATE: '$195.00',
-    SHINGLE_TOTAL: '$4,680.00',
-    RIDGE_LF: '45',
-    RIDGE_RATE: '$12.00',
-    RIDGE_TOTAL: '$540.00',
-    FLASHING_TOTAL: '$450.00',
-    VENT_COUNT: '2',
-    VENT_RATE: '$85.00',
-    VENT_TOTAL: '$170.00',
-    CLEANUP_TOTAL: '$350.00',
-    SUBTOTAL: '$10,976.00',
-    TOTAL_AMOUNT: '$11,799.20',
-    DEPOSIT_AMOUNT: '$5,899.60',
-    BALANCE_DUE: '$5,899.60',
+    // Sample pricing - EDIT THESE VALUES to match your actual rates
+    TEAROFF_RATE: '$85.00',           // Cost per square to tear off old roof
+    TEAROFF_TOTAL: '$2,040.00',       // 24 squares × $85
+    DECKING_SHEETS: '3',              // Number of 4×8 plywood sheets needed
+    DECKING_RATE: '$65.00',           // Cost per sheet for decking repair
+    DECKING_TOTAL: '$195.00',         // 3 sheets × $65
+    ICE_WATER_SQ: '28',               // Squares of ice & water shield (add 15% waste)
+    ICE_WATER_RATE: '$32.00',         // Cost per square for ice & water
+    ICE_WATER_TOTAL: '$896.00',       // 28 sq × $32
+    UNDERLAY_SQ: '28',                // Squares of synthetic underlayment
+    UNDERLAY_RATE: '$18.00',          // Cost per square for underlayment
+    UNDERLAY_TOTAL: '$504.00',        // 28 sq × $18
+    DRIP_EDGE_LF: '310',              // Linear feet of drip edge (perimeter + rakes)
+    DRIP_EDGE_RATE: '$4.50',          // Cost per linear foot
+    DRIP_EDGE_TOTAL: '$1,395.00',     // 310 LF × $4.50
+    SHINGLE_RATE: '$195.00',          // Cost per square for shingles installed
+    SHINGLE_TOTAL: '$4,680.00',       // 24 squares × $195
+    RIDGE_LF: '45',                   // Linear feet of ridge cap
+    RIDGE_RATE: '$12.00',             // Cost per linear foot of ridge
+    RIDGE_TOTAL: '$540.00',           // 45 LF × $12
+    FLASHING_TOTAL: '$450.00',        // Lump sum for all flashings
+    VENT_COUNT: '2',                  // Number of vents to install
+    VENT_RATE: '$85.00',              // Cost per vent
+    VENT_TOTAL: '$170.00',            // 2 vents × $85
+    CLEANUP_TOTAL: '$350.00',         // Lump sum for cleanup & haul-away
+    SUBTOTAL: '$10,976.00',           // Sum of all line items
+    TOTAL_AMOUNT: '$11,799.20',       // Subtotal + tax
+    DEPOSIT_AMOUNT: '$5,899.60',      // 50% deposit
+    BALANCE_DUE: '$5,899.60',         // Remaining balance
   };
 
   return defaults;

@@ -288,21 +288,46 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
 
         {editableFields.length > 0 && (
           <div className="space-y-3">
-            {editableFields.map(field => (
-              <div key={field}>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  {field.replace(/_/g, ' ')}
-                  {fieldValues[field] && <span className="ml-1 text-green-600">✓</span>}
-                </label>
-                <input
-                  type="text"
-                  value={fieldValues[field] || ''}
-                  onChange={e => setFieldValues(prev => ({ ...prev, [field]: e.target.value }))}
-                  placeholder={`Enter ${field.replace(/_/g, ' ').toLowerCase()}...`}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            ))}
+            {editableFields.map((field, index) => {
+              // Add section headers for better organization
+              const showSectionHeader = (
+                (field === 'ESTIMATE_NUMBER' && index === 0) ||
+                (field === 'SHINGLE_BRAND') ||
+                (field === 'TEAROFF_RATE') ||
+                (field === 'SUBTOTAL') ||
+                (field === 'WARRANTY_PERIOD')
+              );
+              
+              const sectionTitle = 
+                field === 'ESTIMATE_NUMBER' ? '📋 Basic Info' :
+                field === 'SHINGLE_BRAND' ? '🏠 Project Specs' :
+                field === 'TEAROFF_RATE' ? '💰 Cost Breakdown' :
+                field === 'SUBTOTAL' ? '🧾 Totals' :
+                field === 'WARRANTY_PERIOD' ? '📜 Terms' : '';
+              
+              return (
+                <div key={field}>
+                  {showSectionHeader && sectionTitle && (
+                    <div className="text-xs font-bold text-gray-900 mt-4 mb-2 pt-3 border-t border-gray-200 first:mt-0 first:pt-0 first:border-t-0">
+                      {sectionTitle}
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      {field.replace(/_/g, ' ')}
+                      {fieldValues[field] && <span className="ml-1 text-green-600">✓</span>}
+                    </label>
+                    <input
+                      type="text"
+                      value={fieldValues[field] || ''}
+                      onChange={e => setFieldValues(prev => ({ ...prev, [field]: e.target.value }))}
+                      placeholder={`Enter ${field.replace(/_/g, ' ').toLowerCase()}...`}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
 
