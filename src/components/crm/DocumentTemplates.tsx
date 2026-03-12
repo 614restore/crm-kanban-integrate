@@ -44,6 +44,7 @@ import { getCertificateOfCompletionTemplate } from '@/lib/certificateTemplate';
 import DocumentEditor from './DocumentEditor';
 import InlineDocumentEditor from './InlineDocumentEditor';
 import SimpleDocumentEditor from './SimpleDocumentEditor';
+import UnifiedDocumentBuilder from './UnifiedDocumentBuilder';
 
 interface DocumentField {
   key: string;
@@ -3210,9 +3211,9 @@ const DocumentTemplates: React.FC = () => {
         </div>  {/* end main content */}
       </div>  {/* end flex row with sidebar */}
 
-      {/* Simple Side-by-Side Editor */}
+      {/* Unified Document Builder - Matches Estimate Builder */}
       {showSimpleEditor && editorTemplate && editorTemplate.fields && (
-        <SimpleDocumentEditor
+        <UnifiedDocumentBuilder
           templateName={editorTemplate.name}
           templateContent={(() => {
             // Pre-fill company information from profile
@@ -3230,13 +3231,12 @@ const DocumentTemplates: React.FC = () => {
             return content;
           })()}
           fields={editorTemplate.fields}
+          customerName={selectedContactId ? getContactFullName(crmState.contacts.find(c => c.id === selectedContactId)!) : undefined}
           onSave={(data) => {
             console.log('Document saved:', data);
             toast({ title: 'Saved', description: 'Document has been saved successfully.' });
-          }}
-          onSend={(data) => {
-            console.log('Document sent:', data);
-            toast({ title: 'Sent', description: 'Document has been sent to the customer.' });
+            setShowSimpleEditor(false);
+            setEditorTemplate(null);
           }}
           onClose={() => {
             setShowSimpleEditor(false);
