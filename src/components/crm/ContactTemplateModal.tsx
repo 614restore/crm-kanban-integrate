@@ -63,7 +63,11 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
   // Build preview content with live values
   const previewContent = useMemo(() => {
     if (!selected) return '';
-    const base = buildContactOverrides(contact as any, companyProfile as any, profile as any);
+    const base = buildContactOverrides(
+      contact,
+      companyProfile,
+      profile
+    );
     const merged = { ...base, ...fieldValues };
     return fillTemplateVars(selected.content, merged);
   }, [selected, companyProfile, profile, fieldValues, contact]);
@@ -85,7 +89,11 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
     }
 
     // Check for unfilled required fields
-    const base = buildContactOverrides(contact as any, companyProfile as any, profile as any);
+    const base = buildContactOverrides(
+      contact,
+      companyProfile,
+      profile
+    );
     const merged = { ...base, ...fieldValues };
     const finalHtml = fillTemplateVars(selected.content, merged);
     const stillUnfilled = getUnfilledVars(finalHtml);
@@ -164,7 +172,11 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
 
   const unfilledFields = useMemo(() => {
     if (!selected) return [];
-    const base = buildContactOverrides(contact as any, companyProfile as any, profile as any);
+    const base = buildContactOverrides(
+      contact,
+      companyProfile,
+      profile
+    );
     const merged = { ...base, ...fieldValues };
     const html = fillTemplateVars(selected.content, merged);
     return getUnfilledVars(html);
@@ -349,7 +361,7 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
           <div className="p-4 border-t border-gray-200 flex items-center justify-between gap-3 flex-shrink-0">
             <p className="text-xs text-gray-500">
               {unfilledFields.length > 0
-                ? `${unfilledFields.length} field(s) still blank — document will save with placeholders if left empty.`
+                ? `${unfilledFields.length} field(s) still blank — please fill them in before saving.`
                 : '✓ All fields filled. Ready to save.'}
             </p>
             <div className="flex gap-2">
