@@ -81,9 +81,12 @@ const App = () => (
               <Route path="/terms" element={<TermsOfService />} />
               <Route path="/privacy" element={<PrivacyPolicy />} />
               <Route path="/eula" element={<EULA />} />
+              {/* Legacy sign routes */}
               <Route path="/sign" element={<SignDocument />} />
               <Route path="/sign-estimate" element={<SignEstimate />} />
               <Route path="/sign-change-order" element={<SignChangeOrder />} />
+              {/* New token-based e-sign route */}
+              <Route path="/sign/:token" element={<SignDocument />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
