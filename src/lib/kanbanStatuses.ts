@@ -1,95 +1,81 @@
 export type KanbanStatus =
-  | 'lead'
+  // Sales Pipeline
+  | 'new_lead'
   | 'contacted'
-  | 'appt_set'
-  | 'appt_complete'
+  | 'inspection_scheduled'
+  | 'inspection_complete'
   | 'estimate_sent'
-  | 'estimate_viewed'
-  | 'negotiating'
-  | 'signed'
-  | 'material_ordered'
-  | 'scheduled'
+  | 'follow_up'
+  | 'signed_won'
+  | 'lost'
+  // Project Board
+  | 'project_scheduled'
+  | 'materials_ordered'
   | 'in_progress'
   | 'punch_list'
   | 'complete'
+  // Financial Board
   | 'invoice_sent'
-  | 'invoice_paid'
-  | 'supplement_filed'
-  | 'supplement_approved'
+  | 'partial_payment'
+  | 'paid_in_full'
+  | 'collections'
+  // Owner Board
+  | 'needs_attention'
+  | 'awaiting_approval'
   | 'on_hold'
-  | 'lost'
-  | 'referral';
+  | 'escalated'
 
-export const KANBAN_STATUS_LABELS: Record<KanbanStatus, string> = {
-  lead: 'New Lead',
-  contacted: 'Contacted',
-  appt_set: 'Appt Set',
-  appt_complete: 'Appt Complete',
-  estimate_sent: 'Estimate Sent',
-  estimate_viewed: 'Estimate Viewed',
-  negotiating: 'Negotiating',
-  signed: 'Signed',
-  material_ordered: 'Material Ordered',
-  scheduled: 'Scheduled',
-  in_progress: 'In Progress',
-  punch_list: 'Punch List',
-  complete: 'Complete',
-  invoice_sent: 'Invoice Sent',
-  invoice_paid: 'Invoice Paid',
-  supplement_filed: 'Supplement Filed',
-  supplement_approved: 'Supplement Approved',
-  on_hold: 'On Hold',
-  lost: 'Lost',
-  referral: 'Referral',
-};
-
-export const KANBAN_STATUS_COLORS: Record<KanbanStatus, string> = {
-  lead: '#3b82f6',
-  contacted: '#6366f1',
-  appt_set: '#8b5cf6',
-  appt_complete: '#a855f7',
-  estimate_sent: '#f59e0b',
-  estimate_viewed: '#10b981',
-  negotiating: '#f97316',
-  signed: '#22c55e',
-  material_ordered: '#14b8a6',
-  scheduled: '#06b6d4',
-  in_progress: '#0ea5e9',
-  punch_list: '#84cc16',
-  complete: '#16a34a',
-  invoice_sent: '#f59e0b',
-  invoice_paid: '#15803d',
-  supplement_filed: '#7c3aed',
-  supplement_approved: '#5b21b6',
-  on_hold: '#9ca3af',
-  lost: '#ef4444',
-  referral: '#ec4899',
-};
-
-export const ACTIVE_STATUSES: KanbanStatus[] = [
-  'lead', 'contacted', 'appt_set', 'appt_complete',
-  'estimate_sent', 'estimate_viewed', 'negotiating',
-  'signed', 'material_ordered', 'scheduled', 'in_progress', 'punch_list',
-];
-
-export const CLOSED_WON_STATUSES: KanbanStatus[] = [
-  'complete', 'invoice_sent', 'invoice_paid',
-];
-
-export const CLOSED_LOST_STATUSES: KanbanStatus[] = ['lost'];
-
-export function isActiveStatus(status: string): boolean {
-  return ACTIVE_STATUSES.includes(status as KanbanStatus);
+export const STATUS_LABELS: Record<KanbanStatus, string> = {
+  new_lead:             'New Lead',
+  contacted:            'Contacted',
+  inspection_scheduled: 'Inspection Scheduled',
+  inspection_complete:  'Inspection Complete',
+  estimate_sent:        'Estimate Sent',
+  follow_up:            'Follow Up',
+  signed_won:           'Signed / Won',
+  lost:                 'Lost',
+  project_scheduled:    'Project Scheduled',
+  materials_ordered:    'Materials Ordered',
+  in_progress:          'In Progress',
+  punch_list:           'Punch List',
+  complete:             'Complete',
+  invoice_sent:         'Invoice Sent',
+  partial_payment:      'Partial Payment',
+  paid_in_full:         'Paid in Full',
+  collections:          'Collections',
+  needs_attention:      'Needs Attention',
+  awaiting_approval:    'Awaiting Approval',
+  on_hold:              'On Hold',
+  escalated:            'Escalated',
 }
 
-export function isClosedWon(status: string): boolean {
-  return CLOSED_WON_STATUSES.includes(status as KanbanStatus);
+export const STATUS_COLORS: Record<KanbanStatus, string> = {
+  new_lead:             '#6366f1',
+  contacted:            '#3b82f6',
+  inspection_scheduled: '#f59e0b',
+  inspection_complete:  '#10b981',
+  estimate_sent:        '#8b5cf6',
+  follow_up:            '#f97316',
+  signed_won:           '#22c55e',
+  lost:                 '#ef4444',
+  project_scheduled:    '#06b6d4',
+  materials_ordered:    '#f59e0b',
+  in_progress:          '#3b82f6',
+  punch_list:           '#f97316',
+  complete:             '#22c55e',
+  invoice_sent:         '#8b5cf6',
+  partial_payment:      '#f59e0b',
+  paid_in_full:         '#22c55e',
+  collections:          '#ef4444',
+  needs_attention:      '#ef4444',
+  awaiting_approval:    '#f59e0b',
+  on_hold:              '#6b7280',
+  escalated:            '#dc2626',
 }
 
-export function getStatusLabel(status: string): string {
-  return KANBAN_STATUS_LABELS[status as KanbanStatus] ?? status;
-}
-
-export function getStatusColor(status: string): string {
-  return KANBAN_STATUS_COLORS[status as KanbanStatus] ?? '#9ca3af';
+export const BOARD_STATUSES: Record<string, KanbanStatus[]> = {
+  sales:     ['new_lead','contacted','inspection_scheduled','inspection_complete','estimate_sent','follow_up','signed_won','lost'],
+  project:   ['project_scheduled','materials_ordered','in_progress','punch_list','complete'],
+  financial: ['invoice_sent','partial_payment','paid_in_full','collections'],
+  owner:     ['needs_attention','awaiting_approval','on_hold','escalated'],
 }

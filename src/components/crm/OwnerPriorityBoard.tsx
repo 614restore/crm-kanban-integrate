@@ -102,28 +102,23 @@ export default function OwnerPriorityBoard() {
               <span>🕐 {row.days_stale} day{row.days_stale !== 1 ? 's' : ''} stale</span>
               <span>👤 {row.assigned_to ?? <span className="text-red-400">Unassigned</span>}</span>
             </div>
-            <div className="text-xs text-blue-600 font-medium">→ {recommendedAction(row)}</div>
-            <div className="flex items-center gap-2 mt-1">
+            <div className="text-sm text-gray-600 italic">{recommendedAction(row)}</div>
+            <div className="flex gap-2 mt-2">
               <button
                 onClick={() => handleNudge(row)}
                 disabled={nudging === row.id}
-                className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-md hover:bg-blue-700 disabled:opacity-50"
+                className="px-3 py-1 text-xs font-medium bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
               >
-                {nudging === row.id ? 'Sending...' : '📨 Nudge'}
+                {nudging === row.id ? 'Sending...' : 'Nudge'}
               </button>
-              <select
-                className="text-xs border border-gray-200 rounded-md px-2 py-1.5 text-gray-600"
-                defaultValue=""
-                onChange={e => { if (e.target.value) handleMoveStage(row, e.target.value); }}
-              >
-                <option value="" disabled>Move Stage →</option>
-                <option value="contacted">Contacted</option>
-                <option value="estimate_sent">Estimate Sent</option>
-                <option value="estimate_viewed">Estimate Viewed</option>
-                <option value="signed">Signed</option>
-                <option value="invoice_sent">Invoice Sent</option>
-                <option value="complete">Complete</option>
-              </select>
+              {row.status === 'estimate_sent' && (
+                <button
+                  onClick={() => handleMoveStage(row, 'estimate_viewed')}
+                  className="px-3 py-1 text-xs font-medium bg-green-500 text-white rounded hover:bg-green-600"
+                >
+                  Mark Viewed
+                </button>
+              )}
             </div>
           </div>
         );
