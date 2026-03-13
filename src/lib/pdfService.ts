@@ -1,20 +1,16 @@
 /**
- * PDF Service - Client-side HTML to PDF conversion and storage
- * Uses html2pdf.js for rendering and Supabase Storage for persistence
+ * PDF Service — client-side HTML→PDF conversion + Supabase Storage upload.
+ * html2pdf.js is a CJS-only library; we import it via a dynamic import with
+ * type: ignore to satisfy ESNext / bundler moduleResolution without require().
  */
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const html2pdf = require('html2pdf.js') as (
-  element?: HTMLElement,
-  options?: Record<string, unknown>
-) => {
-  set(o: Record<string, unknown>): ReturnType<typeof html2pdf>;
-  from(el: HTMLElement): ReturnType<typeof html2pdf>;
-  outputPdf(type: 'blob'): Promise<Blob>;
-  save(): Promise<void>;
-};
-
+// @ts-expect-error — html2pdf.js ships no ESM build; bundler (Vite) handles CJS interop at runtime
+import _html2pdf from 'html2pdf.js';
+import type { } from 'html2pdf.js'; // pulls in our declare module shim
 import { supabase } from './supabase';
+
+// Typed wrapper so call-sites get autocompletion
+const html2pdf = _html2pdf as typeof import('html2pdf.js');
 
 export interface PdfGenerationOptions {
   filename: string;
@@ -31,9 +27,7 @@ export interface GeneratedPdfResult {
   publicUrl: string;
 }
 
-/**
- * Generate PDF from HTML element and upload to Supabase Storage
- */
+/** Generate PDF from an HTML element and upload to Supabase Storage. */
 export async function generateAndUploadPdf(
   htmlElement: HTMLElement,
   companyId: string,
@@ -42,55 +36,39 @@ export async function generateAndUploadPdf(
   documentType: string,
   options?: Partial<PdfGenerationOptions>
 ): Promise<GeneratedPdfResult> {
-  const defaultOptions = {
+  const finalOptions = {
     filename: `${documentType}-${documentId}.pdf`,
     margin: [10, 10, 10, 10],
     image: { type: 'jpeg', quality: 0.98 },
     html2canvas: { scale: 2, useCORS: true },
     jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+    ...options,
   };
 
-  const finalOptions = { ...defaultOptions, ...options };
+  const pdfBlob: Blob = await html2pdf()
+    .set(finalOptions)
+    .from(htmlElement)
+    .outputPdf('blob');
 
-  try {
-    const pdfBlob = await html2pdf()
-      .set(finalOptions)
-      .from(htmlElement)
-      .outputPdf('blob');
+  const storagePath = `documents/${companyId}/${contactId}/${documentId}-signed-${Date.now()}.pdf`;
 
-    const timestamp = Date.now();
-    const storagePath = `documents/${companyId}/${contactId}/${documentId}-signed-${timestamp}.pdf`;
+  const { data, error } = await supabase.storage
+    .from('documents')
+    .upload(storagePath, pdfBlob, { contentType: 'application/pdf', upsert: false });
 
-    const { data, error } = await supabase.storage
-      .from('documents')
-      .upload(storagePath, pdfBlob, {
-        contentType: 'application/pdf',
-        upsert: false,
-      });
+  if (error) throw new Error(`Supabase upload failed: ${error.message}`);
 
-    if (error) throw new Error(`Supabase upload failed: ${error.message}`);
+  const { data: publicUrlData } = supabase.storage.from('documents').getPublicUrl(storagePath);
 
-    const { data: publicUrlData } = supabase.storage
-      .from('documents')
-      .getPublicUrl(storagePath);
-
-    const blobUrl = URL.createObjectURL(pdfBlob);
-
-    return {
-      blob: pdfBlob,
-      url: blobUrl,
-      storagePath: data.path,
-      publicUrl: publicUrlData.publicUrl,
-    };
-  } catch (err) {
-    console.error('[pdfService] PDF generation failed:', err);
-    throw new Error(`Failed to generate PDF: ${err instanceof Error ? err.message : 'Unknown error'}`);
-  }
+  return {
+    blob: pdfBlob,
+    url: URL.createObjectURL(pdfBlob),
+    storagePath: data.path,
+    publicUrl: publicUrlData.publicUrl,
+  };
 }
 
-/**
- * Download PDF blob to user's device
- */
+/** Trigger a browser download of a PDF blob. */
 export function downloadPdf(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -102,56 +80,42 @@ export function downloadPdf(blob: Blob, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
-/**
- * Generate PDF and trigger immediate download (no upload)
- */
+/** Generate PDF and immediately download it — no Supabase upload. */
 export async function generateAndDownloadPdf(
   htmlElement: HTMLElement,
   filename: string,
   options?: Partial<PdfGenerationOptions>
 ): Promise<void> {
-  const defaultOptions = {
+  const finalOptions = {
     filename,
     margin: [10, 10, 10, 10],
     image: { type: 'jpeg', quality: 0.98 },
     html2canvas: { scale: 2, useCORS: true },
     jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+    ...options,
   };
-
-  const finalOptions = { ...defaultOptions, ...options };
-
-  try {
-    await html2pdf().set(finalOptions).from(htmlElement).save();
-  } catch (err) {
-    console.error('[pdfService] PDF download failed:', err);
-    throw new Error(`Failed to download PDF: ${err instanceof Error ? err.message : 'Unknown error'}`);
-  }
+  await html2pdf().set(finalOptions).from(htmlElement).save();
 }
 
-/**
- * Create a professional document header string for PDFs
- */
+/** Build a branded header string to inject at the top of PDF HTML. */
 export function createPdfHeader(companyName: string, documentTitle: string): string {
   return `
-    <div style="border-bottom: 3px solid #2563eb; padding-bottom: 20px; margin-bottom: 30px;">
-      <div style="font-size: 28px; font-weight: bold; color: #2563eb; margin-bottom: 5px;">${companyName}</div>
-      <div style="text-align: center; font-size: 24px; font-weight: bold; margin-top: 20px;">${documentTitle}</div>
-    </div>
-  `;
+    <div style="border-bottom:3px solid #2563eb;padding-bottom:20px;margin-bottom:30px;">
+      <div style="font-size:28px;font-weight:bold;color:#2563eb;">${companyName}</div>
+      <div style="text-align:center;font-size:24px;font-weight:bold;margin-top:20px;">${documentTitle}</div>
+    </div>`;
 }
 
-/**
- * Add watermark overlay to an HTML element (rendered into PDF)
- */
+/** Overlay a watermark on an element (e.g., DRAFT / SIGNED). */
 export function addWatermark(htmlElement: HTMLElement, text: string, opacity = 0.1): void {
-  const watermark = document.createElement('div');
-  watermark.style.cssText = [
+  const el = document.createElement('div');
+  el.style.cssText = [
     'position:fixed', 'top:50%', 'left:50%',
     'transform:translate(-50%,-50%) rotate(-45deg)',
     'font-size:120px', 'font-weight:bold',
     `color:rgba(0,0,0,${opacity})`,
     'pointer-events:none', 'z-index:9999', 'user-select:none',
   ].join(';');
-  watermark.textContent = text;
-  htmlElement.appendChild(watermark);
+  el.textContent = text;
+  htmlElement.appendChild(el);
 }

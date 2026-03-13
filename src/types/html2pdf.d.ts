@@ -1,4 +1,4 @@
-// Type declaration shim for html2pdf.js (no official @types package)
+// Type declaration shim for html2pdf.js (no @types package on npm)
 declare module 'html2pdf.js' {
   interface Html2PdfOptions {
     filename?: string;
@@ -9,18 +9,19 @@ declare module 'html2pdf.js' {
     [key: string]: unknown;
   }
 
-  interface Html2PdfInstance {
-    set(options: Html2PdfOptions): Html2PdfInstance;
-    from(element: HTMLElement | string): Html2PdfInstance;
+  interface Html2PdfWorker {
+    set(options: Html2PdfOptions): Html2PdfWorker;
+    from(element: HTMLElement | string): Html2PdfWorker;
     outputPdf(type: 'blob'): Promise<Blob>;
     outputPdf(type: string): Promise<unknown>;
     save(): Promise<void>;
-    toPdf(): Html2PdfInstance;
+    toPdf(): Html2PdfWorker;
     output(type: string, options?: unknown): Promise<unknown>;
   }
 
-  function html2pdf(): Html2PdfInstance;
-  function html2pdf(element: HTMLElement, options?: Html2PdfOptions): Html2PdfInstance;
+  // The lib exports a function that returns a worker chain
+  function html2pdf(): Html2PdfWorker;
+  function html2pdf(element: HTMLElement, options?: Html2PdfOptions): Html2PdfWorker;
 
   export = html2pdf;
 }
