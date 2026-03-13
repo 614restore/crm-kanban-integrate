@@ -25,27 +25,6 @@ export default defineConfig(({ mode }) => {
       },
     },
     build: {
-      // Only chunk packages we actually have installed
-      rollupOptions: {
-        output: {
-          manualChunks: {
-            'vendor-react': ['react', 'react-dom'],
-            'vendor-ui': [
-              '@radix-ui/react-dialog',
-              '@radix-ui/react-dropdown-menu',
-              '@radix-ui/react-select',
-              '@radix-ui/react-tabs',
-              '@radix-ui/react-popover',
-              '@radix-ui/react-toast',
-              '@radix-ui/react-switch',
-              '@radix-ui/react-checkbox',
-              '@radix-ui/react-label',
-            ],
-            'vendor-utils': ['date-fns', 'lucide-react', 'sonner'],
-            'vendor-supabase': ['@supabase/supabase-js'],
-          },
-        },
-      },
       chunkSizeWarningLimit: 600,
       minify: mode === 'production' ? 'terser' : false,
       terserOptions: {
