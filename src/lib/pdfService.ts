@@ -1,16 +1,28 @@
 /**
- * PDF Service — client-side HTML→PDF conversion + Supabase Storage upload.
- * html2pdf.js is a CJS-only library; we import it via a dynamic import with
- * type: ignore to satisfy ESNext / bundler moduleResolution without require().
+ * PDF Service — client-side HTML→PDF + Supabase Storage.
+ *
+ * html2pdf.js is CJS-only with no ESM export. We load it via a fully dynamic
+ * import() so TypeScript never statically resolves the module, avoiding all
+ * moduleResolution:bundler type errors. Vite handles CJS interop at runtime.
  */
-
-// @ts-expect-error — html2pdf.js ships no ESM build; bundler (Vite) handles CJS interop at runtime
-import _html2pdf from 'html2pdf.js';
-import type { } from 'html2pdf.js'; // pulls in our declare module shim
 import { supabase } from './supabase';
 
-// Typed wrapper so call-sites get autocompletion
-const html2pdf = _html2pdf as typeof import('html2pdf.js');
+// Lazy-loaded once, cached for subsequent calls
+let _html2pdfModule: ((element?: HTMLElement) => {
+  set(o: Record<string, unknown>): ReturnType<typeof _html2pdfModule>;
+  from(el: HTMLElement): ReturnType<typeof _html2pdfModule>;
+  outputPdf(type: 'blob'): Promise<Blob>;
+  save(): Promise<void>;
+}) | null = null;
+
+async function getHtml2Pdf() {
+  if (!_html2pdfModule) {
+    // Dynamic import bypasses tsc static module resolution
+    const mod = await import(/* @vite-ignore */ 'html2pdf.js' as string);
+    _html2pdfModule = (mod.default ?? mod) as typeof _html2pdfModule;
+  }
+  return _html2pdfModule!;
+}
 
 export interface PdfGenerationOptions {
   filename: string;
@@ -36,7 +48,9 @@ export async function generateAndUploadPdf(
   documentType: string,
   options?: Partial<PdfGenerationOptions>
 ): Promise<GeneratedPdfResult> {
-  const finalOptions = {
+  const html2pdf = await getHtml2Pdf();
+
+  const finalOptions: Record<string, unknown> = {
     filename: `${documentType}-${documentId}.pdf`,
     margin: [10, 10, 10, 10],
     image: { type: 'jpeg', quality: 0.98 },
@@ -45,7 +59,9 @@ export async function generateAndUploadPdf(
     ...options,
   };
 
-  const pdfBlob: Blob = await html2pdf()
+  const pdfBlob: Blob = await (html2pdf as unknown as () => {
+    set(o: Record<string, unknown>): { from(el: HTMLElement): { outputPdf(t: 'blob'): Promise<Blob> } };
+  })()
     .set(finalOptions)
     .from(htmlElement)
     .outputPdf('blob');
@@ -80,13 +96,15 @@ export function downloadPdf(blob: Blob, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
-/** Generate PDF and immediately download it — no Supabase upload. */
+/** Generate PDF and immediately download — no Supabase upload. */
 export async function generateAndDownloadPdf(
   htmlElement: HTMLElement,
   filename: string,
   options?: Partial<PdfGenerationOptions>
 ): Promise<void> {
-  const finalOptions = {
+  const html2pdf = await getHtml2Pdf();
+
+  const finalOptions: Record<string, unknown> = {
     filename,
     margin: [10, 10, 10, 10],
     image: { type: 'jpeg', quality: 0.98 },
@@ -94,10 +112,16 @@ export async function generateAndDownloadPdf(
     jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
     ...options,
   };
-  await html2pdf().set(finalOptions).from(htmlElement).save();
+
+  await (html2pdf as unknown as () => {
+    set(o: Record<string, unknown>): { from(el: HTMLElement): { save(): Promise<void> } };
+  })()
+    .set(finalOptions)
+    .from(htmlElement)
+    .save();
 }
 
-/** Build a branded header string to inject at the top of PDF HTML. */
+/** Build a branded header string for PDF documents. */
 export function createPdfHeader(companyName: string, documentTitle: string): string {
   return `
     <div style="border-bottom:3px solid #2563eb;padding-bottom:20px;margin-bottom:30px;">
@@ -106,7 +130,7 @@ export function createPdfHeader(companyName: string, documentTitle: string): str
     </div>`;
 }
 
-/** Overlay a watermark on an element (e.g., DRAFT / SIGNED). */
+/** Overlay a watermark on an element before rendering to PDF. */
 export function addWatermark(htmlElement: HTMLElement, text: string, opacity = 0.1): void {
   const el = document.createElement('div');
   el.style.cssText = [
