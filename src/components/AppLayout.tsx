@@ -348,6 +348,13 @@ function TrialBanner({ companyId }: { companyId: string | null }) {
   return null;
 }
 
+const EMPTY_INIT_PAYLOAD = {
+  contacts: [], appointments: [], invoices: [], boards: defaultBoards,
+  leadSources: defaultLeadSources, automations: [], teamMembers: [],
+  suppliers: [], materialOrders: [], estimates: [], projects: [],
+  workOrders: [], documentTemplates: [], companyGoals: [],
+};
+
 function CRMApp() {
   const { profile, user, loading: authLoading } = useAuth();
   const [state, dispatch] = useReducer(crmReducer, initialState);
@@ -515,7 +522,7 @@ function CRMApp() {
       });
     } catch (error) {
       console.error('Error loading CRM data:', error);
-      dispatch({ type: 'INITIALIZE_DATA', payload: { contacts: [], appointments: [], invoices: [], boards: defaultBoards, leadSources: defaultLeadSources, automations: [], teamMembers: [], suppliers: [], materialOrders: [], estimates: [], projects: [], workOrders: [], documentTemplates: [], companyGoals: [] } });
+      dispatch({ type: 'INITIALIZE_DATA', payload: EMPTY_INIT_PAYLOAD });
     }
   }, [profile?.company_id, authLoading]);
 
@@ -589,16 +596,26 @@ function CRMApp() {
     return () => { window.removeEventListener('focus', handleFocus); window.removeEventListener('crm-force-refresh', handleForceRefresh); };
   }, [profile?.company_id, requestSoftReload]);
 
+  // Failsafe: if auth has resolved but there is still no company_id, unblock the
+  // loading screen immediately so the user is not stuck forever.
+  useEffect(() => {
+    if (authLoading) return;
+    if (state.isInitialized) return;
+    if (profile?.company_id) return; // normal path — let loadData handle it
+    console.warn('[AppLayout] Auth resolved with no company_id — unblocking loading screen.');
+    dispatch({ type: 'INITIALIZE_DATA', payload: EMPTY_INIT_PAYLOAD });
+  }, [authLoading, profile?.company_id, state.isInitialized]);
+
+  // Hard timeout: always fires after 12 s regardless of company_id presence.
   useEffect(() => {
     if (!state.isLoading || state.isInitialized) return;
     if (authLoading) return;
-    if (!profile?.company_id) return;
     const timer = window.setTimeout(() => {
       console.warn('[AppLayout] Initial load timed out after 12s.');
-      dispatch({ type: 'INITIALIZE_DATA', payload: { contacts: [], appointments: [], invoices: [], boards: defaultBoards, leadSources: defaultLeadSources, automations: [], teamMembers: [], suppliers: [], materialOrders: [], estimates: [], projects: [], workOrders: [], documentTemplates: [], companyGoals: [] } });
+      dispatch({ type: 'INITIALIZE_DATA', payload: EMPTY_INIT_PAYLOAD });
     }, 12000);
     return () => window.clearTimeout(timer);
-  }, [state.isLoading, state.isInitialized, authLoading, profile?.company_id]);
+  }, [state.isLoading, state.isInitialized, authLoading]);
 
   useEffect(() => {
     if (!profile?.company_id) return;
