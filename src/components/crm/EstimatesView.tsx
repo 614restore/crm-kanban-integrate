@@ -6,6 +6,7 @@ import { sendEmail } from '@/lib/emailApi';
 import { Estimate, EstimateItem, Contact } from '@/lib/crmData';
 import { exportEstimatesToExcel } from '@/lib/exportUtils';
 import { SignaturePad } from './SignaturePad';
+import { ESTIMATE_TEMPLATES, EstimateTemplate } from '@/lib/estimateTemplates';
 import {
   FileText,
   Plus,
@@ -62,6 +63,7 @@ export default function EstimatesView() {
   const [viewingEstimate, setViewingEstimate] = useState<Estimate | null>(null);
   const [showSignatureModal, setShowSignatureModal] = useState<Estimate | null>(null);
   const [signerName, setSignerName] = useState('');
+  const [showTemplateSelector, setShowTemplateSelector] = useState(false);
 
   // Form state
   const [selectedContactId, setSelectedContactId] = useState('');
@@ -205,6 +207,15 @@ export default function EstimatesView() {
       setValidityDate(defaultDate.toISOString().split('T')[0]);
     }
     setShowModal(true);
+  };
+
+  const handleLoadTemplate = (template: EstimateTemplate) => {
+    setTitle(template.name);
+    setItems(template.items.map(item => ({ ...item, id: crypto.randomUUID() })));
+    setNotes(template.notes || '');
+    setTerms(template.terms || '');
+    setShowTemplateSelector(false);
+    toast.success(`Template "${template.name}" loaded`);
   };
 
   const handleCloseModal = () => {
@@ -911,6 +922,43 @@ export default function EstimatesView() {
 
             {/* Modal Body - Scrollable */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* Template Selector */}
+              {!editingEstimate && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <h3 className="text-sm font-semibold text-blue-900">Start with a Template</h3>
+                      <p className="text-xs text-blue-700">Choose from pre-built estimates for common projects</p>
+                    </div>
+                    <button
+                      onClick={() => setShowTemplateSelector(!showTemplateSelector)}
+                      className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      {showTemplateSelector ? 'Hide Templates' : 'Browse Templates'}
+                    </button>
+                  </div>
+                  {showTemplateSelector && (
+                    <div className="mt-4 grid grid-cols-2 gap-3 max-h-64 overflow-y-auto">
+                      {ESTIMATE_TEMPLATES.map((template) => (
+                        <button
+                          key={template.id}
+                          onClick={() => handleLoadTemplate(template)}
+                          className="text-left p-3 bg-white border border-blue-200 rounded-lg hover:border-blue-400 hover:shadow-sm transition-all"
+                        >
+                          <div className="flex items-start justify-between mb-1">
+                            <h4 className="text-sm font-semibold text-gray-900">{template.name}</h4>
+                            <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full capitalize">
+                              {template.category}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-600 mb-2">{template.description}</p>
+                          <p className="text-xs text-gray-500">{template.items.length} line items</p>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               {/* Basic Info */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
