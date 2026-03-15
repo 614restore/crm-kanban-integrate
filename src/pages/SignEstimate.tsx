@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import SignaturePad from "@/components/ui/SignaturePad";
 
-const API_BASE = "https://crm-kanban-integrate.vercel.app/api/sign-document";
+const API_BASE = "https://crm-kanban-integrate.vercel.app/api/document-handler?action=sign-estimate";
 
 interface EstimateItem {
   description: string;
@@ -62,7 +62,7 @@ export default function SignEstimate() {
         setAlreadySigned(data.alreadySigned);
         // Track view and notify sender
         if (!data.alreadySigned) {
-          fetch("https://crm-kanban-integrate.vercel.app/api/track-view", {
+          fetch("https://crm-kanban-integrate.vercel.app/api/document-handler?action=track-view", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ token: id }),
