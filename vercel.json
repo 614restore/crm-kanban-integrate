@@ -21,7 +21,7 @@
     }
   ],
   "rewrites": [
-    { "source": "/((?!api/)(?!.*\\.html$).*)", "destination": "/index.html" }
+    { "source": "/((?!api/|assets/).*)", "destination": "/index.html" }
   ],
   "env": {
     "VITE_BASE_URL": "/"
