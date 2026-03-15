@@ -172,19 +172,22 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
 
   const editableFields = useMemo(() => {
     if (!selected) return [];
-    // Show ALL fields defined in the template, not just unfilled ones
+    
+    // Get auto-filled fields from contact/company data
+    const autoFilledFields = buildContactOverrides(contact, companyProfile, profile);
+    const autoFilledKeys = Object.keys(autoFilledFields).filter(key => autoFilledFields[key]);
+    
+    // Show ONLY fields that are NOT auto-filled
     if (selected.fields && selected.fields.length > 0) {
-      return selected.fields.map(f => f.key);
+      return selected.fields
+        .map(f => f.key)
+        .filter(key => !autoFilledKeys.includes(key));
     }
-    // Fallback: show all variables found in template
-    const base = buildContactOverrides(
-      contact,
-      companyProfile,
-      profile
-    );
-    const merged = { ...base, ...fieldValues };
+    
+    // Fallback: show all variables found in template that aren't auto-filled
+    const merged = { ...autoFilledFields, ...fieldValues };
     const html = fillTemplateVars(selected.content, merged);
-    return getUnfilledVars(html);
+    return getUnfilledVars(html).filter(key => !autoFilledKeys.includes(key));
   }, [selected, contact, companyProfile, profile]);
 
   const unfilledCount = useMemo(() => {
