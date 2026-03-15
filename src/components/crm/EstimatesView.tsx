@@ -323,7 +323,13 @@ export default function EstimatesView() {
         </tr>`
       ).join('');
 
-      const companyName = (companyProfile as any)?.name || '614 Restore';
+      const companyName = companyProfile?.name || 'Your Company';
+      const companyPhone = companyProfile?.phone || '';
+      const companyEmail = companyProfile?.email || '';
+      const companyAddress = companyProfile?.address || '';
+      const companyCity = companyProfile?.city || '';
+      const companyState = companyProfile?.state || '';
+      const companyZip = companyProfile?.zip || '';
       const customerName = `${contact.firstName} ${contact.lastName}`;
       const customerAddress = `${contact.address}, ${contact.city}, ${contact.state} ${contact.zip}`;
 
@@ -334,7 +340,8 @@ export default function EstimatesView() {
           <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
             <div style="background:#1e40af;color:white;padding:24px;border-radius:8px 8px 0 0">
               <h2 style="margin:0;font-size:24px">${companyName}</h2>
-              <p style="margin:4px 0 0 0;opacity:0.9">Professional Restoration Services</p>
+              ${companyAddress ? `<p style="margin:4px 0 0 0;opacity:0.9;font-size:13px">${companyAddress}${companyCity ? `, ${companyCity}, ${companyState} ${companyZip}` : ''}</p>` : ''}
+              ${companyPhone ? `<p style="margin:2px 0 0 0;opacity:0.9;font-size:13px">${companyPhone}</p>` : ''}
             </div>
             <div style="padding:24px;background:#f9fafb">
               <h3 style="color:#1e40af;margin-top:0">Estimate ${estimate.estimateNumber}</h3>
@@ -376,8 +383,9 @@ export default function EstimatesView() {
               <p style="margin-bottom:0">Thank you,<br/><strong>${companyName}</strong></p>
             </div>
             <div style="background:#e5e7eb;padding:16px;text-align:center;font-size:12px;color:#6b7280;border-radius:0 0 8px 8px">
-              ${companyName} | Professional Restoration Services<br/>
-              This estimate is valid until ${estimate.validUntil ? new Date(estimate.validUntil).toLocaleDateString() : 'further notice'}
+              ${companyName}${companyPhone ? ` | ${companyPhone}` : ''}${companyEmail ? ` | ${companyEmail}` : ''}<br/>
+              This estimate is valid until ${estimate.validUntil ? new Date(estimate.validUntil).toLocaleDateString() : 'further notice'}<br/>
+              <span style="font-size:10px;color:#9ca3af;margin-top:4px;display:inline-block">Powered by TrussCTR</span>
             </div>
           </div>`,
       });
@@ -623,12 +631,23 @@ export default function EstimatesView() {
     });
   };
 
-  const printEstimate = (estimate: Estimate) => {
+  const printEstimate = async (estimate: Estimate) => {
     const contact = state.contacts.find(c => c.id === estimate.contactId);
     const contactName = contact ? `${contact.firstName} ${contact.lastName}` : 'Unknown';
     const contactAddress = contact ? `${contact.address}, ${contact.city}, ${contact.state} ${contact.zip}` : '';
     const contactPhone = contact?.phone1 || '';
     const contactEmail = contact?.email || '';
+
+    // Fetch company info from database
+    const companyProfile = await db.getCompany(profile?.company_id || '').catch(() => null);
+    const companyName = companyProfile?.name || 'Your Company';
+    const companyAddress = companyProfile?.address || '';
+    const companyCity = companyProfile?.city || '';
+    const companyState = companyProfile?.state || '';
+    const companyZip = companyProfile?.zip || '';
+    const companyPhone = companyProfile?.phone || '';
+    const companyEmail = companyProfile?.email || '';
+    const companyLicense = companyProfile?.contractor_license || '';
     const itemsHtml = estimate.items && estimate.items.length > 0
       ? `<table style="width:100%;border-collapse:collapse;margin-bottom:24px">
           <thead>
@@ -682,13 +701,13 @@ export default function EstimatesView() {
 <body>
   <div class="header">
     <div class="company-info">
-      <div class="company-name">TrussCTR</div>
+      <div class="company-name">${companyName}</div>
       <div class="company-details">
-        <div>614 Restore LLC</div>
-        <div>Columbus, OH</div>
-        <div>Phone: (614) 555-0100</div>
-        <div>Email: info@614restore.com</div>
-        <div>License #: OH-123456</div>
+        ${companyAddress ? `<div>${companyAddress}</div>` : ''}
+        ${companyCity && companyState ? `<div>${companyCity}, ${companyState} ${companyZip}</div>` : ''}
+        ${companyPhone ? `<div>Phone: ${companyPhone}</div>` : ''}
+        ${companyEmail ? `<div>Email: ${companyEmail}</div>` : ''}
+        ${companyLicense ? `<div>License #: ${companyLicense}</div>` : ''}
       </div>
     </div>
     <div class="estimate-meta">
@@ -722,7 +741,7 @@ export default function EstimatesView() {
   ${estimate.notes ? `<div class="notes-section"><div class="section-title">Notes</div><p style="margin:0;font-size:14px;color:#374151">${estimate.notes}</p></div>` : ''}
   ${estimate.terms ? `<div class="notes-section"><div class="section-title">Terms &amp; Conditions</div><p style="margin:0;font-size:14px;color:#374151">${estimate.terms}</p></div>` : ''}
 
-  <div class="footer">Generated ${new Date().toLocaleDateString()} · ${estimate.estimateNumber}</div>
+  <div class="footer">Generated ${new Date().toLocaleDateString()} · ${estimate.estimateNumber}<br/><span style="font-size:10px;color:#9ca3af">Powered by TrussCTR</span></div>
 </body>
 </html>`;
 
