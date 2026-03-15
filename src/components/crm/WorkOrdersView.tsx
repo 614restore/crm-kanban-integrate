@@ -6,6 +6,9 @@ import { WorkOrder } from '@/lib/crmData';
 import { exportWorkOrdersToExcel } from '@/lib/exportUtils';
 import { SignaturePad } from './SignaturePad';
 import { uploadDocument, getDocumentSignedUrl, formatFileSize } from '@/lib/storage';
+import PhotoChecklist from './PhotoChecklist';
+import CompletionChecklist from './CompletionChecklist';
+import { createInvoiceFromWorkOrder } from '@/lib/workOrderHelpers';
 import {
   Clipboard,
   Plus,
@@ -40,6 +43,7 @@ function StatusBadge({ status }: { status: WorkOrder['status'] }) {
     scheduled: { label: 'Scheduled', className: 'bg-blue-100 text-blue-700', icon: Calendar },
     in_progress: { label: 'In Progress', className: 'bg-yellow-100 text-yellow-700', icon: PlayCircle },
     completed: { label: 'Completed', className: 'bg-green-100 text-green-700', icon: CheckCircle },
+    ready_to_invoice: { label: 'Ready to Invoice', className: 'bg-purple-100 text-purple-700', icon: DollarSign },
     cancelled: { label: 'Cancelled', className: 'bg-red-100 text-red-700', icon: XCircle },
     on_hold: { label: 'On Hold', className: 'bg-orange-100 text-orange-700', icon: Pause },
   }[status];
@@ -81,6 +85,8 @@ export default function WorkOrdersView() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [showSignModal, setShowSignModal] = useState<WorkOrder | null>(null);
   const [signerName, setSignerName] = useState('');
+  const [showForemanSignModal, setShowForemanSignModal] = useState<WorkOrder | null>(null);
+  const [foremanName, setForemanName] = useState('');
 
   // Form state
   const [workOrderNumber, setWorkOrderNumber] = useState('');
@@ -104,6 +110,30 @@ export default function WorkOrdersView() {
   const [attachments, setAttachments] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // New fields
+  const [isSubcontractor, setIsSubcontractor] = useState(false);
+  const [subCompany, setSubCompany] = useState('');
+  const [subForeman, setSubForeman] = useState('');
+  const [subPhone, setSubPhone] = useState('');
+  const [subPayType, setSubPayType] = useState<'per_square' | 'per_job' | 'time_and_materials'>('per_square');
+  const [subRate, setSubRate] = useState('');
+  const [subCost, setSubCost] = useState('0');
+  const [isInsurance, setIsInsurance] = useState(false);
+  const [jobType, setJobType] = useState<string>('');
+  const [squares, setSquares] = useState('');
+  const [pitch, setPitch] = useState('');
+  const [layers, setLayers] = useState('');
+  const [deckingType, setDeckingType] = useState('');
+  const [shingleBrand, setShingleBrand] = useState('');
+  const [shingleLine, setShingleLine] = useState('');
+  const [shingleColor, setShingleColor] = useState('');
+  const [underlayment, setUnderlayment] = useState('');
+  const [dripEdge, setDripEdge] = useState('');
+  const [ventilation, setVentilation] = useState('');
+  const [flashing, setFlashing] = useState('');
+  const [changeOrders, setChangeOrders] = useState<any[]>([]);
+  const [showAddAWO, setShowAddAWO] = useState(false);
 
   // Load work orders when company is available (handles slow auth)
   useEffect(() => {
@@ -179,12 +209,14 @@ export default function WorkOrdersView() {
       setSelectedProjectId(workOrder.projectId || '');
       setSelectedContactId(workOrder.contactId);
       setDescription(workOrder.description || '');
-      setStatus(workOrder.status);      setPriority(workOrder.priority);
+      setStatus(workOrder.status);
+      setPriority(workOrder.priority);
       setScheduledDate(workOrder.scheduledDate || '');
       setAssignedTo(workOrder.assignedTo);
       setEstimatedHours(workOrder.estimatedHours?.toString() || '');
       setActualHours(workOrder.actualHours?.toString() || '');
       setLaborCost(workOrder.laborCost.toString());
+      setSubCost(workOrder.subcontractorCost?.toString() || '0');
       setMaterialCost(workOrder.materialCost.toString());
       setAddress(workOrder.address || '');
       setCity(workOrder.city || '');
@@ -192,8 +224,27 @@ export default function WorkOrdersView() {
       setZip(workOrder.zip || '');
       setNotes(workOrder.notes || '');
       setAttachments(workOrder.attachments || []);
+      setIsSubcontractor(workOrder.isSubcontractor || false);
+      setSubCompany(workOrder.subcontractorCompany || '');
+      setSubForeman(workOrder.subcontractorForeman || '');
+      setSubPhone(workOrder.subcontractorPhone || '');
+      setSubPayType(workOrder.subcontractorPayType || 'per_square');
+      setSubRate(workOrder.subcontractorRate?.toString() || '');
+      setIsInsurance(workOrder.isInsuranceJob || false);
+      setJobType(workOrder.jobType || '');
+      setSquares(workOrder.squares?.toString() || '');
+      setPitch(workOrder.pitch || '');
+      setLayers(workOrder.layers?.toString() || '');
+      setDeckingType(workOrder.deckingType || '');
+      setShingleBrand(workOrder.shingleBrand || '');
+      setShingleLine(workOrder.shingleLine || '');
+      setShingleColor(workOrder.shingleColor || '');
+      setUnderlayment(workOrder.underlayment || '');
+      setDripEdge(workOrder.dripEdge || '');
+      setVentilation(workOrder.ventilation || '');
+      setFlashing(workOrder.flashing || '');
+      setChangeOrders(workOrder.changeOrders || []);
     } else {
-      // Generate work order number for new work orders only
       const nextNumber = `WO-${Date.now().toString().slice(-6)}`;
       setWorkOrderNumber(nextNumber);
     }
@@ -215,6 +266,7 @@ export default function WorkOrdersView() {
     setEstimatedHours('');
     setActualHours('');
     setLaborCost('0');
+    setSubCost('0');
     setMaterialCost('0');
     setAddress('');
     setCity('');
@@ -222,6 +274,27 @@ export default function WorkOrdersView() {
     setZip('');
     setNotes('');
     setAttachments([]);
+    setIsSubcontractor(false);
+    setSubCompany('');
+    setSubForeman('');
+    setSubPhone('');
+    setSubPayType('per_square');
+    setSubRate('');
+    setIsInsurance(false);
+    setJobType('');
+    setSquares('');
+    setPitch('');
+    setLayers('');
+    setDeckingType('');
+    setShingleBrand('');
+    setShingleLine('');
+    setShingleColor('');
+    setUnderlayment('');
+    setDripEdge('');
+    setVentilation('');
+    setFlashing('');
+    setChangeOrders([]);
+    setShowAddAWO(false);
   };
 
   const handleSave = async () => {
@@ -239,7 +312,7 @@ export default function WorkOrdersView() {
     setIsSaving(true);
 
     try {
-      const totalCost = (parseFloat(laborCost) || 0) + (parseFloat(materialCost) || 0);
+      const totalCost = (parseFloat(laborCost) || 0) + (parseFloat(subCost) || 0) + (parseFloat(materialCost) || 0);
       
       const workOrderData = {
         company_id: profile.company_id,
@@ -255,8 +328,29 @@ export default function WorkOrdersView() {
         estimated_hours: estimatedHours ? parseFloat(estimatedHours) : undefined,
         actual_hours: actualHours ? parseFloat(actualHours) : undefined,
         labor_cost: parseFloat(laborCost) || 0,
+        subcontractor_cost: parseFloat(subCost) || 0,
         material_cost: parseFloat(materialCost) || 0,
         total_cost: totalCost,
+        is_subcontractor: isSubcontractor,
+        subcontractor_company: isSubcontractor ? subCompany : undefined,
+        subcontractor_foreman: isSubcontractor ? subForeman : undefined,
+        subcontractor_phone: isSubcontractor ? subPhone : undefined,
+        subcontractor_pay_type: isSubcontractor ? subPayType : undefined,
+        subcontractor_rate: isSubcontractor && subRate ? parseFloat(subRate) : undefined,
+        is_insurance_job: isInsurance,
+        job_type: jobType || undefined,
+        squares: squares ? parseFloat(squares) : undefined,
+        pitch: pitch || undefined,
+        layers: layers ? parseInt(layers) : undefined,
+        decking_type: deckingType || undefined,
+        shingle_brand: shingleBrand || undefined,
+        shingle_line: shingleLine || undefined,
+        shingle_color: shingleColor || undefined,
+        underlayment: underlayment || undefined,
+        drip_edge: dripEdge || undefined,
+        ventilation: ventilation || undefined,
+        flashing: flashing || undefined,
+        change_orders: changeOrders.length > 0 ? changeOrders : undefined,
         address: address.trim() || undefined,
         city: city.trim() || undefined,
         state: workOrderState.trim() || undefined,
@@ -514,6 +608,54 @@ export default function WorkOrdersView() {
     }
   };
 
+  const handleForemanSign = async (signatureData: string) => {
+    const workOrder = showForemanSignModal;
+    if (!workOrder || !profile?.company_id) return;
+    const name = foremanName.trim();
+    if (!name) {
+      toast.error('Please enter foreman name');
+      return;
+    }
+    try {
+      const updated = await db.updateWorkOrder(workOrder.id, {
+        foreman_signed_by: name,
+        foreman_signature_data: signatureData,
+      });
+      if (updated) {
+        const appWorkOrder: WorkOrder = {
+          ...workOrder,
+          foremanSignedBy: updated.foreman_signed_by,
+          foremanSignatureData: updated.foreman_signature_data,
+          updatedAt: updated.updated_at,
+        };
+        dispatch({ type: 'UPDATE_WORK_ORDER', payload: appWorkOrder });
+        toast.success('Foreman signature saved');
+        setShowForemanSignModal(null);
+        setForemanName('');
+      }
+    } catch (err: any) {
+      toast.error(`Failed to save foreman signature: ${err.message}`);
+    }
+  };
+
+  const handleCreateInvoice = async (workOrder: WorkOrder) => {
+    if (!profile?.company_id || !profile?.id) return;
+    try {
+      const result = await createInvoiceFromWorkOrder(workOrder.id, profile.company_id, profile.id);
+      if (result.success) {
+        toast.success('Invoice created successfully');
+        // Reload invoices
+        const invoices = await db.getInvoices(profile.company_id);
+        // You may need to dispatch to update invoices in state
+      } else {
+        toast.error(result.error || 'Failed to create invoice');
+      }
+    } catch (error) {
+      console.error('Error creating invoice:', error);
+      toast.error('Failed to create invoice');
+    }
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || !profile?.company_id) return;
@@ -728,6 +870,7 @@ export default function WorkOrdersView() {
           <option value="scheduled">Scheduled</option>
           <option value="in_progress">In Progress</option>
           <option value="completed">Completed</option>
+          <option value="ready_to_invoice">Ready to Invoice</option>
           <option value="on_hold">On Hold</option>
           <option value="cancelled">Cancelled</option>
         </select>
@@ -764,6 +907,12 @@ export default function WorkOrdersView() {
                     <h3 className="text-lg font-semibold text-gray-900">{workOrder.title}</h3>
                     <StatusBadge status={workOrder.status} />
                     <PriorityBadge priority={workOrder.priority} />
+                    {workOrder.isInsuranceJob && (
+                      <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">Insurance</span>
+                    )}
+                    {workOrder.isSubcontractor && (
+                      <span className="px-2 py-1 bg-amber-100 text-amber-700 text-xs font-medium rounded-full">Subcontractor</span>
+                    )}
                   </div>
                   <div className="flex items-center gap-4 text-sm text-gray-600 mb-2">
                     <span className="font-mono">{workOrder.workOrderNumber}</span>
@@ -783,9 +932,28 @@ export default function WorkOrdersView() {
                         {workOrder.city}, {workOrder.state}
                       </span>
                     )}
+                    {workOrder.jobType && (
+                      <span className="text-xs bg-gray-100 px-2 py-0.5 rounded">{workOrder.jobType.replace('_', ' ')}</span>
+                    )}
                   </div>
                   {workOrder.description && (
                     <p className="text-sm text-gray-600">{workOrder.description}</p>
+                  )}
+                  {workOrder.isSubcontractor && workOrder.subcontractorCompany && (
+                    <p className="text-sm text-amber-700 mt-1">Sub: {workOrder.subcontractorCompany} ({workOrder.subcontractorForeman || 'No foreman'})</p>
+                  )}
+                  {workOrder.squares && (
+                    <p className="text-xs text-gray-500 mt-1">{workOrder.squares} sq | Pitch: {workOrder.pitch || 'N/A'} | {workOrder.shingleBrand || 'No brand'} {workOrder.shingleColor || ''}</p>
+                  )}
+                  {workOrder.changeOrders && workOrder.changeOrders.length > 0 && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <span className="text-xs font-semibold text-yellow-700">{workOrder.changeOrders.length} AWO(s):</span>
+                      {workOrder.changeOrders.map((co: any, idx: number) => (
+                        <span key={idx} className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded">
+                          {co.description} (+${co.amount})
+                        </span>
+                      ))}
+                    </div>
                   )}
                 </div>
                 <div className="flex items-center gap-2">
@@ -816,6 +984,41 @@ export default function WorkOrdersView() {
                       </button>
                     </>
                   )}
+                  {workOrder.status === 'completed' && (
+                    <>
+                      <button
+                        onClick={() => handleCreateInvoice(workOrder)}
+                        className="px-3 py-1.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-1"
+                        title="Create Invoice"
+                      >
+                        <DollarSign size={16} />
+                        Create Invoice
+                      </button>
+                      <button
+                        onClick={async () => {
+                          try {
+                            const updated = await db.updateWorkOrder(workOrder.id, { status: 'ready_to_invoice' });
+                            if (updated) {
+                              const appWorkOrder: WorkOrder = {
+                                ...workOrder,
+                                status: 'ready_to_invoice',
+                                updatedAt: updated.updated_at,
+                              };
+                              dispatch({ type: 'UPDATE_WORK_ORDER', payload: appWorkOrder });
+                              toast.success('Work order marked ready to invoice');
+                            }
+                          } catch (error) {
+                            toast.error('Failed to update status');
+                          }
+                        }}
+                        className="px-3 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-1"
+                        title="Mark ready to invoice"
+                      >
+                        <DollarSign size={16} />
+                        Ready to Invoice
+                      </button>
+                    </>
+                  )}
                   <button
                     onClick={() => handleOpenModal(workOrder)}
                     className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
@@ -834,7 +1037,7 @@ export default function WorkOrdersView() {
               </div>
 
               {/* Work Order Details Grid */}
-              <div className="grid grid-cols-5 gap-4 pt-4 border-t border-gray-100">
+              <div className="grid grid-cols-6 gap-4 pt-4 border-t border-gray-100">
                 <div>
                   <p className="text-xs text-gray-500 mb-1">Scheduled</p>
                   <p className="text-sm font-medium text-gray-900">{formatDate(workOrder.scheduledDate)}</p>
@@ -842,7 +1045,9 @@ export default function WorkOrdersView() {
                 <div>
                   <p className="text-xs text-gray-500 mb-1">Assigned To</p>
                   <p className="text-sm font-medium text-gray-900">
-                    {workOrder.assignedToNames && workOrder.assignedToNames.length > 0
+                    {workOrder.isSubcontractor
+                      ? workOrder.subcontractorCompany || 'Sub'
+                      : workOrder.assignedToNames && workOrder.assignedToNames.length > 0
                       ? workOrder.assignedToNames.join(', ')
                       : 'Unassigned'}
                   </p>
@@ -854,8 +1059,14 @@ export default function WorkOrdersView() {
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500 mb-1">Labor Cost</p>
-                  <p className="text-sm font-semibold text-green-600">{formatCurrency(workOrder.laborCost)}</p>
+                  <p className="text-xs text-gray-500 mb-1">{workOrder.isSubcontractor ? 'Sub Cost' : 'Labor Cost'}</p>
+                  <p className="text-sm font-semibold text-green-600">
+                    {formatCurrency(workOrder.isSubcontractor ? (workOrder.subcontractorCost || 0) : workOrder.laborCost)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">Material Cost</p>
+                  <p className="text-sm font-semibold text-blue-600">{formatCurrency(workOrder.materialCost)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-500 mb-1">Total Cost</p>
@@ -1012,6 +1223,7 @@ export default function WorkOrdersView() {
                     <option value="scheduled">Scheduled</option>
                     <option value="in_progress">In Progress</option>
                     <option value="completed">Completed</option>
+                    <option value="ready_to_invoice">Ready to Invoice</option>
                     <option value="on_hold">On Hold</option>
                     <option value="cancelled">Cancelled</option>
                   </select>
@@ -1107,29 +1319,367 @@ export default function WorkOrdersView() {
               {/* Crew Assignment */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Assign Crew Members
+                  <input
+                    type="checkbox"
+                    checked={isSubcontractor}
+                    onChange={(e) => setIsSubcontractor(e.target.checked)}
+                    className="mr-2 rounded"
+                  />
+                  Use Subcontractor (instead of in-house crew)
                 </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {state.teamMembers
-                    .filter(m => m.isActive)
-                    .map((member) => (
-                      <label
-                        key={member.id}
-                        className={`flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer transition-colors ${
-                          assignedTo.includes(member.id)
-                            ? 'bg-green-50 border-green-500'
-                            : 'border-gray-300 hover:bg-gray-50'
-                        }`}
-                      >
+
+                {isSubcontractor ? (
+                  <div className="space-y-3 p-4 bg-amber-50 rounded-lg border border-amber-200">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Sub Company Name *</label>
                         <input
-                          type="checkbox"
-                          checked={assignedTo.includes(member.id)}
-                          onChange={() => toggleAssignee(member.id)}
-                          className="rounded text-green-600"
+                          type="text"
+                          value={subCompany}
+                          onChange={(e) => setSubCompany(e.target.value)}
+                          className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
                         />
-                        <span className="text-sm">{member.name}</span>
-                      </label>
-                    ))}
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Foreman Contact</label>
+                        <input
+                          type="text"
+                          value={subForeman}
+                          onChange={(e) => setSubForeman(e.target.value)}
+                          className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Phone</label>
+                        <input
+                          type="tel"
+                          value={subPhone}
+                          onChange={(e) => setSubPhone(e.target.value)}
+                          className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Pay Type</label>
+                        <select
+                          value={subPayType}
+                          onChange={(e) => setSubPayType(e.target.value as any)}
+                          className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
+                        >
+                          <option value="per_square">Per Square</option>
+                          <option value="per_job">Per Job</option>
+                          <option value="time_and_materials">T&M</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Sub Rate (Cost to You)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={subRate}
+                          onChange={(e) => setSubRate(e.target.value)}
+                          className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Total Sub Cost</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={subCost}
+                          onChange={(e) => setSubCost(e.target.value)}
+                          className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-2">
+                    {state.teamMembers
+                      .filter(m => m.isActive)
+                      .map((member) => (
+                        <label
+                          key={member.id}
+                          className={`flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer transition-colors ${
+                            assignedTo.includes(member.id)
+                              ? 'bg-green-50 border-green-500'
+                              : 'border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={assignedTo.includes(member.id)}
+                            onChange={() => toggleAssignee(member.id)}
+                            className="rounded text-green-600"
+                          />
+                          <span className="text-sm">{member.name}</span>
+                        </label>
+                      ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Job Type & Insurance */}
+              <div className="grid grid-cols-2 gap-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <div className="col-span-2">
+                  <label className="flex items-center text-sm font-medium text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={isInsurance}
+                      onChange={(e) => setIsInsurance(e.target.checked)}
+                      className="mr-2 rounded"
+                    />
+                    Insurance Job (vs. Retail)
+                  </label>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Job Type</label>
+                  <select
+                    value={jobType}
+                    onChange={(e) => setJobType(e.target.value)}
+                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
+                  >
+                    <option value="">Select type</option>
+                    <optgroup label="Roofing">
+                      <option value="roof_tear_off">Roof - Tear-Off</option>
+                      <option value="roof_recover">Roof - Recover</option>
+                      <option value="roof_repair">Roof - Repair</option>
+                      <option value="roof_shingle">Roof - Shingle</option>
+                      <option value="roof_metal">Roof - Metal</option>
+                      <option value="roof_flat">Roof - Flat/TPO</option>
+                      <option value="roof_new_construction">Roof - New Construction</option>
+                    </optgroup>
+                    <optgroup label="Exterior">
+                      <option value="gutters">Gutters</option>
+                      <option value="siding">Siding</option>
+                      <option value="fence_wood">Fence - Wood Panel</option>
+                      <option value="fence_chain_link">Fence - Chain Link</option>
+                      <option value="deck">Deck</option>
+                      <option value="patio">Patio</option>
+                      <option value="masonry">Masonry</option>
+                    </optgroup>
+                    <optgroup label="Interior">
+                      <option value="drywall">Drywall</option>
+                      <option value="paint_interior">Paint - Interior</option>
+                      <option value="paint_exterior">Paint - Exterior</option>
+                    </optgroup>
+                    <optgroup label="Other">
+                      <option value="multi_trade">Multi-Trade Job</option>
+                      <option value="other">Other</option>
+                    </optgroup>
+                  </select>
+                </div>
+              </div>
+
+              {/* Job Specifications */}
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900 mb-3">
+                  {jobType?.startsWith('roof_') ? 'Roof Specifications' : 'Job Specifications'}
+                </h3>
+                <div className="grid grid-cols-4 gap-3">
+                  {jobType?.startsWith('roof_') && (
+                    <>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Squares</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.1"
+                          value={squares}
+                          onChange={(e) => setSquares(e.target.value)}
+                          className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Pitch</label>
+                        <input
+                          type="text"
+                          value={pitch}
+                          onChange={(e) => setPitch(e.target.value)}
+                          placeholder="e.g., 6/12"
+                          className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Layers</label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="5"
+                          value={layers}
+                          onChange={(e) => setLayers(e.target.value)}
+                          className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Decking</label>
+                        <input
+                          type="text"
+                          value={deckingType}
+                          onChange={(e) => setDeckingType(e.target.value)}
+                          placeholder="OSB, Plywood"
+                          className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+                    </>
+                  )}
+                  {(jobType === 'gutters' || jobType === 'siding' || jobType === 'fence_wood' || jobType === 'fence_chain_link') && (
+                    <>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Linear Feet</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.1"
+                          value={squares}
+                          onChange={(e) => setSquares(e.target.value)}
+                          placeholder="Total LF"
+                          className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+                    </>
+                  )}
+                  {(jobType === 'deck' || jobType === 'patio') && (
+                    <>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Square Feet</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.1"
+                          value={squares}
+                          onChange={(e) => setSquares(e.target.value)}
+                          placeholder="Total SF"
+                          className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+                    </>
+                  )}
+                  {(jobType === 'drywall' || jobType === 'paint_interior' || jobType === 'paint_exterior') && (
+                    <>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Square Feet / Rooms</label>
+                        <input
+                          type="text"
+                          value={squares}
+                          onChange={(e) => setSquares(e.target.value)}
+                          placeholder="SF or room count"
+                          className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+                    </>
+                  )}
+                  {!jobType && (
+                    <div className="col-span-4 text-sm text-gray-500 italic">
+                      Select a job type above to see relevant specification fields
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Product Selections */}
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900 mb-3">Product Selections & Materials</h3>
+                <div className="grid grid-cols-3 gap-3">
+                  {jobType?.startsWith('roof_') && (
+                    <>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Shingle Brand</label>
+                        <input
+                          type="text"
+                          value={shingleBrand}
+                          onChange={(e) => setShingleBrand(e.target.value)}
+                          placeholder="Owens Corning, GAF"
+                          className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Line</label>
+                        <input
+                          type="text"
+                          value={shingleLine}
+                          onChange={(e) => setShingleLine(e.target.value)}
+                          placeholder="Duration, Timberline"
+                          className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Color</label>
+                        <input
+                          type="text"
+                          value={shingleColor}
+                          onChange={(e) => setShingleColor(e.target.value)}
+                          className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Underlayment</label>
+                        <input
+                          type="text"
+                          value={underlayment}
+                          onChange={(e) => setUnderlayment(e.target.value)}
+                          className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Drip Edge</label>
+                        <input
+                          type="text"
+                          value={dripEdge}
+                          onChange={(e) => setDripEdge(e.target.value)}
+                          className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Ventilation</label>
+                        <input
+                          type="text"
+                          value={ventilation}
+                          onChange={(e) => setVentilation(e.target.value)}
+                          className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+                      <div className="col-span-3">
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Flashing</label>
+                        <input
+                          type="text"
+                          value={flashing}
+                          onChange={(e) => setFlashing(e.target.value)}
+                          className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+                    </>
+                  )}
+                  {(jobType === 'gutters' || jobType === 'siding' || jobType === 'fence_wood' || jobType === 'fence_chain_link' || jobType === 'deck' || jobType === 'patio' || jobType === 'drywall' || jobType === 'paint_interior' || jobType === 'paint_exterior' || jobType === 'masonry') && (
+                    <>
+                      <div className="col-span-3">
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Product/Material Details</label>
+                        <input
+                          type="text"
+                          value={shingleBrand}
+                          onChange={(e) => setShingleBrand(e.target.value)}
+                          placeholder="Brand, style, color, gauge, etc."
+                          className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+                      <div className="col-span-3">
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Additional Materials/Notes</label>
+                        <input
+                          type="text"
+                          value={shingleLine}
+                          onChange={(e) => setShingleLine(e.target.value)}
+                          placeholder="Fasteners, accessories, special requirements"
+                          className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+                    </>
+                  )}
+                  {!jobType && (
+                    <div className="col-span-3 text-sm text-gray-500 italic">
+                      Select a job type to add product and material details
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1255,6 +1805,126 @@ export default function WorkOrdersView() {
                   </ul>
                 )}
               </div>
+
+              {/* Change Orders / AWOs */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Change Orders / AWOs
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddAWO(true)}
+                    className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+                  >
+                    + Add AWO
+                  </button>
+                </div>
+                {changeOrders.length > 0 && (
+                  <div className="space-y-2">
+                    {changeOrders.map((co, idx) => (
+                      <div key={idx} className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm">
+                        <div className="flex justify-between items-start mb-1">
+                          <strong className="text-gray-900">{co.description}</strong>
+                          <button
+                            type="button"
+                            onClick={() => setChangeOrders(prev => prev.filter((_, i) => i !== idx))}
+                            className="text-red-500 hover:text-red-700"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                        <div className="text-gray-600">
+                          Amount: <strong>${co.amount}</strong> | Approved by: {co.approvedBy} ({co.approverName}) | Date: {new Date(co.approvalDate).toLocaleDateString()}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {showAddAWO && (
+                  <div className="mt-2 p-3 bg-gray-50 border border-gray-300 rounded-lg space-y-2">
+                    <input
+                      type="text"
+                      placeholder="Description"
+                      id="awo-desc"
+                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded"
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="number"
+                        placeholder="Amount"
+                        id="awo-amount"
+                        className="px-2 py-1.5 text-sm border border-gray-300 rounded"
+                      />
+                      <select id="awo-approver" className="px-2 py-1.5 text-sm border border-gray-300 rounded">
+                        <option value="customer">Customer</option>
+                        <option value="adjuster">Adjuster</option>
+                      </select>
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Approver Name"
+                      id="awo-name"
+                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const desc = (document.getElementById('awo-desc') as HTMLInputElement)?.value;
+                          const amt = (document.getElementById('awo-amount') as HTMLInputElement)?.value;
+                          const approver = (document.getElementById('awo-approver') as HTMLSelectElement)?.value;
+                          const name = (document.getElementById('awo-name') as HTMLInputElement)?.value;
+                          if (desc && amt) {
+                            setChangeOrders(prev => [...prev, {
+                              id: `awo-${Date.now()}`,
+                              description: desc,
+                              amount: parseFloat(amt),
+                              approvedBy: approver,
+                              approverName: name,
+                              approvalDate: new Date().toISOString(),
+                            }]);
+                            setShowAddAWO(false);
+                          }
+                        }}
+                        className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700"
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowAddAWO(false)}
+                        className="px-3 py-1 bg-gray-300 text-gray-700 text-sm rounded hover:bg-gray-400"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Photo Checklist */}
+              {editingWorkOrder && (
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900 mb-3">Photo Documentation</h3>
+                  <PhotoChecklist
+                    workOrderId={editingWorkOrder.id}
+                    companyId={profile?.company_id || ''}
+                    initialChecklist={editingWorkOrder.photoChecklist || []}
+                  />
+                </div>
+              )}
+
+              {/* Completion Checklist */}
+              {editingWorkOrder && (
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900 mb-3">Quality Control Checklist</h3>
+                  <CompletionChecklist
+                    workOrderId={editingWorkOrder.id}
+                    initialItems={editingWorkOrder.checklistItems || []}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Modal Footer */}
@@ -1319,6 +1989,54 @@ export default function WorkOrdersView() {
                       return;
                     }
                     handleSignWorkOrder(dataUrl);
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Foreman Signature Modal */}
+      {showForemanSignModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Foreman Signature</h2>
+                <p className="text-sm text-gray-500 mt-0.5">{showForemanSignModal.workOrderNumber} · {showForemanSignModal.title}</p>
+              </div>
+              <button
+                onClick={() => { setShowForemanSignModal(null); setForemanName(''); }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Foreman Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={foremanName}
+                  onChange={e => setForemanName(e.target.value)}
+                  placeholder="Foreman name"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Draw Signature
+                </label>
+                <SignaturePad
+                  onSave={dataUrl => {
+                    if (!foremanName.trim()) {
+                      toast.error('Please enter the foreman name before saving');
+                      return;
+                    }
+                    handleForemanSign(dataUrl);
                   }}
                 />
               </div>

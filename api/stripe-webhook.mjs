@@ -77,7 +77,7 @@ export default async function handler(req, res) {
         const session = event.data.object;
         const customerId = session.customer;
         const subscriptionId = session.subscription;
-        const planId = session.metadata?.planId || '';
+        const planId = session.metadata?.planId || 'professional';
 
         // Prefer client_reference_id (company UUID passed from the pricing table embed).
         // Fall back to looking up the auth user by email, then their profile.
@@ -108,16 +108,19 @@ export default async function handler(req, res) {
         }
 
         if (companyId) {
-          await supabase
+          const { error } = await supabase
             .from('companies')
             .update({
               subscription_status: 'active',
+              subscription_plan: planId,
               stripe_customer_id: customerId,
               stripe_subscription_id: subscriptionId,
-              plan: planId || undefined,
               updated_at: new Date().toISOString(),
             })
             .eq('id', companyId);
+          if (error) {
+            console.error('checkout.session.completed: failed to update company', companyId, error);
+          }
         } else {
           console.warn('checkout.session.completed: could not resolve company_id for email', session.customer_details?.email);
         }
@@ -128,14 +131,18 @@ export default async function handler(req, res) {
         const sub = event.data.object;
         const companyId = await getCompanyByStripeCustomer(supabase, sub.customer);
         if (companyId) {
-          await supabase
+          const planId = sub.metadata?.planId || sub.items?.data?.[0]?.price?.metadata?.planId || 'professional';
+          const { error } = await supabase
             .from('companies')
             .update({
               subscription_status: sub.status,
-              plan: sub.metadata?.planId || sub.items?.data?.[0]?.price?.metadata?.planId || undefined,
+              subscription_plan: planId,
               updated_at: new Date().toISOString(),
             })
             .eq('id', companyId);
+          if (error) {
+            console.error('customer.subscription.updated: failed to update company', companyId, error);
+          }
         }
         break;
       }
@@ -144,10 +151,13 @@ export default async function handler(req, res) {
         const sub = event.data.object;
         const companyId = await getCompanyByStripeCustomer(supabase, sub.customer);
         if (companyId) {
-          await supabase
+          const { error } = await supabase
             .from('companies')
             .update({ subscription_status: 'canceled', updated_at: new Date().toISOString() })
             .eq('id', companyId);
+          if (error) {
+            console.error('customer.subscription.deleted: failed to update company', companyId, error);
+          }
         }
         break;
       }
@@ -157,10 +167,13 @@ export default async function handler(req, res) {
         if (invoice.customer) {
           const companyId = await getCompanyByStripeCustomer(supabase, invoice.customer);
           if (companyId) {
-            await supabase
+            const { error } = await supabase
               .from('companies')
               .update({ subscription_status: 'past_due', updated_at: new Date().toISOString() })
               .eq('id', companyId);
+            if (error) {
+              console.error('invoice.payment_failed: failed to update company', companyId, error);
+            }
           }
         }
         break;
@@ -171,10 +184,13 @@ export default async function handler(req, res) {
         if (invoice.customer) {
           const companyId = await getCompanyByStripeCustomer(supabase, invoice.customer);
           if (companyId) {
-            await supabase
+            const { error } = await supabase
               .from('companies')
               .update({ subscription_status: 'active', updated_at: new Date().toISOString() })
               .eq('id', companyId);
+            if (error) {
+              console.error('invoice.payment_succeeded: failed to update company', companyId, error);
+            }
           }
         }
         break;

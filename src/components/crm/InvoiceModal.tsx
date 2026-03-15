@@ -6,7 +6,9 @@ import { fireAutomationEvent } from '@/lib/automationEngine';
 import { Invoice, InvoiceItem, formatCurrency, getContactFullName } from '@/lib/crmData';
 import { sendEmail } from '@/lib/emailApi';
 import { toast } from 'sonner';
-import { X, Plus, Trash2, Save, Send, DollarSign } from 'lucide-react';
+import { X, Plus, Trash2, Save, Send, DollarSign, Download } from 'lucide-react';
+import PaymentHistory from './PaymentHistory';
+import { generateInvoicePDF } from '@/lib/invoicePdfGenerator';
 
 export default function InvoiceModal() {
   const { state, dispatch } = useCRM();
@@ -27,6 +29,8 @@ export default function InvoiceModal() {
   const [notes, setNotes] = useState(prefill?.notes || '');
   const [isSaving, setIsSaving] = useState(false);
   const [validateError, setValidateError] = useState('');
+  const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
+  const [showPaymentHistory, setShowPaymentHistory] = useState(false);
 
   // Re-initialize if prefill changes (new conversion)
   useEffect(() => {
@@ -73,6 +77,38 @@ export default function InvoiceModal() {
   const subtotal = items.reduce((sum, item) => sum + item.total, 0);
   const tax = subtotal * 0.0825; // 8.25% tax
   const total = subtotal + tax;
+
+  const handleDownloadPDF = async () => {
+    if (!selectedContact) {
+      toast.error('Please select a customer first');
+      return;
+    }
+    try {
+      await generateInvoicePDF({
+        invoiceNumber: `INV-${Date.now()}`,
+        date: new Date().toISOString().split('T')[0],
+        dueDate,
+        customer: {
+          name: getContactFullName(selectedContact),
+          email: selectedContact.email || '',
+          address: selectedContact.address || '',
+          city: selectedContact.city || '',
+          state: selectedContact.state || '',
+          zip: selectedContact.zip || '',
+        },
+        items: items.filter(i => i.description && i.total > 0),
+        subtotal,
+        tax,
+        total,
+        notes,
+        companyName: state.companyName || 'TrussCTR',
+      });
+      toast.success('PDF downloaded successfully');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast.error('Failed to generate PDF');
+    }
+  };
 
   const handleSave = async (status: 'draft' | 'sent') => {
     setValidateError('');
@@ -362,6 +398,24 @@ export default function InvoiceModal() {
                 </div>
               </div>
             </div>
+
+            {/* Payment History (for existing invoices) */}
+            {editingInvoiceId && (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-semibold text-gray-900">Payment History</h3>
+                  <button
+                    onClick={() => setShowPaymentHistory(!showPaymentHistory)}
+                    className="text-xs text-blue-600 hover:text-blue-700"
+                  >
+                    {showPaymentHistory ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+                {showPaymentHistory && (
+                  <PaymentHistory invoiceId={editingInvoiceId} />
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -373,6 +427,14 @@ export default function InvoiceModal() {
             </div>
           )}
           <div className="flex items-center justify-end gap-3">
+          <button
+            onClick={handleDownloadPDF}
+            disabled={!selectedContact || items.filter(i => i.description && i.total > 0).length === 0}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Download size={18} />
+            Download PDF
+          </button>
           <button
             onClick={handleClose}
             className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors font-medium"

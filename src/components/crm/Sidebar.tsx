@@ -95,21 +95,34 @@ export default function Sidebar() {
   const { state, dispatch } = useCRM();
   const { profile, signOut } = useAuth();
   const { currentView, sidebarCollapsed, currentUser } = state;
-  const [companyName, setCompanyName] = useState('TrussCTR');
+  const [companyName, setCompanyName] = useState('Loading...');
   const [companyLogoUrl, setCompanyLogoUrl] = useState<string | null>(null);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [isLoadingCompany, setIsLoadingCompany] = useState(true);
 
   const userRole = (currentUser?.role || profile?.role || 'owner') as any;
 
   const loadCompanyBrand = useCallback(async () => {
-    if (!profile?.company_id) return;
+    if (!profile?.company_id) {
+      setIsLoadingCompany(false);
+      return;
+    }
     try {
+      setIsLoadingCompany(true);
       const company = await db.getCompany(profile.company_id);
-      if (!company) return;
+      if (!company) {
+        console.warn('[Sidebar] No company data returned for ID:', profile.company_id);
+        setCompanyName('My Company');
+        setIsLoadingCompany(false);
+        return;
+      }
       setCompanyName(normalizeCompanyName(company.name, company.email));
       setCompanyLogoUrl(company.logo_url || null);
+      setIsLoadingCompany(false);
     } catch (error) {
-      console.error('Failed to load company branding:', error);
+      console.error('[Sidebar] Failed to load company branding:', error);
+      setCompanyName('My Company');
+      setIsLoadingCompany(false);
     }
   }, [profile?.company_id]);
 
@@ -146,9 +159,7 @@ export default function Sidebar() {
             {companyLogoUrl ? (
               <img src={companyLogoUrl} alt="Company logo" className="w-8 h-8 rounded-lg object-contain" onError={() => setCompanyLogoUrl(null)} />
             ) : (
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
-                <Building2 size={18} className="text-white" />
-              </div>
+              <img src="/logo.png" alt="TrussCTR Logo" className="w-8 h-8 object-contain" />
             )}
             <span className="font-bold text-lg truncate">{companyName}</span>
           </div>
@@ -238,13 +249,13 @@ export default function Sidebar() {
       {/* Legal Links */}
       {!sidebarCollapsed && (
         <div className="px-3 pb-2 flex flex-wrap gap-x-2 gap-y-1 justify-center">
-          <a href="/crm-kanban-integrate/terms" target="_blank" rel="noopener noreferrer" className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Terms</a>
+          <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Terms</a>
           <span className="text-slate-600 text-xs">·</span>
-          <a href="/crm-kanban-integrate/privacy" target="_blank" rel="noopener noreferrer" className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Privacy</a>
+          <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Privacy</a>
           <span className="text-slate-600 text-xs">·</span>
-          <a href="/crm-kanban-integrate/eula" target="_blank" rel="noopener noreferrer" className="text-xs text-slate-500 hover:text-slate-300 transition-colors">EULA</a>
+          <a href="/eula" target="_blank" rel="noopener noreferrer" className="text-xs text-slate-500 hover:text-slate-300 transition-colors">EULA</a>
           <span className="text-slate-600 text-xs">·</span>
-          <a href="mailto:scopemgr@614restore.com?subject=CONTACT%20TrussCTR" className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Support</a>
+          <a href="mailto:614restorellc@gmail.com?subject=TrussCTR%20Support" className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Support</a>
         </div>
       )}
 

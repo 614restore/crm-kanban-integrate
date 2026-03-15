@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from '@/lib/authContext';
 import { PermissionProvider } from '@/lib/permissions/PermissionProvider';
 import { db, DbCompany } from '@/lib/database';
 import { supabase } from '@/lib/supabase';
+import { detectAndNotifyUnassignedContacts } from '@/lib/staleLeadDetection';
 import {
   defaultBoards,
   defaultLeadSources,
@@ -156,18 +157,111 @@ function ViewLoadingFallback() {
 }
 
 function LoadingScreen() {
+  const [showForceButton, setShowForceButton] = useState(false);
+  
+  useEffect(() => {
+    // Show force continue button after 3 seconds (reduced from 5)
+    const timer = setTimeout(() => setShowForceButton(true), 3000);
+    return () => clearTimeout(timer);
+  }, []);
+  
+  const handleForceContinue = () => {
+    try {
+      // Clear any stuck auth state
+      sessionStorage.clear();
+      localStorage.removeItem('sb-auth-token');
+      // Clear URL parameters that might be causing issues
+      const cleanUrl = window.location.origin + window.location.pathname;
+      window.history.replaceState({}, '', cleanUrl);
+      window.location.reload();
+    } catch (e) {
+      console.error('Failed to clear auth state:', e);
+      window.location.reload();
+    }
+  };
+  
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center">
-      <div className="text-center">
-        <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-          <Building2 size={32} className="text-white" />
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-900 flex items-center justify-center relative overflow-hidden">
+      {/* Animated background elements */}
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-purple-500/5 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '2s' }}></div>
+      </div>
+
+      <div className="text-center relative z-10">
+        {/* Logo with glow effect */}
+        <div className="relative inline-block mb-8">
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-3xl blur-2xl opacity-30 animate-pulse"></div>
+          <div className="relative bg-gradient-to-br from-slate-800 to-slate-900 p-6 rounded-3xl border border-slate-700/50 shadow-2xl">
+            <img 
+              src="/logo.png" 
+              alt="TrussCTR Logo" 
+              className="w-32 h-32 object-contain drop-shadow-2xl" 
+            />
+          </div>
         </div>
-        <h1 className="text-2xl font-bold text-white mb-2">TrussCTR</h1>
-        <div className="flex items-center justify-center gap-2 text-slate-400">
-          <Loader2 className="animate-spin" size={20} />
-          <span>Loading your data...</span>
+
+        {/* Brand name with gradient */}
+        <h1 className="text-5xl font-bold mb-3 bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400 bg-clip-text text-transparent animate-pulse">
+          TrussCTR
+        </h1>
+        
+        {/* Tagline */}
+        <p className="text-blue-200 text-lg mb-8 font-light tracking-wide">
+          Contractor CRM Center
+        </p>
+
+        {/* Loading indicator with modern design */}
+        <div className="flex items-center justify-center gap-3 mb-8">
+          <div className="relative">
+            <Loader2 className="animate-spin text-blue-400" size={24} />
+            <div className="absolute inset-0 bg-blue-400/20 rounded-full blur-xl"></div>
+          </div>
+          <span className="text-slate-300 text-lg font-medium">Loading your workspace...</span>
+        </div>
+
+        {/* Progress bar */}
+        <div className="w-64 h-1.5 bg-slate-700/50 rounded-full overflow-hidden mx-auto mb-8">
+          <div className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full animate-[loading_2s_ease-in-out_infinite]" style={{
+            animation: 'loading 2s ease-in-out infinite',
+          }}></div>
+        </div>
+
+        {showForceButton && (
+          <div className="space-y-3 animate-fade-in">
+            <button
+              onClick={handleForceContinue}
+              className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-sm font-semibold rounded-xl transition-all duration-300 shadow-lg hover:shadow-blue-500/50 hover:scale-105"
+            >
+              Taking too long? Click to retry
+            </button>
+            <p className="text-xs text-slate-500">This will clear cached data and reload</p>
+          </div>
+        )}
+
+        {/* Decorative dots */}
+        <div className="flex justify-center gap-2 mt-12">
+          <div className="w-2 h-2 bg-blue-500/50 rounded-full animate-bounce"></div>
+          <div className="w-2 h-2 bg-indigo-500/50 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+          <div className="w-2 h-2 bg-purple-500/50 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
         </div>
       </div>
+
+      <style>{`
+        @keyframes loading {
+          0% { width: 0%; }
+          50% { width: 70%; }
+          100% { width: 100%; }
+        }
+        @keyframes fade-in {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+          animation: fade-in 0.5s ease-out;
+        }
+      `}</style>
     </div>
   );
 }
@@ -359,19 +453,25 @@ function CRMApp() {
   const isReloadingRef = useRef(false);
   const queuedReloadRef = useRef(false);
 
-  const withFetchTimeout = <T,>(p: Promise<T>, fallback: T, ms = 7000): Promise<T> =>
+  const withFetchTimeout = <T,>(p: Promise<T>, fallback: T, ms = 4000): Promise<T> =>
     Promise.race([p, new Promise<T>(resolve => setTimeout(() => resolve(fallback), ms))]);
 
   const loadData = useCallback(async (options?: { silent?: boolean }) => {
     const silent = options?.silent ?? false;
     if (!profile?.company_id) {
-      if (!authLoading && !silent) console.warn('[AppLayout] No company_id available');
+      if (!authLoading && !silent) {
+        console.warn('[AppLayout] No company_id available - profile:', profile);
+      }
       return;
     }
-    if (!silent) dispatch({ type: 'SET_LOADING', payload: true });
+    if (!silent) {
+      console.log('[AppLayout] Loading data for company:', profile.company_id);
+      dispatch({ type: 'SET_LOADING', payload: true });
+    }
     dispatch({ type: 'SET_COMPANY_ID', payload: profile.company_id });
 
     try {
+      console.log('[AppLayout] Fetching all data...');
       const [
         dbContacts, dbCommunications, dbAppointments, dbInvoices, dbBoards,
         dbLeadSources, dbAutomations, dbTeamMembers, , dbEstimates,
@@ -392,6 +492,14 @@ function CRMApp() {
         withFetchTimeout(db.getSuppliers(profile.company_id), []),
         withFetchTimeout(db.getMaterialOrders(profile.company_id), []),
       ]);
+
+      console.log('[AppLayout] Data fetched:', {
+        contacts: dbContacts.length,
+        communications: dbCommunications.length,
+        appointments: dbAppointments.length,
+        invoices: dbInvoices.length,
+        teamMembers: dbTeamMembers.length,
+      });
 
       const contacts = dbContacts.map(dbContactToAppContact);
       const communicationsByContact = (dbCommunications || []).reduce((acc, comm) => {
@@ -423,7 +531,7 @@ function CRMApp() {
 
       const boards: KanbanBoard[] = dbBoards.length > 0
         ? await Promise.all(dbBoards.map(async (board) => {
-            const result = await db.getKanbanBoardWithColumns(board.id);
+            const result = await db.getKanbanBoardWithColumns(board.id, profile.company_id);
             return {
               id: board.id, name: board.name, type: board.type as any,
               visibleTo: board.visible_to as any[], createdBy: board.created_by || '',
@@ -513,8 +621,10 @@ function CRMApp() {
         type: 'INITIALIZE_DATA',
         payload: { contacts: enrichedContacts, appointments, invoices, boards, leadSources, automations, teamMembers, suppliers, materialOrders, estimates, projects, workOrders, documentTemplates: [], companyGoals: [] },
       });
+      console.log('[AppLayout] Data initialized successfully');
     } catch (error) {
-      console.error('Error loading CRM data:', error);
+      console.error('[AppLayout] Error loading CRM data:', error);
+      console.error('[AppLayout] Error details:', JSON.stringify(error, null, 2));
       dispatch({ type: 'INITIALIZE_DATA', payload: { contacts: [], appointments: [], invoices: [], boards: defaultBoards, leadSources: defaultLeadSources, automations: [], teamMembers: [], suppliers: [], materialOrders: [], estimates: [], projects: [], workOrders: [], documentTemplates: [], companyGoals: [] } });
     }
   }, [profile?.company_id, authLoading]);
@@ -563,7 +673,8 @@ function CRMApp() {
       },
     });
     return () => { db.unsubscribe(channel); };
-  }, [profile?.company_id, loadData, requestSoftReload]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.company_id]);
 
   useEffect(() => {
     if (!profile?.company_id) return;
@@ -594,20 +705,35 @@ function CRMApp() {
     if (authLoading) return;
     if (!profile?.company_id) return;
     const timer = window.setTimeout(() => {
-      console.warn('[AppLayout] Initial load timed out after 12s.');
+      console.warn('[AppLayout] Initial load timed out after 8s.');
       dispatch({ type: 'INITIALIZE_DATA', payload: { contacts: [], appointments: [], invoices: [], boards: defaultBoards, leadSources: defaultLeadSources, automations: [], teamMembers: [], suppliers: [], materialOrders: [], estimates: [], projects: [], workOrders: [], documentTemplates: [], companyGoals: [] } });
-    }, 12000);
+    }, 8000);
     return () => window.clearTimeout(timer);
   }, [state.isLoading, state.isInitialized, authLoading, profile?.company_id]);
 
   useEffect(() => {
     if (!profile?.company_id) return;
-    db.getCompany(profile.company_id).then((company) => {
+    
+    const checkSubscription = async () => {
+      const company = await db.getCompany(profile.company_id!);
       if (!company) return;
-      const trialExpired = company.subscription_status === 'trialing' && !!company.trial_ends_at && new Date(company.trial_ends_at) < new Date();
-      const blocked = trialExpired || company.subscription_status === 'canceled' || company.subscription_status === 'past_due';
+      
+      const now = new Date();
+      const trialExpired = company.subscription_status === 'trialing' && 
+                          !!company.trial_ends_at && 
+                          new Date(company.trial_ends_at) < now;
+      const blocked = trialExpired || 
+                     company.subscription_status === 'canceled' || 
+                     company.subscription_status === 'past_due';
+      
       setSubscriptionBlocked(blocked);
-    });
+    };
+    
+    checkSubscription();
+    
+    // Re-check every 5 minutes
+    const interval = setInterval(checkSubscription, 5 * 60 * 1000);
+    return () => clearInterval(interval);
   }, [profile?.company_id]);
 
   useEffect(() => {

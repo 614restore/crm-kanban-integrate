@@ -11,6 +11,7 @@ import AIConfigDialog from '@/components/AIConfigDialog';
 import { formatPhoneNumber } from '@/lib/utils';
 import AIApprovalPanel from '@/components/AIApprovalPanel';
 import SubscriptionView from '@/components/crm/SubscriptionView';
+import FeatureToggles from '@/components/crm/FeatureToggles';
 import {
   Settings,
   Building2,
@@ -43,12 +44,13 @@ import {
   Target,
   DollarSign,
   Receipt,
+  ToggleLeft,
 } from 'lucide-react';
 import { supabase, isDemoMode } from '@/lib/supabase';
 import { ensureDefaultLeadSources } from '@/lib/setupCompany';
 import ImageCropDialog from '@/components/ui/ImageCropDialog';
 
-type SettingsTab = 'company' | 'profile' | 'integrations' | 'ai-assistant' | 'notifications' | 'security' | 'billing' | 'customer-billing' | 'api';
+type SettingsTab = 'company' | 'profile' | 'integrations' | 'ai-assistant' | 'notifications' | 'security' | 'billing' | 'customer-billing' | 'api' | 'features';
 
 interface CompanyFormData {
   name: string;
@@ -1231,6 +1233,7 @@ export default function SettingsView() {
   const tabs = [
     { id: 'company', label: 'Company', icon: <Building2 size={18} /> },
     { id: 'profile', label: 'My Profile', icon: <User size={18} /> },
+    { id: 'features', label: 'Feature Toggles', icon: <ToggleLeft size={18} /> },
     { id: 'integrations', label: 'Integrations', icon: <Link size={18} /> },
     { id: 'ai-assistant', label: 'AI Assistant', icon: <Zap size={18} /> },
     { id: 'notifications', label: 'Notifications', icon: <Bell size={18} /> },
@@ -1685,6 +1688,8 @@ export default function SettingsView() {
                         className="w-20 h-20 rounded-full object-cover"
                       />
                     ) : (
+
+        {activeTab === 'features' && <FeatureToggles />}
                       <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-2xl font-bold">
                         {profile?.first_name?.[0]?.toUpperCase() || profile?.email?.[0]?.toUpperCase() || 'U'}
                         {profile?.last_name?.[0]?.toUpperCase() || ''}

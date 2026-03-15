@@ -60,6 +60,14 @@ export default function SignEstimate() {
       .then((data) => {
         setEstimate(data.estimate);
         setAlreadySigned(data.alreadySigned);
+        // Track view and notify sender
+        if (!data.alreadySigned) {
+          fetch("https://crm-kanban-integrate.vercel.app/api/track-view", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token: id }),
+          }).catch(() => {}); // Silent fail
+        }
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -85,6 +93,7 @@ export default function SignEstimate() {
           estimateId: estimate?.id,
           signedBy: signedBy.trim(),
           signatureData,
+          token: id,
         }),
       });
       if (!res.ok) {

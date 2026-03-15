@@ -162,7 +162,7 @@ export default function PipelineBoard() {
             normalizedColumns.map((col) => ({ title: col.title, status: col.status, color: col.color, sort_order: col.order }))
           );
           if (!created) { toast.error('Failed to create board'); return; }
-          const boardWithColumns = await db.getKanbanBoardWithColumns(created.id);
+          const boardWithColumns = await db.getKanbanBoardWithColumns(created.id, effectiveCompanyId);
           savedBoard = {
             id: created.id, name: created.name, type: created.type as KanbanBoard['type'],
             visibleTo: (created.visible_to || editingBoard.visibleTo) as KanbanBoard['visibleTo'],
@@ -174,7 +174,7 @@ export default function PipelineBoard() {
           if (!updatedBoard) { toast.error('Failed to update board'); return; }
           const replaced = await db.replaceKanbanColumns(editingBoard.id, normalizedColumns.map((col) => ({ title: col.title, status: col.status, color: col.color, sort_order: col.order })));
           if (!replaced) { toast.error('Failed to update board columns'); return; }
-          const boardWithColumns = await db.getKanbanBoardWithColumns(editingBoard.id);
+          const boardWithColumns = await db.getKanbanBoardWithColumns(editingBoard.id, effectiveCompanyId);
           savedBoard = {
             id: updatedBoard.id, name: updatedBoard.name, type: updatedBoard.type as KanbanBoard['type'],
             visibleTo: (updatedBoard.visible_to || editingBoard.visibleTo) as KanbanBoard['visibleTo'],

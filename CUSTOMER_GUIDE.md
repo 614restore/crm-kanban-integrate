@@ -84,11 +84,34 @@ The Dashboard is the first thing you see when you log in — an at-a-glance view
 
 ### Work Orders
 
-- **Create Work Orders:** Assign specific scopes of work to team members (tear-off, installation, gutters, etc.).
-- **Scheduling:** Set scheduled dates and track actual vs. estimated hours.
-- **Status Tracking:** Scheduled → In Progress → Completed → Cancelled.
-- **Labor & Cost:** Track labor costs per work order.
-- **Start / Complete:** Field crew can tap "Start" and "Complete" to log real-time progress.
+**Multi-Trade Support:** Handles ALL your services - roofing, gutters, siding, fencing, decks, patios, masonry, drywall, and painting.
+
+**17 Job Types Organized by Category:**
+- **Roofing:** Tear-Off, Recover, Repair, Shingle, Metal, Flat/TPO, New Construction
+- **Exterior:** Gutters, Siding, Fence (Wood/Chain Link), Deck, Patio, Masonry
+- **Interior:** Drywall, Paint Interior, Paint Exterior
+- **Other:** Multi-Trade Job, Other
+
+**Key Features:**
+- **Crew Assignment:** Choose in-house team OR subcontractor
+  - In-house: Select team members from your crew
+  - Subcontractor: Enter company name, foreman, phone, pay type (per square/per job/T&M), and rate
+- **Insurance Job Tracking:** Flag insurance vs retail jobs
+- **Dynamic Specifications:** Fields adapt based on job type
+  - Roofing: Squares, pitch, layers, decking type
+  - Gutters/Siding/Fencing: Linear feet
+  - Decks/Patios: Square feet
+  - Interior: Square feet or room count
+- **Product Details:** Capture brand, line, color, and materials
+- **Change Orders (AWOs):** Track additional work with approval tracking
+  - Description, amount, approved by (customer/adjuster), approver name, date
+  - Displays as yellow badges on work order cards
+- **Status Workflow:** Scheduled → In Progress → Completed → Ready to Invoice
+- **Cost Tracking:** Separate labor, subcontractor, and material costs
+- **Excel Export:** 35+ columns including all new fields
+
+**Scheduling:** Set scheduled dates and track actual vs. estimated hours.  
+**Start / Complete:** Field crew can tap "Start" and "Complete" to log real-time progress.
 
 ### Invoicing & Financials
 

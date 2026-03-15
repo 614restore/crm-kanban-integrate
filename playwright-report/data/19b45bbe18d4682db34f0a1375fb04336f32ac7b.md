@@ -1,0 +1,77 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - region "Notifications (F8)":
+    - list
+  - region "Notifications alt+T"
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e6]:
+        - img "TrussCTR Logo" [ref=e7]
+        - generic [ref=e8]:
+          - text: TrussCTR
+          - paragraph [ref=e9]: Restoration Management Simplified
+      - generic [ref=e10]:
+        - heading "Built for Restoration Contractors" [level=1] [ref=e11]:
+          - text: Built for
+          - text: Restoration Contractors
+        - paragraph [ref=e12]: Streamline your entire workflow—from lead capture to final payment. Manage projects, track insurance claims, and scale your business with confidence.
+        - generic [ref=e13]:
+          - generic [ref=e14]:
+            - img [ref=e15]
+            - generic [ref=e18]: End-to-end project management
+          - generic [ref=e19]:
+            - img [ref=e20]
+            - generic [ref=e23]: Insurance & supplement tracking
+          - generic [ref=e24]:
+            - img [ref=e25]
+            - generic [ref=e28]: Real-time team collaboration
+          - generic [ref=e29]:
+            - img [ref=e30]
+            - generic [ref=e33]: Automated workflows & reminders
+          - generic [ref=e34]:
+            - img [ref=e35]
+            - generic [ref=e38]: Mobile-ready for field teams
+      - paragraph [ref=e39]: Trusted by restoration professionals nationwide
+    - generic [ref=e41]:
+      - generic [ref=e42]:
+        - generic [ref=e43]:
+          - heading "Welcome back" [level=2] [ref=e44]
+          - paragraph [ref=e45]: Sign in to access your CRM
+        - generic [ref=e46]:
+          - img [ref=e47]
+          - paragraph [ref=e51]: Invalid login credentials
+        - generic [ref=e52]:
+          - generic [ref=e54]:
+            - img [ref=e55]
+            - textbox "you@company.com" [ref=e58]: demo@example.com
+          - generic [ref=e59]:
+            - generic [ref=e60]: Password
+            - generic [ref=e61]:
+              - img [ref=e62]
+              - textbox "••••••••" [ref=e65]: password
+              - button [ref=e66] [cursor=pointer]:
+                - img [ref=e67]
+          - generic [ref=e70]:
+            - generic [ref=e71] [cursor=pointer]:
+              - checkbox "Remember me" [ref=e72]
+              - generic [ref=e73]: Remember me
+            - button "Forgot password?" [ref=e74] [cursor=pointer]
+          - button "Sign In" [ref=e75] [cursor=pointer]:
+            - text: Sign In
+            - img [ref=e76]
+        - paragraph [ref=e80]:
+          - text: Don't have an account?
+          - button "Sign up free" [ref=e81] [cursor=pointer]
+      - paragraph [ref=e82]:
+        - text: By signing up, you agree to our
+        - link "Terms of Service" [ref=e83] [cursor=pointer]:
+          - /url: /terms
+        - text: ","
+        - link "EULA" [ref=e84] [cursor=pointer]:
+          - /url: /eula
+        - text: and
+        - link "Privacy Policy" [ref=e85] [cursor=pointer]:
+          - /url: /privacy
+```

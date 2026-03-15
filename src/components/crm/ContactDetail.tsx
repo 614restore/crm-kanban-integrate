@@ -269,7 +269,7 @@ export default function ContactDetail() {
         return;
       }
 
-      const docs = await db.getDocumentsByContact(contactId);
+      const docs = await db.getDocumentsByContact(contactId, profile?.company_id || state.companyId || '');
 
       const docsWithSignedUrls = await Promise.all(
         docs.map(async (doc) => {

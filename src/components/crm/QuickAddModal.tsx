@@ -194,7 +194,10 @@ export default function QuickAddModal() {
         throw new Error('Unable to determine company context. Please ensure you are properly logged in and try again.');
       }
 
-      // If user has a company, save to database
+      // If user has a company, save to database with increased timeout
+      // Ensure contact is always assigned - default to current user if not specified
+      const assignedTo = formData.assignedTo || profile?.id || user?.id;
+      
       const dbContact = await withTimeout(
         db.createContact({
           company_id: finalCompanyId,
@@ -209,7 +212,7 @@ export default function QuickAddModal() {
           zip: formData.zip || undefined,
           status: formData.status,
           lead_source: formData.leadSource,
-          assigned_to: formData.assignedTo || undefined,
+          assigned_to: assignedTo, // Always assign to someone
           tags: [],
           project_type: formData.projectType || undefined,
           project_value: formData.projectValue ? parseFloat(formData.projectValue) : undefined,
@@ -223,7 +226,7 @@ export default function QuickAddModal() {
           deductible: formData.deductible ? parseFloat(formData.deductible) : undefined,
           notes: formData.notes || undefined,
         }),
-        15000,
+        45000, // Increased from 15s to 45s for slow connections
         'Create contact'
       );
 

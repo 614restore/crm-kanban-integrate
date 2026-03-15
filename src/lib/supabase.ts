@@ -11,6 +11,23 @@ if (typeof window !== 'undefined') {
     if (params.get('type') === 'recovery' || hash.includes('type=recovery')) {
       sessionStorage.setItem('pending_password_reset', 'true');
     }
+    
+    // Clear any stale auth fragments that might cause hangs
+    if (params.has('code') || params.has('access_token') || hash.includes('access_token')) {
+      // Set a flag to clean URL after auth completes
+      sessionStorage.setItem('auth_url_cleanup_pending', 'true');
+      
+      // Auto-cleanup after 10 seconds if auth doesn't complete
+      setTimeout(() => {
+        try {
+          if (sessionStorage.getItem('auth_url_cleanup_pending') === 'true') {
+            sessionStorage.removeItem('auth_url_cleanup_pending');
+            const cleanUrl = window.location.origin + window.location.pathname;
+            window.history.replaceState({}, '', cleanUrl);
+          }
+        } catch { /* ignore */ }
+      }, 10000);
+    }
   } catch (e) { console.warn('[supabase] Could not parse recovery URL params:', e); }
 }
 
@@ -45,11 +62,7 @@ const supabase = createClient(
     auth: {
       autoRefreshToken: true,
       persistSession: true,
-      // On Vercel (real paths), we must detect the session from the URL so that
-      // email confirmation and password-reset links work. On GitHub Pages we use
-      // hash routing, which conflicts with URL session detection — so we disable
-      // it there by setting VITE_HASH_ROUTING=true in the GH Pages build.
-      detectSessionInUrl: import.meta.env.VITE_HASH_ROUTING !== 'true',
+      detectSessionInUrl: true,
       storage: typeof window !== 'undefined' ? window.localStorage : undefined,
       storageKey: 'sb-auth-token',
       flowType: 'pkce',

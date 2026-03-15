@@ -766,7 +766,11 @@ export function useFinancialStats() {
   });
 
   state.workOrders.forEach((wo) => {
-    stats.totalLaborCost += (wo.laborCost || 0);
+    if (wo.isSubcontractor) {
+      stats.totalSubcontractorCost += (wo.subcontractorCost || 0);
+    } else {
+      stats.totalLaborCost += (wo.laborCost || 0);
+    }
   });
 
   return stats;

@@ -8,6 +8,7 @@ interface PriorityRow {
   status: string;
   project_value: number | null;
   assigned_to: string | null;
+  assigned_to_id: string | null;
   updated_at: string;
   company_id: string;
   days_stale: number;
@@ -56,9 +57,86 @@ export default function OwnerPriorityBoard() {
 
   async function handleNudge(row: PriorityRow) {
     setNudging(row.id);
-    await new Promise(r => setTimeout(r, 800));
-    alert(`Nudge sent to ${row.first_name} ${row.last_name}`);
-    setNudging(null);
+    try {
+      // Get current user info
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        alert('You must be logged in to send a nudge');
+        return;
+      }
+
+      // Get current user profile
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('first_name, last_name, company_id')
+        .eq('id', user.id)
+        .single();
+
+      if (!profile?.company_id) {
+        alert('Unable to determine your company');
+        return;
+      }
+
+      const nudgedByName = `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || user.email || 'Owner';
+
+      // If contact is assigned, send nudge to assigned user
+      if (row.assigned_to_id) {
+        // Create notification for assigned user
+        await supabase.from('notifications').insert({
+          company_id: profile.company_id,
+          user_id: row.assigned_to_id,
+          type: 'info',
+          title: `Reminder: Follow up with ${row.first_name} ${row.last_name}`,
+          message: `${nudgedByName} is checking in: This contact has been stale for ${row.days_stale} days. Please schedule an appointment or update their status.`,
+          related_id: row.id,
+          related_type: 'contact',
+          read: false,
+        });
+
+        // Log the nudge in communications
+        await supabase.from('communications').insert({
+          company_id: profile.company_id,
+          contact_id: row.id,
+          type: 'note',
+          direction: 'internal',
+          subject: 'Follow-up Reminder',
+          content: `${nudgedByName} sent a reminder to ${row.assigned_to} to follow up with this contact.`,
+          user_id: user.id,
+        });
+
+        alert(`✅ Nudge sent to ${row.assigned_to}!`);
+      } else {
+        // Contact is unassigned - notify all owners/admins
+        const { data: owners } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('company_id', profile.company_id)
+          .in('role', ['owner', 'admin']);
+
+        if (owners && owners.length > 0) {
+          const notifications = owners.map(owner => ({
+            company_id: profile.company_id,
+            user_id: owner.id,
+            type: 'warning',
+            title: `Unassigned Stale Lead: ${row.first_name} ${row.last_name}`,
+            message: `This contact has been stale for ${row.days_stale} days and is not assigned to anyone. Please assign and follow up.`,
+            related_id: row.id,
+            related_type: 'contact',
+            read: false,
+          }));
+
+          await supabase.from('notifications').insert(notifications);
+          alert(`✅ Nudge sent to ${owners.length} owner(s)/admin(s)!`);
+        } else {
+          alert('⚠️ No owners found to notify');
+        }
+      }
+    } catch (error) {
+      console.error('Error sending nudge:', error);
+      alert('❌ Failed to send nudge. Please try again.');
+    } finally {
+      setNudging(null);
+    }
   }
 
   async function handleMoveStage(row: PriorityRow, newStatus: string) {

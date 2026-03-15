@@ -1,6 +1,6 @@
 {
-  "name": "614 Restore CRM",
-  "short_name": "614 Restore",
+  "name": "TrussCTR - Contractor CRM",
+  "short_name": "TrussCTR",
   "description": "Professional CRM for Restoration Contractors",
   "start_url": "/crm-kanban-integrate/",
   "display": "standalone",

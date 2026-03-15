@@ -196,9 +196,7 @@ export default function AuthPage() {
       <div className="hidden lg:flex lg:w-1/2 flex-col justify-between p-12">
         <div>
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
-              <Building2 size={28} className="text-white" />
-            </div>
+            <img src="/logo.png" alt="TrussCTR Logo" className="w-16 h-16 object-contain" />
             <div>
               <span className="text-2xl font-bold text-white">TrussCTR</span>
               <p className="text-blue-200 text-sm italic">Restoration Management Simplified</p>
@@ -208,24 +206,23 @@ export default function AuthPage() {
 
         <div className="space-y-8">
           <h1 className="text-5xl font-bold text-white leading-tight">
-            The #1 CRM for
+            Built for
             <br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">
-              Roofing Contractors
+              Restoration Contractors
             </span>
           </h1>
           <p className="text-xl text-slate-300 max-w-md">
-            Track customers from first contact to final payment. Manage insurance claims, schedule
-            jobs, and grow your business.
+            Streamline your entire workflow—from lead capture to final payment. Manage projects, track insurance claims, and scale your business with confidence.
           </p>
 
           <div className="space-y-4">
             {[
-              'Complete customer lifecycle tracking',
-              'Insurance claim management',
-              'Customizable Kanban boards',
-              'Team collaboration & permissions',
-              'QuickBooks & mobile app integration',
+              'End-to-end project management',
+              'Insurance & supplement tracking',
+              'Real-time team collaboration',
+              'Automated workflows & reminders',
+              'Mobile-ready for field teams',
             ].map((feature, index) => (
               <div key={index} className="flex items-center gap-3">
                 <CheckCircle className="text-green-400" size={20} />
@@ -236,7 +233,7 @@ export default function AuthPage() {
         </div>
 
         <p className="text-slate-500 text-sm">
-          Trusted by 500+ roofing companies across the nation
+          Trusted by restoration professionals nationwide
         </p>
       </div>
 
@@ -246,9 +243,7 @@ export default function AuthPage() {
           {/* Mobile Logo */}
           <div className="lg:hidden flex flex-col items-center justify-center mb-8">
             <div className="flex items-center gap-3 mb-1">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
-                <Building2 size={24} className="text-white" />
-              </div>
+              <img src="/logo.png" alt="TrussCTR Logo" className="w-12 h-12 object-contain" />
               <span className="text-xl font-bold text-white">TrussCTR</span>
             </div>
             <p className="text-blue-200 text-sm italic">Restoration Management Simplified</p>

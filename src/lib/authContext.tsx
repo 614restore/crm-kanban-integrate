@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useRef } from 'r
 import { supabase, isDemoMode } from '@/lib/supabase';
 import { setupNewUser } from '@/lib/setupCompany';
 import type { Session, User } from '@supabase/supabase-js';
+import { logAuthState } from '@/lib/authDebug';
 
 export interface Profile {
   id: string;
@@ -114,6 +115,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
+    // Log initial auth state for debugging
+    if (import.meta.env.DEV) {
+      logAuthState();
+    }
+    
     let recoveryEventFired = false;
     let pendingReset = (() => {
       try { return sessionStorage.getItem('pending_password_reset') === 'true'; } catch { return false; }
@@ -179,6 +185,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Share the same promise with getSession below — only one fetch runs
         const profileData = await loadProfileOnce(session.user.id, session.user.email || '');
         setProfile(profileData);
+        
+        // Clean up auth URL parameters after successful sign-in
+        try {
+          if (sessionStorage.getItem('auth_url_cleanup_pending') === 'true') {
+            sessionStorage.removeItem('auth_url_cleanup_pending');
+            const cleanUrl = window.location.origin + window.location.pathname;
+            window.history.replaceState({}, '', cleanUrl);
+          }
+        } catch { /* ignore */ }
       } else {
         setProfile(null);
       }
@@ -219,7 +234,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const timer = window.setTimeout(() => {
       console.warn('[Auth] Loading timed out — continuing with current session state.');
       setLoading(false);
-    }, 12000);
+      // If we're still stuck, force clear any pending auth state
+      try {
+        sessionStorage.removeItem('pending_password_reset');
+        sessionStorage.removeItem('auth_url_cleanup_pending');
+      } catch { /* ignore */ }
+    }, 5000); // Reduced to 5s for faster recovery
     return () => window.clearTimeout(timer);
   }, [loading]);
 

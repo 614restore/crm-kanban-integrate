@@ -549,7 +549,29 @@ export default function CommunicationHub() {
   const hasSelectedThread = !!selectedCommData?.contact;
 
   return (
-    <div className="h-full flex">
+    <div className="h-full flex flex-col">
+      {/* Coming Soon Banner for SMS/Voice */}
+      <div className="bg-gradient-to-r from-green-50 to-blue-50 border-b border-green-200 px-6 py-3">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <MessageSquare className="w-5 h-5 text-green-600" />
+            <Phone className="w-5 h-5 text-blue-600" />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-gray-900">
+              📱 SMS & Voice Calling Coming Soon!
+            </p>
+            <p className="text-xs text-gray-600">
+              Twilio integration in progress — send texts and make calls directly from TrussCTR (Q2 2026)
+            </p>
+          </div>
+          <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">
+            In Development
+          </span>
+        </div>
+      </div>
+
+      <div className="flex flex-1 min-h-0">
       {/* Left Panel - Communication List */}
       <div className="w-1/2 border-r border-gray-200 flex flex-col bg-white">
         {/* Header */}
@@ -1053,6 +1075,7 @@ export default function CommunicationHub() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

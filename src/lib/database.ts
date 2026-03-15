@@ -18,6 +18,8 @@ export interface DbCompany {
   tax_id?: string;
   from_email?: string;
   from_name?: string;
+  google_review_url?: string;
+  yelp_review_url?: string;
   subscription_plan?: 'starter' | 'professional' | 'enterprise' | 'trial';
   subscription_status?: 'active' | 'past_due' | 'canceled' | 'trialing';
   trial_ends_at?: string;
@@ -366,6 +368,30 @@ export interface DbWorkOrder {
   started_at?: string;
   completed_at?: string;
   assigned_to: string[];
+  // Subcontractor fields
+  is_subcontractor?: boolean;
+  subcontractor_company?: string;
+  subcontractor_foreman?: string;
+  subcontractor_phone?: string;
+  subcontractor_pay_type?: string;
+  subcontractor_rate?: number;
+  subcontractor_cost?: number;
+  // Job type & insurance
+  is_insurance_job?: boolean;
+  job_type?: string;
+  // Roof specs
+  squares?: number;
+  pitch?: string;
+  layers?: number;
+  decking_type?: string;
+  shingle_brand?: string;
+  shingle_line?: string;
+  shingle_color?: string;
+  underlayment?: string;
+  drip_edge?: string;
+  ventilation?: string;
+  flashing?: string;
+  // Costs
   estimated_hours?: number;
   actual_hours?: number;
   labor_cost: number;
@@ -378,8 +404,12 @@ export interface DbWorkOrder {
   notes?: string;
   attachments?: string[];
   checklist_items?: any[];
+  photo_checklist?: any[];
+  change_orders?: any[];
   signed_by?: string;
   signature_data?: string;
+  foreman_signed_by?: string;
+  foreman_signature_data?: string;
   sign_token?: string;
   created_by: string;
   created_at: string;
@@ -488,9 +518,13 @@ class DatabaseService {
 
     // 1. Return from cache instantly while we refresh in the background
     const cached = this.getCachedCompany(companyId);
-    if (cached) return cached;
+    if (cached) {
+      // Refresh cache in background
+      this.refreshCompanyCache(companyId);
+      return cached;
+    }
 
-    // 2. Try direct table query first (fast path) — 5 s cap
+    // 2. Try direct table query first (fast path) — 8 s cap (increased)
     try {
       const { data, error } = await this.raceTimeout(
         supabase
@@ -498,7 +532,7 @@ class DatabaseService {
           .select('*')
           .eq('id', companyId)
           .single(),
-        5000,
+        8000,
         'companies direct query',
       );
 
@@ -507,17 +541,17 @@ class DatabaseService {
         return data;
       }
       if (error) {
-        console.warn('[Database] Direct company query failed, trying RPC:', error.message);
+        console.warn('[Database] Direct company query failed:', error.message, '- trying RPC');
       }
     } catch (directErr) {
       console.warn('[Database] Direct query timed-out, trying RPC');
     }
 
-    // 3. Fallback: RPC (SECURITY DEFINER, bypasses RLS) — 5 s cap
+    // 3. Fallback: RPC (SECURITY DEFINER, bypasses RLS) — 8 s cap
     try {
       const { data: rpcData, error: rpcError } = await this.raceTimeout(
         supabase.rpc('get_my_company'),
-        5000,
+        8000,
         'get_my_company RPC',
       );
 
@@ -533,8 +567,25 @@ class DatabaseService {
       console.warn('[Database] RPC unavailable/timed-out');
     }
 
-    // 4. Both paths failed
+    // 4. Both paths failed - log for debugging
+    console.error('[Database] Failed to load company data for ID:', companyId);
     return null;
+  }
+
+  /** Refresh company cache in background (fire-and-forget) */
+  private async refreshCompanyCache(companyId: string): Promise<void> {
+    try {
+      const { data, error } = await supabase
+        .from('companies')
+        .select('*')
+        .eq('id', companyId)
+        .single();
+      if (!error && data) {
+        this.setCachedCompany(companyId, data);
+      }
+    } catch {
+      // Silent fail - cache refresh is best-effort
+    }
   }
 
   async createCompany(company: Partial<DbCompany>): Promise<DbCompany | null> {
@@ -602,6 +653,8 @@ class DatabaseService {
           p_tax_id: updates.tax_id ?? null,
           p_from_email: updates.from_email ?? null,
           p_from_name: updates.from_name ?? null,
+          p_google_review_url: updates.google_review_url ?? null,
+          p_yelp_review_url: updates.yelp_review_url ?? null,
         }),
         5000, 'update_my_company RPC'
       );
@@ -630,26 +683,46 @@ class DatabaseService {
   // Contact operations
   async getContacts(companyId: string): Promise<DbContact[]> {
     if (this.inDemoMode()) {
+      console.warn('[Database] Demo mode - contacts not available');
       return [];
     }
-    const { data, error } = await supabase
-      .from('contacts')
-      .select('*')
-      .eq('company_id', companyId)
-      .order('created_at', { ascending: false });
     
-    if (error) {
-      console.error('Error fetching contacts:', error);
+    console.log('[Database] Fetching contacts for company:', companyId);
+    const startTime = Date.now();
+    
+    try {
+      const { data, error } = await this.raceTimeout(
+        supabase
+          .from('contacts')
+          .select('*')
+          .eq('company_id', companyId)
+          .order('created_at', { ascending: false }),
+        15000,
+        'getContacts'
+      );
+      
+      const duration = Date.now() - startTime;
+      console.log(`[Database] getContacts completed in ${duration}ms, returned ${data?.length || 0} contacts`);
+      
+      if (error) {
+        console.error('[Database] Error fetching contacts:', error);
+        console.error('[Database] Error details:', JSON.stringify(error, null, 2));
+        return [];
+      }
+      
+      return data || [];
+    } catch (err) {
+      console.error('[Database] getContacts timed out or failed:', err);
       return [];
     }
-    return data || [];
   }
 
-  async getContact(contactId: string): Promise<DbContact | null> {
+  async getContact(contactId: string, companyId: string): Promise<DbContact | null> {
     const { data, error } = await supabase
       .from('contacts')
       .select('*')
       .eq('id', contactId)
+      .eq('company_id', companyId)
       .single();
     
     if (error) {
@@ -661,22 +734,34 @@ class DatabaseService {
 
   async createContact(contact: Partial<DbContact>): Promise<DbContact | null> {
     try {
+      // Increase timeout to 30 seconds for slow connections
       const { data, error } = await this.raceTimeout(
         supabase
           .from('contacts')
           .insert(contact)
           .select()
           .single(),
-        10000,
+        30000, // Increased from 10s to 30s
         'createContact'
       );
       if (error) {
         console.error('Error creating contact:', error);
+        // Provide more specific error messages
+        if (error.message?.includes('timeout')) {
+          throw new Error('Database connection is slow. Please check your internet connection and try again.');
+        }
+        if (error.message?.includes('permission') || error.message?.includes('policy')) {
+          throw new Error('Permission denied. Please contact your administrator.');
+        }
         throw new Error(error.message || 'Failed to save contact to database');
       }
       return data;
     } catch (err) {
       console.error('createContact timed out or failed:', err);
+      // Provide user-friendly error message
+      if (err instanceof Error && err.message.includes('timed out')) {
+        throw new Error('The request took too long. Please check your internet connection and try again.');
+      }
       throw err instanceof Error ? err : new Error('Failed to create contact');
     }
   }
@@ -738,11 +823,12 @@ class DatabaseService {
     return data || [];
   }
 
-  async getJobsByContact(contactId: string): Promise<DbJob[]> {
+  async getJobsByContact(contactId: string, companyId: string): Promise<DbJob[]> {
     const { data, error } = await supabase
       .from('jobs')
       .select('*')
       .eq('contact_id', contactId)
+      .eq('company_id', companyId)
       .order('created_at', { ascending: false });
     
     if (error) {
@@ -969,29 +1055,22 @@ class DatabaseService {
     return data || [];
   }
 
-  async getInvoiceWithItems(invoiceId: string): Promise<{ invoice: DbInvoice; items: DbInvoiceItem[] } | null> {
-    const { data: invoice, error: invoiceError } = await supabase
+  async getInvoiceWithItems(invoiceId: string, companyId: string): Promise<{ invoice: DbInvoice; items: DbInvoiceItem[] } | null> {
+    // Use nested select to avoid N+1 query (Finding 10)
+    const { data, error } = await supabase
       .from('invoices')
-      .select('*')
+      .select('*, invoice_items(*)')
       .eq('id', invoiceId)
+      .eq('company_id', companyId)
       .single();
     
-    if (invoiceError) {
-      console.error('Error fetching invoice:', invoiceError);
+    if (error) {
+      console.error('Error fetching invoice with items:', error);
       return null;
     }
 
-    const { data: items, error: itemsError } = await supabase
-      .from('invoice_items')
-      .select('*')
-      .eq('invoice_id', invoiceId);
-    
-    if (itemsError) {
-      console.error('Error fetching invoice items:', itemsError);
-      return { invoice, items: [] };
-    }
-
-    return { invoice, items: items || [] };
+    const { invoice_items, ...invoice } = data as any;
+    return { invoice, items: invoice_items || [] };
   }
 
   async createInvoice(invoice: Partial<DbInvoice>, items: Partial<DbInvoiceItem>[]): Promise<DbInvoice | null> {
@@ -1046,11 +1125,12 @@ class DatabaseService {
     return data || [];
   }
 
-  async getCommunicationsByContact(contactId: string): Promise<DbCommunication[]> {
+  async getCommunicationsByContact(contactId: string, companyId: string): Promise<DbCommunication[]> {
     const { data, error } = await supabase
       .from('communications')
       .select('*')
       .eq('contact_id', contactId)
+      .eq('company_id', companyId)
       .order('created_at', { ascending: false });
     
     if (error) {
@@ -1089,11 +1169,12 @@ class DatabaseService {
     return data || [];
   }
 
-  async getDocumentsByContact(contactId: string): Promise<DbDocument[]> {
+  async getDocumentsByContact(contactId: string, companyId: string): Promise<DbDocument[]> {
     const { data, error } = await supabase
       .from('documents')
       .select('*')
       .eq('contact_id', contactId)
+      .eq('company_id', companyId)
       .order('created_at', { ascending: false });
     
     if (error) {
@@ -1148,30 +1229,23 @@ class DatabaseService {
     return data || [];
   }
 
-  async getKanbanBoardWithColumns(boardId: string): Promise<{ board: DbKanbanBoard; columns: DbKanbanColumn[] } | null> {
-    const { data: board, error: boardError } = await supabase
+  async getKanbanBoardWithColumns(boardId: string, companyId: string): Promise<{ board: DbKanbanBoard; columns: DbKanbanColumn[] } | null> {
+    // Use nested select to avoid N+1 query (Finding 10)
+    const { data, error } = await supabase
       .from('kanban_boards')
-      .select('*')
+      .select('*, kanban_columns(*)')
       .eq('id', boardId)
+      .eq('company_id', companyId)
       .single();
     
-    if (boardError) {
-      console.error('Error fetching board:', boardError);
+    if (error) {
+      console.error('Error fetching board with columns:', error);
       return null;
     }
 
-    const { data: columns, error: columnsError } = await supabase
-      .from('kanban_columns')
-      .select('*')
-      .eq('board_id', boardId)
-      .order('sort_order', { ascending: true });
-    
-    if (columnsError) {
-      console.error('Error fetching columns:', columnsError);
-      return { board, columns: [] };
-    }
-
-    return { board, columns: columns || [] };
+    const { kanban_columns, ...board } = data as any;
+    const columns = (kanban_columns || []).sort((a: any, b: any) => a.sort_order - b.sort_order);
+    return { board, columns };
   }
 
   async createKanbanBoard(board: Partial<DbKanbanBoard>, columns: Partial<DbKanbanColumn>[]): Promise<DbKanbanBoard | null> {

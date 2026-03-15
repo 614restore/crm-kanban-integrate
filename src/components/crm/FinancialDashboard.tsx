@@ -436,9 +436,12 @@ export default function FinancialDashboard() {
           .filter((o) => o.status !== 'cancelled' && (o.contactId ? activeContactIds.has(o.contactId) : true))
           .reduce((sum, o) => sum + o.total, 0);
         const subCost = state.projects
-          .reduce((sum, p) => sum + (p.actualSubcontractorCost || 0), 0);
+          .reduce((sum, p) => sum + (p.actualSubcontractorCost || 0), 0) +
+          state.workOrders
+            .filter((wo) => wo.status === 'completed' || wo.status === 'in_progress' || wo.status === 'ready_to_invoice')
+            .reduce((sum, wo) => sum + (wo.subcontractorCost || 0), 0);
         const laborCost = state.workOrders
-          .filter((wo) => wo.status === 'completed' || wo.status === 'in_progress')
+          .filter((wo) => (wo.status === 'completed' || wo.status === 'in_progress' || wo.status === 'ready_to_invoice') && !wo.isSubcontractor)
           .reduce((sum, wo) => sum + (wo.laborCost || 0), 0);
         const totalCosts = materialCost + subCost + laborCost;
         const margin = financialStats.totalRevenue > 0
@@ -456,10 +459,10 @@ export default function FinancialDashboard() {
               <div className="p-4 bg-orange-50 rounded-xl">
                 <p className="text-sm text-orange-600 font-medium">Sub-Contractor Costs</p>
                 <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(subCost)}</p>
-                <p className="text-xs text-gray-500 mt-1">Electrical, plumbing, HVAC subs</p>
+                <p className="text-xs text-gray-500 mt-1">All subcontractor labor costs</p>
               </div>
               <div className="p-4 bg-purple-50 rounded-xl">
-                <p className="text-sm text-purple-600 font-medium">Payroll / Labor</p>
+                <p className="text-sm text-purple-600 font-medium">In-House Labor</p>
                 <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(laborCost)}</p>
                 <p className="text-xs text-gray-500 mt-1">Crew wages, overtime, benefits</p>
               </div>

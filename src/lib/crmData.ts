@@ -417,16 +417,41 @@ export interface WorkOrder {
   contactName: string;
   title: string;
   description?: string;
-  status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled' | 'on_hold';
+  status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled' | 'on_hold' | 'ready_to_invoice';
   priority: 'low' | 'medium' | 'high' | 'urgent';
   scheduledDate?: string;
   startedAt?: string;
   completedAt?: string;
-  assignedTo: string[]; // Array of team member IDs
+  // Crew assignment
+  assignedTo: string[]; // In-house team member IDs
   assignedToNames?: string[];
+  // Subcontractor assignment
+  isSubcontractor?: boolean;
+  subcontractorCompany?: string;
+  subcontractorForeman?: string;
+  subcontractorPhone?: string;
+  subcontractorPayType?: 'per_square' | 'per_job' | 'time_and_materials';
+  subcontractorRate?: number;
+  // Job type & insurance
+  isInsuranceJob?: boolean;
+  jobType?: 'tear_off' | 'recover' | 'repair' | 'shingle' | 'metal' | 'flat' | 'new_construction';
+  // Roof specs
+  squares?: number;
+  pitch?: string;
+  layers?: number;
+  deckingType?: string;
+  shingleBrand?: string;
+  shingleLine?: string;
+  shingleColor?: string;
+  underlayment?: string;
+  dripEdge?: string;
+  ventilation?: string;
+  flashing?: string;
+  // Costs
   estimatedHours?: number;
   actualHours?: number;
   laborCost: number;
+  subcontractorCost?: number;
   materialCost: number;
   totalCost: number;
   address?: string;
@@ -436,8 +461,12 @@ export interface WorkOrder {
   notes?: string;
   attachments?: string[];
   checklistItems?: WorkOrderChecklistItem[];
+  photoChecklist?: PhotoChecklistItem[];
+  changeOrders?: ChangeOrder[];
   signedBy?: string;
   signatureData?: string;
+  foremanSignedBy?: string;
+  foremanSignatureData?: string;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -449,6 +478,25 @@ export interface WorkOrderChecklistItem {
   completed: boolean;
   completedBy?: string;
   completedAt?: string;
+}
+
+export interface PhotoChecklistItem {
+  id: string;
+  label: string;
+  required: boolean;
+  completed: boolean;
+  photoUrl?: string;
+  uploadedAt?: string;
+}
+
+export interface ChangeOrder {
+  id: string;
+  description: string;
+  amount: number;
+  approvedBy: string; // 'customer' or 'adjuster'
+  approverName?: string;
+  approvalDate: string;
+  signatureData?: string;
 }
 
 // Avatar URLs
