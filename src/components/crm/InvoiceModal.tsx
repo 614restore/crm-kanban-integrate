@@ -31,6 +31,8 @@ export default function InvoiceModal() {
   const [validateError, setValidateError] = useState('');
   const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
   const [showPaymentHistory, setShowPaymentHistory] = useState(false);
+  const [includeTax, setIncludeTax] = useState(true);
+  const [taxRate, setTaxRate] = useState(8.25);
 
   // Re-initialize if prefill changes (new conversion)
   useEffect(() => {
@@ -75,7 +77,7 @@ export default function InvoiceModal() {
   };
 
   const subtotal = items.reduce((sum, item) => sum + item.total, 0);
-  const tax = subtotal * 0.0825; // 8.25% tax
+  const tax = includeTax ? subtotal * (taxRate / 100) : 0;
   const total = subtotal + tax;
 
   const handleDownloadPDF = async () => {
@@ -388,10 +390,40 @@ export default function InvoiceModal() {
                   <span>Subtotal</span>
                   <span>{formatCurrency(subtotal)}</span>
                 </div>
-                <div className="flex justify-between text-gray-600">
-                  <span>Tax (8.25%)</span>
-                  <span>{formatCurrency(tax)}</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="includeTax"
+                      checked={includeTax}
+                      onChange={(e) => setIncludeTax(e.target.checked)}
+                      className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                    />
+                    <label htmlFor="includeTax" className="text-sm font-medium text-gray-700 cursor-pointer">
+                      Include Tax
+                    </label>
+                  </div>
+                  {includeTax && (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        value={taxRate}
+                        onChange={(e) => setTaxRate(parseFloat(e.target.value) || 0)}
+                        step="0.01"
+                        min="0"
+                        max="100"
+                        className="w-20 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 text-right"
+                      />
+                      <span className="text-gray-600">%</span>
+                    </div>
+                  )}
                 </div>
+                {includeTax && (
+                  <div className="flex justify-between text-gray-600">
+                    <span>Tax ({taxRate}%)</span>
+                    <span>{formatCurrency(tax)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-lg font-bold text-gray-900 pt-2 border-t border-gray-200">
                   <span>Total</span>
                   <span>{formatCurrency(total)}</span>
