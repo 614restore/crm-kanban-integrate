@@ -324,37 +324,61 @@ export default function EstimatesView() {
       ).join('');
 
       const companyName = (companyProfile as any)?.name || '614 Restore';
+      const customerName = `${contact.firstName} ${contact.lastName}`;
+      const customerAddress = `${contact.address}, ${contact.city}, ${contact.state} ${contact.zip}`;
 
       await sendEmail({
         to: contact.email,
         subject: `Estimate ${estimate.estimateNumber} from ${companyName}`,
         html: `
           <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
-            <h2 style="color:#1e40af">Estimate from ${companyName}</h2>
-            <p>Hi ${contact.firstName},</p>
-            <p>Please find your estimate below. It is valid until ${estimate.validUntil ? new Date(estimate.validUntil).toLocaleDateString() : 'further notice'}.</p>
-            <h3 style="margin-bottom:4px">${estimate.title}</h3>
-            <table style="width:100%;border-collapse:collapse;margin:16px 0">
-              <thead style="background:#f3f4f6">
-                <tr>
-                  <th style="padding:8px 12px;text-align:left">Description</th>
-                  <th style="padding:8px 12px;text-align:center">Qty</th>
-                  <th style="padding:8px 12px;text-align:right">Unit Price</th>
-                  <th style="padding:8px 12px;text-align:right">Total</th>
-                </tr>
-              </thead>
-              <tbody>${itemsHtml}</tbody>
-              <tfoot>
-                <tr>
-                  <td colspan="3" style="padding:12px;text-align:right;font-weight:bold">Total</td>
-                  <td style="padding:12px;text-align:right;font-weight:bold;font-size:1.1em">$${Number(estimate.total).toFixed(2)}</td>
-                </tr>
-              </tfoot>
-            </table>
-            ${estimate.notes ? `<p><strong>Notes:</strong> ${estimate.notes}</p>` : ''}
-            ${estimate.terms ? `<p style="font-size:0.85em;color:#6b7280"><strong>Terms:</strong> ${estimate.terms}</p>` : ''}
-            <p>Please reply to this email or call us if you have any questions.</p>
-            <p>Thank you,<br/>${companyName}</p>
+            <div style="background:#1e40af;color:white;padding:24px;border-radius:8px 8px 0 0">
+              <h2 style="margin:0;font-size:24px">${companyName}</h2>
+              <p style="margin:4px 0 0 0;opacity:0.9">Professional Restoration Services</p>
+            </div>
+            <div style="padding:24px;background:#f9fafb">
+              <h3 style="color:#1e40af;margin-top:0">Estimate ${estimate.estimateNumber}</h3>
+              <p>Hi ${contact.firstName},</p>
+              <p>Thank you for the opportunity to provide you with an estimate. Please find the details below.</p>
+              
+              <div style="background:white;padding:16px;border-radius:8px;margin:16px 0;border:1px solid #e5e7eb">
+                <div style="font-size:12px;color:#6b7280;text-transform:uppercase;font-weight:600;margin-bottom:8px">Prepared For</div>
+                <div style="font-weight:600;color:#111">${customerName}</div>
+                <div style="color:#6b7280;font-size:14px">${customerAddress}</div>
+                ${contact.phone1 ? `<div style="color:#6b7280;font-size:14px">Phone: ${contact.phone1}</div>` : ''}
+              </div>
+
+              <h3 style="margin-bottom:4px;color:#111">${estimate.title}</h3>
+              <p style="color:#6b7280;font-size:14px;margin-top:4px">Valid until ${estimate.validUntil ? new Date(estimate.validUntil).toLocaleDateString() : 'further notice'}</p>
+              
+              <table style="width:100%;border-collapse:collapse;margin:16px 0;background:white;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb">
+                <thead style="background:#f3f4f6">
+                  <tr>
+                    <th style="padding:12px;text-align:left;font-size:13px;color:#374151">Description</th>
+                    <th style="padding:12px;text-align:center;font-size:13px;color:#374151">Qty</th>
+                    <th style="padding:12px;text-align:right;font-size:13px;color:#374151">Unit Price</th>
+                    <th style="padding:12px;text-align:right;font-size:13px;color:#374151">Total</th>
+                  </tr>
+                </thead>
+                <tbody>${itemsHtml}</tbody>
+                <tfoot>
+                  <tr style="background:#f9fafb;font-weight:bold">
+                    <td colspan="3" style="padding:16px;text-align:right;font-size:16px;color:#111">Total</td>
+                    <td style="padding:16px;text-align:right;font-size:18px;color:#1e40af">$${Number(estimate.total).toFixed(2)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+              
+              ${estimate.notes ? `<div style="background:white;padding:16px;border-radius:8px;margin:16px 0;border:1px solid #e5e7eb"><strong style="color:#111">Notes:</strong><p style="margin:8px 0 0 0;color:#374151">${estimate.notes}</p></div>` : ''}
+              ${estimate.terms ? `<div style="background:#fef3c7;padding:16px;border-radius:8px;margin:16px 0;border:1px solid #fbbf24"><strong style="color:#92400e">Terms & Conditions:</strong><p style="margin:8px 0 0 0;color:#78350f;font-size:13px">${estimate.terms}</p></div>` : ''}
+              
+              <p style="margin-top:24px">If you have any questions or would like to discuss this estimate, please don't hesitate to contact us.</p>
+              <p style="margin-bottom:0">Thank you,<br/><strong>${companyName}</strong></p>
+            </div>
+            <div style="background:#e5e7eb;padding:16px;text-align:center;font-size:12px;color:#6b7280;border-radius:0 0 8px 8px">
+              ${companyName} | Professional Restoration Services<br/>
+              This estimate is valid until ${estimate.validUntil ? new Date(estimate.validUntil).toLocaleDateString() : 'further notice'}
+            </div>
           </div>`,
       });
 
@@ -600,7 +624,11 @@ export default function EstimatesView() {
   };
 
   const printEstimate = (estimate: Estimate) => {
-    const contactName = getContactName(estimate.contactId);
+    const contact = state.contacts.find(c => c.id === estimate.contactId);
+    const contactName = contact ? `${contact.firstName} ${contact.lastName}` : 'Unknown';
+    const contactAddress = contact ? `${contact.address}, ${contact.city}, ${contact.state} ${contact.zip}` : '';
+    const contactPhone = contact?.phone1 || '';
+    const contactEmail = contact?.email || '';
     const itemsHtml = estimate.items && estimate.items.length > 0
       ? `<table style="width:100%;border-collapse:collapse;margin-bottom:24px">
           <thead>
@@ -633,13 +661,15 @@ export default function EstimatesView() {
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111; margin: 0; padding: 40px; }
     @media print { body { padding: 20px; } }
     .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; padding-bottom: 24px; border-bottom: 2px solid #e5e7eb; }
-    .company-name { font-size: 24px; font-weight: 700; color: #1d4ed8; }
+    .company-info { flex: 1; }
+    .company-name { font-size: 24px; font-weight: 700; color: #1d4ed8; margin-bottom: 8px; }
+    .company-details { font-size: 13px; color: #6b7280; line-height: 1.6; }
     .estimate-meta { text-align: right; }
     .estimate-number { font-size: 20px; font-weight: 700; color: #111; }
     .badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; text-transform: uppercase; background: #dbeafe; color: #1d4ed8; margin-top: 6px; }
     .section-title { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: #6b7280; margin-bottom: 8px; }
-    .bill-to { margin-bottom: 32px; }
-    .bill-to p { margin: 2px 0; font-size: 15px; }
+    .bill-to { margin-bottom: 32px; background: #f9fafb; padding: 16px; border-radius: 8px; }
+    .bill-to p { margin: 2px 0; font-size: 14px; color: #374151; }
     .totals { display: flex; justify-content: flex-end; margin-bottom: 32px; }
     .totals-box { width: 280px; }
     .totals-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; color: #374151; }
@@ -651,8 +681,15 @@ export default function EstimatesView() {
 </head>
 <body>
   <div class="header">
-    <div>
-      <div class="company-name">${profile?.company_id ? 'TrussCTR' : 'Your Company'}</div>
+    <div class="company-info">
+      <div class="company-name">TrussCTR</div>
+      <div class="company-details">
+        <div>614 Restore LLC</div>
+        <div>Columbus, OH</div>
+        <div>Phone: (614) 555-0100</div>
+        <div>Email: info@614restore.com</div>
+        <div>License #: OH-123456</div>
+      </div>
     </div>
     <div class="estimate-meta">
       <div class="estimate-number">Estimate ${estimate.estimateNumber}</div>
@@ -663,8 +700,11 @@ export default function EstimatesView() {
 
   <div class="bill-to">
     <div class="section-title">Prepared For</div>
-    <p><strong>${contactName}</strong></p>
-    ${estimate.title ? `<p style="color:#6b7280">${estimate.title}</p>` : ''}
+    <p><strong style="font-size:16px">${contactName}</strong></p>
+    ${contactAddress ? `<p>${contactAddress}</p>` : ''}
+    ${contactPhone ? `<p>Phone: ${contactPhone}</p>` : ''}
+    ${contactEmail ? `<p>Email: ${contactEmail}</p>` : ''}
+    ${estimate.title ? `<p style="margin-top:8px;color:#1d4ed8;font-weight:600">${estimate.title}</p>` : ''}
   </div>
 
   ${estimate.description ? `<p style="color:#374151;margin-bottom:24px">${estimate.description}</p>` : ''}
