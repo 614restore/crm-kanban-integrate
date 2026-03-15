@@ -1688,8 +1688,6 @@ export default function SettingsView() {
                         className="w-20 h-20 rounded-full object-cover"
                       />
                     ) : (
-
-        {activeTab === 'features' && <FeatureToggles />}
                       <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-2xl font-bold">
                         {profile?.first_name?.[0]?.toUpperCase() || profile?.email?.[0]?.toUpperCase() || 'U'}
                         {profile?.last_name?.[0]?.toUpperCase() || ''}
@@ -1811,6 +1809,8 @@ export default function SettingsView() {
             </div>
           </div>
         )}
+
+        {activeTab === 'features' && <FeatureToggles />}
 
         {activeTab === 'integrations' && (
           <div className="max-w-4xl space-y-8">
