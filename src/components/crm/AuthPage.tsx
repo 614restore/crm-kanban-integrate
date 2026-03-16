@@ -211,7 +211,7 @@ export default function AuthPage() {
             <img src="/trussctr-logo.png" alt="TrussCTR Logo" className="w-20 h-20 object-contain drop-shadow-2xl" />
             <div>
               <span className="text-2xl font-bold text-white drop-shadow-lg">TrussCTR</span>
-              <p className="text-blue-200 text-sm italic drop-shadow-md">Restoration Management Simplified</p>
+              <p className="text-blue-200 text-sm italic drop-shadow-md">A CRM you can Truss</p>
             </div>
           </div>
         </div>
@@ -258,7 +258,7 @@ export default function AuthPage() {
               <img src="/trussctr-logo.png" alt="TrussCTR Logo" className="w-16 h-16 object-contain drop-shadow-2xl" />
               <span className="text-xl font-bold text-white drop-shadow-lg">TrussCTR</span>
             </div>
-            <p className="text-blue-200 text-sm italic drop-shadow-md">Restoration Management Simplified</p>
+            <p className="text-blue-200 text-sm italic drop-shadow-md">A CRM you can Truss</p>
           </div>
 
           <div className="bg-white rounded-2xl shadow-2xl p-8">
