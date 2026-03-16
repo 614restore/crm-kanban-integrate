@@ -867,9 +867,21 @@ TrussCTR is fully responsive and works on mobile devices.
 - 📊 Advanced Analytics Dashboard
 - 💳 Integrated Payment Processing
 - 📧 Email Marketing Campaigns
-- 🔗 QuickBooks Integration
+- 🔗 QuickBooks OAuth Integration (manual token entry currently available)
 - 📱 SMS Two-Way Conversations
 - 🗺️ Route Optimization for Crews
+- 🏗️ Supplier Catalog Integration (Beacon PRO+, SRS, ABC Supply)
+- 📧 Two-Way Gmail/Outlook Inbox Sync (outbound email currently available)
+
+### Already Built (Not Yet Documented)
+- ✅ **EagleView Integration**: Aerial imagery and roof measurements
+- ✅ **Weather/Hail Tracking**: Storm tracking for insurance claims
+- ✅ **AI Assistant Panel**: AI-powered insights and recommendations
+- ✅ **Offline Database Sync**: Work without internet, sync when online
+- ✅ **Service Worker/PWA**: Install as app on desktop and mobile
+- ✅ **Stripe Payment Integration**: Accept credit card payments (browser-compatible)
+- ✅ **QuickBooks Integration**: Sync customers and invoices (manual OAuth setup required)
+- ✅ **Outbound Email API**: Send estimates and invoices via email
 
 ---
 
