@@ -1,0 +1,66 @@
+NEW LOGIN PAGE DESIGN - LIVE!
+
+BACKGROUND DESIGN:
+==================
+
+The TrussCTR shield logo now appears as a large, subtle watermark
+covering 60% of the background at 8% opacity.
+
+DESIGN ELEMENTS:
+================
+
+- Gradient Background: Slate-900 to Indigo-900
+- Large Logo Watermark: 60% size, 8% opacity, centered
+- Animated Glows: Amber/orange pulsing orbs (matches logo colors)
+- Content: Fully readable white text with drop shadows
+- Professional: Subtle branding without overwhelming content
+
+COLOR PALETTE:
+==============
+
+Background:  Slate-900 to Indigo-900 gradient
+Watermark:   8% opacity TrussCTR logo
+Accents:     Amber/Orange (matches logo)
+Text:        White with drop shadows
+Buttons:     Blue-600
+
+WHAT YOU'LL SEE:
+================
+
+1. LOGIN PAGE:
+   - Large TrussCTR shield logo faintly visible in background
+   - Login form clearly readable over watermark
+   - Professional, branded appearance
+
+2. LOADING SCREEN:
+   - Same watermark treatment
+   - Centered logo with amber glow
+   - Loading message
+
+3. MOBILE VIEW:
+   - Watermark scales proportionally
+   - All content remains readable
+   - Responsive design maintained
+
+VIEW IT NOW:
+============
+
+https://crm-kanban-integrate.vercel.app
+
+(Log out to see the login page with new watermark background)
+
+NEXT STEP:
+==========
+
+Replace the placeholder logo with your actual TrussCTR shield:
+
+1. Save your logo as: public/trussctr-logo.png
+2. Run: git add public/trussctr-logo.png
+3. Run: git commit -m "Add actual TrussCTR logo"
+4. Run: git push origin main
+5. Wait 2-3 minutes for deployment
+
+The watermark will automatically use your new logo!
+
+Status: DEPLOYED AND LIVE
+Updated: March 15, 2026 at 9:47 PM EST
