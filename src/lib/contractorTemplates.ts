@@ -1,5 +1,6 @@
-// Contractor Estimate Templates — shared between DocumentTemplates tab and Customer Detail modal
-// Templates use {{VARIABLE}} syntax; contact/company vars are auto-filled, totals are user-supplied.
+// Contractor Document Templates — Two-tier system:
+// 1. LEGAL DOCUMENTS: Standalone forms (Contingency, 3-Day Cancel, etc.)
+// 2. CUSTOMER SERVICE AGREEMENTS: Contract templates with project-specific line items
 
 export interface DocumentField {
   key: string;
@@ -14,7 +15,8 @@ export interface DocumentTemplate {
   id: string;
   name: string;
   description: string;
-  category: 'estimate' | 'invoice' | 'contract' | 'work-order' | 'proposal' | 'change-order' | 'safety' | 'other';
+  category: 'legal' | 'contract' | 'work-order' | 'safety';
+  templateType: 'legal-document' | 'customer-service-agreement';
   content: string;
   variables: string[];
   fields?: DocumentField[];
@@ -175,12 +177,271 @@ const contractTermsBlock = `<div class="terms">
 
 export function getContractorEstimateTemplates(): DocumentTemplate[] {
   return [
+    // ═══════════════════════════════════════════════════════════════════════
+    // LEGAL DOCUMENTS (Standalone forms - no line items)
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // ── CONTINGENCY AGREEMENT ─────────────────────────────────────────────
+    {
+      id: 'legal-001',
+      name: 'Contingency Agreement',
+      description: 'Insurance restoration contingency agreement - contractor assists with claim, paid from insurance proceeds',
+      category: 'legal',
+      templateType: 'legal-document',
+      content: contractHeader('Contingency Agreement') + `
+<div class="sec">
+  <h3>Agreement Terms</h3>
+  <p style="font-size:13px;line-height:1.9;color:#374151">
+    This Contingency Agreement ("Agreement") is entered into between <strong>{{CUSTOMER_NAME}}</strong> ("Property Owner") and <strong>{{COMPANY_NAME}}</strong> ("Contractor") for property located at <strong>{{PROPERTY_ADDRESS}}, {{PROPERTY_CITY}}, {{PROPERTY_STATE}} {{PROPERTY_ZIP}}</strong>.
+  </p>
+</div>
+<div class="sec">
+  <h3>Scope of Services</h3>
+  <p style="font-size:13px;line-height:1.9;color:#374151">
+    Contractor agrees to provide the following services on a contingency basis:
+  </p>
+  <ul class="scope-list">
+    <li>Inspect property damage and document all loss-related items</li>
+    <li>Prepare detailed scope of work and cost estimate</li>
+    <li>Communicate with insurance carrier and adjuster on Property Owner's behalf</li>
+    <li>Identify and document any additional damage or omissions from initial insurance estimate</li>
+    <li>Prepare and submit supplement requests as needed</li>
+    <li>Perform all approved restoration work per insurance scope and supplements</li>
+  </ul>
+</div>
+<div class="sec">
+  <h3>Payment Terms</h3>
+  <p style="font-size:13px;line-height:1.9;color:#374151">
+    <strong>Contingency Basis:</strong> Contractor's compensation is contingent upon approval and payment by Property Owner's insurance carrier. Property Owner is responsible only for their insurance deductible of <strong>{{DEDUCTIBLE_AMOUNT}}</strong>. All other costs will be paid from insurance proceeds.<br><br>
+    <strong>Insurance Assignment:</strong> Property Owner authorizes insurance carrier to issue all claim-related payments as dual-party checks payable to both Property Owner and Contractor. Property Owner agrees to endorse all insurance checks promptly upon receipt.<br><br>
+    <strong>Deductible Payment:</strong> Property Owner's deductible is due prior to commencement of work.
+  </p>
+</div>
+${contractTermsBlock}
+${footer}`,
+      variables: ['COMPANY_NAME','COMPANY_TAGLINE','REP_NAME','COMPANY_ADDRESS','COMPANY_CITY','COMPANY_STATE','COMPANY_ZIP','COMPANY_PHONE','COMPANY_EMAIL','CONTRACTOR_LICENSE','COMPANY_LOGO','CUSTOMER_NAME','CUSTOMER_PHONE','CUSTOMER_EMAIL','PROPERTY_ADDRESS','PROPERTY_CITY','PROPERTY_STATE','PROPERTY_ZIP','CONTRACT_NUMBER','CONTRACT_DATE','START_DATE','ESTIMATED_COMPLETION','DEDUCTIBLE_AMOUNT','WARRANTY_PERIOD','PAYMENT_TERMS'],
+      favorite: true, isDefault: false, tags: ['legal','contingency','insurance'],
+      createdAt: '2026-03-08', lastModified: '2026-03-08', usageCount: 0, fileType: 'html'
+    },
+
+    // ── 3-DAY RIGHT TO CANCEL ─────────────────────────────────────────────
+    {
+      id: 'legal-002',
+      name: '3-Day Right to Cancel',
+      description: 'Federal 3-day right to cancel notice for home solicitation sales',
+      category: 'legal',
+      templateType: 'legal-document',
+      content: contractHeader('Notice of Right to Cancel') + `
+<div class="alert-box">
+  <h3>YOUR RIGHT TO CANCEL</h3>
+  <p>You are entering into a transaction that will result in a lien, mortgage, or other security interest in your home. You have a legal right under federal law to cancel this transaction, without cost, within three business days from whichever of the following events occurs last:</p>
+  <ul style="margin:8px 0 8px 20px;font-size:13px">
+    <li>The date of the transaction, which is <strong>{{CONTRACT_DATE}}</strong>; or</li>
+    <li>The date you received your Truth in Lending disclosures; or</li>
+    <li>The date you received this notice of your right to cancel.</li>
+  </ul>
+</div>
+<div class="sec">
+  <h3>How to Cancel</h3>
+  <p style="font-size:13px;line-height:1.9;color:#374151">
+    If you decide to cancel this transaction, you may do so by notifying <strong>{{COMPANY_NAME}}</strong> in writing at:<br><br>
+    <strong>{{COMPANY_NAME}}</strong><br>
+    {{COMPANY_ADDRESS}}<br>
+    {{COMPANY_CITY}}, {{COMPANY_STATE}} {{COMPANY_ZIP}}<br>
+    Phone: {{COMPANY_PHONE}}<br>
+    Email: {{COMPANY_EMAIL}}<br><br>
+    You may use any written statement that is signed and dated by you and states your intention to cancel, or you may use the cancellation form on the back of this notice.<br><br>
+    <strong>Cancellation Deadline:</strong> {{CANCELLATION_DEADLINE}}
+  </p>
+</div>
+<div class="sec">
+  <h3>Effects of Cancellation</h3>
+  <p style="font-size:13px;line-height:1.9;color:#374151">
+    When you cancel this transaction, any lien, mortgage, or other security interest in your home arising from this transaction becomes void. You are also entitled to a refund of any down payment or other consideration if you cancel. Within 20 calendar days after we receive your notice of cancellation, we must return any money or property you have given to us.<br><br>
+    You may keep any money or property we have given you until we have done the things mentioned above, but you must then offer to return the money or property. If we do not claim the money or property within 20 calendar days after your offer to return it, you may keep it without further obligation.
+  </p>
+</div>
+${footer}`,
+      variables: ['COMPANY_NAME','COMPANY_TAGLINE','REP_NAME','COMPANY_ADDRESS','COMPANY_CITY','COMPANY_STATE','COMPANY_ZIP','COMPANY_PHONE','COMPANY_EMAIL','CONTRACTOR_LICENSE','COMPANY_LOGO','CUSTOMER_NAME','CUSTOMER_PHONE','CUSTOMER_EMAIL','PROPERTY_ADDRESS','PROPERTY_CITY','PROPERTY_STATE','PROPERTY_ZIP','CONTRACT_NUMBER','CONTRACT_DATE','CANCELLATION_DEADLINE'],
+      favorite: true, isDefault: false, tags: ['legal','cancellation','federal-law'],
+      createdAt: '2026-03-08', lastModified: '2026-03-08', usageCount: 0, fileType: 'html'
+    },
+
+    // ── CERTIFICATE OF COMPLETION ─────────────────────────────────────────
+    {
+      id: 'legal-003',
+      name: 'Certificate of Completion',
+      description: 'Certificate of substantial completion for construction projects',
+      category: 'legal',
+      templateType: 'legal-document',
+      content: contractHeader('Certificate of Completion') + `
+<div class="sec">
+  <h3>Project Information</h3>
+  <div class="row"><span class="lbl">Contract #:</span><span class="val">{{CONTRACT_NUMBER}}</span></div>
+  <div class="row"><span class="lbl">Original Contract Date:</span><span class="val">{{CONTRACT_DATE}}</span></div>
+  <div class="row"><span class="lbl">Work Commenced:</span><span class="val">{{START_DATE}}</span></div>
+  <div class="row"><span class="lbl">Substantial Completion:</span><span class="val">{{COMPLETION_DATE}}</span></div>
+  <div class="row"><span class="lbl">Final Inspection:</span><span class="val">{{INSPECTION_DATE}}</span></div>
+</div>
+<div class="sec">
+  <h3>Certification</h3>
+  <p style="font-size:13px;line-height:1.9;color:#374151">
+    <strong>{{COMPANY_NAME}}</strong> hereby certifies that all work described in Contract #{{CONTRACT_NUMBER}} has been completed in accordance with the contract documents, applicable building codes, and manufacturer specifications.<br><br>
+    The following work has been completed:
+  </p>
+  <div style="background:#f8fafc;padding:12px 14px;border-radius:6px;font-size:13px;line-height:1.9;color:#374151;margin:12px 0">
+    {{WORK_COMPLETED}}
+  </div>
+  <p style="font-size:13px;line-height:1.9;color:#374151">
+    All required inspections have been completed and approved. All permits have been closed. The property is ready for occupancy and use.
+  </p>
+</div>
+<div class="sec">
+  <h3>Warranty Information</h3>
+  <div class="row"><span class="lbl">Workmanship Warranty:</span><span class="val">{{WARRANTY_PERIOD}} from completion date</span></div>
+  <div class="row"><span class="lbl">Warranty Start Date:</span><span class="val">{{COMPLETION_DATE}}</span></div>
+  <div class="row"><span class="lbl">Warranty Expiration:</span><span class="val">{{WARRANTY_EXPIRATION}}</span></div>
+</div>
+${footer}`,
+      variables: ['COMPANY_NAME','COMPANY_TAGLINE','REP_NAME','COMPANY_ADDRESS','COMPANY_CITY','COMPANY_STATE','COMPANY_ZIP','COMPANY_PHONE','COMPANY_EMAIL','CONTRACTOR_LICENSE','COMPANY_LOGO','CUSTOMER_NAME','CUSTOMER_PHONE','CUSTOMER_EMAIL','PROPERTY_ADDRESS','PROPERTY_CITY','PROPERTY_STATE','PROPERTY_ZIP','CONTRACT_NUMBER','CONTRACT_DATE','START_DATE','COMPLETION_DATE','INSPECTION_DATE','WORK_COMPLETED','WARRANTY_PERIOD','WARRANTY_EXPIRATION'],
+      favorite: true, isDefault: false, tags: ['legal','completion','certificate'],
+      createdAt: '2026-03-08', lastModified: '2026-03-08', usageCount: 0, fileType: 'html'
+    },
+
+    // ── CHANGE ORDER ──────────────────────────────────────────────────────
+    {
+      id: 'legal-004',
+      name: 'Change Order',
+      description: 'Change order form for modifications to existing contracts',
+      category: 'legal',
+      templateType: 'legal-document',
+      content: contractHeader('Change Order') + `
+<div class="sec">
+  <h3>Original Contract Information</h3>
+  <div class="row"><span class="lbl">Original Contract #:</span><span class="val">{{CONTRACT_NUMBER}}</span></div>
+  <div class="row"><span class="lbl">Contract Date:</span><span class="val">{{CONTRACT_DATE}}</span></div>
+  <div class="row"><span class="lbl">Original Contract Amount:</span><span class="val">{{ORIGINAL_CONTRACT_AMOUNT}}</span></div>
+  <div class="row"><span class="lbl">Change Order #:</span><span class="val">{{CHANGE_ORDER_NUMBER}}</span></div>
+  <div class="row"><span class="lbl">Change Order Date:</span><span class="val">{{CHANGE_ORDER_DATE}}</span></div>
+</div>
+<div class="sec">
+  <h3>Description of Changes</h3>
+  <div style="background:#f8fafc;padding:12px 14px;border-radius:6px;font-size:13px;line-height:1.9;color:#374151">
+    {{CHANGE_DESCRIPTION}}
+  </div>
+</div>
+<div class="sec">
+  <h3>Cost Impact</h3>
+  <table>
+    <thead><tr><th>Description</th><th style="width:110px">Amount</th></tr></thead>
+    <tbody>
+      <tr><td>Original Contract Amount</td><td>{{ORIGINAL_CONTRACT_AMOUNT}}</td></tr>
+      <tr><td>Previous Change Orders</td><td>{{PREVIOUS_CHANGE_ORDERS}}</td></tr>
+      <tr><td><strong>This Change Order</strong></td><td><strong>{{CHANGE_ORDER_AMOUNT}}</strong></td></tr>
+      <tr style="background:#f3f4f6;font-weight:700"><td>New Contract Amount</td><td>{{NEW_CONTRACT_AMOUNT}}</td></tr>
+    </tbody>
+  </table>
+</div>
+<div class="sec">
+  <h3>Schedule Impact</h3>
+  <div class="row"><span class="lbl">Original Completion Date:</span><span class="val">{{ORIGINAL_COMPLETION_DATE}}</span></div>
+  <div class="row"><span class="lbl">Time Extension:</span><span class="val">{{TIME_EXTENSION}}</span></div>
+  <div class="row"><span class="lbl">New Completion Date:</span><span class="val">{{NEW_COMPLETION_DATE}}</span></div>
+</div>
+${footer}`,
+      variables: ['COMPANY_NAME','COMPANY_TAGLINE','REP_NAME','COMPANY_ADDRESS','COMPANY_CITY','COMPANY_STATE','COMPANY_ZIP','COMPANY_PHONE','COMPANY_EMAIL','CONTRACTOR_LICENSE','COMPANY_LOGO','CUSTOMER_NAME','CUSTOMER_PHONE','CUSTOMER_EMAIL','PROPERTY_ADDRESS','PROPERTY_CITY','PROPERTY_STATE','PROPERTY_ZIP','CONTRACT_NUMBER','CONTRACT_DATE','ORIGINAL_CONTRACT_AMOUNT','CHANGE_ORDER_NUMBER','CHANGE_ORDER_DATE','CHANGE_DESCRIPTION','PREVIOUS_CHANGE_ORDERS','CHANGE_ORDER_AMOUNT','NEW_CONTRACT_AMOUNT','ORIGINAL_COMPLETION_DATE','TIME_EXTENSION','NEW_COMPLETION_DATE'],
+      favorite: true, isDefault: false, tags: ['legal','change-order','modification'],
+      createdAt: '2026-03-08', lastModified: '2026-03-08', usageCount: 0, fileType: 'html'
+    },
+
+    // ── WORK ORDER ────────────────────────────────────────────────────────
+    {
+      id: 'legal-005',
+      name: 'Work Order',
+      description: 'Field work order for crew assignments and daily tasks',
+      category: 'work-order',
+      templateType: 'legal-document',
+      content: contractHeader('Work Order') + `
+<div class="sec">
+  <h3>Work Order Details</h3>
+  <div class="row"><span class="lbl">Work Order #:</span><span class="val">{{WORK_ORDER_NUMBER}}</span></div>
+  <div class="row"><span class="lbl">Date Issued:</span><span class="val">{{WORK_ORDER_DATE}}</span></div>
+  <div class="row"><span class="lbl">Scheduled Date:</span><span class="val">{{SCHEDULED_DATE}}</span></div>
+  <div class="row"><span class="lbl">Priority:</span><span class="val">{{PRIORITY}}</span></div>
+  <div class="row"><span class="lbl">Crew Lead:</span><span class="val">{{CREW_LEAD}}</span></div>
+  <div class="row"><span class="lbl">Crew Members:</span><span class="val">{{CREW_MEMBERS}}</span></div>
+</div>
+<div class="sec">
+  <h3>Work to be Performed</h3>
+  <div style="background:#f8fafc;padding:12px 14px;border-radius:6px;font-size:13px;line-height:1.9;color:#374151">
+    {{WORK_DESCRIPTION}}
+  </div>
+</div>
+<div class="sec">
+  <h3>Materials & Equipment</h3>
+  <div style="background:#f8fafc;padding:12px 14px;border-radius:6px;font-size:13px;line-height:1.9;color:#374151">
+    {{MATERIALS_NEEDED}}
+  </div>
+</div>
+<div class="sec">
+  <h3>Special Instructions</h3>
+  <div style="background:#fef3c7;padding:12px 14px;border-radius:6px;font-size:13px;line-height:1.9;color:#374151;border-left:4px solid #f59e0b">
+    {{SPECIAL_INSTRUCTIONS}}
+  </div>
+</div>
+${footer}`,
+      variables: ['COMPANY_NAME','COMPANY_TAGLINE','REP_NAME','COMPANY_ADDRESS','COMPANY_CITY','COMPANY_STATE','COMPANY_ZIP','COMPANY_PHONE','COMPANY_EMAIL','CONTRACTOR_LICENSE','COMPANY_LOGO','CUSTOMER_NAME','CUSTOMER_PHONE','CUSTOMER_EMAIL','PROPERTY_ADDRESS','PROPERTY_CITY','PROPERTY_STATE','PROPERTY_ZIP','WORK_ORDER_NUMBER','WORK_ORDER_DATE','SCHEDULED_DATE','PRIORITY','CREW_LEAD','CREW_MEMBERS','WORK_DESCRIPTION','MATERIALS_NEEDED','SPECIAL_INSTRUCTIONS'],
+      favorite: true, isDefault: false, tags: ['work-order','crew','field'],
+      createdAt: '2026-03-08', lastModified: '2026-03-08', usageCount: 0, fileType: 'html'
+    },
+
+    // ── WARRANTY ──────────────────────────────────────────────────────────
+    {
+      id: 'legal-006',
+      name: 'Warranty Certificate',
+      description: 'Workmanship warranty certificate for completed projects',
+      category: 'legal',
+      templateType: 'legal-document',
+      content: contractHeader('Warranty Certificate') + `
+<div class="sec">
+  <h3>Warranty Coverage</h3>
+  <div class="row"><span class="lbl">Contract #:</span><span class="val">{{CONTRACT_NUMBER}}</span></div>
+  <div class="row"><span class="lbl">Completion Date:</span><span class="val">{{COMPLETION_DATE}}</span></div>
+  <div class="row"><span class="lbl">Warranty Period:</span><span class="val">{{WARRANTY_PERIOD}}</span></div>
+  <div class="row"><span class="lbl">Warranty Expiration:</span><span class="val">{{WARRANTY_EXPIRATION}}</span></div>
+</div>
+<div class="sec">
+  <h3>Work Covered</h3>
+  <div style="background:#f8fafc;padding:12px 14px;border-radius:6px;font-size:13px;line-height:1.9;color:#374151">
+    {{WORK_COVERED}}
+  </div>
+</div>
+<div class="sec">
+  <h3>Warranty Terms</h3>
+  <p style="font-size:13px;line-height:1.9;color:#374151">
+    <strong>{{COMPANY_NAME}}</strong> warrants that all work performed under Contract #{{CONTRACT_NUMBER}} is free from defects in workmanship for a period of <strong>{{WARRANTY_PERIOD}}</strong> from the completion date.<br><br>
+    <strong>What is Covered:</strong> Defects in workmanship, installation errors, and failures resulting from improper installation by {{COMPANY_NAME}}.<br><br>
+    <strong>What is NOT Covered:</strong> Normal wear and tear, damage from improper maintenance, damage from acts of God, damage from third parties, modifications by others, and manufacturer defects (covered under separate manufacturer warranties).<br><br>
+    <strong>How to Make a Claim:</strong> Contact {{COMPANY_NAME}} at {{COMPANY_PHONE}} or {{COMPANY_EMAIL}}. We will inspect the issue and repair any warranted defects at no charge.
+  </p>
+</div>
+${footer}`,
+      variables: ['COMPANY_NAME','COMPANY_TAGLINE','REP_NAME','COMPANY_ADDRESS','COMPANY_CITY','COMPANY_STATE','COMPANY_ZIP','COMPANY_PHONE','COMPANY_EMAIL','CONTRACTOR_LICENSE','COMPANY_LOGO','CUSTOMER_NAME','CUSTOMER_PHONE','CUSTOMER_EMAIL','PROPERTY_ADDRESS','PROPERTY_CITY','PROPERTY_STATE','PROPERTY_ZIP','CONTRACT_NUMBER','COMPLETION_DATE','WARRANTY_PERIOD','WARRANTY_EXPIRATION','WORK_COVERED'],
+      favorite: true, isDefault: false, tags: ['legal','warranty','guarantee'],
+      createdAt: '2026-03-08', lastModified: '2026-03-08', usageCount: 0, fileType: 'html'
+    },
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // CUSTOMER SERVICE AGREEMENTS (Contracts with project-specific line items)
+    // ═══════════════════════════════════════════════════════════════════════
+
     // ── 1. Asphalt Shingle Roof Replacement ──────────────────────────────
     {
       id: 'ct-001',
-      name: 'Asphalt Shingle Roof Replacement',
-      description: 'Full tear-off and replacement estimate for architectural / 3-tab asphalt shingle roofing',
-      category: 'estimate',
+      name: 'Customer Service Agreement - Asphalt Shingle Roof',
+      description: 'Customer service agreement for asphalt shingle roof replacement with preloaded line items',
+      category: 'contract',
+      templateType: 'customer-service-agreement',
       fields: [
         { key: 'ESTIMATE_NUMBER', label: 'Estimate Number', type: 'text', defaultValue: 'EST-' + Date.now().toString().slice(-6), required: true },
         { key: 'START_DATE', label: 'Proposed Start Date', type: 'date', required: true },
@@ -249,7 +510,7 @@ export function getContractorEstimateTemplates(): DocumentTemplate[] {
         { key: 'WARRANTY_PERIOD', label: 'Warranty Period', type: 'text', defaultValue: '2 years', required: true },
         { key: 'PAYMENT_TERMS', label: 'Payment Terms', type: 'text', defaultValue: '50% deposit at contract signing; balance due upon completion', required: true },
       ],
-      content: header('Asphalt Shingle Roof Replacement Estimate') + `
+      content: contractHeader('Customer Service Agreement - Asphalt Shingle Roof Replacement') + `
 <div class="sec">
   <h3>Project Specifications</h3>
   <div class="highlight">
@@ -304,12 +565,12 @@ ${footer}`,
       createdAt: '2026-03-08', lastModified: '2026-03-08', usageCount: 0, fileType: 'html'
     },
 
-    // ── 2. Corrugated Metal Roof ──────────────────────────────────────────
     {
       id: 'ct-002',
-      name: 'Corrugated Metal Roof Estimate',
-      description: 'Tear-off and installation estimate for corrugated metal panel roofing',
-      category: 'estimate',
+      name: 'Customer Service Agreement - Corrugated Metal Roof',
+      description: 'Customer service agreement for corrugated metal roof with preloaded line items',
+      category: 'contract',
+      templateType: 'customer-service-agreement',
       fields: [
         { key: 'ESTIMATE_NUMBER', label: 'Estimate Number', type: 'text', defaultValue: 'EST-' + Date.now().toString().slice(-6), required: true },
         { key: 'START_DATE', label: 'Proposed Start Date', type: 'date', required: true },
@@ -355,7 +616,7 @@ ${footer}`,
         { key: 'WARRANTY_PERIOD', label: 'Warranty Period', type: 'text', defaultValue: '2 years', required: true },
         { key: 'PAYMENT_TERMS', label: 'Payment Terms', type: 'textarea', defaultValue: 'Payment is due within 30 days of invoice date.\nLate payments subject to 1.5% monthly finance charge.\nQuestions? Contact us at (614) 808-8899.', required: true },
       ],
-      content: header('Corrugated Metal Roof Estimate') + `
+      content: contractHeader('Customer Service Agreement - Corrugated Metal Roof') + `
 <div class="sec">
   <h3>Project Specifications</h3>
   <div class="highlight">
@@ -407,12 +668,12 @@ ${footer}`,
       createdAt: '2026-03-08', lastModified: '2026-03-08', usageCount: 0, fileType: 'html'
     },
 
-    // ── 3. Standing Seam Metal Roof ───────────────────────────────────────
     {
       id: 'ct-003',
-      name: 'Standing Seam Metal Roof Estimate',
-      description: 'Premium concealed-fastener standing seam metal roof installation estimate',
-      category: 'estimate',
+      name: 'Customer Service Agreement - Standing Seam Metal Roof',
+      description: 'Customer service agreement for standing seam metal roof with preloaded line items',
+      category: 'contract',
+      templateType: 'customer-service-agreement',
       fields: [
         { key: 'ESTIMATE_NUMBER', label: 'Estimate Number', type: 'text', defaultValue: 'EST-' + Date.now().toString().slice(-6), required: true },
         { key: 'START_DATE', label: 'Proposed Start Date', type: 'date', required: true },
@@ -466,7 +727,7 @@ ${footer}`,
         { key: 'WARRANTY_PERIOD', label: 'Warranty Period', type: 'text', defaultValue: '2 years', required: true },
         { key: 'PAYMENT_TERMS', label: 'Payment Terms', type: 'textarea', defaultValue: 'Payment is due within 30 days of invoice date.\nLate payments subject to 1.5% monthly finance charge.\nQuestions? Contact us at (614) 808-8899.', required: true },
       ],
-      content: header('Standing Seam Metal Roof Estimate') + `
+      content: contractHeader('Customer Service Agreement - Standing Seam Metal Roof') + `
 <div class="sec">
   <h3>Project Specifications</h3>
   <div class="highlight">
@@ -522,13 +783,13 @@ ${footer}`,
       createdAt: '2026-03-08', lastModified: '2026-03-08', usageCount: 0, fileType: 'html'
     },
 
-    // ── 4. Vinyl Siding ───────────────────────────────────────────────────
     {
       id: 'ct-004',
-      name: 'Vinyl Siding Estimate',
-      description: 'Installation estimate for vinyl siding including trim, soffit, and fascia',
-      category: 'estimate',
-      content: header('Vinyl Siding Estimate') + `
+      name: 'Customer Service Agreement - Vinyl Siding',
+      description: 'Customer service agreement for vinyl siding installation with preloaded line items',
+      category: 'contract',
+      templateType: 'customer-service-agreement',
+      content: contractHeader('Customer Service Agreement - Vinyl Siding Installation') + `
 <div class="sec">
   <h3>Project Specifications</h3>
   <div class="highlight">
@@ -581,13 +842,13 @@ ${footer}`,
       createdAt: '2026-03-08', lastModified: '2026-03-08', usageCount: 0, fileType: 'html'
     },
 
-    // ── 5. Aluminum Siding ────────────────────────────────────────────────
     {
       id: 'ct-005',
-      name: 'Aluminum Siding Estimate',
-      description: 'Installation estimate for aluminum siding including soffit and fascia coil stock',
-      category: 'estimate',
-      content: header('Aluminum Siding Estimate') + `
+      name: 'Customer Service Agreement - Aluminum Siding',
+      description: 'Customer service agreement for aluminum siding installation with preloaded line items',
+      category: 'contract',
+      templateType: 'customer-service-agreement',
+      content: contractHeader('Customer Service Agreement - Aluminum Siding Installation') + `
 <div class="sec">
   <h3>Project Specifications</h3>
   <div class="highlight">
@@ -639,13 +900,13 @@ ${footer}`,
       createdAt: '2026-03-08', lastModified: '2026-03-08', usageCount: 0, fileType: 'html'
     },
 
-    // ── 6. Gutters & Downspouts ───────────────────────────────────────────
     {
       id: 'ct-006',
-      name: 'Gutters & Downspouts Estimate',
-      description: 'Seamless aluminum gutter removal and installation estimate with optional gutter guards',
-      category: 'estimate',
-      content: header('Gutters & Downspouts Estimate') + `
+      name: 'Customer Service Agreement - Gutters & Downspouts',
+      description: 'Customer service agreement for gutter system installation with preloaded line items',
+      category: 'contract',
+      templateType: 'customer-service-agreement',
+      content: contractHeader('Customer Service Agreement - Gutters & Downspouts') + `
 <div class="sec">
   <h3>Project Specifications</h3>
   <div class="highlight">
@@ -695,13 +956,13 @@ ${footer}`,
       createdAt: '2026-03-08', lastModified: '2026-03-08', usageCount: 0, fileType: 'html'
     },
 
-    // ── 7. Interior Drywall ───────────────────────────────────────────────
     {
       id: 'ct-007',
-      name: 'Interior Drywall Estimate',
-      description: 'Drywall repair or replacement estimate including hanging, taping, and finishing',
-      category: 'estimate',
-      content: header('Interior Drywall Estimate') + `
+      name: 'Customer Service Agreement - Interior Drywall',
+      description: 'Customer service agreement for drywall repair/replacement with preloaded line items',
+      category: 'contract',
+      templateType: 'customer-service-agreement',
+      content: contractHeader('Customer Service Agreement - Interior Drywall') + `
 <div class="sec">
   <h3>Project Specifications</h3>
   <div class="highlight">
@@ -753,13 +1014,13 @@ ${footer}`,
       createdAt: '2026-03-08', lastModified: '2026-03-08', usageCount: 0, fileType: 'html'
     },
 
-    // ── 8. Interior Paint ─────────────────────────────────────────────────
     {
       id: 'ct-008',
-      name: 'Interior Paint Estimate',
-      description: 'Full interior painting estimate covering walls, ceilings, trim, and doors',
-      category: 'estimate',
-      content: header('Interior Paint Estimate') + `
+      name: 'Customer Service Agreement - Interior Paint',
+      description: 'Customer service agreement for interior painting with preloaded line items',
+      category: 'contract',
+      templateType: 'customer-service-agreement',
+      content: contractHeader('Customer Service Agreement - Interior Painting') + `
 <div class="sec">
   <h3>Project Specifications</h3>
   <div class="highlight">
@@ -909,13 +1170,13 @@ ${footer}`,
       createdAt: '2026-03-08', lastModified: '2026-03-08', usageCount: 0, fileType: 'html'
     },
 
-    // ── 10. Window Replacement Contract ──────────────────────────────────
     {
       id: 'ct-010',
-      name: 'Window Replacement Contract',
-      description: 'Full window replacement contract covering specs, scope, pricing, warranty, and payment schedule',
+      name: 'Customer Service Agreement - Window Replacement',
+      description: 'Customer service agreement for window replacement with preloaded line items',
       category: 'contract',
-      content: contractHeader('Window Replacement Contract') + `
+      templateType: 'customer-service-agreement',
+      content: contractHeader('Customer Service Agreement - Window Replacement') + `
 <div class="sec">
   <h3>Window Specifications</h3>
   <div class="highlight">
@@ -974,13 +1235,13 @@ ${footer}`,
       createdAt: '2026-03-08', lastModified: '2026-03-08', usageCount: 0, fileType: 'html'
     },
 
-    // ── 11. Siding Replacement Contract ──────────────────────────────────
     {
       id: 'ct-011',
-      name: 'Siding Replacement Contract',
-      description: 'Complete siding replacement contract for vinyl, fiber cement, LP SmartSide, or aluminum siding projects',
+      name: 'Customer Service Agreement - Siding Replacement',
+      description: 'Customer service agreement for complete siding replacement with preloaded line items',
       category: 'contract',
-      content: contractHeader('Siding Replacement Contract') + `
+      templateType: 'customer-service-agreement',
+      content: contractHeader('Customer Service Agreement - Siding Replacement') + `
 <div class="sec">
   <h3>Siding Specifications</h3>
   <div class="highlight">
@@ -1113,13 +1374,13 @@ ${footer}`,
       createdAt: '2026-03-08', lastModified: '2026-03-08', usageCount: 0, fileType: 'html'
     },
 
-    // ── 13. Interior Restoration Contract ────────────────────────────────
     {
       id: 'ct-013',
-      name: 'Interior Restoration Contract',
-      description: 'Interior restoration contract covering drywall, paint, flooring, and contents — suitable for water, fire, and mold remediation follow-up',
+      name: 'Customer Service Agreement - Interior Restoration',
+      description: 'Customer service agreement for interior restoration with preloaded line items',
       category: 'contract',
-      content: contractHeader('Interior Restoration Contract') + `
+      templateType: 'customer-service-agreement',
+      content: contractHeader('Customer Service Agreement - Interior Restoration') + `
 <div class="sec">
   <h3>Project Overview</h3>
   <div class="highlight">
