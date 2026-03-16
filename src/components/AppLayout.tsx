@@ -181,9 +181,19 @@ function LoadingScreen() {
   };
   
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-900 flex items-center justify-center relative overflow-hidden">
+    <div className="min-h-screen relative flex items-center justify-center overflow-hidden">
+      {/* Background Image with Overlay */}
+      <div 
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+        style={{
+          backgroundImage: 'url(https://614restore.github.io/restore-web/images/hero-bg.jpg)',
+        }}
+      >
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-900/85 via-slate-800/90 to-indigo-900/85"></div>
+      </div>
+
       {/* Animated background elements */}
-      <div className="absolute inset-0 overflow-hidden">
+      <div className="absolute inset-0 overflow-hidden z-0">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl animate-pulse"></div>
         <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-purple-500/5 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '2s' }}></div>
@@ -192,12 +202,12 @@ function LoadingScreen() {
       <div className="text-center relative z-10">
         {/* Logo with glow effect */}
         <div className="relative inline-block mb-8">
-          <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-3xl blur-2xl opacity-30 animate-pulse"></div>
-          <div className="relative bg-gradient-to-br from-slate-800 to-slate-900 p-6 rounded-3xl border border-slate-700/50 shadow-2xl">
+          <div className="absolute inset-0 bg-gradient-to-r from-amber-500 to-orange-600 rounded-3xl blur-2xl opacity-30 animate-pulse"></div>
+          <div className="relative bg-gradient-to-br from-slate-800/50 to-slate-900/50 p-6 rounded-3xl border border-slate-700/50 shadow-2xl backdrop-blur-sm">
             <img 
-              src="/logo.png" 
+              src="/trussctr-logo.png" 
               alt="TrussCTR Logo" 
-              className="w-32 h-32 object-contain drop-shadow-2xl" 
+              className="w-40 h-40 object-contain drop-shadow-2xl" 
             />
           </div>
         </div>

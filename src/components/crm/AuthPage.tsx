@@ -191,15 +191,25 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-900 flex">
+    <div className="min-h-screen relative flex">
+      {/* Background Image with Overlay */}
+      <div 
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+        style={{
+          backgroundImage: 'url(https://614restore.github.io/restore-web/images/hero-bg.jpg)',
+        }}
+      >
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-900/85 via-slate-800/90 to-indigo-900/85"></div>
+      </div>
+
       {/* Left Panel - Branding */}
-      <div className="hidden lg:flex lg:w-1/2 flex-col justify-between p-12">
+      <div className="hidden lg:flex lg:w-1/2 flex-col justify-between p-12 relative z-10">
         <div>
           <div className="flex items-center gap-3 mb-2">
-            <img src="/logo.png" alt="TrussCTR Logo" className="w-16 h-16 object-contain" />
+            <img src="/trussctr-logo.png" alt="TrussCTR Logo" className="w-20 h-20 object-contain drop-shadow-2xl" />
             <div>
-              <span className="text-2xl font-bold text-white">TrussCTR</span>
-              <p className="text-blue-200 text-sm italic">Restoration Management Simplified</p>
+              <span className="text-2xl font-bold text-white drop-shadow-lg">TrussCTR</span>
+              <p className="text-blue-200 text-sm italic drop-shadow-md">Restoration Management Simplified</p>
             </div>
           </div>
         </div>
@@ -238,15 +248,15 @@ export default function AuthPage() {
       </div>
 
       {/* Right Panel - Auth Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8">
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 relative z-10">
         <div className="w-full max-w-md">
           {/* Mobile Logo */}
           <div className="lg:hidden flex flex-col items-center justify-center mb-8">
             <div className="flex items-center gap-3 mb-1">
-              <img src="/logo.png" alt="TrussCTR Logo" className="w-12 h-12 object-contain" />
-              <span className="text-xl font-bold text-white">TrussCTR</span>
+              <img src="/trussctr-logo.png" alt="TrussCTR Logo" className="w-16 h-16 object-contain drop-shadow-2xl" />
+              <span className="text-xl font-bold text-white drop-shadow-lg">TrussCTR</span>
             </div>
-            <p className="text-blue-200 text-sm italic">Restoration Management Simplified</p>
+            <p className="text-blue-200 text-sm italic drop-shadow-md">Restoration Management Simplified</p>
           </div>
 
           <div className="bg-white rounded-2xl shadow-2xl p-8">
