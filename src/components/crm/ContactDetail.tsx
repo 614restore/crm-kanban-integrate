@@ -13,6 +13,7 @@ import HailTracePanel from './HailTracePanel';
 import EagleViewPanel from './EagleViewPanel';
 import InsuranceTrackingView from './InsuranceTrackingView';
 import SupplementTrackingView from './SupplementTrackingView';
+import { PipelineStageTracker } from './PipelineStageTracker';
 import {
   applyMention,
   findActiveMentionQuery,
@@ -1298,6 +1299,12 @@ export default function ContactDetail() {
 
             {/* Sidebar */}
             <div className="space-y-6">
+              {/* Pipeline Stage Tracker */}
+              <PipelineStageTracker 
+                currentStatus={contact.status} 
+                statusChangedAt={contact.statusChangedAt}
+              />
+
               {/* Project Pricing Card */}
               <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl p-6 text-white">
                 <h3 className="text-lg font-semibold mb-4">Project Pricing</h3>
