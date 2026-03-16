@@ -125,11 +125,31 @@ export default function SalesAnalytics() {
 
   const completed = filtered.filter((c) => c.status === 'completed' || c.status === 'paid');
   const lost = filtered.filter((c) => c.status === 'lost');
+  const inspections = filtered.filter((c) => c.inspectionCompleted);
+  const contingency = filtered.filter((c) => c.status === 'approved' || c.status === 'scheduled');
+  const selfGenerated = filtered.filter((c) => c.leadSource === 'Self-Generated' || c.leadSource === 'Referral');
+  
   const totalRevenue = completed.reduce((s, c) => s + (c.projectValue || 0), 0);
   const avgDeal = completed.length > 0 ? totalRevenue / completed.length : 0;
   const convRate = completed.length + lost.length > 0
     ? (completed.length / (completed.length + lost.length)) * 100
     : 0;
+  const closeRate = completed.length + lost.length > 0
+    ? ((completed.length / (completed.length + lost.length)) * 100).toFixed(1)
+    : '0.0';
+  
+  // Appointments by period
+  const appointments = state.appointments.filter((apt) => {
+    const cutoff = period === 'all' ? new Date(0) : new Date(Date.now() - PERIOD_MS[period]);
+    return new Date(apt.date) >= cutoff;
+  });
+  
+  // Self-generated metrics
+  const selfGenInspections = selfGenerated.filter((c) => c.inspectionCompleted).length;
+  const selfGenContingency = selfGenerated.filter((c) => c.status === 'approved' || c.status === 'scheduled').length;
+  const selfGenSales = selfGenerated.filter((c) => c.status === 'completed' || c.status === 'paid').length;
+  const selfGenLost = selfGenerated.filter((c) => c.status === 'lost').length;
+  const selfGenTotal = selfGenerated.length;
 
   const byStatus = useMemo(() => {
     const map: Record<string, number> = {};
@@ -204,9 +224,42 @@ export default function SalesAnalytics() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Total Leads" value={filtered.length.toString()} icon={Users} color="blue" />
+        <StatCard label="Appointments" value={appointments.length.toString()} sub={`${inspections.length} inspections done`} icon={Calendar} color="purple" />
         <StatCard label="Revenue Closed" value={fmt(totalRevenue)} sub={`${completed.length} deals closed`} icon={DollarSign} color="green" />
-        <StatCard label="Conversion Rate" value={`${convRate.toFixed(1)}%`} sub={`${lost.length} lost`} icon={Target} color="purple" />
-        <StatCard label="Avg Deal Size" value={fmt(avgDeal)} icon={TrendingUp} color="orange" />
+        <StatCard label="Close Rate" value={`${closeRate}%`} sub={`${completed.length} closed / ${lost.length} lost`} icon={Target} color="orange" />
+      </div>
+
+      {/* Self-Generated Metrics */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+        <div className="flex items-center gap-2 mb-4">
+          <Award size={18} className="text-green-500" />
+          <h2 className="text-base font-semibold text-gray-800">Self-Generated Performance</h2>
+          <span className="ml-auto text-xs text-gray-500">{selfGenTotal} total leads</span>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="text-center p-3 bg-blue-50 rounded-lg">
+            <p className="text-2xl font-bold text-blue-600">{selfGenInspections}</p>
+            <p className="text-xs text-gray-600 mt-1">Inspections</p>
+          </div>
+          <div className="text-center p-3 bg-yellow-50 rounded-lg">
+            <p className="text-2xl font-bold text-yellow-600">{selfGenContingency}</p>
+            <p className="text-xs text-gray-600 mt-1">Contingency</p>
+          </div>
+          <div className="text-center p-3 bg-green-50 rounded-lg">
+            <p className="text-2xl font-bold text-green-600">{selfGenSales}</p>
+            <p className="text-xs text-gray-600 mt-1">Sales</p>
+          </div>
+          <div className="text-center p-3 bg-red-50 rounded-lg">
+            <p className="text-2xl font-bold text-red-600">{selfGenLost}</p>
+            <p className="text-xs text-gray-600 mt-1">Lost</p>
+          </div>
+          <div className="text-center p-3 bg-purple-50 rounded-lg">
+            <p className="text-2xl font-bold text-purple-600">
+              {selfGenTotal > 0 ? ((selfGenSales / selfGenTotal) * 100).toFixed(0) : 0}%
+            </p>
+            <p className="text-xs text-gray-600 mt-1">Close Rate</p>
+          </div>
+        </div>
       </div>
 
       {/* Pipeline + Lead Sources */}

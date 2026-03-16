@@ -202,27 +202,28 @@ function LoadingScreen() {
       </div>
 
       <div className="text-center relative z-10">
-        {/* Logo with glow effect */}
-        <div className="relative inline-block mb-8">
-          <div className="absolute inset-0 bg-gradient-to-r from-amber-500 to-orange-600 rounded-3xl blur-2xl opacity-30 animate-pulse"></div>
-          <div className="relative bg-gradient-to-br from-slate-800/50 to-slate-900/50 p-6 rounded-3xl border border-slate-700/50 shadow-2xl backdrop-blur-sm">
+        {/* Logo without background box, shifted left */}
+        <div className="flex items-start gap-8 mb-8">
+          <div className="relative">
+            <div className="absolute inset-0 bg-gradient-to-r from-amber-500 to-orange-600 rounded-full blur-2xl opacity-20 animate-pulse"></div>
             <img 
               src="/trussctr-logo.png" 
               alt="TrussCTR Logo" 
-              className="w-40 h-40 object-contain drop-shadow-2xl" 
+              className="w-40 h-40 object-contain drop-shadow-2xl relative" 
             />
           </div>
+          <div className="text-left">
+            {/* Brand name with gradient */}
+            <h1 className="text-5xl font-bold mb-3 bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400 bg-clip-text text-transparent animate-pulse">
+              TrussCTR
+            </h1>
+            
+            {/* Tagline */}
+            <p className="text-blue-200 text-lg mb-8 font-light tracking-wide">
+              Contractor CRM Center
+            </p>
+          </div>
         </div>
-
-        {/* Brand name with gradient */}
-        <h1 className="text-5xl font-bold mb-3 bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400 bg-clip-text text-transparent animate-pulse">
-          TrussCTR
-        </h1>
-        
-        {/* Tagline */}
-        <p className="text-blue-200 text-lg mb-8 font-light tracking-wide">
-          Contractor CRM Center
-        </p>
 
         {/* Loading indicator with modern design */}
         <div className="flex items-center justify-center gap-3 mb-8">
