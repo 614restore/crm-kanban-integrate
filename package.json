@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:dev": "vite build --mode development",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
@@ -15,7 +16,12 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
-    "test:all": "npm run lint && npm run typecheck && npm run test && npm run test:e2e"
+    "test:all": "npm run lint && npm run typecheck && npm run test && npm run test:e2e",
+    "test:month": "vitest run tests/month-soak.test.ts",
+    "doctor": "node scripts/doctor.mjs",
+    "e2e:invite": "node scripts/e2e-invite.mjs",
+    "ci:quality": "npm run doctor && npm run test && npm run test:month && npm run build",
+    "deploy": "npm run build && gh-pages -d dist"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.12",
@@ -58,6 +64,7 @@
     "zustand": "^4.5.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.48.2",
     "@types/node": "^20.11.19",
     "@types/react": "^18.2.56",
     "@types/react-beautiful-dnd": "^13.1.8",
@@ -65,14 +72,17 @@
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",
     "@vitejs/plugin-react": "^4.2.1",
+    "@vitest/ui": "^2.1.8",
     "autoprefixer": "^10.4.17",
     "eslint": "^8.56.0",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
+    "gh-pages": "^6.1.1",
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1",
     "terser": "^5.46.0",
     "typescript": "^5.2.2",
-    "vite": "^7.0.0"
+    "vite": "^7.0.0",
+    "vitest": "^2.1.8"
   }
 }

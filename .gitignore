@@ -15,6 +15,8 @@ dist-ssr
 # Environment variables - CRITICAL SECURITY
 # Block ALL .env variants - never commit credentials
 .env
+.env.local
+.env.*.local
 .env.*
 !.env.example
 !.env.production.template

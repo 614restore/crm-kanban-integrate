@@ -295,12 +295,3 @@ For issues or questions:
 ---
 
 **Built with ❤️ by 614 Restore**
-
-<-- Disable RLS on companies table
-ALTER TABLE companies DISABLE ROW LEVEL SECURITY;
-
--- Verify
-SELECT tablename, rowsecurity 
-FROM pg_tables 
-WHERE tablename = Updated: Tue Mar  3 17:28:53 EST 2026 -->
-# Email API deployed via Vercel serverless functions
