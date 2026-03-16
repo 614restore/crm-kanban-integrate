@@ -192,14 +192,16 @@ export default function AuthPage() {
 
   return (
     <div className="min-h-screen relative flex">
-      {/* Background Image with Overlay */}
-      <div 
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-        style={{
-          backgroundImage: 'url(https://614restore.github.io/restore-web/images/hero-bg.jpg)',
-        }}
-      >
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-900/85 via-slate-800/90 to-indigo-900/85"></div>
+      {/* Background with Logo Watermark */}
+      <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-900">
+        {/* Large Semi-Transparent Logo Watermark */}
+        <div 
+          className="absolute inset-0 bg-center bg-no-repeat opacity-[0.08]"
+          style={{
+            backgroundImage: 'url(/trussctr-logo.png)',
+            backgroundSize: '60%',
+          }}
+        ></div>
       </div>
 
       {/* Left Panel - Branding */}
