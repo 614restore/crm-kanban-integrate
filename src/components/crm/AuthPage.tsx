@@ -198,7 +198,7 @@ export default function AuthPage() {
         <div 
           className="absolute inset-0 bg-center bg-no-repeat opacity-[0.08]"
           style={{
-            backgroundImage: 'url(/trussctr-logo.png)',
+            backgroundImage: 'url(/trussctr-logo-shield.png)',
             backgroundSize: '60%',
           }}
         ></div>
@@ -208,7 +208,7 @@ export default function AuthPage() {
       <div className="hidden lg:flex lg:w-1/2 flex-col justify-between p-12 relative z-10">
         <div>
           <div className="flex items-center gap-3 mb-2">
-            <img src="/trussctr-logo.png" alt="TrussCTR Logo" className="w-20 h-20 object-contain drop-shadow-2xl" />
+            <img src="/trussctr-logo-shield.png" alt="TrussCTR Logo" className="w-20 h-20 object-contain drop-shadow-2xl" />
             <div>
               <span className="text-2xl font-bold text-white drop-shadow-lg">TrussCTR</span>
               <p className="text-blue-200 text-sm italic drop-shadow-md">A CRM you can Truss</p>
@@ -255,7 +255,7 @@ export default function AuthPage() {
           {/* Mobile Logo */}
           <div className="lg:hidden flex flex-col items-center justify-center mb-8">
             <div className="flex items-center gap-3 mb-1">
-              <img src="/trussctr-logo.png" alt="TrussCTR Logo" className="w-16 h-16 object-contain drop-shadow-2xl" />
+              <img src="/trussctr-logo-shield.png" alt="TrussCTR Logo" className="w-16 h-16 object-contain drop-shadow-2xl" />
               <span className="text-xl font-bold text-white drop-shadow-lg">TrussCTR</span>
             </div>
             <p className="text-blue-200 text-sm italic drop-shadow-md">A CRM you can Truss</p>

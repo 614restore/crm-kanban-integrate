@@ -188,7 +188,7 @@ function LoadingScreen() {
         <div 
           className="absolute inset-0 bg-center bg-no-repeat opacity-[0.08]"
           style={{
-            backgroundImage: 'url(/trussctr-logo.png)',
+            backgroundImage: 'url(/trussctr-logo-shield.png)',
             backgroundSize: '60%',
           }}
         ></div>
@@ -207,7 +207,7 @@ function LoadingScreen() {
           <div className="relative">
             <div className="absolute inset-0 bg-gradient-to-r from-amber-500 to-orange-600 rounded-full blur-2xl opacity-20 animate-pulse"></div>
             <img 
-              src="/trussctr-logo.png" 
+              src="/trussctr-logo-shield.png" 
               alt="TrussCTR Logo" 
               className="w-40 h-40 object-contain drop-shadow-2xl relative" 
             />

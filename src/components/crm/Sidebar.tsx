@@ -159,7 +159,7 @@ export default function Sidebar() {
             {companyLogoUrl ? (
               <img src={companyLogoUrl} alt="Company logo" className="w-8 h-8 rounded-lg object-contain" onError={() => setCompanyLogoUrl(null)} />
             ) : (
-              <img src="/trussctr-logo.png" alt="TrussCTR Logo" className="w-8 h-8 object-contain" />
+              <img src="/trussctr-logo-shield.png" alt="TrussCTR Logo" className="w-8 h-8 object-contain" />
             )}
             <span className="font-bold text-lg truncate">{companyName}</span>
           </div>
