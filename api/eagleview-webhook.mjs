@@ -11,28 +11,31 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // Signature verification is mandatory — fail closed if secret or signature is absent
+  // Signature verification — enforced when EAGLEVIEW_WEBHOOK_SECRET is configured.
+  // Until you register your platform webhook with EagleView's developer portal and
+  // receive a shared secret, leave EAGLEVIEW_WEBHOOK_SECRET unset and verification
+  // is skipped (webhooks are still processed). Once you have the secret, set it in
+  // Vercel env vars and all webhooks will be verified — spoofed requests rejected.
   const webhookSecret = process.env.EAGLEVIEW_WEBHOOK_SECRET;
   const signature = req.headers['x-eagleview-signature'];
 
-  if (!webhookSecret) {
-    console.error('EAGLEVIEW_WEBHOOK_SECRET is not configured');
-    return res.status(500).json({ error: 'Webhook secret not configured' });
-  }
+  if (webhookSecret) {
+    if (!signature) {
+      console.warn('EagleView webhook: missing x-eagleview-signature header');
+      return res.status(401).json({ error: 'Missing signature' });
+    }
 
-  if (!signature) {
-    console.warn('EagleView webhook: missing x-eagleview-signature header');
-    return res.status(401).json({ error: 'Missing signature' });
-  }
+    const hmac = crypto
+      .createHmac('sha256', webhookSecret)
+      .update(JSON.stringify(req.body))
+      .digest('hex');
 
-  const hmac = crypto
-    .createHmac('sha256', webhookSecret)
-    .update(JSON.stringify(req.body))
-    .digest('hex');
-
-  if (hmac !== signature) {
-    console.warn('EagleView webhook signature mismatch');
-    return res.status(401).json({ error: 'Invalid signature' });
+    if (hmac !== signature) {
+      console.warn('EagleView webhook signature mismatch');
+      return res.status(401).json({ error: 'Invalid signature' });
+    }
+  } else {
+    console.warn('EagleView webhook: EAGLEVIEW_WEBHOOK_SECRET not set — skipping signature verification. Set this env var once you register your webhook with EagleView.');
   }
 
   const { orderId, status, reportUrl, reportType, completedAt } = req.body || {};

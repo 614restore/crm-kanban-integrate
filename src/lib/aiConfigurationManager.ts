@@ -3,6 +3,53 @@
 
 import { supabase } from '@/lib/supabase';
 
+// ── AES-256-GCM encryption helpers ───────────────────────────────────────────
+// Key is derived from VITE_ENCRYPTION_SECRET env var (set in Vercel dashboard)
+const ENCRYPTION_SECRET = import.meta.env.VITE_ENCRYPTION_SECRET || 'fallback-dev-secret-32chars!!xx';
+
+async function getEncryptionKey(): Promise<CryptoKey> {
+  const enc = new TextEncoder();
+  return crypto.subtle.importKey(
+    'raw',
+    enc.encode(ENCRYPTION_SECRET.padEnd(32, '0').slice(0, 32)),
+    { name: 'AES-GCM' },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+
+async function encryptAES(plaintext: string): Promise<string> {
+  const key = await getEncryptionKey();
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const enc = new TextEncoder();
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    enc.encode(plaintext)
+  );
+  const ivB64 = btoa(String.fromCharCode(...iv));
+  const ctB64 = btoa(String.fromCharCode(...new Uint8Array(ciphertext)));
+  return `${ivB64}:${ctB64}`;
+}
+
+async function decryptAES(encrypted: string): Promise<string> {
+  // Handle legacy Base64-only values stored before this fix
+  if (!encrypted.includes(':')) {
+    return atob(encrypted);
+  }
+  const key = await getEncryptionKey();
+  const [ivB64, ctB64] = encrypted.split(':');
+  const iv = Uint8Array.from(atob(ivB64), c => c.charCodeAt(0));
+  const ciphertext = Uint8Array.from(atob(ctB64), c => c.charCodeAt(0));
+  const plaintext = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    ciphertext
+  );
+  return new TextDecoder().decode(plaintext);
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 export interface AIConfigurationRecord {
   id: string;
   company_id: string;
@@ -43,7 +90,7 @@ export interface AIAccessApproval {
 export class AIConfigurationManager {
   /**
    * Save AI configuration securely
-   * Encrypts API key before storage
+   * Encrypts API key with AES-256-GCM before storage
    */
   async saveConfiguration(
     companyId: string,
@@ -61,9 +108,7 @@ export class AIConfigurationManager {
     }
   ): Promise<AIConfigurationRecord | null> {
     try {
-      // In production, encrypt the API key before storing
-      // For now, we'll use a simple encoding (should use proper encryption)
-      const encryptedKey = this.encryptApiKey(config.apiKey);
+      const encryptedKey = await this.encryptApiKey(config.apiKey);
 
       const { data, error } = await supabase
         .from('ai_configurations')
@@ -122,7 +167,6 @@ export class AIConfigurationManager {
     userId: string
   ): Promise<AIConfigurationRecord[]> {
     try {
-      // Get configurations where user has approval or user created them
       const { data, error } = await supabase
         .from('ai_configurations')
         .select('*')
@@ -131,7 +175,6 @@ export class AIConfigurationManager {
 
       if (error) throw error;
 
-      // Filter to only approved configs or ones created by the user
       return (data as AIConfigurationRecord[])?.filter(
         (config) => config.user_id === userId || config.is_approved
       ) || [];
@@ -149,9 +192,7 @@ export class AIConfigurationManager {
     companyId: string
   ): Promise<AIConfigurationRecord | null> {
     try {
-      // Send notification to company admins
       await this.notifyAdminsForApproval(configId, companyId);
-
       return null;
     } catch (error) {
       console.error('Failed to request approval:', error);
@@ -317,14 +358,12 @@ export class AIConfigurationManager {
    */
   private async notifyAdminsForApproval(configId: string, companyId: string): Promise<void> {
     try {
-      // Get company admins
       const { data: admins } = await supabase
         .from('team_members')
         .select('email, name')
         .eq('company_id', companyId)
         .in('role', ['admin', 'owner']);
 
-      // Send notification emails (implement via Supabase Edge Function or external service)
       if (admins && admins.length > 0) {
         // TODO: notify admins via Edge Function or email service
       }
@@ -334,22 +373,17 @@ export class AIConfigurationManager {
   }
 
   /**
-   * Private: Encrypt API key (basic implementation)
-   * In production, use proper encryption library
+   * Encrypt API key using AES-256-GCM via Web Crypto API
    */
-  private encryptApiKey(apiKey: string): string {
-    // This is a placeholder - use proper encryption in production
-    // Consider using libsodium or similar
-    return Buffer.from(apiKey).toString('base64');
+  private async encryptApiKey(apiKey: string): Promise<string> {
+    return encryptAES(apiKey);
   }
 
   /**
-   * Private: Decrypt API key (basic implementation)
-   * In production, use proper decryption library
+   * Decrypt API key — handles both legacy Base64 and new AES-256-GCM format
    */
-  decryptApiKey(encrypted: string): string {
-    // This is a placeholder - use proper decryption in production
-    return Buffer.from(encrypted, 'base64').toString('utf-8');
+  async decryptApiKey(encrypted: string): Promise<string> {
+    return decryptAES(encrypted);
   }
 }
 
