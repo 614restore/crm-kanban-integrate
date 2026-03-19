@@ -18,14 +18,22 @@ async function sendEmail(to, subject, html) {
   } catch {}
 }
 
-function setCors(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+function setCors(req, res) {
+  const origin = (req.headers && req.headers.origin) || '';
+  const isAllowed =
+    origin === 'https://crm-kanban-integrate.vercel.app' ||
+    origin.endsWith('.vercel.app') ||
+    origin.startsWith('http://localhost') ||
+    origin.startsWith('http://127.0.0.1');
+  const allowedOrigin = isAllowed ? origin : 'https://crm-kanban-integrate.vercel.app';
+  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Vary', 'Origin');
 }
 
 export default async function handler(req, res) {
-  setCors(res);
+  setCors(req, res);
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   const { action } = req.query;

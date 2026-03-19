@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import Sidebar from '@/components/crm/Sidebar';
 import MobileNav from './MobileNav';
@@ -14,6 +15,7 @@ interface ResponsiveLayoutProps {
 export default function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
   const isMobile = useIsMobile();
   const { profile } = useAuth();
+  const queryClient = useQueryClient();
   const [isOfflineReady, setIsOfflineReady] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [pullDistance, setPullDistance] = useState(0);
@@ -89,11 +91,9 @@ export default function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
     setPullDistance(0);
     setStartY(0);
 
-    // Simulate refresh delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Refresh the page
-    window.location.reload();
+    // Soft refresh — invalidate all queries without destroying page state
+    await queryClient.invalidateQueries();
+    setIsRefreshing(false);
   };
 
   // Mobile layout with bottom navigation

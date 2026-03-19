@@ -1,10 +1,15 @@
 // EagleView API Integration
 // Handles: 1) Roof measurement imports, 2) Weather/storm data
 
+import { requireAuth } from './_auth-middleware.mjs';
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
+
+  const user = await requireAuth(req, res);
+  if (!user) return;
 
   const { action, address, zipCode } = req.body;
 

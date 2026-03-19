@@ -5,11 +5,29 @@
 //   APP_URL            — your app's base URL (e.g. https://614restore.github.io/crm-kanban-integrate)
 
 import Stripe from 'stripe';
+import { requireAuth } from './_auth-middleware.mjs';
+
+// Only allow price IDs that are configured in environment variables
+function getAllowedPriceIds() {
+  return [
+    process.env.VITE_STRIPE_STARTER_MONTHLY,
+    process.env.VITE_STRIPE_STARTER_YEARLY,
+    process.env.VITE_STRIPE_PRO_MONTHLY,
+    process.env.VITE_STRIPE_PRO_YEARLY,
+    process.env.VITE_STRIPE_BUSINESS_MONTHLY,
+    process.env.VITE_STRIPE_BUSINESS_YEARLY,
+    process.env.VITE_STRIPE_ENTERPRISE_MONTHLY,
+    process.env.VITE_STRIPE_ENTERPRISE_YEARLY,
+  ].filter(Boolean);
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
+
+  const user = await requireAuth(req, res);
+  if (!user) return;
 
   const stripeKey = process.env.STRIPE_SECRET_KEY;
   if (!stripeKey) {
@@ -22,6 +40,12 @@ export default async function handler(req, res) {
 
   if (!priceId) {
     return res.status(400).json({ error: 'priceId is required' });
+  }
+
+  // Validate that the requested price ID is one we actually offer
+  const allowedIds = getAllowedPriceIds();
+  if (allowedIds.length > 0 && !allowedIds.includes(priceId)) {
+    return res.status(400).json({ error: 'Invalid price ID.' });
   }
 
   const appUrl = process.env.APP_URL;
