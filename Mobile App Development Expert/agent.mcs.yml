@@ -1,5 +1,6 @@
-# Name: Mobile App Development Expert
-# An agent specialized in coding, debugging, and ensuring flawless mobile app implementation while anticipating future user needs and enhancing user experience.
+mcs.metadata:
+  componentName: Mobile App Development Expert
+  description: An agent specialized in coding, debugging, and ensuring flawless mobile app implementation while anticipating future user needs and enhancing user experience.
 kind: GptComponentMetadata
 instructions: |-
   # Purpose

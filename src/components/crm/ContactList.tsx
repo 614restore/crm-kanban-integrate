@@ -5,7 +5,6 @@ import { useCRM, useFilteredContacts } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { toast } from 'sonner';
 import { exportContactsToExcel } from '@/lib/exportUtils';
-import { detectAndNotifyUnassignedContacts } from '@/lib/staleLeadDetection';
 import {
   Contact,
   statusLabels,
@@ -35,7 +34,6 @@ import {
   ArrowUpDown,
   Archive,
   ArchiveRestore,
-  UserX,
 } from 'lucide-react';
 
 type SortField = 'name' | 'status' | 'createdAt' | 'projectValue';
@@ -52,36 +50,27 @@ export default function ContactList() {
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [showBulkActions, setShowBulkActions] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
-  const [showUnassigned, setShowUnassigned] = useState(false);
   const [archivedContacts, setArchivedContacts] = useState<Contact[]>([]);
 
   // Sort contacts
-  const sortedContacts = [...filteredContacts]
-    .filter(contact => {
-      // Filter by unassigned if enabled
-      if (showUnassigned) {
-        return !contact.assignedTo || contact.assignedTo === '';
-      }
-      return true;
-    })
-    .sort((a, b) => {
-      let comparison = 0;
-      switch (sortField) {
-        case 'name':
-          comparison = getContactFullName(a).localeCompare(getContactFullName(b));
-          break;
-        case 'status':
-          comparison = a.status.localeCompare(b.status);
-          break;
-        case 'createdAt':
-          comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-          break;
-        case 'projectValue':
-          comparison = (a.projectValue || 0) - (b.projectValue || 0);
-          break;
-      }
-      return sortDirection === 'asc' ? comparison : -comparison;
-    });
+  const sortedContacts = [...filteredContacts].sort((a, b) => {
+    let comparison = 0;
+    switch (sortField) {
+      case 'name':
+        comparison = getContactFullName(a).localeCompare(getContactFullName(b));
+        break;
+      case 'status':
+        comparison = a.status.localeCompare(b.status);
+        break;
+      case 'createdAt':
+        comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        break;
+      case 'projectValue':
+        comparison = (a.projectValue || 0) - (b.projectValue || 0);
+        break;
+    }
+    return sortDirection === 'asc' ? comparison : -comparison;
+  });
 
   // Load archived contacts from Supabase
   const loadArchivedContacts = useCallback(async () => {
@@ -291,28 +280,6 @@ export default function ContactList() {
     }
   };
 
-  const handleNotifyUnassigned = async () => {
-    if (!profile?.company_id) {
-      toast.error('No company selected');
-      return;
-    }
-    
-    try {
-      const result = await detectAndNotifyUnassignedContacts(profile.company_id);
-      
-      if (result.unassignedCount === 0) {
-        toast.success('All contacts are assigned! 🎉');
-      } else if (result.notified) {
-        toast.success(`Notified admins about ${result.unassignedCount} unassigned contact${result.unassignedCount > 1 ? 's' : ''}`);
-      } else {
-        toast.warning(`Found ${result.unassignedCount} unassigned contact${result.unassignedCount > 1 ? 's' : ''} but no admins to notify`);
-      }
-    } catch (error) {
-      console.error('Error notifying about unassigned contacts:', error);
-      toast.error('Failed to send notifications');
-    }
-  };
-
   return (
     <div className="h-full flex flex-col">
       <input
@@ -334,35 +301,7 @@ export default function ContactList() {
           </div>
           <div className="flex items-center gap-3">
             <button
-              onClick={() => {
-                setShowUnassigned(u => !u);
-                if (showArchived) setShowArchived(false);
-              }}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors text-sm font-medium ${showUnassigned ? 'bg-orange-100 text-orange-700' : 'text-gray-600 hover:bg-gray-100'}`}
-            >
-              <UserX size={18} />
-              {showUnassigned ? 'All Contacts' : 'Unassigned'}
-              {showUnassigned && (
-                <span className="ml-1 px-1.5 py-0.5 bg-orange-200 text-orange-800 rounded-full text-xs font-bold">
-                  {sortedContacts.length}
-                </span>
-              )}
-            </button>
-            {showUnassigned && sortedContacts.length > 0 && (
-              <button
-                onClick={handleNotifyUnassigned}
-                className="flex items-center gap-2 px-3 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium"
-                title="Send notification to admins about unassigned contacts"
-              >
-                <Mail size={18} />
-                Notify Admins
-              </button>
-            )}
-            <button
-              onClick={() => {
-                setShowArchived(a => !a);
-                if (showUnassigned) setShowUnassigned(false);
-              }}
+              onClick={() => setShowArchived(a => !a)}
               className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors text-sm font-medium ${showArchived ? 'bg-amber-100 text-amber-700' : 'text-gray-600 hover:bg-gray-100'}`}
             >
               <Archive size={18} />
@@ -540,17 +479,13 @@ export default function ContactList() {
                       )}
                     </div>
                     <div className="col-span-1 flex items-center">
-                      {assignee ? (
+                      {assignee && (
                         <img
                           src={assignee.avatar}
                           alt={assignee.name}
                           className="w-8 h-8 rounded-full object-cover"
                           title={assignee.name}
                         />
-                      ) : (
-                        <span className="text-xs text-red-600 font-medium bg-red-50 px-2 py-1 rounded" title="No salesman assigned">
-                          Unassigned
-                        </span>
                       )}
                     </div>
                     <div className="col-span-1 flex items-center justify-end gap-1">
@@ -667,17 +602,13 @@ export default function ContactList() {
                         <p className="text-gray-400 text-sm">No value set</p>
                       )}
                     </div>
-                    {assignee ? (
+                    {assignee && (
                       <img
                         src={assignee.avatar}
                         alt={assignee.name}
                         className="w-8 h-8 rounded-full object-cover"
                         title={assignee.name}
                       />
-                    ) : (
-                      <span className="text-xs text-red-600 font-medium bg-red-50 px-2 py-1 rounded" title="No salesman assigned">
-                        Unassigned
-                      </span>
                     )}
                   </div>
                 </div>

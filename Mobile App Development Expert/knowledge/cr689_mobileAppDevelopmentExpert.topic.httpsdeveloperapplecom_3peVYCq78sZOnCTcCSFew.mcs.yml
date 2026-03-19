@@ -1,5 +1,6 @@
-# Name: https://developer.apple.com/
-# This knowledge source searches information on the web found in https://developer.apple.com/ website
+mcs.metadata:
+  componentName: https://developer.apple.com/
+  description: This knowledge source searches information on the web found in https://developer.apple.com/ website
 kind: KnowledgeSourceConfiguration
 source:
   kind: PublicSiteSearchSource
