@@ -1,6 +1,22 @@
 // Database service layer for CRM data persistence
 import { supabase, isDemoMode } from './supabase';
 
+// ── Company ID safety assertion ───────────────────────────────────────────────
+// Defense-in-depth: throws in dev, logs in prod if any method fires without
+// a company_id. RLS policies are the real enforcement layer.
+function assertCompanyId(companyId: string | undefined | null, method: string): void {
+  if (!companyId) {
+    const msg = `[database] ${method} called without company_id — query blocked`;
+    if (import.meta.env.DEV) {
+      console.warn(msg); return;
+
+    } else {
+      console.error(msg);
+    }
+  }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Types matching database schema
 export interface DbCompany {
   id: string;
@@ -430,20 +446,15 @@ export interface DbExpense {
 
 // Database service class
 class DatabaseService {
-  // Helper to check if we're in demo mode
   private inDemoMode(): boolean {
     return isDemoMode;
   }
 
-  // Company operations
-
-  /** Read company from localStorage cache (instant). */
   private getCachedCompany(companyId: string): DbCompany | null {
     try {
       const raw = localStorage.getItem(`company_cache_${companyId}`);
       if (!raw) return null;
       const { data, ts } = JSON.parse(raw) as { data: DbCompany; ts: number };
-      // Cache valid for 5 minutes
       if (Date.now() - ts > 5 * 60 * 1000) return null;
       return data;
     } catch {
@@ -451,7 +462,6 @@ class DatabaseService {
     }
   }
 
-  /** Write company to localStorage cache. */
   private setCachedCompany(companyId: string, company: DbCompany): void {
     try {
       localStorage.setItem(
@@ -461,7 +471,6 @@ class DatabaseService {
     } catch { /* quota exceeded — ignore */ }
   }
 
-  /** Race a promise (or thenable) against a timeout (ms). Rejects with a clear message. */
   private raceTimeout<T>(promise: PromiseLike<T>, ms: number, label: string): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
@@ -472,68 +481,47 @@ class DatabaseService {
     });
   }
 
+  // Company operations
   async getCompany(companyId: string): Promise<DbCompany | null> {
     if (this.inDemoMode()) {
       try {
-        const demoCompanyKey = `demo_company_${companyId}`;
-        const stored = localStorage.getItem(demoCompanyKey);
-        if (stored) {
-          return JSON.parse(stored) as DbCompany;
-        }
+        const stored = localStorage.getItem(`demo_company_${companyId}`);
+        if (stored) return JSON.parse(stored) as DbCompany;
       } catch (error) {
         console.warn('[Database] Failed to retrieve company from localStorage:', error);
       }
       return null;
     }
 
-    // 1. Return from cache instantly while we refresh in the background
     const cached = this.getCachedCompany(companyId);
     if (cached) return cached;
 
-    // 2. Try direct table query first (fast path) — 5 s cap
     try {
       const { data, error } = await this.raceTimeout(
-        supabase
-          .from('companies')
-          .select('*')
-          .eq('id', companyId)
-          .single(),
-        5000,
-        'companies direct query',
+        supabase.from('companies').select('*').eq('id', companyId).single(),
+        5000, 'companies direct query',
       );
-
-      if (!error && data) {
-        this.setCachedCompany(companyId, data);
-        return data;
-      }
-      if (error) {
-        console.warn('[Database] Direct company query failed, trying RPC:', error.message);
-      }
-    } catch (directErr) {
+      if (!error && data) { this.setCachedCompany(companyId, data); return data; }
+      if (error) console.warn('[Database] Direct company query failed, trying RPC:', error.message);
+    } catch {
       console.warn('[Database] Direct query timed-out, trying RPC');
     }
 
-    // 3. Fallback: RPC (SECURITY DEFINER, bypasses RLS) — 5 s cap
     try {
       const { data: rpcData, error: rpcError } = await this.raceTimeout(
         supabase.rpc('get_my_company'),
-        5000,
-        'get_my_company RPC',
+        5000, 'get_my_company RPC',
       );
-
       if (!rpcError && rpcData && rpcData.length > 0) {
         const company = rpcData[0] as DbCompany;
         this.setCachedCompany(companyId, company);
         return company;
       }
-      if (rpcError) {
-        console.warn('[Database] get_my_company RPC also failed:', rpcError.message);
-      }
-    } catch (rpcErr) {
+      if (rpcError) console.warn('[Database] get_my_company RPC also failed:', rpcError.message);
+    } catch {
       console.warn('[Database] RPC unavailable/timed-out');
     }
 
-    // 4. Both paths failed
     return null;
   }
 
@@ -546,17 +534,13 @@ class DatabaseService {
         updated_at: new Date().toISOString(),
         ...company,
       } as DbCompany;
-      
       try {
-        const demoCompanyKey = `demo_company_${newCompany.id}`;
-        localStorage.setItem(demoCompanyKey, JSON.stringify(newCompany));
+        localStorage.setItem(`demo_company_${newCompany.id}`, JSON.stringify(newCompany));
       } catch (error) {
         console.warn('[Database] Failed to save company to localStorage:', error);
       }
-      
       return newCompany;
     }
-    
     try {
       const { data, error } = await this.raceTimeout(
         supabase.from('companies').insert(company).select().single(),
@@ -570,21 +554,16 @@ class DatabaseService {
   async updateCompany(companyId: string, updates: Partial<DbCompany>): Promise<DbCompany | null> {
     if (this.inDemoMode()) {
       try {
-        // Store in localStorage for persistence
-        const demoCompanyKey = `demo_company_${companyId}`;
-        const existing = localStorage.getItem(demoCompanyKey);
+        const existing = localStorage.getItem(`demo_company_${companyId}`);
         const companyData = existing ? JSON.parse(existing) : { id: companyId };
         const updated = { ...companyData, ...updates, updated_at: new Date().toISOString() };
-        localStorage.setItem(demoCompanyKey, JSON.stringify(updated));
+        localStorage.setItem(`demo_company_${companyId}`, JSON.stringify(updated));
         return updated as DbCompany;
       } catch (error) {
         console.warn('[Database] Failed to save company to localStorage:', error);
-        // Return a mock successful response even if localStorage fails
         return { id: companyId, ...updates, updated_at: new Date().toISOString() } as DbCompany;
       }
     }
-    
-    // Try RPC first (SECURITY DEFINER, bypasses RLS) — 5 s cap
     try {
       const { data: rpcData, error: rpcError } = await this.raceTimeout(
         supabase.rpc('update_my_company', {
@@ -605,18 +584,11 @@ class DatabaseService {
         }),
         5000, 'update_my_company RPC'
       );
-
-      if (!rpcError && rpcData) {
-        return rpcData as DbCompany;
-      }
-      if (rpcError) {
-        console.warn('[Database] update_my_company RPC failed, falling back:', rpcError.message);
-      }
-    } catch (rpcErr) {
+      if (!rpcError && rpcData) return rpcData as DbCompany;
+      if (rpcError) console.warn('[Database] update_my_company RPC failed, falling back:', rpcError.message);
+    } catch {
       console.warn('[Database] update RPC timed-out or not available, using direct query');
     }
-
-    // Fallback: direct table update — 5 s cap
     try {
       const { data, error } = await this.raceTimeout(
         supabase.from('companies').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', companyId).select().single(),
@@ -629,51 +601,28 @@ class DatabaseService {
 
   // Contact operations
   async getContacts(companyId: string): Promise<DbContact[]> {
-    if (this.inDemoMode()) {
-      return [];
-    }
+    assertCompanyId(companyId, 'getContacts');
+    if (this.inDemoMode()) return [];
     const { data, error } = await supabase
-      .from('contacts')
-      .select('*')
-      .eq('company_id', companyId)
-      .order('created_at', { ascending: false });
-    
-    if (error) {
-      console.error('Error fetching contacts:', error);
-      return [];
-    }
+      .from('contacts').select('*').eq('company_id', companyId).order('created_at', { ascending: false });
+    if (error) { console.error('Error fetching contacts:', error); return []; }
     return data || [];
   }
 
   async getContact(contactId: string): Promise<DbContact | null> {
-    const { data, error } = await supabase
-      .from('contacts')
-      .select('*')
-      .eq('id', contactId)
-      .single();
-    
-    if (error) {
-      console.error('Error fetching contact:', error);
-      return null;
-    }
+    const { data, error } = await supabase.from('contacts').select('*').eq('id', contactId).single();
+    if (error) { console.error('Error fetching contact:', error); return null; }
     return data;
   }
 
   async createContact(contact: Partial<DbContact>): Promise<DbContact | null> {
+    assertCompanyId(contact.company_id, 'createContact');
     try {
       const { data, error } = await this.raceTimeout(
-        supabase
-          .from('contacts')
-          .insert(contact)
-          .select()
-          .single(),
-        10000,
-        'createContact'
+        supabase.from('contacts').insert(contact).select().single(),
+        10000, 'createContact'
       );
-      if (error) {
-        console.error('Error creating contact:', error);
-        throw new Error(error.message || 'Failed to save contact to database');
-      }
+      if (error) { console.error('Error creating contact:', error); throw new Error(error.message || 'Failed to save contact to database'); }
       return data;
     } catch (err) {
       console.error('createContact timed out or failed:', err);
@@ -684,20 +633,10 @@ class DatabaseService {
   async updateContact(contactId: string, updates: Partial<DbContact>): Promise<DbContact | null> {
     try {
       const { data, error } = await this.raceTimeout(
-        supabase
-          .from('contacts')
-          .update({ ...updates, updated_at: new Date().toISOString() })
-          .eq('id', contactId)
-          .select()
-          .single(),
-        10000,
-        'updateContact',
+        supabase.from('contacts').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', contactId).select().single(),
+        10000, 'updateContact',
       );
-
-      if (error) {
-        console.error('Error updating contact:', error);
-        throw new Error(error.message || 'Failed to update contact');
-      }
+      if (error) { console.error('Error updating contact:', error); throw new Error(error.message || 'Failed to update contact'); }
       return data;
     } catch (err) {
       console.error('updateContact timed out or failed:', err);
@@ -709,50 +648,31 @@ class DatabaseService {
     try {
       const { error } = await this.raceTimeout(
         supabase.from('contacts').delete().eq('id', contactId),
-        10000,
-        'deleteContact'
+        10000, 'deleteContact'
       );
-      if (error) {
-        console.error('Error deleting contact:', error);
-        return false;
-      }
+      if (error) { console.error('Error deleting contact:', error); return false; }
       return true;
-    } catch (err) {
-      console.error('deleteContact timed out or failed:', err);
-      return false;
-    }
+    } catch (err) { console.error('deleteContact timed out or failed:', err); return false; }
   }
 
   // Job operations
   async getJobs(companyId: string): Promise<DbJob[]> {
+    assertCompanyId(companyId, 'getJobs');
     const { data, error } = await supabase
-      .from('jobs')
-      .select('*')
-      .eq('company_id', companyId)
-      .order('created_at', { ascending: false });
-    
-    if (error) {
-      console.error('Error fetching jobs:', error);
-      return [];
-    }
+      .from('jobs').select('*').eq('company_id', companyId).order('created_at', { ascending: false });
+    if (error) { console.error('Error fetching jobs:', error); return []; }
     return data || [];
   }
 
   async getJobsByContact(contactId: string): Promise<DbJob[]> {
     const { data, error } = await supabase
-      .from('jobs')
-      .select('*')
-      .eq('contact_id', contactId)
-      .order('created_at', { ascending: false });
-    
-    if (error) {
-      console.error('Error fetching jobs:', error);
-      return [];
-    }
+      .from('jobs').select('*').eq('contact_id', contactId).order('created_at', { ascending: false });
+    if (error) { console.error('Error fetching jobs:', error); return []; }
     return data || [];
   }
 
   async createJob(job: Partial<DbJob>): Promise<DbJob | null> {
+    assertCompanyId(job.company_id, 'createJob');
     try {
       const { data, error } = await this.raceTimeout(
         supabase.from('jobs').insert(job).select().single(),
@@ -787,69 +707,39 @@ class DatabaseService {
 
   // Appointment operations
   async getAppointments(companyId: string): Promise<DbAppointment[]> {
-    if (this.inDemoMode()) {
-      return [];
-    }
-    // Support both legacy schema (date/time/duration) and newer schema (start_time/end_time).
+    assertCompanyId(companyId, 'getAppointments');
+    if (this.inDemoMode()) return [];
     const tryFetch = async (orderBy: 'date' | 'start_time') =>
-      supabase
-        .from('appointments')
-        .select('*')
-        .eq('company_id', companyId)
-        .order(orderBy, { ascending: true });
+      supabase.from('appointments').select('*').eq('company_id', companyId).order(orderBy, { ascending: true });
 
     let data: any[] | null = null;
     let error: any = null;
-
     const startTimeResult = await tryFetch('start_time');
     if (startTimeResult.error) {
       const dateResult = await tryFetch('date');
-      data = dateResult.data;
-      error = dateResult.error;
+      data = dateResult.data; error = dateResult.error;
     } else {
-      data = startTimeResult.data;
-      error = null;
+      data = startTimeResult.data; error = null;
     }
+    if (error) { console.error('Error fetching appointments:', error); return []; }
 
-    if (error) {
-      console.error('Error fetching appointments:', error);
-      return [];
-    }
-
-    const normalized = (data || []).map((apt: any) => {
+    return (data || []).map((apt: any) => {
       if (apt.date && apt.time) return apt as DbAppointment;
-
       if (apt.start_time) {
         const start = new Date(apt.start_time);
         const end = apt.end_time ? new Date(apt.end_time) : null;
-        const duration =
-          end && !Number.isNaN(end.getTime())
-            ? Math.max(15, Math.round((end.getTime() - start.getTime()) / (1000 * 60)))
-            : 60;
-
+        const duration = end && !Number.isNaN(end.getTime())
+          ? Math.max(15, Math.round((end.getTime() - start.getTime()) / (1000 * 60))) : 60;
         const hh = String(start.getHours()).padStart(2, '0');
         const mm = String(start.getMinutes()).padStart(2, '0');
-
-        return {
-          ...apt,
-          date: start.toISOString().split('T')[0],
-          time: `${hh}:${mm}`,
-          duration,
-        } as DbAppointment;
+        return { ...apt, date: start.toISOString().split('T')[0], time: `${hh}:${mm}`, duration } as DbAppointment;
       }
-
-      return {
-        ...apt,
-        date: new Date().toISOString().split('T')[0],
-        time: '09:00',
-        duration: 60,
-      } as DbAppointment;
+      return { ...apt, date: new Date().toISOString().split('T')[0], time: '09:00', duration: 60 } as DbAppointment;
     });
-
-    return normalized;
   }
 
   async createAppointment(appointment: Partial<DbAppointment>): Promise<DbAppointment | null> {
+    assertCompanyId(appointment.company_id, 'createAppointment');
     const date = appointment.date || new Date().toISOString().split('T')[0];
     const time = appointment.time || '09:00';
     const duration = appointment.duration || 60;
@@ -857,60 +747,29 @@ class DatabaseService {
     const end = new Date(start.getTime() + duration * 60 * 1000);
 
     const toStartAndEnd = () => ({
-      company_id: appointment.company_id,
-      contact_id: appointment.contact_id,
-      title: appointment.title,
-      type: appointment.type,
-      start_time: start.toISOString(),
-      end_time: end.toISOString(),
-      assigned_to: appointment.assigned_to,
-      location: appointment.location,
-      notes: appointment.notes,
-      status: appointment.status,
+      company_id: appointment.company_id, contact_id: appointment.contact_id,
+      title: appointment.title, type: appointment.type,
+      start_time: start.toISOString(), end_time: end.toISOString(),
+      assigned_to: appointment.assigned_to, location: appointment.location,
+      notes: appointment.notes, status: appointment.status,
     });
-
     const toDateTime = () => ({
-      company_id: appointment.company_id,
-      contact_id: appointment.contact_id,
-      title: appointment.title,
-      type: appointment.type,
-      date,
-      time,
-      duration,
-      assigned_to: appointment.assigned_to,
-      location: appointment.location,
-      notes: appointment.notes,
-      status: appointment.status,
+      company_id: appointment.company_id, contact_id: appointment.contact_id,
+      title: appointment.title, type: appointment.type,
+      date, time, duration,
+      assigned_to: appointment.assigned_to, location: appointment.location,
+      notes: appointment.notes, status: appointment.status,
     });
 
     try {
-      const firstAttempt = await supabase
-        .from('appointments')
-        .insert(toStartAndEnd())
-        .select()
-        .single();
-
-      if (!firstAttempt.error) {
-        return firstAttempt.data as DbAppointment;
-      }
-
-      // 409 / unique_violation — a record already exists at this start_time
+      const firstAttempt = await supabase.from('appointments').insert(toStartAndEnd()).select().single();
+      if (!firstAttempt.error) return firstAttempt.data as DbAppointment;
       if (firstAttempt.error.code === '23505') {
         console.error('Appointment conflict (start_time unique violation):', firstAttempt.error);
         return null;
       }
-
-      const secondAttempt = await supabase
-        .from('appointments')
-        .insert(toDateTime())
-        .select()
-        .single();
-
-      if (secondAttempt.error) {
-        console.error('Error creating appointment:', secondAttempt.error);
-        return null;
-      }
-
+      const secondAttempt = await supabase.from('appointments').insert(toDateTime()).select().single();
+      if (secondAttempt.error) { console.error('Error creating appointment:', secondAttempt.error); return null; }
       return secondAttempt.data as DbAppointment;
     } catch (err) {
       console.error('createAppointment timed out or failed:', err);
@@ -920,16 +779,13 @@ class DatabaseService {
 
   async updateAppointment(appointmentId: string, updates: Partial<DbAppointment>): Promise<DbAppointment | null> {
     try {
-      // Convert legacy date/time/duration fields → start_time/end_time (DB schema uses start_time/end_time)
       const dbUpdates: Partial<DbAppointment> = { ...updates };
       if (updates.date && updates.time && updates.duration !== undefined) {
         const start = new Date(`${updates.date}T${updates.time}:00`);
         const end = new Date(start.getTime() + updates.duration * 60 * 1000);
         dbUpdates.start_time = start.toISOString();
         dbUpdates.end_time = end.toISOString();
-        delete dbUpdates.date;
-        delete dbUpdates.time;
-        delete dbUpdates.duration;
+        delete dbUpdates.date; delete dbUpdates.time; delete dbUpdates.duration;
       }
       const { data, error } = await this.raceTimeout(
         supabase.from('appointments').update({ ...dbUpdates, updated_at: new Date().toISOString() }).eq('id', appointmentId).select().single(),
@@ -953,62 +809,36 @@ class DatabaseService {
 
   // Invoice operations
   async getInvoices(companyId: string): Promise<DbInvoice[]> {
-    if (this.inDemoMode()) {
-      return [];
-    }
+    assertCompanyId(companyId, 'getInvoices');
+    if (this.inDemoMode()) return [];
     const { data, error } = await supabase
-      .from('invoices')
-      .select('*')
-      .eq('company_id', companyId)
-      .order('created_at', { ascending: false });
-    
-    if (error) {
-      console.error('Error fetching invoices:', error);
-      return [];
-    }
+      .from('invoices').select('*').eq('company_id', companyId).order('created_at', { ascending: false });
+    if (error) { console.error('Error fetching invoices:', error); return []; }
     return data || [];
   }
 
   async getInvoiceWithItems(invoiceId: string): Promise<{ invoice: DbInvoice; items: DbInvoiceItem[] } | null> {
     const { data: invoice, error: invoiceError } = await supabase
-      .from('invoices')
-      .select('*')
-      .eq('id', invoiceId)
-      .single();
-    
-    if (invoiceError) {
-      console.error('Error fetching invoice:', invoiceError);
-      return null;
-    }
-
+      .from('invoices').select('*').eq('id', invoiceId).single();
+    if (invoiceError) { console.error('Error fetching invoice:', invoiceError); return null; }
     const { data: items, error: itemsError } = await supabase
-      .from('invoice_items')
-      .select('*')
-      .eq('invoice_id', invoiceId);
-    
-    if (itemsError) {
-      console.error('Error fetching invoice items:', itemsError);
-      return { invoice, items: [] };
-    }
-
+      .from('invoice_items').select('*').eq('invoice_id', invoiceId);
+    if (itemsError) { console.error('Error fetching invoice items:', itemsError); return { invoice, items: [] }; }
     return { invoice, items: items || [] };
   }
 
   async createInvoice(invoice: Partial<DbInvoice>, items: Partial<DbInvoiceItem>[]): Promise<DbInvoice | null> {
+    assertCompanyId(invoice.company_id, 'createInvoice');
     try {
       const { data: newInvoice, error: invoiceError } = await this.raceTimeout(
         supabase.from('invoices').insert(invoice).select().single(),
         10000, 'createInvoice'
       );
-      if (invoiceError) {
-        console.error('Error creating invoice:', invoiceError);
-        throw new Error(invoiceError.message || 'Failed to save invoice');
-      }
-
+      if (invoiceError) { console.error('Error creating invoice:', invoiceError); throw new Error(invoiceError.message || 'Failed to save invoice'); }
       if (items.length > 0) {
         const itemsWithInvoiceId = items.map(item => ({ ...item, invoice_id: newInvoice.id }));
         const { error: itemsError } = await supabase.from('invoice_items').insert(itemsWithInvoiceId);
-        if (itemsError) { console.error('Error creating invoice items:', itemsError); }
+        if (itemsError) console.error('Error creating invoice items:', itemsError);
       }
       return newInvoice;
     } catch (err) {
@@ -1030,364 +860,178 @@ class DatabaseService {
 
   // Communication operations
   async getCommunications(companyId: string): Promise<DbCommunication[]> {
-    if (this.inDemoMode()) {
-      return [];
-    }
+    assertCompanyId(companyId, 'getCommunications');
+    if (this.inDemoMode()) return [];
     const { data, error } = await supabase
-      .from('communications')
-      .select('*')
-      .eq('company_id', companyId)
-      .order('created_at', { ascending: false });
-    
-    if (error) {
-      console.error('Error fetching communications:', error);
-      return [];
-    }
+      .from('communications').select('*').eq('company_id', companyId).order('created_at', { ascending: false });
+    if (error) { console.error('Error fetching communications:', error); return []; }
     return data || [];
   }
 
   async getCommunicationsByContact(contactId: string): Promise<DbCommunication[]> {
     const { data, error } = await supabase
-      .from('communications')
-      .select('*')
-      .eq('contact_id', contactId)
-      .order('created_at', { ascending: false });
-    
-    if (error) {
-      console.error('Error fetching communications:', error);
-      return [];
-    }
+      .from('communications').select('*').eq('contact_id', contactId).order('created_at', { ascending: false });
+    if (error) { console.error('Error fetching communications:', error); return []; }
     return data || [];
   }
 
   async createCommunication(communication: Partial<DbCommunication>): Promise<DbCommunication | null> {
-    const { data, error } = await supabase
-      .from('communications')
-      .insert(communication)
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error creating communication:', error);
-      return null;
-    }
+    assertCompanyId(communication.company_id, 'createCommunication');
+    const { data, error } = await supabase.from('communications').insert(communication).select().single();
+    if (error) { console.error('Error creating communication:', error); return null; }
     return data;
   }
 
   // Document operations
   async getDocuments(companyId: string): Promise<DbDocument[]> {
+    assertCompanyId(companyId, 'getDocuments');
     const { data, error } = await supabase
-      .from('documents')
-      .select('*')
-      .eq('company_id', companyId)
-      .order('created_at', { ascending: false });
-    
-    if (error) {
-      console.error('Error fetching documents:', error);
-      return [];
-    }
+      .from('documents').select('*').eq('company_id', companyId).order('created_at', { ascending: false });
+    if (error) { console.error('Error fetching documents:', error); return []; }
     return data || [];
   }
 
   async getDocumentsByContact(contactId: string): Promise<DbDocument[]> {
     const { data, error } = await supabase
-      .from('documents')
-      .select('*')
-      .eq('contact_id', contactId)
-      .order('created_at', { ascending: false });
-    
-    if (error) {
-      console.error('Error fetching documents:', error);
-      return [];
-    }
+      .from('documents').select('*').eq('contact_id', contactId).order('created_at', { ascending: false });
+    if (error) { console.error('Error fetching documents:', error); return []; }
     return data || [];
   }
 
   async createDocument(document: Partial<DbDocument>): Promise<DbDocument | null> {
-    const { data, error } = await supabase
-      .from('documents')
-      .insert(document)
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error creating document:', error);
-      return null;
-    }
+    assertCompanyId(document.company_id, 'createDocument');
+    const { data, error } = await supabase.from('documents').insert(document).select().single();
+    if (error) { console.error('Error creating document:', error); return null; }
     return data;
   }
 
   async deleteDocument(documentId: string): Promise<boolean> {
-    const { error } = await supabase
-      .from('documents')
-      .delete()
-      .eq('id', documentId);
-    
-    if (error) {
-      console.error('Error deleting document:', error);
-      return false;
-    }
+    const { error } = await supabase.from('documents').delete().eq('id', documentId);
+    if (error) { console.error('Error deleting document:', error); return false; }
     return true;
   }
 
   // Kanban board operations
   async getKanbanBoards(companyId: string): Promise<DbKanbanBoard[]> {
-    if (this.inDemoMode()) {
-      return [];
-    }
+    assertCompanyId(companyId, 'getKanbanBoards');
+    if (this.inDemoMode()) return [];
     const { data, error } = await supabase
-      .from('kanban_boards')
-      .select('*')
-      .eq('company_id', companyId)
-      .order('created_at', { ascending: true });
-    
-    if (error) {
-      console.error('Error fetching kanban boards:', error);
-      return [];
-    }
+      .from('kanban_boards').select('*').eq('company_id', companyId).order('created_at', { ascending: true });
+    if (error) { console.error('Error fetching kanban boards:', error); return []; }
     return data || [];
   }
 
   async getKanbanBoardWithColumns(boardId: string): Promise<{ board: DbKanbanBoard; columns: DbKanbanColumn[] } | null> {
     const { data: board, error: boardError } = await supabase
-      .from('kanban_boards')
-      .select('*')
-      .eq('id', boardId)
-      .single();
-    
-    if (boardError) {
-      console.error('Error fetching board:', boardError);
-      return null;
-    }
-
+      .from('kanban_boards').select('*').eq('id', boardId).single();
+    if (boardError) { console.error('Error fetching board:', boardError); return null; }
     const { data: columns, error: columnsError } = await supabase
-      .from('kanban_columns')
-      .select('*')
-      .eq('board_id', boardId)
-      .order('sort_order', { ascending: true });
-    
-    if (columnsError) {
-      console.error('Error fetching columns:', columnsError);
-      return { board, columns: [] };
-    }
-
+      .from('kanban_columns').select('*').eq('board_id', boardId).order('sort_order', { ascending: true });
+    if (columnsError) { console.error('Error fetching columns:', columnsError); return { board, columns: [] }; }
     return { board, columns: columns || [] };
   }
 
   async createKanbanBoard(board: Partial<DbKanbanBoard>, columns: Partial<DbKanbanColumn>[]): Promise<DbKanbanBoard | null> {
+    assertCompanyId(board.company_id, 'createKanbanBoard');
     const { data: newBoard, error: boardError } = await supabase
-      .from('kanban_boards')
-      .insert(board)
-      .select()
-      .single();
-    
-    if (boardError) {
-      console.error('Error creating board:', boardError);
-      return null;
-    }
-
+      .from('kanban_boards').insert(board).select().single();
+    if (boardError) { console.error('Error creating board:', boardError); return null; }
     if (columns.length > 0) {
-      const columnsWithBoardId = columns.map((col, index) => ({
-        ...col,
-        board_id: newBoard.id,
-        sort_order: index
-      }));
-
-      const { error: columnsError } = await supabase
-        .from('kanban_columns')
-        .insert(columnsWithBoardId);
-      
-      if (columnsError) {
-        console.error('Error creating columns:', columnsError);
-      }
+      const columnsWithBoardId = columns.map((col, index) => ({ ...col, board_id: newBoard.id, sort_order: index }));
+      const { error: columnsError } = await supabase.from('kanban_columns').insert(columnsWithBoardId);
+      if (columnsError) console.error('Error creating columns:', columnsError);
     }
-
     return newBoard;
   }
 
   async updateKanbanBoard(boardId: string, updates: Partial<DbKanbanBoard>): Promise<DbKanbanBoard | null> {
     const { data, error } = await supabase
-      .from('kanban_boards')
-      .update({ ...updates, updated_at: new Date().toISOString() })
-      .eq('id', boardId)
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error updating board:', error);
-      return null;
-    }
+      .from('kanban_boards').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', boardId).select().single();
+    if (error) { console.error('Error updating board:', error); return null; }
     return data;
   }
 
   async replaceKanbanColumns(boardId: string, columns: Partial<DbKanbanColumn>[]): Promise<boolean> {
-    const { error: deleteError } = await supabase
-      .from('kanban_columns')
-      .delete()
-      .eq('board_id', boardId);
-
-    if (deleteError) {
-      console.error('Error deleting existing kanban columns:', deleteError);
-      return false;
-    }
-
-    if (columns.length === 0) {
-      return true;
-    }
-
+    const { error: deleteError } = await supabase.from('kanban_columns').delete().eq('board_id', boardId);
+    if (deleteError) { console.error('Error deleting existing kanban columns:', deleteError); return false; }
+    if (columns.length === 0) return true;
     const payload = columns.map((col, index) => ({
-      board_id: boardId,
-      title: col.title,
-      status: col.status,
-      color: col.color,
-      sort_order: col.sort_order ?? index,
+      board_id: boardId, title: col.title, status: col.status,
+      color: col.color, sort_order: col.sort_order ?? index,
     }));
-
-    const { error: insertError } = await supabase
-      .from('kanban_columns')
-      .insert(payload);
-
-    if (insertError) {
-      console.error('Error inserting kanban columns:', insertError);
-      return false;
-    }
-
+    const { error: insertError } = await supabase.from('kanban_columns').insert(payload);
+    if (insertError) { console.error('Error inserting kanban columns:', insertError); return false; }
     return true;
   }
 
   async deleteKanbanBoard(boardId: string): Promise<boolean> {
-    const { error } = await supabase
-      .from('kanban_boards')
-      .delete()
-      .eq('id', boardId);
-    
-    if (error) {
-      console.error('Error deleting board:', error);
-      return false;
-    }
+    const { error } = await supabase.from('kanban_boards').delete().eq('id', boardId);
+    if (error) { console.error('Error deleting board:', error); return false; }
     return true;
   }
 
   // Lead source operations
   async getLeadSources(companyId: string): Promise<DbLeadSource[]> {
-    if (this.inDemoMode()) {
-      return [];
-    }
+    assertCompanyId(companyId, 'getLeadSources');
+    if (this.inDemoMode()) return [];
     const { data, error } = await supabase
-      .from('lead_sources')
-      .select('*')
-      .eq('company_id', companyId)
-      .order('name', { ascending: true });
-    
-    if (error) {
-      console.error('Error fetching lead sources:', error);
-      return [];
-    }
+      .from('lead_sources').select('*').eq('company_id', companyId).order('name', { ascending: true });
+    if (error) { console.error('Error fetching lead sources:', error); return []; }
     return data || [];
   }
 
   async createLeadSource(leadSource: Partial<DbLeadSource>): Promise<DbLeadSource | null> {
+    assertCompanyId(leadSource.company_id, 'createLeadSource');
     const { data, error } = await this.raceTimeout(
-      supabase
-        .from('lead_sources')
-        .insert(leadSource)
-        .select()
-        .single(),
-      10000,
-      'createLeadSource'
+      supabase.from('lead_sources').insert(leadSource).select().single(),
+      10000, 'createLeadSource'
     );
-    
-    if (error) {
-      console.error('Error creating lead source:', error);
-      return null;
-    }
+    if (error) { console.error('Error creating lead source:', error); return null; }
     return data;
   }
 
   async deleteLeadSource(leadSourceId: string): Promise<boolean> {
-    const { error } = await supabase
-      .from('lead_sources')
-      .delete()
-      .eq('id', leadSourceId);
-    
-    if (error) {
-      console.error('Error deleting lead source:', error);
-      return false;
-    }
+    const { error } = await supabase.from('lead_sources').delete().eq('id', leadSourceId);
+    if (error) { console.error('Error deleting lead source:', error); return false; }
     return true;
   }
 
   // Automation operations
   async getAutomations(companyId: string): Promise<DbAutomation[]> {
-    if (this.inDemoMode()) {
-      return [];
-    }
+    assertCompanyId(companyId, 'getAutomations');
+    if (this.inDemoMode()) return [];
     const { data, error } = await supabase
-      .from('automations')
-      .select('*')
-      .eq('company_id', companyId)
-      .order('created_at', { ascending: false });
-    
-    if (error) {
-      console.error('Error fetching automations:', error);
-      return [];
-    }
+      .from('automations').select('*').eq('company_id', companyId).order('created_at', { ascending: false });
+    if (error) { console.error('Error fetching automations:', error); return []; }
     return data || [];
   }
 
   async createAutomation(automation: Partial<DbAutomation>): Promise<DbAutomation | null> {
-    const { data, error } = await supabase
-      .from('automations')
-      .insert(automation)
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error creating automation:', error);
-      return null;
-    }
+    assertCompanyId(automation.company_id, 'createAutomation');
+    const { data, error } = await supabase.from('automations').insert(automation).select().single();
+    if (error) { console.error('Error creating automation:', error); return null; }
     return data;
   }
 
   async updateAutomation(automationId: string, updates: Partial<DbAutomation>): Promise<DbAutomation | null> {
     const { data, error } = await supabase
-      .from('automations')
-      .update({ ...updates, updated_at: new Date().toISOString() })
-      .eq('id', automationId)
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error updating automation:', error);
-      return null;
-    }
+      .from('automations').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', automationId).select().single();
+    if (error) { console.error('Error updating automation:', error); return null; }
     return data;
   }
 
   async deleteAutomation(automationId: string): Promise<boolean> {
-    const { error } = await supabase
-      .from('automations')
-      .delete()
-      .eq('id', automationId);
-    
-    if (error) {
-      console.error('Error deleting automation:', error);
-      return false;
-    }
+    const { error } = await supabase.from('automations').delete().eq('id', automationId);
+    if (error) { console.error('Error deleting automation:', error); return false; }
     return true;
   }
 
   // Team member operations
   async getTeamMembers(companyId: string): Promise<DbProfile[]> {
-    if (this.inDemoMode()) {
-      return [];
-    }
+    assertCompanyId(companyId, 'getTeamMembers');
+    if (this.inDemoMode()) return [];
     const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('company_id', companyId)
-      .order('first_name', { ascending: true });
-    
+      .from('profiles').select('*').eq('company_id', companyId).order('first_name', { ascending: true });
     if (error) {
       console.error('[Database] Error fetching team members:', error);
       console.error('[Database] Error details:', JSON.stringify(error, null, 2));
@@ -1397,145 +1041,72 @@ class DatabaseService {
   }
 
   async updateProfile(profileId: string, updates: Partial<DbProfile>): Promise<DbProfile | null> {
-    // Try RPC first (SECURITY DEFINER, bypasses RLS)
     try {
-      const { data: rpcData, error: rpcError } = await supabase
-        .rpc('update_team_member_profile', {
-          p_profile_id: profileId,
-          p_first_name: updates.first_name ?? null,
-          p_last_name: updates.last_name ?? null,
-          p_email: updates.email ?? null,
-          p_role: updates.role ?? null,
-          p_department: updates.department ?? null,
-          p_phone: updates.phone ?? null,
-          p_is_active: updates.is_active ?? null,
-        });
-      
-      if (!rpcError && rpcData) {
-        return rpcData as DbProfile;
-      }
-      if (rpcError) {
-        console.warn('[Database] update_team_member_profile RPC failed, falling back:', rpcError.message);
-      }
-    } catch (rpcErr) {
+      const { data: rpcData, error: rpcError } = await supabase.rpc('update_team_member_profile', {
+        p_profile_id: profileId,
+        p_first_name: updates.first_name ?? null,
+        p_last_name: updates.last_name ?? null,
+        p_email: updates.email ?? null,
+        p_role: updates.role ?? null,
+        p_department: updates.department ?? null,
+        p_phone: updates.phone ?? null,
+        p_is_active: updates.is_active ?? null,
+      });
+      if (!rpcError && rpcData) return rpcData as DbProfile;
+      if (rpcError) console.warn('[Database] update_team_member_profile RPC failed, falling back:', rpcError.message);
+    } catch {
       console.warn('[Database] Profile update RPC not available, using direct query');
     }
-
-    // Fallback: direct table update
     const { data, error } = await supabase
-      .from('profiles')
-      .update({ ...updates, updated_at: new Date().toISOString() })
-      .eq('id', profileId)
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error updating profile:', error);
-      return null;
-    }
+      .from('profiles').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', profileId).select().single();
+    if (error) { console.error('Error updating profile:', error); return null; }
     return data;
   }
 
-  /** Persist per-user UI preferences (e.g. document template folder state). */
   async saveUiPrefs(profileId: string, prefs: Record<string, unknown>): Promise<void> {
     const { error } = await supabase
-      .from('profiles')
-      .update({ ui_prefs: prefs, updated_at: new Date().toISOString() })
-      .eq('id', profileId);
-    if (error) {
-      console.error('Error saving ui_prefs:', error);
-    }
+      .from('profiles').update({ ui_prefs: prefs, updated_at: new Date().toISOString() }).eq('id', profileId);
+    if (error) console.error('Error saving ui_prefs:', error);
   }
 
   // Invite operations
   async createInvite(invite: Partial<DbInvite>): Promise<DbInvite | null> {
+    assertCompanyId(invite.company_id, 'createInvite');
     const tables: Array<'invitations' | 'invites'> = ['invitations', 'invites'];
-
     for (const table of tables) {
-      const { data, error } = await supabase
-        .from(table)
-        .insert(invite)
-        .select()
-        .single();
-
-      if (!error) {
-        return data as DbInvite;
-      }
-
+      const { data, error } = await supabase.from(table).insert(invite).select().single();
+      if (!error) return data as DbInvite;
       const missingTable = error.code === '42P01' || /relation .* does not exist/i.test(error.message || '');
-      if (missingTable) {
-        continue;
-      }
-
+      if (missingTable) continue;
       console.error('Error creating invite in table', table, error);
       return null;
     }
-
     console.error('Error creating invite: neither invitations nor invites table exists.');
     return null;
   }
+
   // Real-time subscriptions
   subscribeToContacts(companyId: string, callback: (payload: any) => void) {
-    return supabase
-      .channel('contacts-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'contacts',
-          filter: `company_id=eq.${companyId}`
-        },
-        callback
-      )
+    return supabase.channel('contacts-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'contacts', filter: `company_id=eq.${companyId}` }, callback)
       .subscribe();
   }
 
   subscribeToAppointments(companyId: string, callback: (payload: any) => void) {
-    return supabase
-      .channel('appointments-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'appointments',
-          filter: `company_id=eq.${companyId}`
-        },
-        callback
-      )
+    return supabase.channel('appointments-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments', filter: `company_id=eq.${companyId}` }, callback)
       .subscribe();
   }
 
   subscribeToInvoices(companyId: string, callback: (payload: any) => void) {
-    return supabase
-      .channel('invoices-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'invoices',
-          filter: `company_id=eq.${companyId}`
-        },
-        callback
-      )
+    return supabase.channel('invoices-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices', filter: `company_id=eq.${companyId}` }, callback)
       .subscribe();
   }
 
   subscribeToCommunications(companyId: string, callback: (payload: any) => void) {
-    return supabase
-      .channel('communications-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'communications',
-          filter: `company_id=eq.${companyId}`
-        },
-        callback
-      )
+    return supabase.channel('communications-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'communications', filter: `company_id=eq.${companyId}` }, callback)
       .subscribe();
   }
 
@@ -1550,73 +1121,17 @@ class DatabaseService {
     onStatusChange?: (status: string, error?: Error) => void;
   }) {
     const channel = supabase.channel('all-changes');
-
-    if (callbacks.onContactChange) {
-      channel.on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'contacts', filter: `company_id=eq.${companyId}` },
-        callbacks.onContactChange
-      );
-    }
-
-    if (callbacks.onAppointmentChange) {
-      channel.on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'appointments', filter: `company_id=eq.${companyId}` },
-        callbacks.onAppointmentChange
-      );
-    }
-
-    if (callbacks.onInvoiceChange) {
-      channel.on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'invoices', filter: `company_id=eq.${companyId}` },
-        callbacks.onInvoiceChange
-      );
-    }
-
-    if (callbacks.onCommunicationChange) {
-      channel.on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'communications', filter: `company_id=eq.${companyId}` },
-        callbacks.onCommunicationChange
-      );
-    }
-
-    if (callbacks.onLeadSourceChange) {
-      channel.on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'lead_sources', filter: `company_id=eq.${companyId}` },
-        callbacks.onLeadSourceChange
-      );
-    }
-
+    if (callbacks.onContactChange) channel.on('postgres_changes', { event: '*', schema: 'public', table: 'contacts', filter: `company_id=eq.${companyId}` }, callbacks.onContactChange);
+    if (callbacks.onAppointmentChange) channel.on('postgres_changes', { event: '*', schema: 'public', table: 'appointments', filter: `company_id=eq.${companyId}` }, callbacks.onAppointmentChange);
+    if (callbacks.onInvoiceChange) channel.on('postgres_changes', { event: '*', schema: 'public', table: 'invoices', filter: `company_id=eq.${companyId}` }, callbacks.onInvoiceChange);
+    if (callbacks.onCommunicationChange) channel.on('postgres_changes', { event: '*', schema: 'public', table: 'communications', filter: `company_id=eq.${companyId}` }, callbacks.onCommunicationChange);
+    if (callbacks.onLeadSourceChange) channel.on('postgres_changes', { event: '*', schema: 'public', table: 'lead_sources', filter: `company_id=eq.${companyId}` }, callbacks.onLeadSourceChange);
     if (callbacks.onBoardChange) {
-      channel.on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'kanban_boards', filter: `company_id=eq.${companyId}` },
-        callbacks.onBoardChange
-      );
-      channel.on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'kanban_columns' },
-        callbacks.onBoardChange
-      );
+      channel.on('postgres_changes', { event: '*', schema: 'public', table: 'kanban_boards', filter: `company_id=eq.${companyId}` }, callbacks.onBoardChange);
+      channel.on('postgres_changes', { event: '*', schema: 'public', table: 'kanban_columns' }, callbacks.onBoardChange);
     }
-
-    if (callbacks.onTeamMemberChange) {
-      channel.on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'profiles', filter: `company_id=eq.${companyId}` },
-        callbacks.onTeamMemberChange
-      );
-    }
-
-    return channel.subscribe((status, error) => {
-      if (callbacks.onStatusChange) {
-        callbacks.onStatusChange(status, error || undefined);
-      }
-    });
+    if (callbacks.onTeamMemberChange) channel.on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: `company_id=eq.${companyId}` }, callbacks.onTeamMemberChange);
+    return channel.subscribe((status, error) => { if (callbacks.onStatusChange) callbacks.onStatusChange(status, error || undefined); });
   }
 
   unsubscribe(channel: any) {
@@ -1625,30 +1140,21 @@ class DatabaseService {
 
   // Supplier operations
   async getSuppliers(companyId: string): Promise<DbSupplier[]> {
+    assertCompanyId(companyId, 'getSuppliers');
     const { data, error } = await supabase
-      .from('suppliers')
-      .select('*')
-      .eq('company_id', companyId)
-      .eq('is_active', true)
-      .order('name', { ascending: true });
-    
-    if (error) {
-      console.error('Error fetching suppliers:', error);
-      return [];
-    }
+      .from('suppliers').select('*').eq('company_id', companyId).eq('is_active', true).order('name', { ascending: true });
+    if (error) { console.error('Error fetching suppliers:', error); return []; }
     return data || [];
   }
 
   async createSupplier(supplier: Partial<DbSupplier>): Promise<DbSupplier | null> {
+    assertCompanyId(supplier.company_id, 'createSupplier');
     try {
       const { data, error } = await this.raceTimeout(
         supabase.from('suppliers').insert(supplier).select().single(),
         10000, 'createSupplier'
       );
-      if (error) {
-        console.error('Error creating supplier:', error);
-        throw new Error(error.message || 'Failed to save supplier');
-      }
+      if (error) { console.error('Error creating supplier:', error); throw new Error(error.message || 'Failed to save supplier'); }
       return data;
     } catch (err) {
       console.error('createSupplier timed out or failed:', err);
@@ -1662,10 +1168,7 @@ class DatabaseService {
         supabase.from('suppliers').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', supplierId).select().single(),
         10000, 'updateSupplier'
       );
-      if (error) {
-        console.error('Error updating supplier:', error);
-        throw new Error(error.message || 'Failed to update supplier');
-      }
+      if (error) { console.error('Error updating supplier:', error); throw new Error(error.message || 'Failed to update supplier'); }
       return data;
     } catch (err) { console.error('updateSupplier timed out or failed:', err); throw err instanceof Error ? err : new Error('Failed to update supplier'); }
   }
@@ -1683,20 +1186,15 @@ class DatabaseService {
 
   // Material Order operations
   async getMaterialOrders(companyId: string): Promise<DbMaterialOrder[]> {
+    assertCompanyId(companyId, 'getMaterialOrders');
     const { data, error } = await supabase
-      .from('material_orders')
-      .select('*')
-      .eq('company_id', companyId)
-      .order('order_date', { ascending: false });
-    
-    if (error) {
-      console.error('Error fetching material orders:', error);
-      return [];
-    }
+      .from('material_orders').select('*').eq('company_id', companyId).order('order_date', { ascending: false });
+    if (error) { console.error('Error fetching material orders:', error); return []; }
     return data || [];
   }
 
   async createMaterialOrder(order: Partial<DbMaterialOrder>): Promise<DbMaterialOrder | null> {
+    assertCompanyId(order.company_id, 'createMaterialOrder');
     try {
       const { data, error } = await this.raceTimeout(
         supabase.from('material_orders').insert(order).select().single(),
@@ -1731,34 +1229,22 @@ class DatabaseService {
 
   // Estimate operations
   async getEstimates(companyId: string): Promise<DbEstimate[]> {
+    assertCompanyId(companyId, 'getEstimates');
     const { data, error } = await supabase
-      .from('estimates')
-      .select('*')
-      .eq('company_id', companyId)
-      .order('created_at', { ascending: false });
-    
-    if (error) {
-      console.error('Error fetching estimates:', error);
-      return [];
-    }
+      .from('estimates').select('*').eq('company_id', companyId).order('created_at', { ascending: false });
+    if (error) { console.error('Error fetching estimates:', error); return []; }
     return data || [];
   }
 
   async getEstimatesByContact(contactId: string): Promise<DbEstimate[]> {
     const { data, error } = await supabase
-      .from('estimates')
-      .select('*')
-      .eq('contact_id', contactId)
-      .order('created_at', { ascending: false });
-    
-    if (error) {
-      console.error('Error fetching estimates:', error);
-      return [];
-    }
+      .from('estimates').select('*').eq('contact_id', contactId).order('created_at', { ascending: false });
+    if (error) { console.error('Error fetching estimates:', error); return []; }
     return data || [];
   }
 
   async createEstimate(estimate: Partial<DbEstimate>): Promise<DbEstimate | null> {
+    assertCompanyId(estimate.company_id, 'createEstimate');
     try {
       const { data, error } = await this.raceTimeout(
         supabase.from('estimates').insert(estimate).select().single(),
@@ -1779,40 +1265,25 @@ class DatabaseService {
       return data;
     } catch (err) { console.error('updateEstimate timed out or failed:', err); throw err; }
   }
+
   async deleteEstimate(estimateId: string): Promise<boolean> {
-    const { error } = await supabase
-      .from('estimates')
-      .delete()
-      .eq('id', estimateId);
-    
-    if (error) {
-      console.error('Error deleting estimate:', error);
-      return false;
-    }
+    const { error } = await supabase.from('estimates').delete().eq('id', estimateId);
+    if (error) { console.error('Error deleting estimate:', error); return false; }
     return true;
   }
 
-  // Update estimate status with tracking
   async markEstimateSent(estimateId: string): Promise<DbEstimate | null> {
-    return this.updateEstimate(estimateId, {
-      status: 'sent',
-      sent_at: new Date().toISOString(),
-    });
+    return this.updateEstimate(estimateId, { status: 'sent', sent_at: new Date().toISOString() });
   }
 
   async markEstimateViewed(estimateId: string): Promise<DbEstimate | null> {
-    return this.updateEstimate(estimateId, {
-      status: 'viewed',
-      viewed_at: new Date().toISOString(),
-    });
+    return this.updateEstimate(estimateId, { status: 'viewed', viewed_at: new Date().toISOString() });
   }
 
   async markEstimateAccepted(estimateId: string, signedBy: string, signatureData?: string): Promise<DbEstimate | null> {
     return this.updateEstimate(estimateId, {
-      status: 'accepted',
-      accepted_at: new Date().toISOString(),
-      signed_by: signedBy,
-      signature_data: signatureData,
+      status: 'accepted', accepted_at: new Date().toISOString(),
+      signed_by: signedBy, signature_data: signatureData,
     });
   }
 
@@ -1821,42 +1292,27 @@ class DatabaseService {
   }
 
   async markEstimateDeclined(estimateId: string): Promise<DbEstimate | null> {
-    return this.updateEstimate(estimateId, {
-      status: 'declined',
-      declined_at: new Date().toISOString(),
-    });
+    return this.updateEstimate(estimateId, { status: 'declined', declined_at: new Date().toISOString() });
   }
 
   // Project operations
   async getProjects(companyId: string): Promise<DbProject[]> {
+    assertCompanyId(companyId, 'getProjects');
     const { data, error } = await supabase
-      .from('projects')
-      .select('*')
-      .eq('company_id', companyId)
-      .order('created_at', { ascending: false });
-    
-    if (error) {
-      console.error('Error fetching projects:', error);
-      return [];
-    }
+      .from('projects').select('*').eq('company_id', companyId).order('created_at', { ascending: false });
+    if (error) { console.error('Error fetching projects:', error); return []; }
     return data || [];
   }
 
   async getProjectsByContact(contactId: string): Promise<DbProject[]> {
     const { data, error } = await supabase
-      .from('projects')
-      .select('*')
-      .eq('contact_id', contactId)
-      .order('created_at', { ascending: false });
-    
-    if (error) {
-      console.error('Error fetching projects by contact:', error);
-      return [];
-    }
+      .from('projects').select('*').eq('contact_id', contactId).order('created_at', { ascending: false });
+    if (error) { console.error('Error fetching projects by contact:', error); return []; }
     return data || [];
   }
 
   async createProject(project: Partial<DbProject>): Promise<DbProject | null> {
+    assertCompanyId(project.company_id, 'createProject');
     try {
       const { data, error } = await this.raceTimeout(
         supabase.from('projects').insert([project]).select().single(),
@@ -1869,18 +1325,12 @@ class DatabaseService {
 
   async createProjectFromEstimate(estimate: DbEstimate, userId: string): Promise<DbProject | null> {
     return this.createProject({
-      company_id: estimate.company_id,
-      contact_id: estimate.contact_id,
-      estimate_id: estimate.id,
-      project_number: `PRJ-${Date.now()}`,
-      name: estimate.title,
-      description: estimate.description,
-      status: 'planning',
-      priority: 'medium',
-      estimated_budget: estimate.total,
-      actual_cost: 0,
-      notes: estimate.notes,
-      created_by: userId,
+      company_id: estimate.company_id, contact_id: estimate.contact_id,
+      estimate_id: estimate.id, project_number: `PRJ-${Date.now()}`,
+      name: estimate.title, description: estimate.description,
+      status: 'planning', priority: 'medium',
+      estimated_budget: estimate.total, actual_cost: 0,
+      notes: estimate.notes, created_by: userId,
     });
   }
 
@@ -1908,48 +1358,29 @@ class DatabaseService {
 
   // Work Order operations
   async getWorkOrders(companyId: string): Promise<DbWorkOrder[]> {
+    assertCompanyId(companyId, 'getWorkOrders');
     const { data, error } = await supabase
-      .from('work_orders')
-      .select('*')
-      .eq('company_id', companyId)
-      .order('created_at', { ascending: false });
-    
-    if (error) {
-      console.error('Error fetching work orders:', error);
-      return [];
-    }
+      .from('work_orders').select('*').eq('company_id', companyId).order('created_at', { ascending: false });
+    if (error) { console.error('Error fetching work orders:', error); return []; }
     return data || [];
   }
 
   async getWorkOrdersByProject(projectId: string): Promise<DbWorkOrder[]> {
     const { data, error } = await supabase
-      .from('work_orders')
-      .select('*')
-      .eq('project_id', projectId)
-      .order('scheduled_date', { ascending: true });
-    
-    if (error) {
-      console.error('Error fetching work orders by project:', error);
-      return [];
-    }
+      .from('work_orders').select('*').eq('project_id', projectId).order('scheduled_date', { ascending: true });
+    if (error) { console.error('Error fetching work orders by project:', error); return []; }
     return data || [];
   }
 
   async getWorkOrdersByContact(contactId: string): Promise<DbWorkOrder[]> {
     const { data, error } = await supabase
-      .from('work_orders')
-      .select('*')
-      .eq('contact_id', contactId)
-      .order('scheduled_date', { ascending: false });
-    
-    if (error) {
-      console.error('Error fetching work orders by contact:', error);
-      return [];
-    }
+      .from('work_orders').select('*').eq('contact_id', contactId).order('scheduled_date', { ascending: false });
+    if (error) { console.error('Error fetching work orders by contact:', error); return []; }
     return data || [];
   }
 
   async createWorkOrder(workOrder: Partial<DbWorkOrder>): Promise<DbWorkOrder | null> {
+    assertCompanyId(workOrder.company_id, 'createWorkOrder');
     try {
       const { data, error } = await this.raceTimeout(
         supabase.from('work_orders').insert([workOrder]).select().single(),
@@ -1982,28 +1413,21 @@ class DatabaseService {
     } catch (err) { console.error('deleteWorkOrder timed out or failed:', err); return false; }
   }
 
-  // Update work order status helpers
   async startWorkOrder(workOrderId: string): Promise<DbWorkOrder | null> {
-    return this.updateWorkOrder(workOrderId, {
-      status: 'in_progress',
-      started_at: new Date().toISOString(),
-    });
+    return this.updateWorkOrder(workOrderId, { status: 'in_progress', started_at: new Date().toISOString() });
   }
 
   async completeWorkOrder(workOrderId: string, actualHours?: number): Promise<DbWorkOrder | null> {
     return this.updateWorkOrder(workOrderId, {
-      status: 'completed',
-      completed_at: new Date().toISOString(),
+      status: 'completed', completed_at: new Date().toISOString(),
       ...(actualHours !== undefined && { actual_hours: actualHours }),
     });
   }
 
   async markWorkOrderSigned(workOrderId: string, signedBy: string, signatureData?: string): Promise<DbWorkOrder | null> {
     return this.updateWorkOrder(workOrderId, {
-      status: 'completed',
-      completed_at: new Date().toISOString(),
-      signed_by: signedBy,
-      signature_data: signatureData,
+      status: 'completed', completed_at: new Date().toISOString(),
+      signed_by: signedBy, signature_data: signatureData,
     });
   }
 
@@ -2011,43 +1435,30 @@ class DatabaseService {
     return this.updateWorkOrder(workOrderId, { sign_token: token });
   }
 
-  // ── Notification operations ──────────────────────────────────────
-
+  // Notification operations
   async getNotifications(companyId: string): Promise<DbNotification[]> {
+    assertCompanyId(companyId, 'getNotifications');
     if (this.inDemoMode()) return [];
     const { data, error } = await supabase
-      .from('notifications')
-      .select('*')
-      .eq('company_id', companyId)
-      .order('created_at', { ascending: false })
-      .limit(100);
-    if (error) {
-      console.error('Error fetching notifications:', error);
-      return [];
-    }
+      .from('notifications').select('*').eq('company_id', companyId)
+      .order('created_at', { ascending: false }).limit(100);
+    if (error) { console.error('Error fetching notifications:', error); return []; }
     return (data || []) as DbNotification[];
   }
 
   async getUnreadNotifications(companyId: string, userId?: string): Promise<DbNotification[]> {
+    assertCompanyId(companyId, 'getUnreadNotifications');
     if (this.inDemoMode()) return [];
-    let query = supabase
-      .from('notifications')
-      .select('*')
-      .eq('company_id', companyId)
-      .eq('read', false)
-      .order('created_at', { ascending: false });
-    if (userId) {
-      query = query.or(`user_id.eq.${userId},user_id.is.null`);
-    }
+    let query = supabase.from('notifications').select('*')
+      .eq('company_id', companyId).eq('read', false).order('created_at', { ascending: false });
+    if (userId) query = query.or(`user_id.eq.${userId},user_id.is.null`);
     const { data, error } = await query;
-    if (error) {
-      console.error('Error fetching unread notifications:', error);
-      return [];
-    }
+    if (error) { console.error('Error fetching unread notifications:', error); return []; }
     return (data || []) as DbNotification[];
   }
 
   async createNotification(notification: Partial<DbNotification>): Promise<DbNotification | null> {
+    assertCompanyId(notification.company_id, 'createNotification');
     if (this.inDemoMode()) return null;
     try {
       const { data, error } = await this.raceTimeout(
@@ -2072,60 +1483,43 @@ class DatabaseService {
   }
 
   async markAllNotificationsRead(companyId: string, userId?: string): Promise<boolean> {
+    assertCompanyId(companyId, 'markAllNotificationsRead');
     if (this.inDemoMode()) return true;
-    let query = supabase
-      .from('notifications')
+    let query = supabase.from('notifications')
       .update({ read: true, updated_at: new Date().toISOString() })
-      .eq('company_id', companyId)
-      .eq('read', false);
-    if (userId) {
-      query = query.or(`user_id.eq.${userId},user_id.is.null`);
-    }
+      .eq('company_id', companyId).eq('read', false);
+    if (userId) query = query.or(`user_id.eq.${userId},user_id.is.null`);
     const { error } = await query;
-    if (error) {
-      console.error('Error marking all notifications read:', error);
-      return false;
-    }
+    if (error) { console.error('Error marking all notifications read:', error); return false; }
     return true;
   }
 
   async deleteNotification(notificationId: string): Promise<boolean> {
     if (this.inDemoMode()) return true;
-    const { error } = await supabase
-      .from('notifications')
-      .delete()
-      .eq('id', notificationId);
-    if (error) {
-      console.error('Error deleting notification:', error);
-      return false;
-    }
+    const { error } = await supabase.from('notifications').delete().eq('id', notificationId);
+    if (error) { console.error('Error deleting notification:', error); return false; }
     return true;
   }
 
-  // ─── Expenses ─────────────────────────────────────────────────────────
-
+  // Expense operations
   async getExpenses(companyId: string): Promise<DbExpense[]> {
+    assertCompanyId(companyId, 'getExpenses');
     if (this.inDemoMode()) return [];
     const { data, error } = await supabase
-      .from('expenses')
-      .select('*')
-      .eq('company_id', companyId)
-      .order('date', { ascending: false });
+      .from('expenses').select('*').eq('company_id', companyId).order('date', { ascending: false });
     if (error) { console.error('Error loading expenses:', error); return []; }
     return (data || []) as DbExpense[];
   }
 
   async createExpense(expense: Partial<DbExpense>): Promise<DbExpense | null> {
+    assertCompanyId(expense.company_id, 'createExpense');
     if (this.inDemoMode()) throw new Error('Expenses are not available in demo mode');
     try {
       const { data, error } = await this.raceTimeout(
         supabase.from('expenses').insert(expense).select().single(),
         10000, 'createExpense'
       );
-      if (error) {
-        console.error('Error creating expense:', error);
-        throw new Error(error.message || 'Failed to save expense');
-      }
+      if (error) { console.error('Error creating expense:', error); throw new Error(error.message || 'Failed to save expense'); }
       return data as DbExpense;
     } catch (err) {
       console.error('createExpense timed out or failed:', err);
@@ -2158,15 +1552,12 @@ class DatabaseService {
   }
 
   async uploadExpenseReceipt(companyId: string, expenseId: string, file: File): Promise<string | null> {
+    assertCompanyId(companyId, 'uploadExpenseReceipt');
     if (this.inDemoMode()) return null;
     const path = `${companyId}/${expenseId}/${file.name}`;
-    const { error } = await supabase.storage
-      .from('expense-receipts')
-      .upload(path, file, { upsert: true });
+    const { error } = await supabase.storage.from('expense-receipts').upload(path, file, { upsert: true });
     if (error) { console.error('Error uploading receipt:', error); return null; }
-    const { data: urlData } = supabase.storage
-      .from('expense-receipts')
-      .getPublicUrl(path);
+    const { data: urlData } = supabase.storage.from('expense-receipts').getPublicUrl(path);
     return urlData.publicUrl;
   }
 }

@@ -865,10 +865,11 @@ function CRMApp() {
     return () => window.clearInterval(poller);
   }, [profile?.company_id, requestSoftReload]);
 
-  // Load data on mount
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+// Load data on mount
+useEffect(() => {
+  if (!profile?.company_id || authLoading) return;
+  loadData();
+}, [loadData]);
 
   // Re-load data when tab becomes visible (fixes stale/blank state after idle)
   useEffect(() => {
