@@ -1,4 +1,3 @@
-code src/components/crm/OwnerPriorityBoard.tsx
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
