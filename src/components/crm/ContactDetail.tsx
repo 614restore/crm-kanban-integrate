@@ -219,6 +219,7 @@ export default function ContactDetail() {
   const documentInputRef = useRef<HTMLInputElement>(null);
 
   const mentionTargets = useMemo(() => getMentionTargets(state.teamMembers), [state.teamMembers]);
+  const effectiveCompanyId = profile?.company_id || state.companyId || null;
   const contactId = contact?.id;
   const contactNotes = contact?.notes ?? '';
 
@@ -440,7 +441,6 @@ export default function ContactDetail() {
   }
 
   const assignee = state.teamMembers.find((tm) => tm.id === contact.assignedTo);
-  const effectiveCompanyId = profile?.company_id || state.companyId || null;
 
   const syncMentionSuggestions = (text: string, caret: number) => {
     const active = findActiveMentionQuery(text, caret);

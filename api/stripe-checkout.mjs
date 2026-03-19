@@ -2,7 +2,7 @@
 // Creates a Stripe Checkout session for a given price ID
 // Environment variables required:
 //   STRIPE_SECRET_KEY  — your Stripe secret key (sk_live_... or sk_test_...)
-//   APP_URL            — your app's base URL (e.g. https://614restore.github.io/crm-kanban-integrate)
+//   APP_URL            — your app's base URL (e.g. https://crm-kanban-integrate.vercel.app)
 
 import Stripe from 'stripe';
 import { requireAuth } from './_auth-middleware.mjs';

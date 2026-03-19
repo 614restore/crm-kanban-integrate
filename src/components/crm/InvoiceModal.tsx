@@ -171,7 +171,10 @@ export default function InvoiceModal() {
             ${notes ? `<p style="margin-top:16px;color:#64748b">${notes}</p>` : ''}
             <p style="margin-top:24px;color:#64748b;font-size:13px">Please reply to this email or call us if you have any questions.</p>
           </div>`,
-        }).catch(() => {});
+        }).catch((emailErr: unknown) => {
+          console.error('[InvoiceModal] Email delivery failed:', emailErr);
+          toast.warning('Invoice saved, but email delivery failed.');
+        });
       } else if (status === 'sent' && !selectedContact?.email) {
         toast.warning('Invoice saved — no email on file for this customer');
       }

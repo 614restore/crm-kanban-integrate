@@ -4,6 +4,20 @@
   "outputDirectory": "dist",
   "installCommand": "npm install --legacy-peer-deps",
   "framework": "vite",
+  "functions": {
+    "api/ai-draft.mjs": {},
+    "api/document-handler.mjs": {},
+    "api/eagleview-auth.mjs": {},
+    "api/eagleview-callback.mjs": {},
+    "api/eagleview-order.mjs": {},
+    "api/eagleview-webhook.mjs": {},
+    "api/eagleview.mjs": {},
+    "api/send-email.mjs": {},
+    "api/send-invite.mjs": {},
+    "api/stripe-checkout.mjs": {},
+    "api/stripe-portal.mjs": {},
+    "api/stripe-webhook.mjs": {}
+  },
   "headers": [
     {
       "source": "/(.*)",

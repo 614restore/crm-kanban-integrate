@@ -11,20 +11,28 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // Verify EagleView signature if webhook secret is configured
+  // Signature verification is mandatory — fail closed if secret or signature is absent
   const webhookSecret = process.env.EAGLEVIEW_WEBHOOK_SECRET;
   const signature = req.headers['x-eagleview-signature'];
 
-  if (webhookSecret && signature) {
-    const hmac = crypto
-      .createHmac('sha256', webhookSecret)
-      .update(JSON.stringify(req.body))
-      .digest('hex');
+  if (!webhookSecret) {
+    console.error('EAGLEVIEW_WEBHOOK_SECRET is not configured');
+    return res.status(500).json({ error: 'Webhook secret not configured' });
+  }
 
-    if (hmac !== signature) {
-      console.warn('EagleView webhook signature mismatch');
-      return res.status(401).json({ error: 'Invalid signature' });
-    }
+  if (!signature) {
+    console.warn('EagleView webhook: missing x-eagleview-signature header');
+    return res.status(401).json({ error: 'Missing signature' });
+  }
+
+  const hmac = crypto
+    .createHmac('sha256', webhookSecret)
+    .update(JSON.stringify(req.body))
+    .digest('hex');
+
+  if (hmac !== signature) {
+    console.warn('EagleView webhook signature mismatch');
+    return res.status(401).json({ error: 'Invalid signature' });
   }
 
   const { orderId, status, reportUrl, reportType, completedAt } = req.body || {};
