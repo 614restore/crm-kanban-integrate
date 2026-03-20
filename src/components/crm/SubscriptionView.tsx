@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, lazy, Suspense } from 'react';
+const PlanComparisonChart = lazy(() => import('@/components/settings/PlanComparisonChart'));
 import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { supabase } from '@/lib/supabase';
@@ -96,8 +97,6 @@ function trialDaysRemaining(trialEndsAt?: string): number | null {
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
 }
 
-// Resolves the correct URL for a public asset regardless of Vite base path
-const chartSrc = `${import.meta.env.BASE_URL}crm-user-tier-comparison.html`.replace('//', '/');
 
 export default function SubscriptionView() {
   const { state } = useCRM();
@@ -309,10 +308,10 @@ export default function SubscriptionView() {
         </div>
       )}
 
-      {/* Scroll-down banner + embedded comparison chart */}
-      <div ref={chartRef} className="space-y-3">
+      {/* Comparison chart */}
+      <div ref={chartRef}>
         <div
-          className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-semibold tracking-wide shadow transition-all duration-700 ${
+          className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-semibold tracking-wide shadow mb-4 transition-all duration-700 ${
             chartVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'
           }`}
         >
@@ -320,16 +319,9 @@ export default function SubscriptionView() {
           SCROLL DOWN TO COMPARE FEATURES
           <ChevronDown className="w-4 h-4 animate-bounce" />
         </div>
-
-        <div className="w-full rounded-xl overflow-hidden border border-gray-200 shadow-sm">
-          <iframe
-            src={chartSrc}
-            title="TrussCTR Plan Feature Comparison"
-            className="w-full"
-            style={{ height: '900px', border: 'none' }}
-            loading="lazy"
-          />
-        </div>
+        <Suspense fallback={<div className="h-48 flex items-center justify-center text-gray-400 text-sm">Loading comparison chart…</div>}>
+          <PlanComparisonChart />
+        </Suspense>
       </div>
 
     </div>
