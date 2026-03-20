@@ -14,64 +14,59 @@ export function isHttpUrl(value: string): boolean {
   return /^https?:\/\//i.test(value);
 }
 
+// Parse any Supabase storage URL (public or signed) into { bucket, path }.
+// Returns null for non-storage URLs (e.g. external links).
+export function extractStorageInfo(value: string): { bucket: string; path: string } | null {
+  if (!value || !isHttpUrl(value)) return null;
+  // public:  /storage/v1/object/public/{bucket}/{path}
+  // signed:  /storage/v1/object/sign/{bucket}/{path}
+  const m = value.match(/\/storage\/v1\/object\/(?:public|sign)\/([^/?]+)\/(.+?)(?:\?.*)?$/);
+  if (!m) return null;
+  return { bucket: m[1], path: decodeURIComponent(m[2]) };
+}
+
+// Legacy helper kept for callers that only need the path string.
 export function extractDocumentPath(value: string): string {
   if (!value) return '';
   if (!isHttpUrl(value)) return value;
+  const info = extractStorageInfo(value);
+  return info ? info.path : value;
+}
 
-  // Backward compatibility: convert previously stored public URLs to object path.
-  const marker = '/storage/v1/object/public/projectceo-documents/';
-  const idx = value.indexOf(marker);
-  if (idx === -1) return value;
-  return decodeURIComponent(value.slice(idx + marker.length).split('?')[0]);
+export function isSupabaseStorageUrl(value: string): boolean {
+  return isHttpUrl(value) && /\.supabase\.co\/storage\//.test(value);
 }
 
 export async function getDocumentSignedUrl(pathOrUrl: string, expiresInSeconds: number = 3600): Promise<string | null> {
-  const path = extractDocumentPath(pathOrUrl);
-  if (!path || (isHttpUrl(path) && !path.includes('/projectceo-documents/'))) {
-    return isHttpUrl(pathOrUrl) ? pathOrUrl : null;
-  }
+  if (!pathOrUrl) return null;
 
+  let bucket: string;
+  let path: string;
 
-  // First, check if the file exists
-  try {
-    const { data: fileData, error: listError } = await supabase.storage
-      .from('projectceo-documents')
-      .list(path.includes('/') ? path.substring(0, path.lastIndexOf('/')) : '', {
-        search: path.includes('/') ? path.substring(path.lastIndexOf('/') + 1) : path
-      });
-    
-    if (listError) {
-      console.error('[Storage] Error checking file existence:', listError);
-      console.error('[Storage] This might indicate the bucket does not exist or has wrong permissions');
-    } else if (!fileData || fileData.length === 0) {
-      console.error('[Storage] File not found in bucket at path:', path);
-      console.error('[Storage] Make sure the file was uploaded successfully and the path is correct');
+  if (isHttpUrl(pathOrUrl)) {
+    const info = extractStorageInfo(pathOrUrl);
+    if (!info) {
+      // Not a Supabase storage URL — open as-is (e.g. EagleView, external links)
+      return pathOrUrl;
     }
-  } catch (checkError) {
-    console.warn('[Storage] Could not verify file existence:', checkError);
+    bucket = info.bucket;
+    path = info.path;
+  } else {
+    // Raw relative path — default to projectceo-documents
+    bucket = 'projectceo-documents';
+    path = pathOrUrl;
   }
 
   const { data, error } = await supabase.storage
-    .from('projectceo-documents')
+    .from(bucket)
     .createSignedUrl(path, expiresInSeconds);
 
   if (error) {
-    console.error('[Storage] Signed URL creation failed!');
-    console.error('[Storage] Error details:', JSON.stringify(error, null, 2));
-    console.error('[Storage] Common causes:');
-    console.error('[Storage]   1. Bucket "projectceo-documents" does not exist');
-    console.error('[Storage]   2. Bucket policies are not configured (needs SELECT policy for authenticated users)');
-    console.error('[Storage]   3. File does not exist at the specified path');
-    console.error('[Storage]   4. User is not authenticated properly');
+    console.error(`[Storage] Signed URL creation failed for bucket "${bucket}" path "${path}":`, error.message);
     return null;
   }
 
-  if (!data?.signedUrl) {
-    console.error('[Storage] Signed URL is empty despite no error');
-    return null;
-  }
-
-  return data.signedUrl;
+  return data?.signedUrl ?? null;
 }
 
 function encodeStoragePath(path: string): string {

@@ -21,7 +21,7 @@ import {
   getMentionTargets,
   validateMentions,
 } from '@/lib/mentions';
-import { uploadDocument, validateDocumentFile, formatFileSize, getDocumentSignedUrl, isHttpUrl } from '@/lib/storage';
+import { uploadDocument, validateDocumentFile, formatFileSize, getDocumentSignedUrl, isHttpUrl, isSupabaseStorageUrl } from '@/lib/storage';
 import { toast } from 'sonner';
 import {
   Contact,
@@ -462,25 +462,17 @@ export default function ContactDetail() {
 
 
     try {
-      // If it's already a full HTTP URL, open it directly
-      if (isHttpUrl(url) && !url.includes('/projectceo-documents/')) {
+      // Non-Supabase URLs (EagleView reports, external links) — open directly
+      if (isHttpUrl(url) && !isSupabaseStorageUrl(url)) {
         window.open(url, '_blank', 'noopener,noreferrer');
         return;
       }
 
-      // If it's a storage path or Supabase URL, try to get/refresh the signed URL
+      // Supabase storage URLs (any bucket) — always create a signed URL
       const signedUrl = await getDocumentSignedUrl(url, 3600);
-      
+
       if (!signedUrl) {
-        console.error('[ContactDetail] Failed to create signed URL');
-        console.error('[ContactDetail] This usually means:');
-        console.error('[ContactDetail]   1. The projectceo-documents bucket does not exist');
-        console.error('[ContactDetail]   2. Storage policies are not configured');
-        console.error('[ContactDetail]   3. The file was deleted or path is incorrect');
-        toast.error(
-          'Unable to open document. Check console for details or verify Supabase bucket setup.',
-          { duration: 5000 }
-        );
+        toast.error('Unable to open document. The file may have been deleted or storage access is not configured.', { duration: 5000 });
         return;
       }
 
