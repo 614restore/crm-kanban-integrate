@@ -5,11 +5,15 @@
 //   APP_URL            — your app's base URL (e.g. https://614restore.github.io/crm-kanban-integrate)
 
 import Stripe from 'stripe';
+import { requireAuth } from './_auth-middleware.mjs';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
+
+  const user = await requireAuth(req, res);
+  if (!user) return;
 
   const stripeKey = process.env.STRIPE_SECRET_KEY;
   if (!stripeKey) {

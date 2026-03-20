@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
+import { supabase } from '@/lib/supabase';
 import { db, DbCompany } from '@/lib/database';
 import {
   CreditCard,
@@ -152,9 +153,13 @@ export default function SubscriptionView() {
     setLoadingPlan(planKey);
     try {
       const companyId = profile?.company_id || state.companyId || undefined;
+      const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(CHECKOUT_API, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
         body: JSON.stringify({ priceId, planId: planKey, companyId }),
       });
       const data = await res.json();
