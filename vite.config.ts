@@ -25,7 +25,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     build: {
-      chunkSizeWarningLimit: 600,
+      chunkSizeWarningLimit: 1000,
       minify: mode === 'production' ? 'terser' : false,
       terserOptions: {
         compress: {
