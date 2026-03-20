@@ -21,13 +21,13 @@ declare global {
 // Stripe Price IDs — fill these in from your Stripe Dashboard after creating products
 const STRIPE_PRICES = {
   starter_monthly: import.meta.env.VITE_STRIPE_STARTER_MONTHLY || '',
-  starter_yearly: import.meta.env.VITE_STRIPE_STARTER_YEARLY || '',
-  pro_monthly: import.meta.env.VITE_STRIPE_PRO_MONTHLY || '',
-  pro_yearly: import.meta.env.VITE_STRIPE_PRO_YEARLY || '',
+  starter_yearly:  import.meta.env.VITE_STRIPE_STARTER_YEARLY  || '',
+  pro_monthly:     import.meta.env.VITE_STRIPE_PRO_MONTHLY     || '',
+  pro_yearly:      import.meta.env.VITE_STRIPE_PRO_YEARLY      || '',
   business_monthly: import.meta.env.VITE_STRIPE_BUSINESS_MONTHLY || '',
-  business_yearly: import.meta.env.VITE_STRIPE_BUSINESS_YEARLY || '',
-  enterprise_monthly: import.meta.env.VITE_STRIPE_ENTERPRISE_MONTHLY || '',
-  enterprise_yearly: import.meta.env.VITE_STRIPE_ENTERPRISE_YEARLY || '',
+  business_yearly:  import.meta.env.VITE_STRIPE_BUSINESS_YEARLY  || '',
+  scale_monthly:   import.meta.env.VITE_STRIPE_SCALE_MONTHLY   || '',
+  scale_yearly:    import.meta.env.VITE_STRIPE_SCALE_YEARLY    || '',
 };
 
 const PLANS = [
@@ -37,8 +37,8 @@ const PLANS = [
     icon: Zap,
     color: 'blue',
     description: 'Perfect for solo contractors or small teams just getting started.',
-    monthlyPrice: 29,
-    yearlyPrice: 290,
+    monthlyPrice: 59,
+    yearlyPrice: 590,
     users: 2,
     contacts: 100,
 
@@ -59,8 +59,8 @@ const PLANS = [
     icon: Rocket,
     color: 'purple',
     description: 'For growing roofing companies ready to scale operations.',
-    monthlyPrice: 59,
-    yearlyPrice: 590,
+    monthlyPrice: 119,
+    yearlyPrice: 1190,
     users: 5,
     contacts: 500,
     popular: true,
@@ -82,8 +82,8 @@ const PLANS = [
     icon: Building2,
     color: 'green',
     description: 'For established roofing businesses managing large teams and high volume.',
-    monthlyPrice: 99,
-    yearlyPrice: 990,
+    monthlyPrice: 229,
+    yearlyPrice: 2290,
     users: 15,
     contacts: 2000,
     features: [
@@ -98,13 +98,13 @@ const PLANS = [
     ],
   },
   {
-    id: 'enterprise',
-    name: 'Enterprise',
+    id: 'scale',
+    name: 'Scale',
     icon: Star,
     color: 'orange',
     description: 'For large roofing enterprises with unlimited scale and dedicated support.',
-    monthlyPrice: 179,
-    yearlyPrice: 1790,
+    monthlyPrice: 399,
+    yearlyPrice: 3990,
     users: 'Unlimited',
     contacts: 'Unlimited',
     features: [
@@ -210,7 +210,7 @@ const COMPARISON_SECTIONS = [
   {
     category: '💰 Pricing',
     rows: [
-      { feature: 'Starting Monthly Price', trussctr: '$29/mo', jobNimbus: '$74/mo', acculynx: '$79/mo', hatch: '$59/mo', serviceTitan: '$398/mo', roofr: '$89/mo' },
+      { feature: 'Starting Monthly Price', trussctr: '$59/mo', jobNimbus: '$74/mo', acculynx: '$79/mo', hatch: '$59/mo', serviceTitan: '$398/mo', roofr: '$89/mo' },
       { feature: 'All Features in Base Plan', trussctr: '✅', jobNimbus: '❌', acculynx: '❌', hatch: '❌', serviceTitan: '❌', roofr: '❌' },
       { feature: 'No Per-Feature Upsells', trussctr: '✅', jobNimbus: '❌', acculynx: '❌', hatch: '❌', serviceTitan: '❌', roofr: '❌' },
       { feature: 'Free Trial', trussctr: '14 days', jobNimbus: '14 days', acculynx: 'Demo only', hatch: '14 days', serviceTitan: 'Demo only', roofr: '14 days' },
