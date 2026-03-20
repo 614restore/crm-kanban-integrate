@@ -75,6 +75,17 @@ import {
 
 type TabType = 'overview' | 'timeline' | 'documents' | 'financial' | 'projects' | 'jobStatus' | 'survey' | 'insurance';
 
+interface SignedDoc {
+  id: string;
+  docType: 'estimate' | 'work_order' | 'change_order';
+  label: string;
+  title: string;
+  signedBy: string;
+  signedAt: string;
+  amount?: number;
+  viewUrl?: string;
+}
+
 // Communication templates for quick responses
 const communicationTemplates = [
   {
@@ -187,6 +198,7 @@ export default function ContactDetail() {
   const [mentionSuggestions, setMentionSuggestions] = useState<ReturnType<typeof getMentionTargets>>([]);
   const [isUploadingDocument, setIsUploadingDocument] = useState(false);
   const [contactDocuments, setContactDocuments] = useState<Document[]>([]);
+  const [signedDocs, setSignedDocs] = useState<SignedDoc[]>([]);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   
   // Project-related data
@@ -263,27 +275,31 @@ export default function ContactDetail() {
     loadContactRelatedData();
   }, [contactId, profile?.company_id, state.projects, state.estimates, state.workOrders, state.materialOrders]);
 
-  // Load contact documents with signed URLs
+  // Load contact documents and signed docs in parallel
   useEffect(() => {
     const loadContactDocuments = async () => {
       if (!contactId) {
         setContactDocuments([]);
+        setSignedDocs([]);
         return;
       }
 
-      const docs = await db.getDocumentsByContact(contactId, profile?.company_id || state.companyId || '');
+      const [docs, signedEstimates, signedWorkOrders, signedChangeOrders] = await Promise.all([
+        db.getDocumentsByContact(contactId, profile?.company_id || state.companyId || ''),
+        db.getSignedEstimatesByContact(contactId),
+        db.getSignedWorkOrdersByContact(contactId),
+        db.getSignedChangeOrdersByContact(contactId),
+      ]);
 
       const docsWithSignedUrls = await Promise.all(
         docs.map(async (doc) => {
-          // Store the path in the URL field, signed URLs will be created on-demand when opening
           const url = doc.url;
-
           return {
             id: doc.id,
             contactId: doc.contact_id || '',
             name: doc.name,
             type: doc.type as 'contract' | 'estimate' | 'invoice' | 'photo' | 'insurance' | 'other',
-            url,  // Store path, not signed URL - we'll create signed URLs on-demand
+            url,
             uploadedAt: doc.created_at,
             uploadedBy: doc.uploaded_by || 'Team member',
             size: doc.size || 'Unknown',
@@ -292,6 +308,49 @@ export default function ContactDetail() {
       );
 
       setContactDocuments(docsWithSignedUrls);
+
+      const origin = window.location.origin;
+      const normalized: SignedDoc[] = [
+        ...signedEstimates.map(est => ({
+          id: est.id,
+          docType: 'estimate' as const,
+          label: est.estimate_number,
+          title: est.title,
+          signedBy: est.signed_by || 'Customer',
+          signedAt: est.accepted_at || est.updated_at,
+          amount: est.total,
+          viewUrl: est.sign_token
+            ? `${origin}/sign?estimateId=${est.id}&token=${est.sign_token}`
+            : undefined,
+        })),
+        ...signedWorkOrders.map(wo => ({
+          id: wo.id,
+          docType: 'work_order' as const,
+          label: wo.work_order_number,
+          title: wo.title,
+          signedBy: wo.signed_by || 'Customer',
+          signedAt: wo.completed_at || wo.updated_at,
+          amount: wo.total_cost,
+          viewUrl: undefined,
+        })),
+        ...signedChangeOrders.map((co: any) => ({
+          id: co.id,
+          docType: 'change_order' as const,
+          label: co.change_order_number,
+          title: co.title,
+          signedBy: co.signed_by_name || 'Customer',
+          signedAt: co.signed_at || co.created_at,
+          amount: co.total,
+          viewUrl: co.sign_token
+            ? `${origin}/sign-change-order/${co.sign_token}`
+            : undefined,
+        })),
+      ];
+
+      normalized.sort(
+        (a, b) => new Date(b.signedAt).getTime() - new Date(a.signedAt).getTime()
+      );
+      setSignedDocs(normalized);
     };
 
     loadContactDocuments();
@@ -1558,96 +1617,162 @@ export default function ContactDetail() {
               userId={profile?.id}
               onDocumentSaved={(doc) => setContactDocuments(prev => [doc, ...prev])}
             />
-          <div className="bg-white rounded-xl border border-gray-200">
-            <input
-              ref={documentInputRef}
-              type="file"
-              className="hidden"
-              onChange={handleUploadDocument}
-              disabled={isUploadingDocument}
-            />
-            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">Documents</h3>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowTemplateModal(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                >
-                  <FileText size={18} />
-                  Use Template
-                </button>
-                <button 
-                  onClick={() => documentInputRef.current?.click()} 
-                  disabled={isUploadingDocument}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isUploadingDocument ? <Loader2 size={18} className="animate-spin" /> : <Upload size={18} />}
-                  {isUploadingDocument ? 'Uploading...' : 'Upload Document'}
-                </button>
+
+            {/* ── Signed Documents ── */}
+            <div className="bg-white rounded-xl border border-gray-200">
+              <div className="p-5 border-b border-gray-200 flex items-center gap-3">
+                <CheckCircle size={20} className="text-green-600" />
+                <h3 className="text-lg font-semibold text-gray-900">Signed Documents</h3>
+                {signedDocs.length > 0 && (
+                  <span className="ml-auto bg-green-100 text-green-700 text-xs font-semibold px-2.5 py-0.5 rounded-full">
+                    {signedDocs.length}
+                  </span>
+                )}
+              </div>
+              <div className="divide-y divide-gray-100">
+                {signedDocs.map((doc) => (
+                  <div key={`${doc.docType}-${doc.id}`} className="p-4 flex items-center justify-between hover:bg-gray-50">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <CheckCircle size={20} className="text-green-600" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                            doc.docType === 'estimate'
+                              ? 'bg-blue-100 text-blue-700'
+                              : doc.docType === 'work_order'
+                              ? 'bg-purple-100 text-purple-700'
+                              : 'bg-orange-100 text-orange-700'
+                          }`}>
+                            {doc.docType === 'estimate'
+                              ? 'Estimate'
+                              : doc.docType === 'work_order'
+                              ? 'Work Order'
+                              : 'Change Order'}
+                          </span>
+                          <span className="text-xs text-gray-400">{doc.label}</span>
+                        </div>
+                        <p className="font-medium text-gray-900">{doc.title}</p>
+                        <p className="text-sm text-gray-500">
+                          Signed by {doc.signedBy} · {formatDate(doc.signedAt)}
+                          {doc.amount != null && ` · ${formatCurrency(doc.amount)}`}
+                        </p>
+                      </div>
+                    </div>
+                    {doc.viewUrl && (
+                      <a
+                        href={doc.viewUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
+                        title="View signed document"
+                      >
+                        <ExternalLink size={18} className="text-gray-500" />
+                      </a>
+                    )}
+                  </div>
+                ))}
+                {signedDocs.length === 0 && (
+                  <div className="p-8 text-center text-gray-400">
+                    <CheckCircle size={28} className="mx-auto mb-2 opacity-30" />
+                    <p className="text-sm">No signed documents yet</p>
+                  </div>
+                )}
               </div>
             </div>
-            <div className="divide-y divide-gray-100">
-              {contactDocuments.map((doc) => (
-                <div key={doc.id} className="p-4 flex items-center justify-between hover:bg-gray-50">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                      <FileText size={20} className="text-gray-500" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900">{doc.name}</p>
-                      <p className="text-sm text-gray-500">
-                        {doc.size} • Uploaded {formatDate(doc.uploadedAt)} by {doc.uploadedBy}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button 
-                      onClick={() => handleOpenDocument(doc.url, doc.name)} 
-                      className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                      title="View document"
-                    >
-                      <Eye size={18} className="text-gray-500" />
-                    </button>
-                    <button 
-                      onClick={() => handleOpenDocument(doc.url, doc.name)} 
-                      className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                      title="Download document"
-                    >
-                      <Download size={18} className="text-gray-500" />
-                    </button>
-                    <button 
-                      onClick={() => handleDeleteDocument(doc.id)} 
-                      className="p-2 hover:bg-red-100 rounded-lg transition-colors"
-                      title="Delete document"
-                    >
-                      <Trash2 size={18} className="text-red-500" />
-                    </button>
-                  </div>
+
+            {/* ── Uploaded Files ── */}
+            <div className="bg-white rounded-xl border border-gray-200">
+              <input
+                ref={documentInputRef}
+                type="file"
+                className="hidden"
+                onChange={handleUploadDocument}
+                disabled={isUploadingDocument}
+              />
+              <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">Uploaded Files</h3>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowTemplateModal(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                  >
+                    <FileText size={18} />
+                    Use Template
+                  </button>
+                  <button
+                    onClick={() => documentInputRef.current?.click()}
+                    disabled={isUploadingDocument}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isUploadingDocument ? <Loader2 size={18} className="animate-spin" /> : <Upload size={18} />}
+                    {isUploadingDocument ? 'Uploading...' : 'Upload Document'}
+                  </button>
                 </div>
-              ))}
-              {contactDocuments.length === 0 && (
-                <div className="p-12 text-center text-gray-500">
-                  <FileText size={32} className="mx-auto mb-2 opacity-50" />
-                  <p>No documents yet</p>
-                  <div className="flex items-center justify-center gap-3 mt-4">
-                    <button
-                      onClick={() => setShowTemplateModal(true)}
-                      className="text-green-600 hover:text-green-700 text-sm font-medium"
-                    >
-                      Use a template
-                    </button>
-                    <span className="text-gray-300">|</span>
-                    <button 
-                      onClick={() => documentInputRef.current?.click()}
-                      className="text-blue-600 hover:text-blue-700 text-sm font-medium"
-                    >
-                      Upload a file
-                    </button>
+              </div>
+              <div className="divide-y divide-gray-100">
+                {contactDocuments.map((doc) => (
+                  <div key={doc.id} className="p-4 flex items-center justify-between hover:bg-gray-50">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                        <FileText size={20} className="text-gray-500" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">{doc.name}</p>
+                        <p className="text-sm text-gray-500">
+                          {doc.size} • Uploaded {formatDate(doc.uploadedAt)} by {doc.uploadedBy}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleOpenDocument(doc.url, doc.name)}
+                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                        title="View document"
+                      >
+                        <Eye size={18} className="text-gray-500" />
+                      </button>
+                      <button
+                        onClick={() => handleOpenDocument(doc.url, doc.name)}
+                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                        title="Download document"
+                      >
+                        <Download size={18} className="text-gray-500" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteDocument(doc.id)}
+                        className="p-2 hover:bg-red-100 rounded-lg transition-colors"
+                        title="Delete document"
+                      >
+                        <Trash2 size={18} className="text-red-500" />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
+                ))}
+                {contactDocuments.length === 0 && (
+                  <div className="p-12 text-center text-gray-500">
+                    <FileText size={32} className="mx-auto mb-2 opacity-50" />
+                    <p>No uploaded files yet</p>
+                    <div className="flex items-center justify-center gap-3 mt-4">
+                      <button
+                        onClick={() => setShowTemplateModal(true)}
+                        className="text-green-600 hover:text-green-700 text-sm font-medium"
+                      >
+                        Use a template
+                      </button>
+                      <span className="text-gray-300">|</span>
+                      <button
+                        onClick={() => documentInputRef.current?.click()}
+                        className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+                      >
+                        Upload a file
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
           </div>
         )}
 

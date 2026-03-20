@@ -1560,6 +1560,41 @@ class DatabaseService {
     const { data: urlData } = supabase.storage.from('expense-receipts').getPublicUrl(path);
     return urlData.publicUrl;
   }
+
+  // ── Signed document queries (for Documents tab in ContactDetail) ─────────────
+
+  async getSignedEstimatesByContact(contactId: string): Promise<DbEstimate[]> {
+    const { data, error } = await supabase
+      .from('estimates')
+      .select('*')
+      .eq('contact_id', contactId)
+      .not('signed_by', 'is', null)
+      .order('accepted_at', { ascending: false });
+    if (error) { console.error('Error fetching signed estimates:', error); return []; }
+    return (data || []) as DbEstimate[];
+  }
+
+  async getSignedWorkOrdersByContact(contactId: string): Promise<DbWorkOrder[]> {
+    const { data, error } = await supabase
+      .from('work_orders')
+      .select('*')
+      .eq('contact_id', contactId)
+      .not('signed_by', 'is', null)
+      .order('completed_at', { ascending: false });
+    if (error) { console.error('Error fetching signed work orders:', error); return []; }
+    return (data || []) as DbWorkOrder[];
+  }
+
+  async getSignedChangeOrdersByContact(contactId: string): Promise<any[]> {
+    const { data, error } = await supabase
+      .from('change_orders')
+      .select('*')
+      .eq('contact_id', contactId)
+      .eq('status', 'signed')
+      .order('signed_at', { ascending: false });
+    if (error) { console.error('Error fetching signed change orders:', error); return []; }
+    return data || [];
+  }
 }
 
 export const db = new DatabaseService();
