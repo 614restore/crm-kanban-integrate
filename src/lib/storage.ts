@@ -348,6 +348,20 @@ export async function uploadDocument(
  * @returns Error message if invalid, null if valid
  */
 export function validateImageFile(file: File, maxSizeMB: number = 5): string | null {
+  const lowerName = file.name.toLowerCase();
+
+  // Catch HEIC/HEIF early — iPhone photos are saved as HEIC by default and
+  // cannot be rendered by most desktop browsers (Chrome, Firefox, Edge).
+  // The MIME type may be 'image/heic', 'image/heif', or even '' (empty).
+  const isHeic =
+    file.type === 'image/heic' ||
+    file.type === 'image/heif' ||
+    lowerName.endsWith('.heic') ||
+    lowerName.endsWith('.heif');
+  if (isHeic) {
+    return 'iPhone HEIC photos are not supported. Please convert to JPG or PNG first (open in Photos → Export → Export as JPG).';
+  }
+
   // Check file type
   if (!file.type.startsWith('image/')) {
     return 'Please upload an image file (JPG, PNG, GIF, WebP)';

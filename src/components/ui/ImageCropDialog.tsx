@@ -4,7 +4,7 @@ import 'react-easy-crop/react-easy-crop.css';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertTriangle } from 'lucide-react';
 
 interface ImageCropDialogProps {
   open: boolean;
@@ -100,8 +100,9 @@ export default function ImageCropDialog({
   const [rotation, setRotation] = useState(0);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<CroppedAreaPixels | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [imageLoadError, setImageLoadError] = useState<string | null>(null);
 
-  // Reset all crop state whenever a new image is loaded.
+  // Reset all crop state whenever a new image is opened.
   // Without this, stale pan/zoom from the previous session pushes the new
   // image off-screen and makes the preview appear completely black.
   useEffect(() => {
@@ -110,6 +111,7 @@ export default function ImageCropDialog({
       setZoom(1);
       setRotation(0);
       setCroppedAreaPixels(null);
+      setImageLoadError(null);
     }
   }, [open, imageUrl]);
 
@@ -128,8 +130,24 @@ export default function ImageCropDialog({
     []
   );
 
+  const onMediaLoaded = useCallback(() => {
+    // Image decoded and displayed successfully — clear any prior error.
+    setImageLoadError(null);
+  }, []);
+
+  const onImageError = useCallback(() => {
+    // The <img> inside react-easy-crop fired an error event.
+    // Common causes: HEIC/HEIF from iPhone (unsupported in Chrome/Firefox),
+    // corrupt file, or a revoked blob URL.
+    setImageLoadError(
+      'This image format cannot be previewed in your browser. ' +
+      'Please convert it to JPG or PNG and try again. ' +
+      '(iPhone HEIC photos must be saved as JPG first.)'
+    );
+  }, []);
+
   const handleSave = async () => {
-    if (!imageUrl) return;
+    if (!imageUrl || imageLoadError) return;
 
     // If the user hasn't dragged yet, croppedAreaPixels is null.
     // Fall back to loading the image and using its full dimensions as the crop.
@@ -171,7 +189,7 @@ export default function ImageCropDialog({
         <div className="space-y-6">
           {/* Crop preview */}
           <div className="relative w-full h-[400px] rounded-lg overflow-hidden bg-gray-900">
-            {imageUrl && (
+            {imageUrl && !imageLoadError && (
               // key={imageUrl} forces react-easy-crop to fully remount when a new
               // image is selected, preventing stale internal state.
               <Cropper
@@ -184,6 +202,8 @@ export default function ImageCropDialog({
                 onCropChange={onCropChange}
                 onZoomChange={onZoomChange}
                 onCropComplete={onCropCompleteInternal}
+                onMediaLoaded={onMediaLoaded}
+                mediaProps={{ onError: onImageError } as React.ImgHTMLAttributes<HTMLElement>}
                 style={{
                   containerStyle: {
                     width: '100%',
@@ -193,47 +213,59 @@ export default function ImageCropDialog({
                 }}
               />
             )}
+
+            {/* Image load error overlay */}
+            {imageLoadError && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center">
+                <AlertTriangle className="h-10 w-10 text-yellow-400 flex-shrink-0" />
+                <p className="text-sm text-gray-300 leading-relaxed max-w-xs">
+                  {imageLoadError}
+                </p>
+              </div>
+            )}
           </div>
 
-          {/* Controls */}
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-medium">Zoom</label>
-                <span className="text-sm text-muted-foreground">{zoom.toFixed(1)}x</span>
+          {/* Controls — hidden when image failed to load */}
+          {!imageLoadError && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium">Zoom</label>
+                  <span className="text-sm text-muted-foreground">{zoom.toFixed(1)}x</span>
+                </div>
+                <Slider
+                  value={[zoom]}
+                  min={1}
+                  max={3}
+                  step={0.1}
+                  onValueChange={(value) => setZoom(value[0])}
+                  className="w-full"
+                />
               </div>
-              <Slider
-                value={[zoom]}
-                min={1}
-                max={3}
-                step={0.1}
-                onValueChange={(value) => setZoom(value[0])}
-                className="w-full"
-              />
-            </div>
 
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-medium">Rotation</label>
-                <span className="text-sm text-muted-foreground">{rotation}°</span>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium">Rotation</label>
+                  <span className="text-sm text-muted-foreground">{rotation}°</span>
+                </div>
+                <Slider
+                  value={[rotation]}
+                  min={0}
+                  max={360}
+                  step={1}
+                  onValueChange={(value) => setRotation(value[0])}
+                  className="w-full"
+                />
               </div>
-              <Slider
-                value={[rotation]}
-                min={0}
-                max={360}
-                step={1}
-                onValueChange={(value) => setRotation(value[0])}
-                className="w-full"
-              />
             </div>
-          </div>
+          )}
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={isProcessing}>
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={isProcessing || !imageUrl}>
+          <Button onClick={handleSave} disabled={isProcessing || !imageUrl || !!imageLoadError}>
             {isProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {isProcessing ? 'Processing...' : 'Save & Upload'}
           </Button>
