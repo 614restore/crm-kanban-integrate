@@ -22,8 +22,8 @@ const PRICE_IDS: Record<string, string> = {
   enterprise: import.meta.env.VITE_STRIPE_ENTERPRISE_MONTHLY || '',
 };
 
-// Vercel API base (empty on GitHub Pages static hosting — falls back to billing portal)
-const API_BASE: string = import.meta.env.VITE_EMAIL_API_BASE_URL || '';
+// API is co-located on Vercel — always use relative paths
+const CHECKOUT_API = '/api/stripe-checkout';
 
 const PLANS = [
   {
@@ -143,30 +143,29 @@ export default function SubscriptionView() {
     setCheckoutError(null);
     const priceId = PRICE_IDS[planKey];
 
-    // If we have an API base and a priceId, create a fresh Stripe session
-    if (API_BASE && priceId) {
-      setLoadingPlan(planKey);
-      try {
-        const companyId = profile?.company_id || state.companyId || undefined;
-        const res = await fetch(`${API_BASE}/api/stripe-checkout`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ priceId, planId: planKey, companyId }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to start checkout');
-        window.location.href = data.url;
-      } catch (err) {
-        setCheckoutError(err instanceof Error ? err.message : 'Checkout failed. Please try again.');
-      } finally {
-        setLoadingPlan(null);
-      }
+    if (!priceId) {
+      // No price ID configured — fall back to billing portal
+      window.open('https://billing.stripe.com/p/login/aFa9AVb73faq5vsfmw6Na00', '_blank', 'noopener,noreferrer');
       return;
     }
 
-    // Fallback: send user to the Stripe billing portal to subscribe
-    window.open('https://billing.stripe.com/p/login/aFa9AVb73faq5vsfmw6Na00', '_blank', 'noopener,noreferrer');
-  }, []);
+    setLoadingPlan(planKey);
+    try {
+      const companyId = profile?.company_id || state.companyId || undefined;
+      const res = await fetch(CHECKOUT_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ priceId, planId: planKey, companyId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to start checkout');
+      window.location.href = data.url;
+    } catch (err) {
+      setCheckoutError(err instanceof Error ? err.message : 'Checkout failed. Please try again.');
+    } finally {
+      setLoadingPlan(null);
+    }
+  }, [profile?.company_id, state.companyId]);
 
   const highlightColors: Record<string, string> = {
     blue: 'border-blue-200 bg-blue-50',
