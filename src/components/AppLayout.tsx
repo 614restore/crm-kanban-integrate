@@ -523,9 +523,15 @@ function CRMApp() {
       const invoices = dbInvoices.map(inv => dbInvoiceToAppInvoice(inv, enrichedContacts));
 
       // Convert DB boards to app boards (with columns)
-      const boards: KanbanBoard[] = dbBoards.length > 0 
+      // Each getKanbanBoardWithColumns call is individually capped at 6 s so a slow
+      // Supabase cold-start on a board column query can't stall the whole loadData.
+      const boards: KanbanBoard[] = dbBoards.length > 0
         ? await Promise.all(dbBoards.map(async (board) => {
-            const result = await db.getKanbanBoardWithColumns(board.id);
+            const result = await withFetchTimeout(
+              db.getKanbanBoardWithColumns(board.id),
+              null,
+              6000
+            );
             return {
               id: board.id,
               name: board.name,
