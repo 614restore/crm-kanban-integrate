@@ -190,10 +190,10 @@ const PRICING_CARDS = [
     badge: '★ Best Value',
     note: 'Flat rate — no per-user fees',
     plans: [
-      { name: 'Starter (2 users)', price: '$29/mo' },
-      { name: 'Pro (5 users)',     price: '$59/mo' },
-      { name: 'Business (10 users)', price: '$99/mo' },
-      { name: 'Enterprise (∞)',    price: '$179/mo' },
+      { name: 'Starter (2 users)',   price: '$59/mo' },
+      { name: 'Pro (5 users)',        price: '$119/mo' },
+      { name: 'Business (15 users)', price: '$229/mo' },
+      { name: 'Scale (∞)',           price: '$399/mo' },
     ],
   },
   {

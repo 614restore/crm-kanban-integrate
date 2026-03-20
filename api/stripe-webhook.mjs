@@ -35,12 +35,12 @@ function planIdFromPriceId(priceId) {
     [
       [process.env.VITE_STRIPE_STARTER_MONTHLY,    'starter'],
       [process.env.VITE_STRIPE_STARTER_YEARLY,     'starter'],
-      [process.env.VITE_STRIPE_PRO_MONTHLY,        'professional'],
-      [process.env.VITE_STRIPE_PRO_YEARLY,         'professional'],
+      [process.env.VITE_STRIPE_PRO_MONTHLY,        'pro'],
+      [process.env.VITE_STRIPE_PRO_YEARLY,         'pro'],
       [process.env.VITE_STRIPE_BUSINESS_MONTHLY,   'business'],
       [process.env.VITE_STRIPE_BUSINESS_YEARLY,    'business'],
-      [process.env.VITE_STRIPE_ENTERPRISE_MONTHLY, 'enterprise'],
-      [process.env.VITE_STRIPE_ENTERPRISE_YEARLY,  'enterprise'],
+      [process.env.VITE_STRIPE_SCALE_MONTHLY,      'scale'],
+      [process.env.VITE_STRIPE_SCALE_YEARLY,       'scale'],
     ].filter(([k]) => Boolean(k))
   );
   return map.get(priceId) ?? null;
@@ -110,7 +110,7 @@ export default async function handler(req, res) {
         const planId =
           planIdFromPriceId(storedPriceId) ||
           session.metadata?.planId ||
-          'professional';
+          'pro';
 
         // Prefer client_reference_id (company UUID passed from the pricing table embed).
         // Fall back to looking up the auth user by email, then their profile.
@@ -172,7 +172,7 @@ export default async function handler(req, res) {
             planIdFromPriceId(activePriceId) ||
             planIdFromPriceId(sub.metadata?.priceId) ||
             sub.metadata?.planId ||
-            'professional';
+            'pro';
           const { error } = await supabase
             .from('companies')
             .update({

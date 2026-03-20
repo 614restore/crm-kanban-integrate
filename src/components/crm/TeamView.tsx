@@ -55,7 +55,7 @@ export default function TeamView() {
   const [subscriptionPlan, setSubscriptionPlan] = useState<string>('trial');
 
   const USER_LIMITS: Record<string, number> = {
-    starter: 2, professional: 5, business: 10, enterprise: Infinity, trial: 2,
+    starter: 2, pro: 5, business: 15, scale: Infinity, trial: 2,
   };
 
   // Fetch company plan once so the UI can reflect seat limits immediately

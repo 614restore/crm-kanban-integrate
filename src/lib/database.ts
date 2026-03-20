@@ -34,7 +34,7 @@ export interface DbCompany {
   tax_id?: string;
   from_email?: string;
   from_name?: string;
-  subscription_plan?: 'starter' | 'professional' | 'business' | 'enterprise' | 'trial';
+  subscription_plan?: 'starter' | 'pro' | 'business' | 'scale' | 'trial';
   subscription_status?: 'active' | 'past_due' | 'canceled' | 'trialing';
   trial_ends_at?: string;
   subscription_ends_at?: string;

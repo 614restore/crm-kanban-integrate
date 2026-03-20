@@ -15,10 +15,10 @@ import {
 
 // Price IDs come from Vite env vars (set in Vercel dashboard for live, .env.local for dev)
 const PRICE_IDS: Record<string, string> = {
-  starter:    import.meta.env.VITE_STRIPE_STARTER_MONTHLY  || '',
-  pro:        import.meta.env.VITE_STRIPE_PRO_MONTHLY      || '',
-  business:   import.meta.env.VITE_STRIPE_BUSINESS_MONTHLY || '',
-  enterprise: import.meta.env.VITE_STRIPE_ENTERPRISE_MONTHLY || '',
+  starter:  import.meta.env.VITE_STRIPE_STARTER_MONTHLY  || '',
+  pro:      import.meta.env.VITE_STRIPE_PRO_MONTHLY      || '',
+  business: import.meta.env.VITE_STRIPE_BUSINESS_MONTHLY || '',
+  scale:    import.meta.env.VITE_STRIPE_SCALE_MONTHLY    || '',
 };
 
 // Vercel API base (empty on GitHub Pages static hosting — falls back to billing portal)
@@ -28,9 +28,9 @@ const PLANS = [
   {
     key: 'starter' as const,
     name: 'Starter',
-    price: 29,
-    annualPrice: 24.17,
-    annualTotal: 290,
+    price: 59,
+    annualPrice: 49.17,
+    annualTotal: 590,
     userLimit: 2,
     features: ['Up to 2 users','Unlimited contacts','Core CRM features','Pipeline board','Invoicing','Email support'],
     icon: <Zap className="w-5 h-5 text-blue-500" />,
@@ -39,9 +39,9 @@ const PLANS = [
   {
     key: 'pro' as const,
     name: 'Pro',
-    price: 59,
-    annualPrice: 49.17,
-    annualTotal: 590,
+    price: 119,
+    annualPrice: 99.17,
+    annualTotal: 1190,
     userLimit: 5,
     features: ['Up to 5 users','Unlimited contacts','Full pipeline visibility','Insurance claim tracking','Supplement tracking','Team reporting'],
     icon: <Star className="w-5 h-5 text-indigo-500" />,
@@ -51,20 +51,20 @@ const PLANS = [
   {
     key: 'business' as const,
     name: 'Business',
-    price: 99,
-    annualPrice: 82.50,
-    annualTotal: 990,
-    userLimit: 10,
-    features: ['Up to 10 users','Unlimited contacts','AI assistant','Advanced analytics','Material order templates','Priority support'],
+    price: 229,
+    annualPrice: 190.83,
+    annualTotal: 2290,
+    userLimit: 15,
+    features: ['Up to 15 users','Unlimited contacts','AI Smart Inspection','Advanced analytics','Material order templates','Priority support'],
     icon: <Shield className="w-5 h-5 text-emerald-500" />,
     color: 'emerald',
   },
   {
-    key: 'enterprise' as const,
-    name: 'Enterprise',
-    price: 179,
-    annualPrice: 149.17,
-    annualTotal: 1790,
+    key: 'scale' as const,
+    name: 'Scale',
+    price: 399,
+    annualPrice: 332.50,
+    annualTotal: 3990,
     userLimit: Infinity,
     features: ['Unlimited users','Unlimited contacts','All features included','Custom onboarding','Dedicated support','QuickBooks sync'],
     icon: <Users className="w-5 h-5 text-purple-500" />,
