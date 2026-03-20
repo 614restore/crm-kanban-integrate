@@ -438,12 +438,15 @@ function TrialBanner({ companyId }: { companyId: string | null }) {
   if (showUrgency) {
     return (
       <div className="flex items-center justify-between gap-3 bg-yellow-50 border-b border-yellow-200 px-4 py-2 text-sm text-yellow-800">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 min-w-0">
           <Zap className="w-4 h-4 flex-shrink-0" />
-          <span>
+          <span className="truncate">
             Your free trial ends in <strong>{daysLeft} day{daysLeft !== 1 ? 's' : ''}</strong>.{' '}
-            Use code <strong className="font-mono">{LAUNCH_PROMO_CODE}</strong> at checkout for <strong>50% off 3 months</strong> (monthly plans only).
+            Use code below for <strong>50% off 3 months</strong> (monthly plans only).
           </span>
+          <button onClick={handleCopy} className="flex-shrink-0 flex items-center gap-1 bg-yellow-200 hover:bg-yellow-300 border border-yellow-400 rounded px-2 py-0.5 text-xs font-mono font-bold transition-colors text-yellow-900" title="Copy promo code">
+            {copied ? '✓ Copied!' : LAUNCH_PROMO_CODE}
+          </button>
         </div>
         <button onClick={() => setDismissed(true)} className="flex-shrink-0 p-1 rounded hover:bg-yellow-100 transition-colors" aria-label="Dismiss">
           <X className="w-3.5 h-3.5" />
@@ -465,7 +468,7 @@ const EMPTY_INIT_PAYLOAD = {
 function CRMApp() {
   const { profile, user, loading: authLoading } = useAuth();
   const [state, dispatch] = useReducer(crmReducer, initialState);
-  const [subscriptionBlocked, setSubscriptionBlocked] = useState(false);
+  const [subscriptionBlocked, setSubscriptionBlocked] = useState<boolean | null>(null);
   useEffect(() => {
     try { localStorage.setItem('crm_current_view', state.currentView); } catch (e) { console.warn('[AppLayout] localStorage write failed:', e); }
   }, [state.currentView]);
@@ -742,23 +745,29 @@ function CRMApp() {
   }, [state.isLoading, state.isInitialized, authLoading]);
 
   useEffect(() => {
-    if (!profile?.company_id) return;
-    
+    if (!profile?.company_id) {
+      setSubscriptionBlocked(false);
+      return;
+    }
+
     const checkSubscription = async () => {
       const company = await db.getCompany(profile.company_id!);
-      if (!company) return;
-      
+      if (!company) {
+        setSubscriptionBlocked(false);
+        return;
+      }
+
       const now = new Date();
-      const trialExpired = company.subscription_status === 'trialing' && 
-                          !!company.trial_ends_at && 
+      const trialExpired = company.subscription_status === 'trialing' &&
+                          !!company.trial_ends_at &&
                           new Date(company.trial_ends_at) < now;
-      const blocked = trialExpired || 
-                     company.subscription_status === 'canceled' || 
+      const blocked = trialExpired ||
+                     company.subscription_status === 'canceled' ||
                      company.subscription_status === 'past_due';
-      
+
       setSubscriptionBlocked(blocked);
     };
-    
+
     checkSubscription();
     
     // Re-check every 5 minutes
@@ -778,7 +787,7 @@ function CRMApp() {
     }
   }, [profile]);
 
-  if (state.isLoading && !state.isInitialized) return <LoadingScreen />;
+  if ((state.isLoading && !state.isInitialized) || subscriptionBlocked === null) return <LoadingScreen />;
 
   if (subscriptionBlocked) {
     return (

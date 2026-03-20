@@ -18,7 +18,7 @@ export default async function handler(req, res) {
 
   const stripe = new Stripe(stripeKey, { apiVersion: '2023-10-16' });
 
-  const { priceId, planId, couponId } = req.body;
+  const { priceId, planId, couponId, companyId } = req.body;
 
   if (!priceId) {
     return res.status(400).json({ error: 'priceId is required' });
@@ -35,6 +35,7 @@ export default async function handler(req, res) {
       mode: 'subscription',
       payment_method_types: ['card'],
       line_items: [{ price: priceId, quantity: 1 }],
+      ...(companyId ? { client_reference_id: companyId } : {}),
       subscription_data: {
         trial_period_days: 14,
         metadata: { planId: planId || '' },

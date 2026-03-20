@@ -11,6 +11,7 @@ import {
   Check,
   ChevronDown,
   Loader2,
+  Tag,
 } from 'lucide-react';
 
 // Price IDs come from Vite env vars (set in Vercel dashboard for live, .env.local for dev)
@@ -146,10 +147,11 @@ export default function SubscriptionView() {
     if (API_BASE && priceId) {
       setLoadingPlan(planKey);
       try {
+        const companyId = profile?.company_id || state.companyId || undefined;
         const res = await fetch(`${API_BASE}/api/stripe-checkout`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ priceId, planId: planKey }),
+          body: JSON.stringify({ priceId, planId: planKey, companyId }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed to start checkout');
@@ -236,6 +238,16 @@ export default function SubscriptionView() {
           );
         })()}
       </div>
+
+      {/* LAUNCH50 promo callout — visible during trial */}
+      {(status === 'trialing' || status === 'canceled' || status === 'past_due') && (
+        <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-2.5 text-sm text-indigo-800">
+          <Tag className="w-4 h-4 flex-shrink-0 text-indigo-500" />
+          <span>
+            Use code <strong className="font-mono">LAUNCH50</strong> at checkout — <strong>50% off your first 3 months</strong> on any monthly plan.
+          </span>
+        </div>
+      )}
 
       {/* Pricing grid */}
       <div>
