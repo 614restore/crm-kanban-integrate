@@ -197,6 +197,7 @@ export default function ImageCropDialog({
                 image={imageUrl}
                 crop={crop}
                 zoom={zoom}
+                minZoom={0.4}
                 rotation={rotation}
                 {...(aspectRatio !== undefined ? { aspect: aspectRatio } : {})}
                 onCropChange={onCropChange}
@@ -235,7 +236,7 @@ export default function ImageCropDialog({
                 </div>
                 <Slider
                   value={[zoom]}
-                  min={1}
+                  min={0.4}
                   max={3}
                   step={0.1}
                   onValueChange={(value) => setZoom(value[0])}

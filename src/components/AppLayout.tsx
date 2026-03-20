@@ -412,6 +412,7 @@ function CRMApp() {
     try { localStorage.setItem('crm_current_view', state.currentView); } catch (e) { console.warn('[AppLayout] localStorage write failed (private browsing?):', e); }
   }, [state.currentView]);
   const realtimeFailedRef = useRef(false);
+  const realtimeChannelRef = useRef<any>(null);
   const isReloadingRef = useRef(false);
   const queuedReloadRef = useRef(false);
 
@@ -846,15 +847,24 @@ function CRMApp() {
         if ((status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') && !realtimeFailedRef.current) {
           realtimeFailedRef.current = true;
           console.warn('Realtime unavailable; continuing with periodic reload fallback.', { status, error });
-          // Keep fallback silent in-app; avoid noisy warning notifications for known websocket issues.
+          // Remove the channel entirely to stop Supabase from retrying the WebSocket connection.
+          if (realtimeChannelRef.current) {
+            db.unsubscribe(realtimeChannelRef.current);
+            realtimeChannelRef.current = null;
+          }
         } else if (status === 'SUBSCRIBED') {
           realtimeFailedRef.current = false;
         }
       },
     });
 
+    realtimeChannelRef.current = channel;
+
     return () => {
-      db.unsubscribe(channel);
+      if (realtimeChannelRef.current) {
+        db.unsubscribe(realtimeChannelRef.current);
+        realtimeChannelRef.current = null;
+      }
     };
   }, [profile?.company_id, loadData, requestSoftReload]);
 

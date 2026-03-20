@@ -7,18 +7,24 @@
 import Stripe from 'stripe';
 import { requireAuth } from './_auth-middleware.mjs';
 
-// Only allow price IDs that are configured in environment variables
-function getAllowedPriceIds() {
-  return [
-    process.env.VITE_STRIPE_STARTER_MONTHLY,
-    process.env.VITE_STRIPE_STARTER_YEARLY,
-    process.env.VITE_STRIPE_PRO_MONTHLY,
-    process.env.VITE_STRIPE_PRO_YEARLY,
-    process.env.VITE_STRIPE_BUSINESS_MONTHLY,
-    process.env.VITE_STRIPE_BUSINESS_YEARLY,
-    process.env.VITE_STRIPE_ENTERPRISE_MONTHLY,
-    process.env.VITE_STRIPE_ENTERPRISE_YEARLY,
-  ].filter(Boolean);
+/**
+ * Build a server-side price ID → plan name map from env vars.
+ * This is the ONLY source of truth for plan names — the client's planId
+ * is intentionally ignored to prevent price/plan manipulation.
+ */
+function buildPriceToPlnMap() {
+  return new Map(
+    [
+      [process.env.VITE_STRIPE_STARTER_MONTHLY,    'starter'],
+      [process.env.VITE_STRIPE_STARTER_YEARLY,     'starter'],
+      [process.env.VITE_STRIPE_PRO_MONTHLY,        'professional'],
+      [process.env.VITE_STRIPE_PRO_YEARLY,         'professional'],
+      [process.env.VITE_STRIPE_BUSINESS_MONTHLY,   'business'],
+      [process.env.VITE_STRIPE_BUSINESS_YEARLY,    'business'],
+      [process.env.VITE_STRIPE_ENTERPRISE_MONTHLY, 'enterprise'],
+      [process.env.VITE_STRIPE_ENTERPRISE_YEARLY,  'enterprise'],
+    ].filter(([k]) => Boolean(k))
+  );
 }
 
 export default async function handler(req, res) {
@@ -36,15 +42,19 @@ export default async function handler(req, res) {
 
   const stripe = new Stripe(stripeKey, { apiVersion: '2023-10-16' });
 
-  const { priceId, planId, couponId } = req.body;
+  // Only read priceId and couponId from the client — planId is NEVER trusted from the client.
+  const { priceId, couponId } = req.body;
 
   if (!priceId) {
     return res.status(400).json({ error: 'priceId is required' });
   }
 
-  // Validate that the requested price ID is one we actually offer
-  const allowedIds = getAllowedPriceIds();
-  if (allowedIds.length > 0 && !allowedIds.includes(priceId)) {
+  // Derive the plan name server-side from the price ID map.
+  // If the priceId is not in our map, it is not a valid plan price — reject it.
+  const priceToPlnMap = buildPriceToPlnMap();
+  const resolvedPlanId = priceToPlnMap.get(priceId);
+
+  if (!resolvedPlanId) {
     return res.status(400).json({ error: 'Invalid price ID.' });
   }
 
@@ -59,9 +69,13 @@ export default async function handler(req, res) {
       mode: 'subscription',
       payment_method_types: ['card'],
       line_items: [{ price: priceId, quantity: 1 }],
+      // Store the server-derived plan name at both the session level (readable
+      // immediately in checkout.session.completed) and the subscription level
+      // (readable in all future subscription events). Never trust client-supplied values.
+      metadata: { planId: resolvedPlanId, priceId },
       subscription_data: {
         trial_period_days: 14,
-        metadata: { planId: planId || '' },
+        metadata: { planId: resolvedPlanId, priceId },
       },
       // If a couponId is passed, apply it directly (disables the promo code field to avoid double-dipping)
       ...(couponId
@@ -69,7 +83,7 @@ export default async function handler(req, res) {
         : { allow_promotion_codes: true }),
       phone_number_collection: { enabled: true },
       tax_id_collection: { enabled: true },
-      success_url: `${appUrl}/?checkout=success&plan=${planId}`,
+      success_url: `${appUrl}/?checkout=success&plan=${resolvedPlanId}`,
       cancel_url: `${appUrl}/?checkout=cancelled`,
     };
 

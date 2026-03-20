@@ -52,6 +52,26 @@ export default function TeamView() {
   const canManage = canManageTeam(userRole);
   const assignableRoles = getAssignableRoles(userRole);
 
+  const [subscriptionPlan, setSubscriptionPlan] = useState<string>('trial');
+
+  const USER_LIMITS: Record<string, number> = {
+    starter: 2, professional: 5, business: 10, enterprise: Infinity, trial: 2,
+  };
+
+  // Fetch company plan once so the UI can reflect seat limits immediately
+  useEffect(() => {
+    const companyId = state.companyId || profile?.company_id;
+    if (!companyId) return;
+    db.getCompany(companyId)
+      .then(c => { if (c?.subscription_plan) setSubscriptionPlan(c.subscription_plan); })
+      .catch(() => {});
+  }, [state.companyId, profile?.company_id]);
+
+  const planLimit = USER_LIMITS[subscriptionPlan] ?? 2;
+  const activeSeats = state.teamMembers.length;
+  const pendingSeats = pendingInvites.filter(i => !i.accepted).length;
+  const atSeatLimit = planLimit !== Infinity && (activeSeats + pendingSeats) >= planLimit;
+
   // Debug logging for team members
   useEffect(() => {
   }, [state.teamMembers, state.companyId, profile]);
@@ -121,6 +141,30 @@ export default function TeamView() {
     if (!inviteEmail.trim()) {
       toast.error('Please enter an email address.');
       return;
+    }
+
+    // Enforce per-plan user limits before sending the invite.
+    // Re-fetch company to get the latest plan in case state is stale.
+    const companyRow = effectiveCompanyId
+      ? await db.getCompany(effectiveCompanyId).catch(() => null)
+      : null;
+    const plan = companyRow?.subscription_plan ?? subscriptionPlan ?? 'trial';
+    const limit = USER_LIMITS[plan] ?? 2;
+
+    if (limit !== Infinity) {
+      const activeCount = state.teamMembers.length;
+      const pendingCount = pendingInvites.filter(i => !i.accepted).length;
+      const totalSeats = activeCount + pendingCount;
+
+      if (totalSeats >= limit) {
+        toast.error(
+          `Your ${plan} plan allows up to ${limit} user${limit === 1 ? '' : 's'}. ` +
+          `You currently have ${activeCount} active member${activeCount === 1 ? '' : 's'} ` +
+          `and ${pendingCount} pending invite${pendingCount === 1 ? '' : 's'}. ` +
+          `Upgrade your plan to add more team members.`
+        );
+        return;
+      }
     }
 
     setIsSendingInvite(true);
@@ -375,11 +419,24 @@ export default function TeamView() {
         {canManage && (
           <div className="flex items-center gap-3">
             <button
-              onClick={() => setShowInviteModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              onClick={() => {
+                if (atSeatLimit) {
+                  toast.error(`Your ${subscriptionPlan} plan allows up to ${planLimit} user${planLimit === 1 ? '' : 's'}. Upgrade to add more team members.`);
+                  return;
+                }
+                setShowInviteModal(true);
+              }}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                atSeatLimit
+                  ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                  : 'bg-blue-600 text-white hover:bg-blue-700'
+              }`}
+              title={atSeatLimit ? `Plan limit reached (${planLimit} users). Upgrade to add more.` : 'Invite a team member'}
             >
               <UserPlus size={18} />
-              <span className="font-medium">Invite Member</span>
+              <span className="font-medium">
+                {atSeatLimit ? `Seat Limit Reached (${activeSeats + pendingSeats}/${planLimit})` : 'Invite Member'}
+              </span>
             </button>
           </div>
         )}

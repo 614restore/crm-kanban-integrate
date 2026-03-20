@@ -21,6 +21,31 @@ import { createClient } from '@supabase/supabase-js';
 
 export const config = { api: { bodyParser: false } };
 
+/**
+ * Derive the canonical plan name from a Stripe price ID using the server-side
+ * env var mapping.  Returns null if the price ID is unknown.
+ *
+ * This is used as the authoritative source so that even if checkout session
+ * metadata was somehow tampered with before reaching the webhook, the plan
+ * stored in the database always reflects the price that was actually paid.
+ */
+function planIdFromPriceId(priceId) {
+  if (!priceId) return null;
+  const map = new Map(
+    [
+      [process.env.VITE_STRIPE_STARTER_MONTHLY,    'starter'],
+      [process.env.VITE_STRIPE_STARTER_YEARLY,     'starter'],
+      [process.env.VITE_STRIPE_PRO_MONTHLY,        'professional'],
+      [process.env.VITE_STRIPE_PRO_YEARLY,         'professional'],
+      [process.env.VITE_STRIPE_BUSINESS_MONTHLY,   'business'],
+      [process.env.VITE_STRIPE_BUSINESS_YEARLY,    'business'],
+      [process.env.VITE_STRIPE_ENTERPRISE_MONTHLY, 'enterprise'],
+      [process.env.VITE_STRIPE_ENTERPRISE_YEARLY,  'enterprise'],
+    ].filter(([k]) => Boolean(k))
+  );
+  return map.get(priceId) ?? null;
+}
+
 async function getRawBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
@@ -77,7 +102,15 @@ export default async function handler(req, res) {
         const session = event.data.object;
         const customerId = session.customer;
         const subscriptionId = session.subscription;
-        const planId = session.metadata?.planId || 'professional';
+
+        // Resolve plan name. Prefer the server-derived priceId stored in session
+        // metadata (set by stripe-checkout.mjs, never from the client).  Fall back
+        // to the planId also stored in metadata, then a safe default.
+        const storedPriceId = session.metadata?.priceId;
+        const planId =
+          planIdFromPriceId(storedPriceId) ||
+          session.metadata?.planId ||
+          'professional';
 
         // Prefer client_reference_id (company UUID passed from the pricing table embed).
         // Fall back to looking up the auth user by email, then their profile.
@@ -131,7 +164,15 @@ export default async function handler(req, res) {
         const sub = event.data.object;
         const companyId = await getCompanyByStripeCustomer(supabase, sub.customer);
         if (companyId) {
-          const planId = sub.metadata?.planId || sub.items?.data?.[0]?.price?.metadata?.planId || 'professional';
+          // Derive plan from the active subscription item's price ID (authoritative —
+          // comes directly from Stripe, not from client input).  Fall back to
+          // subscription metadata set during checkout, then a safe default.
+          const activePriceId = sub.items?.data?.[0]?.price?.id;
+          const planId =
+            planIdFromPriceId(activePriceId) ||
+            planIdFromPriceId(sub.metadata?.priceId) ||
+            sub.metadata?.planId ||
+            'professional';
           const { error } = await supabase
             .from('companies')
             .update({

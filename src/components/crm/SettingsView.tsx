@@ -958,16 +958,16 @@ export default function SettingsView() {
       
       const companyId = effectiveCompanyId || await resolveCompanyId();
 
+      // Always dismiss the loading toast before any early return or continuation
+      if (loadingToastId && toast.dismiss) {
+        toast.dismiss(loadingToastId);
+      }
+
       if (!companyId) {
         toast.error('Unable to find your company. Your account may need to be set up. Please sign out and sign back in.');
         setCompanyLogo(previousLogo);
         setIsUploadingLogo(false);
         return;
-      }
-      
-      // Dismiss loading toast
-      if (loadingToastId && toast.dismiss) {
-        toast.dismiss(loadingToastId);
       }
 
       // Precompute a local compatibility fallback before network upload.
