@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db, DbCompany } from '@/lib/database';
+import { supabase } from '@/lib/supabase';
 import {
   CreditCard,
   Zap,
@@ -99,7 +100,7 @@ const chartSrc = `${import.meta.env.BASE_URL}crm-user-tier-comparison.html`.repl
 
 export default function SubscriptionView() {
   const { state } = useCRM();
-  const { profile, session } = useAuth();
+  const { profile } = useAuth();
   const [company, setCompany] = useState<DbCompany | null>(null);
   const [chartVisible, setChartVisible] = useState(false);
   const chartRef = useRef<HTMLDivElement>(null);
@@ -146,12 +147,14 @@ export default function SubscriptionView() {
     if (API_BASE && priceId) {
       setLoadingPlan(planKey);
       try {
+        const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
+        if (!token) throw new Error('Not authenticated. Please log in again.');
         const res = await fetch(`${API_BASE}/api/stripe-checkout`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({ priceId }),
         });
@@ -168,7 +171,7 @@ export default function SubscriptionView() {
 
     // Fallback: send user to the Stripe billing portal to subscribe
     window.open('https://billing.stripe.com/p/login/aFa9AVb73faq5vsfmw6Na00', '_blank', 'noopener,noreferrer');
-  }, [session]);
+  }, []);
 
   const highlightColors: Record<string, string> = {
     blue: 'border-blue-200 bg-blue-50',
