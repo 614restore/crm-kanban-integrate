@@ -99,7 +99,7 @@ const PLANS = [
   },
   {
     id: 'scale',
-    name: 'Scale',
+    name: 'Scaling',
     icon: Star,
     color: 'orange',
     description: 'For large roofing enterprises with unlimited scale and dedicated support.',
