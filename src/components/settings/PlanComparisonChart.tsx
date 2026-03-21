@@ -188,7 +188,7 @@ const PRICING_CARDS = [
     name: 'TrussCTR',
     highlight: true,
     badge: '★ Best Value',
-    note: 'Flat rate — no per-user fees · 🤖 Android Coming Soon',
+    note: 'Flat rate — no per-user fees',
     plans: [
       { name: 'Starter (2 users)',   price: '$59/mo' },
       { name: 'Pro (5 users)',        price: '$119/mo' },
@@ -328,6 +328,20 @@ const PlanComparisonChart: React.FC = () => {
         <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>
           Built exclusively for roofing &amp; restoration contractors — Web + Native Mobile App included in every plan
         </p>
+        <div style={{ marginTop: 10 }}>
+          <span style={{
+            display: 'inline-block',
+            background: 'linear-gradient(135deg, #1e3a5f, #1e1b4b)',
+            border: '1px solid #3b82f6',
+            color: '#93c5fd',
+            fontSize: '0.72rem',
+            fontWeight: 700,
+            padding: '4px 14px',
+            borderRadius: 999,
+            letterSpacing: '0.06em',
+            textTransform: 'uppercase',
+          }}>🤖 Android App — Coming Soon</span>
+        </div>
       </div>
 
       {/* ── Pricing Cards ── */}
