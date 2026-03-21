@@ -188,7 +188,7 @@ const PRICING_CARDS = [
     name: 'TrussCTR',
     highlight: true,
     badge: '★ Best Value',
-    note: 'Flat rate — no per-user fees',
+    note: 'Flat rate — no per-user fees · 🤖 Android Coming Soon',
     plans: [
       { name: 'Starter (2 users)',   price: '$59/mo' },
       { name: 'Pro (5 users)',        price: '$119/mo' },
@@ -376,7 +376,7 @@ const PlanComparisonChart: React.FC = () => {
         </p>
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-end', gap: 6, flexWrap: 'wrap' }}>
           {[
-            { name: 'TrussCTR', price: '$59', highlight: true },
+            { name: 'TrussCTR', price: '$119', highlight: true },
             { name: 'Jobber', price: '$149' },
             { name: 'JobNimbus', price: '~$135' },
             { name: 'Roofr', price: '$159' },
