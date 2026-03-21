@@ -193,7 +193,7 @@ const PRICING_CARDS = [
       { name: 'Starter (2 users)',   price: '$29/mo' },
       { name: 'Pro (5 users)',        price: '$59/mo' },
       { name: 'Business (10 users)', price: '$99/mo' },
-      { name: 'Enterprise (∞)',      price: '$179/mo' },
+      { name: 'Scaling (∞)',         price: '$179/mo' },
     ],
   },
   {
