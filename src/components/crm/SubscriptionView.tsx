@@ -22,8 +22,6 @@ const PRICE_IDS: Record<string, string> = {
   scale:    import.meta.env.VITE_STRIPE_SCALE_MONTHLY    || '',
 };
 
-// Vercel API base (empty on GitHub Pages static hosting — falls back to billing portal)
-const API_BASE: string = import.meta.env.VITE_EMAIL_API_BASE_URL || '';
 
 const PLANS = [
   {
@@ -142,35 +140,29 @@ export default function SubscriptionView() {
   const handleCheckout = useCallback(async (planKey: string) => {
     setCheckoutError(null);
     const priceId = PRICE_IDS[planKey];
+    if (!priceId) return;
 
-    // If we have an API base and a priceId, create a fresh Stripe session
-    if (API_BASE && priceId) {
-      setLoadingPlan(planKey);
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token;
-        if (!token) throw new Error('Not authenticated. Please log in again.');
-        const res = await fetch(`${API_BASE}/api/stripe-checkout`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ priceId }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to start checkout');
-        window.location.href = data.url;
-      } catch (err) {
-        setCheckoutError(err instanceof Error ? err.message : 'Checkout failed. Please try again.');
-      } finally {
-        setLoadingPlan(null);
-      }
-      return;
+    setLoadingPlan(planKey);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error('Not authenticated. Please log in again.');
+      const res = await fetch('/api/stripe-checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ priceId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to start checkout');
+      window.location.href = data.url;
+    } catch (err) {
+      setCheckoutError(err instanceof Error ? err.message : 'Checkout failed. Please try again.');
+    } finally {
+      setLoadingPlan(null);
     }
-
-    // Fallback: send user to the Stripe billing portal to subscribe
-    window.open('https://billing.stripe.com/p/login/aFa9AVb73faq5vsfmw6Na00', '_blank', 'noopener,noreferrer');
   }, []);
 
   const highlightColors: Record<string, string> = {
