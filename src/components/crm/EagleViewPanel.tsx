@@ -64,6 +64,21 @@ function normalizeStatus(raw: string | undefined): OrderStatus {
 
 const STORAGE_KEY = (contactId: string) => `ev_order_${contactId}`;
 
+/** Try localStorage first, then fall back gracefully (private browser, etc.) */
+function readOrderFromStorage(contactId: string): PendingOrder | null {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY(contactId));
+    return saved ? JSON.parse(saved) : null;
+  } catch { return null; }
+}
+
+function writeOrderToStorage(contactId: string, order: PendingOrder | null) {
+  try {
+    if (order) localStorage.setItem(STORAGE_KEY(contactId), JSON.stringify(order));
+    else localStorage.removeItem(STORAGE_KEY(contactId));
+  } catch { /* private browser — ignore, state is still held in React */ }
+}
+
 export default function EagleViewPanel({
   address, city, state, zip, companyId, contactId, contactName, userId, onDocumentSaved,
 }: Props) {
@@ -80,24 +95,35 @@ export default function EagleViewPanel({
   const fullAddress = [address, city, state, zip].filter(Boolean).join(', ');
   const repName = contactName || 'Customer';
 
-  // ── Load saved order (localStorage) + EagleView credentials ─────────────
+  // ── Load saved order + EagleView credentials ─────────────────────────────
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY(contactId));
-    if (saved) {
-      try { setOrder(JSON.parse(saved)); } catch { /* corrupt, ignore */ }
-    }
+    // Restore any in-progress order from storage (graceful in private browsers)
+    const saved = readOrderFromStorage(contactId);
+    if (saved) setOrder(saved);
 
     if (!companyId) { setConfigStatus('missing'); return; }
 
     const load = async () => {
       try {
-        const { data } = await supabase
+        // Ensure the session is active before hitting Supabase — prevents
+        // false "not configured" state after dormancy or in private browsers.
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) { setConfigStatus('missing'); return; }
+
+        const { data, error: dbError } = await supabase
           .from('company_integrations')
           .select('credentials')
           .eq('company_id', companyId)
           .eq('integration_type', 'eagleview')
           .eq('is_active', true)
           .single();
+
+        if (dbError && dbError.code !== 'PGRST116') {
+          // Real DB / auth error — not just "no rows found"
+          setConfigStatus('missing');
+          return;
+        }
+
         const apiKey = data?.credentials?.apiKey;
         const clientId = data?.credentials?.clientId;
         const env = data?.credentials?.environment || 'production';
@@ -116,11 +142,10 @@ export default function EagleViewPanel({
     load();
   }, [companyId, contactId]);
 
-  // ── Persist order to localStorage ────────────────────────────────────────
+  // ── Persist order to storage ──────────────────────────────────────────────
   const persistOrder = useCallback((o: PendingOrder | null) => {
     setOrder(o);
-    if (o) localStorage.setItem(STORAGE_KEY(contactId), JSON.stringify(o));
-    else localStorage.removeItem(STORAGE_KEY(contactId));
+    writeOrderToStorage(contactId, o);
   }, [contactId]);
 
   // ── Order a new report ────────────────────────────────────────────────────
