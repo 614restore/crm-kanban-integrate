@@ -14,10 +14,10 @@ const PRICING = [
     highlight: true,
     tag: '★ Best Value',
     plans: [
-      { label: 'Starter (2 users)', price: '$29/mo' },
-      { label: 'Pro (5 users)',     price: '$59/mo' },
-      { label: 'Business (10)',     price: '$99/mo' },
-      { label: 'Enterprise (∞)',   price: '$179/mo' },
+      { label: 'Starter (2 users)', price: '$59/mo' },
+      { label: 'Pro (5 users)',     price: '$119/mo' },
+      { label: 'Business (15)',     price: '$229/mo' },
+      { label: 'Scale (∞)',         price: '$399/mo' },
     ],
     note: 'Flat rate — all users included',
     noteColor: '#86efac',
@@ -87,7 +87,7 @@ const SECTIONS = [
     label: '💰 Pricing & Access',
     defaultOpen: true,
     rows: [
-      { f: 'Starting monthly price',           v: ['$29–$179 flat', '$25+/user', '$89+/user', '$89+/mo', '$49+/user', '$500+/mo'] },
+      { f: 'Starting monthly price',           v: ['$59–$399 flat', '$25+/user', '$89+/user', '$89+/mo', '$49+/user', '$500+/mo'] },
       { f: 'Flat rate — no per-user fees',     v: ['Y', 'N', 'N', 'N', 'N', 'N'] },
       { f: '14-day free trial',                v: ['Y', 'Y', 'Demo only', 'Y', 'Y', 'Demo only'] },
       { f: 'Built for roofing & restoration',  v: ['Y', 'Y', 'Y', 'Y', 'Partial', 'Partial'] },
@@ -212,7 +212,7 @@ const SECTIONS = [
 // ─── "Why TrussCTR Wins" summary cards ───────────────────────────────────────
 const WIN_CARDS = [
   { stat: 'Flat Rate',    desc: 'No per-user fees — competitors charge $25–$79 per seat' },
-  { stat: '$29–$179',     desc: 'vs $500–$1,200+/mo for ServiceTitan at comparable team size' },
+  { stat: '$59–$399',     desc: 'vs $500–$1,200+/mo for ServiceTitan at comparable team size' },
   { stat: 'Insurance',   desc: 'Built-in claim & supplement tracking — most competitors don\'t offer this' },
   { stat: 'All Features', desc: 'Every feature on every plan — no artificial feature-gating by tier' },
 ];
