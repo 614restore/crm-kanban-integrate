@@ -8,11 +8,15 @@ import { toast } from 'sonner';
 import PermissionsEditor from '../settings/PermissionsEditor';
 import type { PermissionCategory, PermissionLevel } from '@/lib/permissions';
 import {
+  Users,
+  Plus,
   Search,
   Mail,
   Phone,
   Shield,
   Edit2,
+  Trash2,
+  MoreVertical,
   UserPlus,
   Copy,
   CheckCircle,
@@ -22,11 +26,12 @@ import {
   Target,
   DollarSign,
   Loader2,
+  Settings,
 } from 'lucide-react';
 
 export default function TeamView() {
   const { state, dispatch } = useCRM();
-  const { profile } = useAuth();
+  const { profile, session } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -47,8 +52,31 @@ export default function TeamView() {
   const canManage = canManageTeam(userRole);
   const assignableRoles = getAssignableRoles(userRole);
 
-  useEffect(() => {}, [state.teamMembers, state.companyId, profile]);
+  const [subscriptionPlan, setSubscriptionPlan] = useState<string>('trial');
 
+  const USER_LIMITS: Record<string, number> = {
+    starter: 2, pro: 5, business: 15, scale: Infinity, trial: 2,
+  };
+
+  // Fetch company plan once so the UI can reflect seat limits immediately
+  useEffect(() => {
+    const companyId = state.companyId || profile?.company_id;
+    if (!companyId) return;
+    db.getCompany(companyId)
+      .then(c => { if (c?.subscription_plan) setSubscriptionPlan(c.subscription_plan); })
+      .catch(() => {});
+  }, [state.companyId, profile?.company_id]);
+
+  const planLimit = USER_LIMITS[subscriptionPlan] ?? 2;
+  const activeSeats = state.teamMembers.length;
+  const pendingSeats = pendingInvites.filter(i => !i.accepted).length;
+  const atSeatLimit = planLimit !== Infinity && (activeSeats + pendingSeats) >= planLimit;
+
+  // Debug logging for team members
+  useEffect(() => {
+  }, [state.teamMembers, state.companyId, profile]);
+
+  // Load pending invites
   useEffect(() => {
     if (!state.companyId || !canManageTeam(userRole)) return;
     setIsLoadingInvites(true);
@@ -63,15 +91,21 @@ export default function TeamView() {
       });
   }, [state.companyId, userRole]);
 
-  const filteredMembers = state.teamMembers.filter((tm) =>
-    searchQuery === '' ||
-    tm.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    tm.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    tm.department.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Filter team members
+  const filteredMembers = state.teamMembers.filter((tm) => {
+    const matchesSearch =
+      searchQuery === '' ||
+      tm.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      tm.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      tm.department.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesSearch;
+  });
 
+  // Group by department
   const membersByDepartment = filteredMembers.reduce((acc, tm) => {
-    if (!acc[tm.department]) acc[tm.department] = [];
+    if (!acc[tm.department]) {
+      acc[tm.department] = [];
+    }
     acc[tm.department].push(tm);
     return acc;
   }, {} as Record<string, TeamMember[]>);
@@ -80,12 +114,19 @@ export default function TeamView() {
 
   const handleCopyCompanyId = () => {
     if (!state.companyId) return;
+
     navigator.clipboard.writeText(state.companyId)
-      .then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); })
-      .catch((err) => console.error('Failed to copy company ID:', err));
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      })
+      .catch((error) => {
+        console.error('Failed to copy company ID:', error);
+      });
   };
 
   const handleInvite = async () => {
+    
     if (assignableRoles.length === 0) {
       toast.error('You do not have permission to invite team members');
       return;
@@ -102,6 +143,30 @@ export default function TeamView() {
       return;
     }
 
+    // Enforce per-plan user limits before sending the invite.
+    // Re-fetch company to get the latest plan in case state is stale.
+    const companyRow = effectiveCompanyId
+      ? await db.getCompany(effectiveCompanyId).catch(() => null)
+      : null;
+    const plan = companyRow?.subscription_plan ?? subscriptionPlan ?? 'trial';
+    const limit = USER_LIMITS[plan] ?? 2;
+
+    if (limit !== Infinity) {
+      const activeCount = state.teamMembers.length;
+      const pendingCount = pendingInvites.filter(i => !i.accepted).length;
+      const totalSeats = activeCount + pendingCount;
+
+      if (totalSeats >= limit) {
+        toast.error(
+          `Your ${plan} plan allows up to ${limit} user${limit === 1 ? '' : 's'}. ` +
+          `You currently have ${activeCount} active member${activeCount === 1 ? '' : 's'} ` +
+          `and ${pendingCount} pending invite${pendingCount === 1 ? '' : 's'}. ` +
+          `Upgrade your plan to add more team members.`
+        );
+        return;
+      }
+    }
+
     setIsSendingInvite(true);
 
     const timeoutId = setTimeout(() => {
@@ -112,6 +177,7 @@ export default function TeamView() {
     try {
       const token = globalThis.crypto?.randomUUID?.() || `invite-${Date.now()}`;
 
+      // Insert directly via supabase client
       const { data: inviteRecord, error: inviteError } = await supabase
         .from('invitations')
         .insert({
@@ -133,23 +199,33 @@ export default function TeamView() {
         return;
       }
 
-      // Call the Supabase Edge Function directly — works from GitHub Pages, Vercel, anywhere
-      const { error: fnError } = await supabase.functions.invoke('send-invite-email', {
-        body: {
-          email: inviteEmail.trim().toLowerCase(),
-          token,
-          companyId: effectiveCompanyId,
-          role: inviteRole,
-          invitedBy: profile?.id,
+
+      // Send email via our Vercel API (Resend)
+      const inviteUrl = `${window.location.origin}${window.location.pathname}#/join?token=${token}`;
+      const emailRes = await fetch(`${window.location.origin}/api/send-email`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token || ''}`,
         },
+        body: JSON.stringify({
+          to: inviteEmail.trim().toLowerCase(),
+          subject: `You're invited to join ${state.currentUser?.name || 'TrussCTR'}`,
+          html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto">
+            <h2>You've been invited!</h2>
+            <p>You've been invited to join as a <strong>${inviteRole.replace('_', ' ')}</strong>.</p>
+            <p><a href="${inviteUrl}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:white;border-radius:8px;text-decoration:none;font-weight:600">Accept Invitation</a></p>
+            <p style="color:#6b7280;font-size:13px">This invite expires in 7 days.</p>
+          </div>`,
+        }),
       });
 
-      if (fnError) {
+      if (!emailRes.ok) {
         clearTimeout(timeoutId);
-        toast.error(`Failed to send invitation email: ${fnError.message}`);
+        toast.error('Failed to send invitation email.');
         return;
       }
-
+      
       toast.success(`Invitation email sent to ${inviteEmail}!`);
 
       dispatch({
@@ -166,9 +242,9 @@ export default function TeamView() {
 
       setShowInviteModal(false);
       setInviteEmail('');
-      setInviteRole('sales_rep');
+      setInviteRole('sales');
       clearTimeout(timeoutId);
-
+      // Refresh pending invites list
       const { data } = await supabase
         .from('invitations')
         .select('id, email, role, created_at, expires_at, accepted')
@@ -178,7 +254,8 @@ export default function TeamView() {
     } catch (error: unknown) {
       clearTimeout(timeoutId);
       console.error('Failed to send invitation:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to send invitation');
+      const message = error instanceof Error ? error.message : 'Failed to send invitation';
+      toast.error(message);
     } finally {
       setIsSendingInvite(false);
     }
@@ -201,6 +278,7 @@ export default function TeamView() {
       return;
     }
 
+    // Validate commission rates are within 0–100 before saving
     const rateFields = [
       selectedMember.commission_rate_self_gen ?? 0,
       selectedMember.commission_rate_company  ?? 0,
@@ -224,7 +302,8 @@ export default function TeamView() {
         is_active: selectedMember.isActive,
       });
 
-      const { error: rateError } = await supabase
+      // Save commission rates separately (not in RPC args)
+      await supabase
         .from('profiles')
         .update({
           commission_rate_self_gen: selectedMember.commission_rate_self_gen ?? 0,
@@ -233,12 +312,10 @@ export default function TeamView() {
         })
         .eq('id', selectedMember.id);
 
-      if (rateError) {
-        console.error('Failed to save commission rates:', rateError);
-        toast.error('Saved profile but failed to update commission rates');
+      if (!updated) {
+        toast.error('Failed to save team member');
+        return;
       }
-
-      if (!updated) { toast.error('Failed to save team member'); return; }
 
       dispatch({ type: 'UPDATE_TEAM_MEMBER', payload: selectedMember });
       toast.success('Team member updated');
@@ -263,15 +340,23 @@ export default function TeamView() {
 
   const handleSavePermissions = async (permissions: Partial<Record<PermissionCategory, PermissionLevel>>) => {
     if (!selectedMember) return;
+
     try {
+      // Store custom permissions in the database
       const { error } = await supabase
         .from('profiles')
-        .update({ custom_permissions: permissions })
+        .update({
+          custom_permissions: permissions,
+        })
         .eq('id', selectedMember.id);
 
       if (error) {
+        console.error('Failed to save permissions:', error);
+        
+        // Provide more specific error messages
         if (error.message?.includes('column') && error.message?.includes('custom_permissions')) {
           toast.error('Database not set up yet. Please run the custom_permissions migration in Supabase.');
+          console.error('Missing column: Run the SQL migration in supabase/migrations/001_add_custom_permissions.sql');
         } else if (error.message?.includes('permission') || error.message?.includes('policy')) {
           toast.error('Permission denied. Only owners and admins can modify permissions.');
         } else {
@@ -280,11 +365,20 @@ export default function TeamView() {
         return;
       }
 
-      dispatch({ type: 'UPDATE_TEAM_MEMBER', payload: { ...selectedMember, customPermissions: permissions } });
+      // Update local state to reflect the change
+      dispatch({
+        type: 'UPDATE_TEAM_MEMBER',
+        payload: {
+          ...selectedMember,
+          customPermissions: permissions,
+        },
+      });
+
       toast.success('Permissions updated successfully');
       setShowPermissionsModal(false);
       setSelectedMember(null);
     } catch (error: any) {
+      console.error('Failed to save permissions:', error);
       toast.error(`Failed to save permissions: ${error?.message || 'Unknown error'}`);
     }
   };
@@ -297,9 +391,19 @@ export default function TeamView() {
     toast.success(`Invite for ${email} revoked`);
   };
 
-  const totalLeads   = state.teamMembers.reduce((s, tm) => s + (tm.performance?.leadsGenerated || 0), 0);
-  const totalDeals   = state.teamMembers.reduce((s, tm) => s + (tm.performance?.dealsClosed    || 0), 0);
-  const totalRevenue = state.teamMembers.reduce((s, tm) => s + (tm.performance?.revenue        || 0), 0);
+  // Calculate team stats
+  const totalLeads = state.teamMembers.reduce(
+    (sum, tm) => sum + (tm.performance?.leadsGenerated || 0),
+    0
+  );
+  const totalDeals = state.teamMembers.reduce(
+    (sum, tm) => sum + (tm.performance?.dealsClosed || 0),
+    0
+  );
+  const totalRevenue = state.teamMembers.reduce(
+    (sum, tm) => sum + (tm.performance?.revenue || 0),
+    0
+  );
 
   return (
     <div className="p-6 space-y-6">
@@ -308,17 +412,33 @@ export default function TeamView() {
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Team Management</h2>
           <p className="text-gray-500 mt-1">
-            {state.teamMembers.length} team members across {Object.keys(membersByDepartment).length} departments
+            {state.teamMembers.length} team members across {Object.keys(membersByDepartment).length}{' '}
+            departments
           </p>
         </div>
         {canManage && (
-          <button
-            onClick={() => setShowInviteModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <UserPlus size={18} />
-            <span className="font-medium">Invite Member</span>
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                if (atSeatLimit) {
+                  toast.error(`Your ${subscriptionPlan} plan allows up to ${planLimit} user${planLimit === 1 ? '' : 's'}. Upgrade to add more team members.`);
+                  return;
+                }
+                setShowInviteModal(true);
+              }}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                atSeatLimit
+                  ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                  : 'bg-blue-600 text-white hover:bg-blue-700'
+              }`}
+              title={atSeatLimit ? `Plan limit reached (${planLimit} users). Upgrade to add more.` : 'Invite a team member'}
+            >
+              <UserPlus size={18} />
+              <span className="font-medium">
+                {atSeatLimit ? `Seat Limit Reached (${activeSeats + pendingSeats}/${planLimit})` : 'Invite Member'}
+              </span>
+            </button>
+          </div>
         )}
       </div>
 
@@ -329,14 +449,26 @@ export default function TeamView() {
             <div>
               <p className="text-slate-400 text-sm">Company ID</p>
               <p className="text-2xl font-mono font-bold mt-1">{companyId}</p>
-              <p className="text-slate-400 text-sm mt-2">Share this ID with team members to join your organization</p>
+              <p className="text-slate-400 text-sm mt-2">
+                Share this ID with team members to join your organization
+              </p>
             </div>
             <button
               onClick={handleCopyCompanyId}
               disabled={!state.companyId}
               className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
             >
-              {copied ? <><CheckCircle size={18} /> Copied!</> : <><Copy size={18} /> Copy ID</>}
+              {copied ? (
+                <>
+                  <CheckCircle size={18} />
+                  Copied!
+                </>
+              ) : (
+                <>
+                  <Copy size={18} />
+                  Copy ID
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -397,10 +529,17 @@ export default function TeamView() {
           <h3 className="text-lg font-semibold text-gray-900 mb-4">{department}</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {members.map((member) => (
-              <div key={member.id} className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-md transition-shadow">
+              <div
+                key={member.id}
+                className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-md transition-shadow"
+              >
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-4">
-                    <img src={member.avatar} alt={member.name} className="w-14 h-14 rounded-full object-cover" />
+                    <img
+                      src={member.avatar}
+                      alt={member.name}
+                      className="w-14 h-14 rounded-full object-cover"
+                    />
                     <div>
                       <h4 className="font-semibold text-gray-900">{member.name}</h4>
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs font-medium mt-1">
@@ -411,45 +550,72 @@ export default function TeamView() {
                   </div>
                   {canManage && (
                     <div className="flex items-center gap-2">
-                      <button onClick={() => handleManagePermissions(member)} className="p-2 hover:bg-blue-50 rounded-lg transition-colors group" title="Manage Permissions">
+                      <button
+                        onClick={() => handleManagePermissions(member)}
+                        className="p-2 hover:bg-blue-50 rounded-lg transition-colors group"
+                        title="Manage Permissions"
+                      >
                         <Shield size={16} className="text-gray-500 group-hover:text-blue-600" />
                       </button>
-                      <button onClick={() => handleEditMember(member)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="Edit Member">
+                      <button
+                        onClick={() => handleEditMember(member)}
+                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                        title="Edit Member"
+                      >
                         <Edit2 size={16} className="text-gray-500" />
                       </button>
                     </div>
                   )}
                 </div>
+
                 <div className="space-y-2 text-sm">
                   <div className="flex items-center gap-2 text-gray-600">
                     <Mail size={14} className="text-gray-400" />
-                    <a href={`mailto:${member.email}`} className="hover:text-blue-600">{member.email}</a>
+                    <a href={`mailto:${member.email}`} className="hover:text-blue-600">
+                      {member.email}
+                    </a>
                   </div>
                   <div className="flex items-center gap-2 text-gray-600">
                     <Phone size={14} className="text-gray-400" />
-                    <a href={`tel:${member.phone}`} className="hover:text-blue-600">{member.phone}</a>
+                    <a href={`tel:${member.phone}`} className="hover:text-blue-600">
+                      {member.phone}
+                    </a>
                   </div>
                 </div>
+
                 {member.performance && (
                   <div className="mt-4 pt-4 border-t border-gray-100">
                     <div className="grid grid-cols-3 gap-2 text-center">
                       <div>
-                        <p className="text-lg font-bold text-gray-900">{member.performance.leadsGenerated}</p>
+                        <p className="text-lg font-bold text-gray-900">
+                          {member.performance.leadsGenerated}
+                        </p>
                         <p className="text-xs text-gray-500">Leads</p>
                       </div>
                       <div>
-                        <p className="text-lg font-bold text-gray-900">{member.performance.dealsClosed}</p>
+                        <p className="text-lg font-bold text-gray-900">
+                          {member.performance.dealsClosed}
+                        </p>
                         <p className="text-xs text-gray-500">Deals</p>
                       </div>
                       <div>
-                        <p className="text-lg font-bold text-green-600">{formatCurrency(member.performance.revenue)}</p>
+                        <p className="text-lg font-bold text-green-600">
+                          {formatCurrency(member.performance.revenue)}
+                        </p>
                         <p className="text-xs text-gray-500">Revenue</p>
                       </div>
                     </div>
                   </div>
                 )}
-                <div className="mt-4">
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${member.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
+
+                <div className="mt-4 flex items-center justify-between">
+                  <span
+                    className={`px-2 py-1 rounded-full text-xs font-medium ${
+                      member.isActive
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-gray-100 text-gray-600'
+                    }`}
+                  >
                     {member.isActive ? 'Active' : 'Inactive'}
                   </span>
                 </div>
@@ -462,14 +628,16 @@ export default function TeamView() {
       {/* Pending Invites */}
       {canManage && (
         <div className="bg-white rounded-xl border border-gray-200">
-          <div className="p-5 border-b border-gray-100 flex items-center gap-2">
-            <Mail size={18} className="text-blue-600" />
-            <h3 className="font-semibold text-gray-900">Pending Invites</h3>
-            {pendingInvites.filter(i => !i.accepted).length > 0 && (
-              <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-medium rounded-full">
-                {pendingInvites.filter(i => !i.accepted).length} pending
-              </span>
-            )}
+          <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Mail size={18} className="text-blue-600" />
+              <h3 className="font-semibold text-gray-900">Pending Invites</h3>
+              {pendingInvites.filter(i => !i.accepted).length > 0 && (
+                <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-medium rounded-full">
+                  {pendingInvites.filter(i => !i.accepted).length} pending
+                </span>
+              )}
+            </div>
           </div>
           {isLoadingInvites ? (
             <div className="p-6 text-center text-gray-400 text-sm">Loading invites...</div>
@@ -501,7 +669,11 @@ export default function TeamView() {
                         <span className="px-2 py-1 bg-amber-100 text-amber-700 text-xs font-medium rounded-full">Pending</span>
                       )}
                       {!invite.accepted && (
-                        <button onClick={() => handleRevokeInvite(invite.id, invite.email)} className="p-1 text-gray-400 hover:text-red-500 rounded transition-colors" title="Revoke invite">
+                        <button
+                          onClick={() => handleRevokeInvite(invite.id, invite.email)}
+                          className="p-1 text-gray-400 hover:text-red-500 rounded transition-colors"
+                          title="Revoke invite"
+                        >
                           <X size={14} />
                         </button>
                       )}
@@ -520,7 +692,10 @@ export default function TeamView() {
           <div className="bg-white rounded-2xl w-full max-w-md">
             <div className="p-6 border-b border-gray-200 flex items-center justify-between">
               <h2 className="text-xl font-semibold text-gray-900">Invite Team Member</h2>
-              <button onClick={() => setShowInviteModal(false)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+              <button
+                onClick={() => setShowInviteModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
                 <X size={20} />
               </button>
             </div>
@@ -543,19 +718,24 @@ export default function TeamView() {
                   className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                 >
                   {assignableRoles.map((value) => (
-                    <option key={value} value={value}>{roleLabels[value]}</option>
+                    <option key={value} value={value}>
+                      {roleLabels[value]}
+                    </option>
                   ))}
                 </select>
               </div>
               <div className="p-4 bg-gray-50 rounded-lg">
                 <p className="text-sm text-gray-600">
-                  The invited member will receive an email with a link to join your team.
-                  Company ID: <span className="font-mono font-bold">{companyId}</span>
+                  The invited member will receive an email with instructions to join your team using
+                  the company ID: <span className="font-mono font-bold">{companyId}</span>
                 </p>
               </div>
             </div>
             <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
-              <button onClick={() => setShowInviteModal(false)} className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors font-medium">
+              <button
+                onClick={() => setShowInviteModal(false)}
+                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors font-medium"
+              >
                 Cancel
               </button>
               <button
@@ -567,7 +747,9 @@ export default function TeamView() {
                   <span className="inline-flex items-center gap-2">
                     <Loader2 size={16} className="animate-spin" /> Sending...
                   </span>
-                ) : 'Send Invitation'}
+                ) : (
+                  'Send Invitation'
+                )}
               </button>
             </div>
           </div>
@@ -580,61 +762,169 @@ export default function TeamView() {
           <div className="bg-white rounded-2xl w-full max-w-md">
             <div className="p-6 border-b border-gray-200 flex items-center justify-between">
               <h2 className="text-xl font-semibold text-gray-900">Edit Team Member</h2>
-              <button onClick={() => { setShowEditModal(false); setSelectedMember(null); }} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+              <button
+                onClick={() => {
+                  setShowEditModal(false);
+                  setSelectedMember(null);
+                }}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
                 <X size={20} />
               </button>
             </div>
             <div className="p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-                <input type="text" value={selectedMember.name} onChange={(e) => setSelectedMember({ ...selectedMember, name: e.target.value })} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none" />
+                <input
+                  type="text"
+                  value={selectedMember.name}
+                  onChange={(e) =>
+                    setSelectedMember({ ...selectedMember, name: e.target.value })
+                  }
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input type="email" value={selectedMember.email} onChange={(e) => setSelectedMember({ ...selectedMember, email: e.target.value })} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none" />
+                <input
+                  type="email"
+                  value={selectedMember.email}
+                  onChange={(e) =>
+                    setSelectedMember({ ...selectedMember, email: e.target.value })
+                  }
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                <input type="tel" value={selectedMember.phone} onChange={(e) => setSelectedMember({ ...selectedMember, phone: e.target.value })} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none" />
+                <input
+                  type="tel"
+                  value={selectedMember.phone}
+                  onChange={(e) =>
+                    setSelectedMember({ ...selectedMember, phone: e.target.value })
+                  }
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-                <select value={selectedMember.role} onChange={(e) => setSelectedMember({ ...selectedMember, role: e.target.value as UserRole })} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none">
-                  {assignableRoles.map((value) => <option key={value} value={value}>{roleLabels[value]}</option>)}
+                <select
+                  value={selectedMember.role}
+                  onChange={(e) =>
+                    setSelectedMember({ ...selectedMember, role: e.target.value as UserRole })
+                  }
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                >
+                  {assignableRoles.map((value) => (
+                    <option key={value} value={value}>
+                      {roleLabels[value]}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
-                <input type="text" value={selectedMember.department} onChange={(e) => setSelectedMember({ ...selectedMember, department: e.target.value })} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none" />
+                <input
+                  type="text"
+                  value={selectedMember.department}
+                  onChange={(e) =>
+                    setSelectedMember({ ...selectedMember, department: e.target.value })
+                  }
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                />
               </div>
               {['owner', 'admin', 'manager', 'sales_manager'].includes(userRole) && (
                 <div>
                   <p className="block text-sm font-semibold text-gray-700 mb-2">Commission Rates (%)</p>
                   <div className="grid grid-cols-3 gap-3">
-                    {(['commission_rate_self_gen', 'commission_rate_company', 'commission_rate_custom'] as const).map((field, i) => (
-                      <div key={field}>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">{['Self Generated', 'Company Lead', 'Custom / Override'][i]}</label>
-                        <input
-                          type="number" min="0" max="100" step="0.1"
-                          value={selectedMember[field] ?? ''}
-                          onChange={(e) => setSelectedMember({ ...selectedMember, [field]: e.target.value === '' ? undefined : parseFloat(e.target.value) })}
-                          placeholder={['e.g. 10', 'e.g. 5', 'e.g. 7'][i]}
-                          className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm"
-                        />
-                      </div>
-                    ))}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Self Generated</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        value={selectedMember.commission_rate_self_gen ?? ''}
+                        onChange={(e) =>
+                          setSelectedMember({
+                            ...selectedMember,
+                            commission_rate_self_gen: e.target.value === '' ? undefined : parseFloat(e.target.value),
+                          })
+                        }
+                        placeholder="e.g. 10"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Company Lead</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        value={selectedMember.commission_rate_company ?? ''}
+                        onChange={(e) =>
+                          setSelectedMember({
+                            ...selectedMember,
+                            commission_rate_company: e.target.value === '' ? undefined : parseFloat(e.target.value),
+                          })
+                        }
+                        placeholder="e.g. 5"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Custom / Override</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        value={selectedMember.commission_rate_custom ?? ''}
+                        onChange={(e) =>
+                          setSelectedMember({
+                            ...selectedMember,
+                            commission_rate_custom: e.target.value === '' ? undefined : parseFloat(e.target.value),
+                          })
+                        }
+                        placeholder="e.g. 7"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm"
+                      />
+                    </div>
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">Self Generated = leads they sourced · Company Lead = marketing leads · Custom = special arrangement override</p>
+                  <p className="text-xs text-gray-500 mt-1">Self Generated = leads they sourced themselves &bull; Company Lead = leads from company marketing &bull; Custom = overrides both for special arrangements</p>
                 </div>
               )}
               <div className="flex items-center gap-3">
-                <input type="checkbox" id="isActive" checked={selectedMember.isActive} onChange={(e) => setSelectedMember({ ...selectedMember, isActive: e.target.checked })} className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                <label htmlFor="isActive" className="text-sm font-medium text-gray-700">Active member</label>
+                <input
+                  type="checkbox"
+                  id="isActive"
+                  checked={selectedMember.isActive}
+                  onChange={(e) =>
+                    setSelectedMember({ ...selectedMember, isActive: e.target.checked })
+                  }
+                  className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <label htmlFor="isActive" className="text-sm font-medium text-gray-700">
+                  Active member
+                </label>
               </div>
             </div>
             <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
-              <button onClick={() => { setShowEditModal(false); setSelectedMember(null); }} className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors font-medium">Cancel</button>
-              <button onClick={handleSaveMember} disabled={isSavingMember} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50">
+              <button
+                onClick={() => {
+                  setShowEditModal(false);
+                  setSelectedMember(null);
+                }}
+                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveMember}
+                disabled={isSavingMember}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50"
+              >
                 {isSavingMember ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
                 Save Changes
               </button>
@@ -651,7 +941,10 @@ export default function TeamView() {
           role={selectedMember.role}
           customPermissions={undefined}
           onSave={handleSavePermissions}
-          onClose={() => { setShowPermissionsModal(false); setSelectedMember(null); }}
+          onClose={() => {
+            setShowPermissionsModal(false);
+            setSelectedMember(null);
+          }}
         />
       )}
     </div>

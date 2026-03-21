@@ -21,6 +21,7 @@
     }
   ],
   "rewrites": [
+    { "source": "/api/webhooks/eagleview", "destination": "/api/eagleview-webhook" },
     { "source": "/((?!api/|assets/).*)", "destination": "/index.html" }
   ],
   "env": {

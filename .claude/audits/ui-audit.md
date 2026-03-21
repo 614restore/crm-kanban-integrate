@@ -1,472 +1,105 @@
----
-agent: ui-auditor
-status: fail
-findings: 25
----
-
-# TrussCTR UI/UX Audit
-**Date:** 2026-03-08
-**Auditor:** ui-auditor
-**Scope:** All screens, modals, dialogs, settings panels, and public pages in `src/`
-
----
+# UI/UX Accessibility & Responsive Design Audit — TrussCTR CRM (2026-03-19)
 
 ## Summary
-
-The TrussCTR CRM has a solid visual design and a well-structured component architecture. However, the audit uncovered **3 CRITICAL blocking defects**, **9 HIGH-severity UX degradations**, and **13 LOW-severity accessibility/polish issues**. The most serious problems are:
-
-1. Customer signature links (Change Order, Estimate) are **completely unrouted** — they 404 for every recipient.
-2. The subscription-expired "Subscribe Now" button navigates to a hardcoded SPA path that doesn't exist in the router, resulting in a 404.
-3. The PDF export button in Reports crashes with a `ReferenceError` on every click.
+4 critical · 8 high · 10 medium · 8 low — 30 total
 
 ---
 
-## CRITICAL — Blocks User
+## CRITICAL (4)
+
+SEVERITY: critical
+FILE: src/components/crm/AuthPage.tsx, PipelineBoard.tsx, WorkOrdersView.tsx, EstimatesView.tsx, QuickAddModal.tsx + 31 more form files
+FINDING: Form inputs have visual label text but only 3 of 39 label-bearing files use htmlFor to associate labels with inputs programmatically. 36 files have floating labels disconnected from their inputs. Screen readers cannot associate label text with the correct form control.
+FIX: Add matching htmlFor="field-id" on every <label> and id="field-id" on every <input>, <select>, <textarea>.
+
+SEVERITY: critical
+FILE: src/components/crm/AuthPage.tsx (lines 390-404)
+FINDING: The email input has no <label> at all — only a decorative icon. Completely unlabelled for screen readers.
+FIX: Add <label htmlFor="auth-email" className="sr-only">Email address</label> and id="auth-email" on the input.
+
+SEVERITY: critical
+FILE: src/components/crm/PipelineBoard.tsx (lines 362-380, 430-470)
+FINDING: Kanban cards are <div> elements with draggable and onClick but no tabIndex, role="button", or onKeyDown. Keyboard-only users cannot reach or operate cards.
+FIX: Add tabIndex={0}, role="button", and onKeyDown (Enter/Space activates, arrow keys move between columns) to every card div. Add aria-label describing the card and its current column.
+
+SEVERITY: critical
+FILE: src/components/crm/ContactList.tsx (lines 360-393), Sidebar.tsx (lines 167, 282), TopBar.tsx (lines 137-140)
+FINDING: Icon-only buttons throughout most-used components (list/grid toggle, select-all, sidebar collapse, search clear, sign-out) have no accessible names. The title attribute used is not reliably announced by all screen reader + browser pairs.
+FIX: Replace title with aria-label on all icon-only buttons.
+
+SEVERITY: critical
+FILE: src/components/crm/TopBar.tsx (lines 241-302), Sidebar.tsx (lines 196-246)
+FINDING: Notification dropdown panels are plain <div> elements with no role="dialog", no aria-modal. Bell button lacks aria-expanded and aria-haspopup. Individual notification items are <div onClick> — not keyboard-focusable.
+FIX: Add role="dialog" + aria-label="Notifications" to panel divs; aria-expanded={showNotifications} + aria-haspopup="dialog" to Bell buttons; aria-live="polite" to unread count badge; convert notification <div> items to <button> elements.
 
 ---
 
-### C-01: `SignChangeOrder` and `SignEstimate` pages are unregistered routes — customer signature links 404
+## HIGH (8)
 
-**Severity:** CRITICAL
-**Files:**
-- `src/App.tsx` — routes missing
-- `src/pages/SignEstimate.tsx` — orphaned page
-- `src/pages/SignChangeOrder.tsx` — orphaned page
-- `src/components/crm/ChangeOrderModal.tsx` lines 112, 222 — generates `/sign-change-order/{token}` URLs
+SEVERITY: high
+FILE: 35 CRM component files
+FINDING: outline-none removes browser focus ring; focus:ring-blue-500/20 (20% opacity) is below WCAG 2.1 SC 2.4.11 3:1 minimum against white.
+FIX: Replace with focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2.
 
-**Description:**
-`App.tsx` registers routes for `/sign` (SignDocument), `/reset-password`, `/terms`, `/privacy`, `/eula`, but has **no routes** for `/sign-estimate/:token` or `/sign-change-order/:token`.
+SEVERITY: high
+FILE: src/components/crm/Sidebar.tsx
+FINDING: No aria-current="page" on active nav items. Active state is color-only.
+FIX: Add aria-current={currentView === item.id ? 'page' : undefined} to each nav button.
 
-`ChangeOrderModal.tsx` (lines 112, 222) generates links like:
-```
-${window.location.origin}/sign-change-order/${token}
-```
-When a customer receives this link and opens it, Vercel rewrites to `index.html`, React Router boots up, sees path `/sign-change-order/...`, finds no match, and renders `<NotFound />`. The entire customer-facing signature flow for change orders is completely broken.
+SEVERITY: high
+FILE: 30 files with loading state
+FINDING: Zero use of src/components/ui/skeleton.tsx. Data views flash from nothing to content with no loading placeholder and no aria-busy announcement.
+FIX: Use <Skeleton> for loading rows/cards and aria-busy="true" on the container while loading.
 
-`SignEstimate.tsx` is similarly orphaned — no route exists for it and no API endpoint (`sign-estimate.mjs`) exists either.
+SEVERITY: high
+FILE: ~20 files with modal overlays
+FINDING: Custom <div> overlay modals instead of using src/components/ui/dialog.tsx. Lack focus trapping, role="dialog", aria-labelledby, and Escape-key dismissal.
+FIX: Migrate to the existing Radix Dialog / DialogContent components.
 
-**Remediation:**
-Add routes in `src/App.tsx`:
-```tsx
-import SignEstimate from "./pages/SignEstimate";
-import SignChangeOrder from "./pages/SignChangeOrder";
-<Route path="/sign-estimate/:token" element={<SignEstimate />} />
-<Route path="/sign-change-order/:token" element={<SignChangeOrder />} />
-```
+SEVERITY: high
+FILE: src/components/crm/TopBar.tsx (line 129-135)
+FINDING: Global search input has no <label> or aria-label; only a placeholder.
+FIX: Add aria-label="Search contacts, jobs, and documents" to the input.
 
----
+SEVERITY: high
+FILE: src/components/crm/PipelineBoard.tsx board-selector + TopBar.tsx filters dropdown
+FINDING: Trigger buttons lack aria-expanded/aria-haspopup; panels lack role="listbox"/role="menu"; no keyboard (arrow/Escape) navigation.
+FIX: Add full ARIA dropdown pattern and keyboard navigation.
 
-### C-02: Subscription-blocked "Subscribe Now" navigates to a non-existent SPA route (404)
+SEVERITY: high
+FILE: src/components/crm/Sidebar.tsx (lines 251-259)
+FINDING: Legal footer links use text-slate-500 on bg-slate-900. At text-xs (12px) this is ~3.4:1 contrast — below WCAG AA requirement of 4.5:1 for small text.
+FIX: Change to text-slate-400 or increase to text-sm.
 
-**Severity:** CRITICAL
-**File:** `src/components/AppLayout.tsx` line 957
-
-**Description:**
-When a user's trial has expired, they see a paywall screen. The primary CTA:
-```tsx
-<a href="/settings?tab=billing">Subscribe Now</a>
-```
-This is a standard `<a href>` that triggers a full navigation. With Vercel's SPA wildcard rewrite (`/* to index.html`), React Router loads and tries to match `/settings` — which matches no defined route and falls to `<NotFound />`. The user who most needs to pay is sent to a dead-end page.
-
-**Remediation:**
-Replace with an in-app navigation that dispatches a view change:
-```tsx
-<button onClick={() => dispatch({ type: 'SET_VIEW', payload: 'settings' })}>
-  Subscribe Now
-</button>
-```
+SEVERITY: high
+FILE: src/components/crm/AuthPage.tsx (lines 423-430)
+FINDING: Password visibility toggle has no aria-label or aria-pressed.
+FIX: Add aria-label={showPassword ? 'Hide password' : 'Show password'} and aria-pressed={showPassword}.
 
 ---
 
-### C-03: Reports & Analytics "Export PDF" crashes with ReferenceError
+## MEDIUM (10)
 
-**Severity:** CRITICAL
-**File:** `src/components/crm/ReportsAnalytics.tsx` lines 329-360
-
-**Description:**
-The `handleExportPDF` function references identifiers that do not exist in scope:
-- `metrics.netProfit` — not in the `metrics` useMemo return object (it returns `totalProfit`)
-- `metrics.avgProjectValue` — not defined
-- `metrics.conversionRate` — not defined (exists as `overallConversionRate`)
-- `metrics.customerSatisfaction` — not defined
-- `teamPerformanceData` — no variable with this name exists anywhere in the file (actual variable is `teamPerformance`)
-
-Clicking **Export PDF** throws an uncaught `ReferenceError`. Export CSV works correctly; only PDF is broken.
-
-**Remediation:**
-Replace undefined references with the actual property names:
-```tsx
-{ Metric: 'Net Profit', Value: formatCurrency(metrics.totalProfit) },
-{ Metric: 'Conversion Rate', Value: `${metrics.overallConversionRate.toFixed(1)}%` },
-// use: teamPerformance.map(...) not teamPerformanceData.map(...)
-```
+SEVERITY: medium — ContactList.tsx: Grid layout for list view instead of semantic <table>. Add aria-sort to sort buttons.
+SEVERITY: medium — PipelineBoard.tsx (line 473): Empty column state is just <p>No contacts</p>. Add icon, explanation, and CTA.
+SEVERITY: medium — MobileNav.tsx "More" overlay: lacks role="dialog", aria-label, Escape-key handler, and auto-focus on open.
+SEVERITY: medium — Dashboard.tsx and financial views: Trend arrow icons convey direction only visually. Add <span className="sr-only">Increase</span> or Decrease next to each.
+SEVERITY: medium — AIAssistant.tsx: Message list has no aria-live="polite" — new AI responses are invisible to screen readers.
+SEVERITY: medium — ContactList.tsx, EquipmentView.tsx, PipelineBoard.tsx: window.confirm() used for destructive actions. Replace with existing AlertDialog component.
+SEVERITY: medium — ContactList.tsx grid cards: Clickable <div> with no role, tabIndex, or onKeyDown — keyboard users cannot reach or activate.
+SEVERITY: medium — mobile/PhotoCapture.tsx: <video> has no aria-label; capture/stop camera buttons are icon-only with no accessible names.
+SEVERITY: medium — Sidebar.tsx: Active nav state is color-only. Add a non-color indicator (left border, bold weight) for color-blind users.
+SEVERITY: medium — mobile/ResponsiveLayout.tsx: Binary mobile/desktop breakpoint with no intermediate tablet layout for 768px-1024px screens.
 
 ---
 
-## HIGH — Degrades UX
-
----
-
-### H-01: TopBar renders "Dashboard" for 10+ views — no page title feedback
-
-**Severity:** HIGH
-**File:** `src/components/crm/TopBar.tsx` lines 81-97
-
-**Description:**
-`viewTitles` is missing entries for: `suppliers`, `estimates`, `projects`, `work-orders`, `material-orders`, `expenses`, `document-templates`, `reports`, `insurance-tracking`, `supplement-tracking`, `financial`, `team`, `automations`.
-
-All fall through to the fallback `|| 'Dashboard'`, so the heading reads "Dashboard" while the user is on the Expenses or Reports screen.
-
-**Remediation:**
-Add the missing keys to `viewTitles`:
-```tsx
-suppliers: 'Suppliers',  estimates: 'Estimates',  projects: 'Projects',
-'work-orders': 'Work Orders',  'material-orders': 'Material Orders',
-expenses: 'Expenses',  'document-templates': 'Document Templates',
-reports: 'Reports & Analytics',  'insurance-tracking': 'Insurance Tracking',
-'supplement-tracking': 'Supplement Tracking',  financial: 'Financial Dashboard',
-team: 'Team Management',  automations: 'Workflow Automations',
-```
-
----
-
-### H-02: Settings Quick Actions — 3 buttons are dead (no onClick)
-
-**Severity:** HIGH
-**File:** `src/components/settings/MainSettings.tsx` lines 181-187
-
-**Description:**
-"Export Settings", "Import Configuration", "Reset to Defaults" buttons in the settings sidebar Quick Actions panel have visual hover states but zero handler. Clicking them does nothing.
-
-**Remediation:**
-Implement handlers or replace with `disabled` state and tooltip ("Coming soon") until implemented.
-
----
-
-### H-03: Settings Data Management — 4 export buttons are dead (no onClick)
-
-**Severity:** HIGH
-**File:** `src/components/settings/MainSettings.tsx` lines 389-401
-
-**Description:**
-"Export All Data", "Export Contacts", "Export Estimates", "Export Invoices" buttons render with hover states but no `onClick` handlers. Note: `ContactList.tsx` already implements CSV contact export — that logic should be wired here.
-
-**Remediation:**
-Implement CSV export handlers or mark as `disabled` with tooltip.
-
----
-
-### H-04: Settings Notification/Appearance/Security panels have un-saveable form controls
-
-**Severity:** HIGH
-**File:** `src/components/settings/MainSettings.tsx` lines 217-412
-
-**Description:**
-Three settings panels render interactive controls but never persist changes:
-- **NotificationSettings**: Checkboxes with `defaultChecked` — changes silently discarded. No save button.
-- **AppearanceSettings**: Theme radio buttons that never apply. Logo upload zone ("Click to upload logo") is a `<div>` with no file input or onClick handler.
-- **SecuritySettings**: Password policy checkboxes and 2FA toggle — no persistence.
-
-User changes are silently discarded when navigating away with no warning.
-
-**Remediation:**
-Add a "Save Changes" button with persistence via Supabase (`db.updateCompany`), or mark sections as read-only until implemented.
-
----
-
-### H-05: 5 Settings sections show "Coming Soon" but appear as real nav items
-
-**Severity:** HIGH
-**File:** `src/components/settings/MainSettings.tsx` lines 413-418
-
-**Description:**
-Communication Settings, Calendar Settings, Document Settings, Reporting Settings, and Help & Support all render only `SettingsPlaceholder` with "Coming Soon" text. They appear alongside fully-functional sections in the same sidebar. A user clicking "Help & Support" expecting support contact information gets a dead placeholder.
-
-**Remediation:**
-Badge stub items as "Soon" or grey them out in the nav, or remove them until implemented.
-
----
-
-### H-06: BillingSettings — 3 Add-On "Add" buttons have no onClick handler
-
-**Severity:** HIGH
-**File:** `src/components/settings/BillingSettings.tsx` line ~330
-
-**Description:**
-The Add-Ons section renders three "+ Add" buttons (5 Additional Users, 500 Additional Contacts, Contact Export) with no onClick handlers. Users attempting to purchase add-ons receive no response.
-
-**Remediation:**
-Wire to Stripe Customer Portal (`window.open(...)`) using the same pattern as the "Manage Billing" button.
-
----
-
-### H-07: CalendarScheduler Month/Week/Day views render "coming soon" placeholder
-
-**Severity:** HIGH
-**File:** `src/components/calendar/CalendarScheduler.tsx` lines 779-793
-
-**Description:**
-The calendar toolbar shows Month, Week, and Day tabs. Clicking any of them renders `CalendarGridView` which only displays "Month/Week/Day calendar view is coming soon." Only List view is functional. The tabs are clickable and appear fully clickable but deliver zero content.
-
-**Remediation:**
-Either implement full calendar grid views, or remove the non-list tabs so the UI matches actual capability.
-
----
-
-### H-08: 10+ window.prompt / window.confirm dialogs across the app
-
-**Severity:** HIGH
-**Files:**
-- `src/components/crm/AutomationsView.tsx` lines 67, 102 — window.prompt for automation name
-- `src/components/crm/AutomationsView.tsx` line 126 — window.confirm for delete
-- `src/components/crm/CalendarView.tsx` lines 189, 222 — window.prompt and window.confirm
-- `src/components/crm/DocumentCenter.tsx` line 186 — window.confirm
-- `src/components/crm/SettingsView.tsx` line 777 — window.confirm
-- `src/components/crm/DocumentTemplates.tsx` line 2536 — window.confirm
-- `src/components/crm/ContactDetail.tsx` line 260 — window.confirm
-- `src/components/crm/PermitTracker.tsx` line 277 — window.confirm
-
-**Description:**
-Native browser dialogs block the UI thread, are unstyled, and are suppressed or broken on mobile WebViews. Newer views (EquipmentView, CrewScheduleView) already use proper in-component confirmation modals — this pattern is inconsistent.
-
-**Remediation:**
-Replace with Radix UI `<AlertDialog>` for confirmations and proper form modals for input. The `sonner` toast library, already imported, handles success/error feedback.
-
----
-
-### H-09: Subscription expired paywall does not deep-link to Billing tab
-
-**Severity:** HIGH
-**File:** `src/components/settings/MainSettings.tsx`
-
-**Description:**
-Even if the routing were fixed (C-02), linking to `/settings?tab=billing` via query param would not open the Billing tab — `MainSettings.tsx` ignores URL params and always defaults to `'company'` tab (`useState('company')`). The user who just clicked "Subscribe Now" under urgency lands on the wrong settings page.
-
-**Remediation:**
-Read `?tab` query param on mount:
-```tsx
-const [activeSection, setActiveSection] = useState(() =>
-  new URLSearchParams(window.location.search).get('tab') || 'company'
-);
-```
-
----
-
-## LOW — Accessibility & Polish
-
----
-
-### L-01: ZERO aria-labels on ~150+ icon-only buttons in CRM components
-
-**Severity:** LOW (accessibility)
-**Files:** All files in `src/components/crm/`
-
-**Description:**
-A grep for `aria-label` across all non-UI-library component files returns exactly 2 results — both in `AppLayout.tsx` (trial banner dismiss buttons). An estimated 150+ icon-only buttons (X close, Edit pencil, Trash delete, Search clear, Sidebar toggle, Bell, LogOut) have no accessible name.
-
-Notable gaps: sidebar collapse chevron, sign-out button, search-clear X, all Edit/Delete table action buttons, notification bell, filter toggle.
-
-**Remediation:**
-```tsx
-<button onClick={handleDelete} aria-label="Delete contact">
-  <Trash2 size={16} />
-</button>
-```
-
----
-
-### L-02: TopBar global search input has no label
-
-**Severity:** LOW
-**File:** `src/components/crm/TopBar.tsx` lines ~112-120
-
-**Description:**
-Search `<input>` has a placeholder but no `<label>` or `aria-label`. Screen readers won't announce the field purpose.
-
-**Remediation:**
-```tsx
-<input type="search" aria-label="Search contacts, jobs, documents" ... />
-```
-
----
-
-### L-03: TopBar filter dropdown and notification bell missing aria-expanded / aria-label
-
-**Severity:** LOW
-**File:** `src/components/crm/TopBar.tsx`
-
-**Description:**
-The Filters dropdown toggle and notification bell have no `aria-label` or `aria-expanded`. Keyboard users cannot determine open/closed state.
-
-**Remediation:**
-```tsx
-<button aria-label="Open filters" aria-expanded={showFilters} aria-haspopup="true">
-```
-
----
-
-### L-04: Sidebar collapse/expand button missing accessible label
-
-**Severity:** LOW
-**File:** `src/components/crm/Sidebar.tsx`
-
-**Description:**
-Sidebar toggle renders `<ChevronLeft>` / `<ChevronRight>` with no `aria-label`. Collapsed nav items use HTML `title` attribute for tooltips — visible on hover only, not announced by screen readers.
-
-**Remediation:**
-```tsx
-<button aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
-```
-Use `aria-label={item.label}` on collapsed nav item buttons.
-
----
-
-### L-05: AppearanceSettings logo upload zone has no file input or handler
-
-**Severity:** LOW
-**File:** `src/components/settings/MainSettings.tsx` line ~330
-
-**Description:**
-The "Click to upload logo" zone is a plain `<div>` with no `<input type="file">`, no onClick, and no drag-and-drop handler. Actual logo upload IS implemented correctly in `CompanyTeamSettings.tsx` (with Supabase storage) — this is an unfunctional duplicate.
-
-**Remediation:**
-Remove the dead upload zone from AppearanceSettings and point users to Company & Team Settings for logo upload.
-
----
-
-### L-06: AutomationsView Create/Edit only expose name — trigger and action are hardcoded
-
-**Severity:** LOW
-**File:** `src/components/crm/AutomationsView.tsx`
-
-**Description:**
-Creating an automation only sets the name via `window.prompt`. The trigger event and action type are hardcoded and never configurable. No edit UI exists for these properties.
-
-**Remediation:**
-Replace the prompt with a modal including trigger event and action type selectors.
-
----
-
-### L-07: Global search bar inconsistently applied — many views ignore state.searchQuery
-
-**Severity:** LOW
-**Files:** `src/components/crm/TopBar.tsx`, multiple view files
-
-**Description:**
-Many views (EquipmentView, CrewScheduleView, ReportsAnalytics, InsuranceTrackingView, SupplementTrackingView, FinancialDashboard) maintain their own local `searchQuery` state and do not consume the global `state.searchQuery`. Typing in the global search bar while on Equipment has no effect.
-
-**Remediation:**
-Consume `state.searchQuery` from global state in all views, or add a visual indicator that global search only applies to Contacts.
-
----
-
-### L-08: No empty-state onboarding prompt for brand-new users on Dashboard
-
-**Severity:** LOW
-**File:** `src/components/crm/Dashboard.tsx`
-
-**Description:**
-Dashboard renders KPI cards showing $0 and 0% for a new user. "Recent Activity" and "Upcoming Appointments" render nothing. First-time users see an empty, confusing screen with no CTA to add their first contact.
-
-**Remediation:**
-Add an empty-state card when `state.contacts.length === 0` with a CTA to add the first contact or create the first pipeline entry.
-
----
-
-### L-09: Two separate Billing UIs exist in parallel
-
-**Severity:** LOW
-**Files:** `src/components/crm/SubscriptionView.tsx`, `src/components/settings/BillingSettings.tsx`
-
-**Description:**
-`SubscriptionView` is rendered inside `SettingsView.tsx` (line 2093) as a second billing interface separate from `BillingSettings` (the Stripe pricing table in MainSettings). Two billing UIs coexist and may render different or conflicting content depending on which settings path the user took.
-
-**Remediation:**
-Consolidate to `BillingSettings` as the single canonical billing UI. Remove or redirect the SubscriptionView reference in SettingsView.
-
----
-
-### L-10: Settings page does not read ?tab query param on mount
-
-**Severity:** LOW
-**File:** `src/components/settings/MainSettings.tsx`
-
-**Description:**
-Multiple locations link to Settings with `?tab=billing` or similar, but MainSettings always defaults to `'company'` tab ignoring URL params (see also H-09).
-
-**Remediation:**
-```tsx
-const [activeSection, setActiveSection] = useState(() =>
-  new URLSearchParams(window.location.search).get('tab') || 'company'
-);
-```
-
----
-
-### L-11: Many inline buttons missing explicit type="button"
-
-**Severity:** LOW
-**Files:** Multiple CRM components
-
-**Description:**
-Several `<button>` elements inside form contexts lack `type="button"`. HTML defaults untyped form buttons to `type="submit"`, which can trigger accidental form submissions. Only 27 explicit `type` attributes found across all CRM components.
-
-**Remediation:**
-Add `type="button"` to all non-submit buttons in form contexts.
-
----
-
-### L-12: Notification count badge uses 10px font (below WCAG minimum)
-
-**Severity:** LOW
-**File:** `src/components/crm/Sidebar.tsx` line ~224
-
-**Description:**
-Notification badge uses `text-[10px]` (10px), below the WCAG recommended minimum of 12px for readable text.
-
-**Remediation:**
-Use `text-xs` (12px). The existing "9+" truncation already handles overflow.
-
----
-
-### L-13: BillingSettings "Compare Plans" links to a static HTML file
-
-**Severity:** LOW
-**File:** `src/components/settings/BillingSettings.tsx`
-
-**Description:**
-A "Compare Plans" button opens `/public/trussctr-comparison.html` in a new tab. This file exists in the repo, but serving a raw HTML file bypasses the SPA navigation context. If the deployment path changes, users get a 404.
-
-**Remediation:**
-Verify the path resolves correctly in production. Consider integrating the comparison inline or as a proper route.
-
----
-
-## Metrics
-
-| Severity | Count |
-|----------|-------|
-| CRITICAL | 3 |
-| HIGH | 9 |
-| LOW | 13 |
-| **Total** | **25** |
-
-### Coverage
-- TSX files audited: ~65 components + routing entry points
-- Dead click handlers (explicit no-op buttons): 10
-- Settings sections that are "Coming Soon" stubs: 5
-- aria-label coverage on CRM icon buttons: ~1% (2 of ~150+)
-- window.prompt / window.confirm usages: 10 across 9 files
-- Missing router entries for existing page components: 2
-
-### Priority Fix Order
-1. **C-01** Register SignEstimate + SignChangeOrder routes (~30 min)
-2. **C-02** Fix "Subscribe Now" to use in-app navigation (~15 min)
-3. **C-03** Fix undefined variables in handleExportPDF (~20 min)
-4. **H-01** Add missing view titles to TopBar (~10 min)
-5. **H-02 / H-03** Implement or disable dead export/action buttons in Settings
-6. **H-04** Add save functionality to Notification/Appearance/Security settings
-7. **H-05** Distinguish or remove stub "Coming Soon" settings nav items
-8. **H-06** Wire billing add-on buttons to Stripe Customer Portal
-9. **H-07** Remove non-functional Month/Week/Day calendar tabs or implement them
-10. **L-01** Batch add aria-label to all icon-only buttons (high-impact accessibility)
+## LOW (8)
+
+SEVERITY: low — Sidebar.tsx <nav>: No aria-label="Main navigation".
+SEVERITY: low — src/pages/NotFound.tsx: No document.title update; uses <a href> instead of <Link>.
+SEVERITY: low — ContactList.tsx (lines 449-450): contact.firstName[0] / contact.lastName[0] with no null guard — throws on empty names.
+SEVERITY: low — MobileNav.tsx: No aria-current="page" on active mobile nav buttons.
+SEVERITY: low — AuthPage.tsx form: No aria-labelledby linking form to its <h2> heading.
+SEVERITY: low — Sidebar.tsx: Notification badge uses text-[10px] — below 12px WCAG minimum. Change to text-xs.
+SEVERITY: low — ContactList.tsx: Hidden CSV import <input type="file"> has no aria-label.
+SEVERITY: low — TopBar.tsx <header>: No aria-label="Application header".

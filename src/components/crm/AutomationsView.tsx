@@ -558,7 +558,15 @@ export default function AutomationsView() {
             { name: 'Job Completion Survey', description: 'Automatically send satisfaction survey after job completion', icon: <FileText className="text-green-500" size={20} /> },
             { name: 'Payment Reminder', description: 'Send reminder 3 days before invoice due date', icon: <DollarSign className="text-purple-500" size={20} /> },
           ].map((suggestion, index) => (
-            <div key={index} className="bg-white rounded-lg p-4 border border-gray-200 hover:border-blue-300 cursor-pointer transition-colors">
+            <div
+              key={index}
+              className="bg-white rounded-lg p-4 border border-gray-200 hover:border-blue-300 cursor-pointer transition-colors"
+              onClick={() => {
+                setNameValue(suggestion.name);
+                setRecipients([]);
+                setNameDialog({ type: 'create' });
+              }}
+            >
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
                   {suggestion.icon}

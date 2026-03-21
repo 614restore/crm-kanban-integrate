@@ -918,9 +918,16 @@ export default function SettingsView() {
       return;
     }
 
-    // Create preview URL and open crop dialog
+    // Read as data URL (self-contained string — no blob lifecycle/revocation
+    // issues, works identically in all browsers, loads reliably in <img> tags
+    // even inside Radix portals and CSS-animated dialogs).
     try {
-      const previewUrl = URL.createObjectURL(file);
+      const previewUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => resolve(ev.target!.result as string);
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.readAsDataURL(file);
+      });
       setImageToCrop(previewUrl);
       setPendingImageFile(file);
       setLogoCropDialogOpen(true);
@@ -928,7 +935,7 @@ export default function SettingsView() {
       console.error('Failed to create preview:', error);
       toast.error('Failed to load image for cropping');
     }
-    
+
     e.target.value = '';
   };
 
@@ -947,6 +954,11 @@ export default function SettingsView() {
 
       const loadingToastId = toast.loading?.('Preparing upload...') || undefined;
       const companyId = effectiveCompanyId || await resolveCompanyId();
+
+      // Always dismiss the loading toast before any early return or continuation
+      if (loadingToastId && toast.dismiss) {
+        toast.dismiss(loadingToastId);
+      }
 
       if (!companyId) {
         toast.error('Unable to find your company. Please sign out and sign back in.');
@@ -1105,9 +1117,14 @@ export default function SettingsView() {
       return;
     }
 
-    // Create preview URL and open crop dialog
+    // Read as data URL — same rationale as handleCompanyLogoChange above.
     try {
-      const previewUrl = URL.createObjectURL(file);
+      const previewUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => resolve(ev.target!.result as string);
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.readAsDataURL(file);
+      });
       setImageToCrop(previewUrl);
       setPendingImageFile(file);
       setAvatarCropDialogOpen(true);
@@ -1115,7 +1132,7 @@ export default function SettingsView() {
       console.error('Failed to create preview:', error);
       toast.error('Failed to load image for cropping');
     }
-    
+
     e.target.value = '';
   };
 

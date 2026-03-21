@@ -17,8 +17,18 @@ import EULA from "./pages/EULA";
 import SignDocument from "./pages/SignDocument";
 import SignEstimate from "./pages/SignEstimate";
 import SignChangeOrder from "./pages/SignChangeOrder";
+import { supabase } from '@/lib/supabase';
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5,
+      refetchOnWindowFocus: true,
+      retry: 1,
+    },
+  },
+});
+
 
 // Get base path from environment (set by Vite)
 const basename = import.meta.env.BASE_URL || "/";
@@ -64,8 +74,24 @@ const PWAUpdateNotification = () => {
 
   return null;
 };
+const App = () => {
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible') {
+        const { error } = await supabase.auth.getSession();
+        if (error) {
+          await supabase.auth.signOut();
+        } else {
+          queryClient.invalidateQueries();
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
 
-const App = () => (
+  return (
+
   <ErrorBoundary>
     <ThemeProvider defaultTheme="light">
       <QueryClientProvider client={queryClient}>
@@ -91,6 +117,8 @@ const App = () => (
       </QueryClientProvider>
     </ThemeProvider>
   </ErrorBoundary>
-);
+  );
+};
+
 
 export default App;

@@ -6,9 +6,7 @@ import { fireAutomationEvent } from '@/lib/automationEngine';
 import { Invoice, InvoiceItem, formatCurrency, getContactFullName } from '@/lib/crmData';
 import { sendEmail } from '@/lib/emailApi';
 import { toast } from 'sonner';
-import { X, Plus, Trash2, Save, Send, DollarSign, Download } from 'lucide-react';
-import PaymentHistory from './PaymentHistory';
-import { generateInvoicePDF } from '@/lib/invoicePdfGenerator';
+import { X, Plus, Trash2, Save, Send, DollarSign } from 'lucide-react';
 
 export default function InvoiceModal() {
   const { state, dispatch } = useCRM();
@@ -29,10 +27,6 @@ export default function InvoiceModal() {
   const [notes, setNotes] = useState(prefill?.notes || '');
   const [isSaving, setIsSaving] = useState(false);
   const [validateError, setValidateError] = useState('');
-  const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
-  const [showPaymentHistory, setShowPaymentHistory] = useState(false);
-  const [includeTax, setIncludeTax] = useState(true);
-  const [taxRate, setTaxRate] = useState(8.25);
 
   // Re-initialize if prefill changes (new conversion)
   useEffect(() => {
@@ -77,40 +71,8 @@ export default function InvoiceModal() {
   };
 
   const subtotal = items.reduce((sum, item) => sum + item.total, 0);
-  const tax = includeTax ? subtotal * (taxRate / 100) : 0;
+  const tax = subtotal * 0.0825; // 8.25% tax
   const total = subtotal + tax;
-
-  const handleDownloadPDF = async () => {
-    if (!selectedContact) {
-      toast.error('Please select a customer first');
-      return;
-    }
-    try {
-      await generateInvoicePDF({
-        invoiceNumber: `INV-${Date.now()}`,
-        date: new Date().toISOString().split('T')[0],
-        dueDate,
-        customer: {
-          name: getContactFullName(selectedContact),
-          email: selectedContact.email || '',
-          address: selectedContact.address || '',
-          city: selectedContact.city || '',
-          state: selectedContact.state || '',
-          zip: selectedContact.zip || '',
-        },
-        items: items.filter(i => i.description && i.total > 0),
-        subtotal,
-        tax,
-        total,
-        notes,
-        companyName: state.companyName || 'TrussCTR',
-      });
-      toast.success('PDF downloaded successfully');
-    } catch (error) {
-      console.error('Error generating PDF:', error);
-      toast.error('Failed to generate PDF');
-    }
-  };
 
   const handleSave = async (status: 'draft' | 'sent') => {
     setValidateError('');
@@ -209,9 +171,9 @@ export default function InvoiceModal() {
             ${notes ? `<p style="margin-top:16px;color:#64748b">${notes}</p>` : ''}
             <p style="margin-top:24px;color:#64748b;font-size:13px">Please reply to this email or call us if you have any questions.</p>
           </div>`,
-        }).catch((emailErr) => {
-          console.error('Invoice email failed:', emailErr);
-          toast.warning('Invoice saved but email delivery failed — check your email integration settings');
+        }).catch((emailErr: unknown) => {
+          console.error('[InvoiceModal] Email delivery failed:', emailErr);
+          toast.warning('Invoice saved, but email delivery failed.');
         });
       } else if (status === 'sent' && !selectedContact?.email) {
         toast.warning('Invoice saved — no email on file for this customer');
@@ -221,9 +183,7 @@ export default function InvoiceModal() {
         contactId: selectedContactId,
         contactName: newInvoice.contactName,
         amount: newInvoice.amount,
-      }).catch((automationErr) => {
-        console.warn('Invoice automation event failed:', automationErr);
-      });
+      }).catch(() => {});
 
       dispatch({
         type: 'ADD_NOTIFICATION',
@@ -395,64 +355,16 @@ export default function InvoiceModal() {
                   <span>Subtotal</span>
                   <span>{formatCurrency(subtotal)}</span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      id="includeTax"
-                      checked={includeTax}
-                      onChange={(e) => setIncludeTax(e.target.checked)}
-                      className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-                    />
-                    <label htmlFor="includeTax" className="text-sm font-medium text-gray-700 cursor-pointer">
-                      Include Tax
-                    </label>
-                  </div>
-                  {includeTax && (
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        value={taxRate}
-                        onChange={(e) => setTaxRate(parseFloat(e.target.value) || 0)}
-                        step="0.01"
-                        min="0"
-                        max="100"
-                        className="w-20 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 text-right"
-                      />
-                      <span className="text-gray-600">%</span>
-                    </div>
-                  )}
+                <div className="flex justify-between text-gray-600">
+                  <span>Tax (8.25%)</span>
+                  <span>{formatCurrency(tax)}</span>
                 </div>
-                {includeTax && (
-                  <div className="flex justify-between text-gray-600">
-                    <span>Tax ({taxRate}%)</span>
-                    <span>{formatCurrency(tax)}</span>
-                  </div>
-                )}
                 <div className="flex justify-between text-lg font-bold text-gray-900 pt-2 border-t border-gray-200">
                   <span>Total</span>
                   <span>{formatCurrency(total)}</span>
                 </div>
               </div>
             </div>
-
-            {/* Payment History (for existing invoices) */}
-            {editingInvoiceId && (
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-semibold text-gray-900">Payment History</h3>
-                  <button
-                    onClick={() => setShowPaymentHistory(!showPaymentHistory)}
-                    className="text-xs text-blue-600 hover:text-blue-700"
-                  >
-                    {showPaymentHistory ? 'Hide' : 'Show'}
-                  </button>
-                </div>
-                {showPaymentHistory && (
-                  <PaymentHistory invoiceId={editingInvoiceId} />
-                )}
-              </div>
-            )}
           </div>
         </div>
 
@@ -464,14 +376,6 @@ export default function InvoiceModal() {
             </div>
           )}
           <div className="flex items-center justify-end gap-3">
-          <button
-            onClick={handleDownloadPDF}
-            disabled={!selectedContact || items.filter(i => i.description && i.total > 0).length === 0}
-            className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Download size={18} />
-            Download PDF
-          </button>
           <button
             onClick={handleClose}
             className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors font-medium"

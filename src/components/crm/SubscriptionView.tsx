@@ -1,8 +1,6 @@
-import React, { useEffect, useRef, useState, useCallback, lazy, Suspense } from 'react';
-const PlanComparisonChart = lazy(() => import('@/components/settings/PlanComparisonChart'));
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
-import { supabase } from '@/lib/supabase';
 import { db, DbCompany } from '@/lib/database';
 import {
   CreditCard,
@@ -13,19 +11,18 @@ import {
   Check,
   ChevronDown,
   Loader2,
-  Tag,
 } from 'lucide-react';
 
 // Price IDs come from Vite env vars (set in Vercel dashboard for live, .env.local for dev)
 const PRICE_IDS: Record<string, string> = {
-  starter:    import.meta.env.VITE_STRIPE_STARTER_MONTHLY  || '',
-  pro:        import.meta.env.VITE_STRIPE_PRO_MONTHLY      || '',
-  business:   import.meta.env.VITE_STRIPE_BUSINESS_MONTHLY || '',
-  enterprise: import.meta.env.VITE_STRIPE_ENTERPRISE_MONTHLY || '',
+  starter:  import.meta.env.VITE_STRIPE_STARTER_MONTHLY  || '',
+  pro:      import.meta.env.VITE_STRIPE_PRO_MONTHLY      || '',
+  business: import.meta.env.VITE_STRIPE_BUSINESS_MONTHLY || '',
+  scale:    import.meta.env.VITE_STRIPE_SCALE_MONTHLY    || '',
 };
 
-// API is co-located on Vercel — always use relative paths
-const CHECKOUT_API = '/api/stripe-checkout';
+// Vercel API base (empty on GitHub Pages static hosting — falls back to billing portal)
+const API_BASE: string = import.meta.env.VITE_EMAIL_API_BASE_URL || '';
 
 const PLANS = [
   {
@@ -63,7 +60,7 @@ const PLANS = [
     color: 'emerald',
   },
   {
-    key: 'enterprise' as const,
+    key: 'scale' as const,
     name: 'Scale',
     price: 399,
     annualPrice: 332.50,
@@ -97,6 +94,8 @@ function trialDaysRemaining(trialEndsAt?: string): number | null {
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
 }
 
+// Resolves the correct URL for a public asset regardless of Vite base path
+const chartSrc = `${import.meta.env.BASE_URL}crm-user-tier-comparison.html`.replace('//', '/');
 
 export default function SubscriptionView() {
   const { state } = useCRM();
@@ -143,33 +142,29 @@ export default function SubscriptionView() {
     setCheckoutError(null);
     const priceId = PRICE_IDS[planKey];
 
-    if (!priceId) {
-      // No price ID configured — fall back to billing portal
-      window.open('https://billing.stripe.com/p/login/aFa9AVb73faq5vsfmw6Na00', '_blank', 'noopener,noreferrer');
+    // If we have an API base and a priceId, create a fresh Stripe session
+    if (API_BASE && priceId) {
+      setLoadingPlan(planKey);
+      try {
+        const res = await fetch(`${API_BASE}/api/stripe-checkout`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ priceId }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to start checkout');
+        window.location.href = data.url;
+      } catch (err) {
+        setCheckoutError(err instanceof Error ? err.message : 'Checkout failed. Please try again.');
+      } finally {
+        setLoadingPlan(null);
+      }
       return;
     }
 
-    setLoadingPlan(planKey);
-    try {
-      const companyId = profile?.company_id || state.companyId || undefined;
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(CHECKOUT_API, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-        },
-        body: JSON.stringify({ priceId, planId: planKey, companyId }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to start checkout');
-      window.location.href = data.url;
-    } catch (err) {
-      setCheckoutError(err instanceof Error ? err.message : 'Checkout failed. Please try again.');
-    } finally {
-      setLoadingPlan(null);
-    }
-  }, [profile?.company_id, state.companyId]);
+    // Fallback: send user to the Stripe billing portal to subscribe
+    window.open('https://billing.stripe.com/p/login/aFa9AVb73faq5vsfmw6Na00', '_blank', 'noopener,noreferrer');
+  }, []);
 
   const highlightColors: Record<string, string> = {
     blue: 'border-blue-200 bg-blue-50',
@@ -242,16 +237,6 @@ export default function SubscriptionView() {
         })()}
       </div>
 
-      {/* LAUNCH50 promo callout — visible during trial */}
-      {(status === 'trialing' || status === 'canceled' || status === 'past_due') && (
-        <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-2.5 text-sm text-indigo-800">
-          <Tag className="w-4 h-4 flex-shrink-0 text-indigo-500" />
-          <span>
-            Use code <strong className="font-mono">LAUNCH50</strong> at checkout — <strong>50% off your first 3 months</strong> on any monthly plan.
-          </span>
-        </div>
-      )}
-
       {/* Pricing grid */}
       <div>
         <h4 className="text-base font-semibold text-gray-900 mb-4">Available Plans</h4>
@@ -308,10 +293,10 @@ export default function SubscriptionView() {
         </div>
       )}
 
-      {/* Comparison chart */}
-      <div ref={chartRef}>
+      {/* Scroll-down banner + embedded comparison chart */}
+      <div ref={chartRef} className="space-y-3">
         <div
-          className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-semibold tracking-wide shadow mb-4 transition-all duration-700 ${
+          className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-semibold tracking-wide shadow transition-all duration-700 ${
             chartVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'
           }`}
         >
@@ -319,9 +304,16 @@ export default function SubscriptionView() {
           SCROLL DOWN TO COMPARE FEATURES
           <ChevronDown className="w-4 h-4 animate-bounce" />
         </div>
-        <Suspense fallback={<div className="h-48 flex items-center justify-center text-gray-400 text-sm">Loading comparison chart…</div>}>
-          <PlanComparisonChart />
-        </Suspense>
+
+        <div className="w-full rounded-xl overflow-hidden border border-gray-200 shadow-sm">
+          <iframe
+            src={chartSrc}
+            title="TrussCTR Plan Feature Comparison"
+            className="w-full"
+            style={{ height: '900px', border: 'none' }}
+            loading="lazy"
+          />
+        </div>
       </div>
 
     </div>

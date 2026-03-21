@@ -69,10 +69,10 @@
     "@types/react": "^18.2.56",
     "@types/react-beautiful-dnd": "^13.1.8",
     "@types/react-dom": "^18.2.19",
-    "@typescript-eslint/eslint-plugin": "^6.21.0",
-    "@typescript-eslint/parser": "^6.21.0",
+    "@typescript-eslint/eslint-plugin": "^8.57.1",
+    "@typescript-eslint/parser": "^8.57.1",
     "@vitejs/plugin-react": "^4.2.1",
-    "@vitest/ui": "^2.1.8",
+    "@vitest/ui": "^4.1.0",
     "autoprefixer": "^10.4.17",
     "eslint": "^8.56.0",
     "eslint-plugin-react-hooks": "^4.6.0",
@@ -83,6 +83,6 @@
     "terser": "^5.46.0",
     "typescript": "^5.2.2",
     "vite": "^7.0.0",
-    "vitest": "^2.1.8"
+    "vitest": "^4.1.0"
   }
 }
