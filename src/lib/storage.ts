@@ -132,22 +132,38 @@ async function uploadViaSdk(
   file: File,
   timeoutMs = 20000
 ): Promise<{ ok: true } | { ok: false; message: string }> {
-  const timeoutPromise = new Promise<{ ok: false; message: string }>((resolve) =>
-    setTimeout(() => resolve({ ok: false, message: `SDK upload timed out after ${Math.round(timeoutMs / 1000)}s` }), timeoutMs)
-  );
+  // AbortController lets us actually cancel the underlying fetch when timed out.
+  // Without this the Supabase SDK fetch keeps running as a zombie even after the
+  // timeout resolves, consuming the remaining budget of any outer timeout.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-  const uploadPromise = supabase.storage
-    .from(bucket)
-    .upload(path, file, { upsert: false, cacheControl: '3600', contentType: file.type || undefined })
-    .then(({ error }) => {
-      if (error) {
-        console.error(`[Storage] SDK upload failed:`, error);
-        return { ok: false as const, message: error.message || 'Storage upload failed' };
-      }
-      return { ok: true as const };
-    });
+  try {
+    const { error } = await supabase.storage
+      .from(bucket)
+      .upload(path, file, {
+        upsert: false,
+        cacheControl: '3600',
+        contentType: file.type || undefined,
+        // @ts-ignore — Supabase JS v2 passes fetch options through to the underlying fetch
+        signal: controller.signal,
+      });
 
-  return Promise.race([uploadPromise, timeoutPromise]);
+    if (error) {
+      console.error(`[Storage] SDK upload failed:`, error);
+      return { ok: false, message: error.message || 'Storage upload failed' };
+    }
+    return { ok: true };
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      console.error(`[Storage] SDK upload aborted after ${Math.round(timeoutMs / 1000)}s`);
+      return { ok: false, message: `SDK upload timed out after ${Math.round(timeoutMs / 1000)}s` };
+    }
+    if (error instanceof Error) return { ok: false, message: error.message };
+    return { ok: false, message: 'Unknown SDK upload error' };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**

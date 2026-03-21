@@ -142,11 +142,11 @@ const SECTIONS: Section[] = [
   },
   {
     id: 'mobile',
-    label: '📱 Mobile App (iOS & Android)',
+    label: '📱 Mobile App (iOS · Android Coming Soon)',
     defaultOpen: true,
     rows: [
       { feature: 'Native iOS App',                         values: [Y, Y, Y, Y, Y, Y] },
-      { feature: 'Native Android App',                     values: [Y, Y, Y, Y, Y, Y] },
+      { feature: 'Native Android App',                     values: [P('Coming Soon'), Y, Y, Y, Y, Y] },
       { feature: 'Offline Mode (No Internet Required)',     values: [Y, P('Limited'), P('Limited'), N, Y, Y] },
       { feature: 'Biometric Login (Face ID / Touch ID)',    values: [Y, Y, P('Limited'), N, Y, Y] },
       { feature: 'Full CRM Access on Mobile',              values: [Y, Y, Y, P('Basic'), Y, Y] },

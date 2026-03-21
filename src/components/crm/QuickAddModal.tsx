@@ -62,11 +62,9 @@ export default function QuickAddModal() {
   };
 
   const resolveCompanyId = async (): Promise<string | null> => {
-    // Timeout wrapper to prevent indefinite hanging
-    const timeout = new Promise<string | null>((_, reject) =>
-      setTimeout(() => reject(new Error('Company resolution timed out after 10 seconds')), 10000)
-    );
-
+    // ensureUserHasCompany runs up to 6 sequential Supabase calls (check → create →
+    // update×3 → verify). 30 s gives ample room even on slow connections.
+    // withTimeout properly clears the timer on success to avoid leaks.
     const resolveLogic = async (): Promise<string | null> => {
       const currentCompanyId = profile?.company_id || state.companyId || null;
       if (currentCompanyId) return currentCompanyId;
@@ -129,12 +127,7 @@ export default function QuickAddModal() {
       return createdCompany.id;
     };
 
-    try {
-      return await Promise.race([resolveLogic(), timeout]);
-    } catch (error) {
-      console.error('Error resolving company ID:', error);
-      throw error;
-    }
+    return withTimeout(resolveLogic(), 30000, 'Company resolution');
   };
 
   const handleClose = () => {
@@ -230,8 +223,11 @@ export default function QuickAddModal() {
         'Create contact'
       );
 
+      if (!dbContact) {
+        throw new Error('Contact was not saved. Please try again.');
+      }
 
-        const createdContact: Contact = {
+      const createdContact: Contact = {
           id: dbContact.id,
           firstName: dbContact.first_name,
           lastName: dbContact.last_name,

@@ -15,6 +15,23 @@ export class IntegrationManager {
 
   constructor() {
     this.initializeIntegrations();
+
+    // Auto-reload credentials from Supabase whenever auth state changes
+    // — covers sign-in, token refresh, and initial session on page load.
+    supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+        this.loadFromSupabase().catch(() => {});
+      }
+    });
+
+    // Re-hydrate credentials when the tab regains focus after dormancy.
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          this.loadFromSupabase().catch(() => {});
+        }
+      });
+    }
   }
 
   /**

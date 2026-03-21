@@ -15,6 +15,25 @@ class IntegrationManager {
   private activeConnections: Map<string, any> = new Map();
   private webhookHandlers: Map<string, (...args: unknown[]) => void> = new Map();
 
+  constructor() {
+    // Auto-reload credentials whenever the Supabase session becomes available
+    // — covers: first load, sign-in, token refresh, and returning after dormancy.
+    supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+        this.loadSavedIntegrationsAsync().catch(() => {});
+      }
+    });
+
+    // Re-hydrate credentials when the tab regains focus after dormancy.
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          this.loadSavedIntegrationsAsync().catch(() => {});
+        }
+      });
+    }
+  }
+
   // Initialize all available integrations
   async initializeIntegrations(): Promise<void> {
     // Load from localStorage or API

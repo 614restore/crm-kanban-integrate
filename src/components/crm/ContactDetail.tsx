@@ -3448,15 +3448,22 @@ export default function ContactDetail() {
                   updated_at: new Date().toISOString(),
                 };
 
-                const newWorkOrder = await db.createWorkOrder(workOrderData);
-                if (newWorkOrder) {
-                  toast.success('Work order created successfully');
-                  setShowWorkOrderModal(false);
-                  // Reload data
-                  const workOrders = await db.getWorkOrdersByContact(contactId!);
-                  setContactWorkOrders(workOrders);
-                } else {
-                  toast.error('Failed to create work order');
+                try {
+                  const newWorkOrder = await db.createWorkOrder(workOrderData);
+                  if (newWorkOrder) {
+                    toast.success('Work order created successfully');
+                    setShowWorkOrderModal(false);
+                    // Reload data
+                    if (contactId) {
+                      const workOrders = await db.getWorkOrdersByContact(contactId);
+                      setContactWorkOrders(workOrders);
+                    }
+                  } else {
+                    toast.error('Failed to create work order');
+                  }
+                } catch (err) {
+                  console.error('Error creating work order:', err);
+                  toast.error(err instanceof Error ? err.message : 'Failed to create work order');
                 }
               }}
               className="p-6 space-y-4"
