@@ -12,6 +12,7 @@ import {
   extractMentionHandles,
 } from '@/lib/mentions';
 import { toast } from 'sonner';
+import { withTimeout } from '@/lib/utils';
 import {
   X,
   Calendar,
@@ -297,19 +298,23 @@ export default function AppointmentModal({
         }
       } else {
         // Create new
-        const created = await db.createAppointment({
-          company_id: effectiveCompanyId,
-          contact_id: contactId,
-          title: title.trim(),
-          type,
-          date,
-          time,
-          duration,
-          assigned_to: assignedTo || undefined,
-          location: location || undefined,
-          notes: notes.trim() || undefined,
-          status: 'scheduled',
-        });
+        const created = await withTimeout(
+          db.createAppointment({
+            company_id: effectiveCompanyId,
+            contact_id: contactId,
+            title: title.trim(),
+            type,
+            date,
+            time,
+            duration,
+            assigned_to: assignedTo || undefined,
+            location: location || undefined,
+            notes: notes.trim() || undefined,
+            status: 'scheduled',
+          }),
+          20000,
+          'Save appointment'
+        );
 
         if (!created) {
           toast.error('A booking already exists at that date and time. Please choose a different time slot.');

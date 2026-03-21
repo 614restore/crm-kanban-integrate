@@ -970,11 +970,15 @@ class DatabaseService {
     });
 
     try {
-      const firstAttempt = await supabase
-        .from('appointments')
-        .insert(toStartAndEnd())
-        .select()
-        .single();
+      const firstAttempt = await this.raceTimeout(
+        supabase
+          .from('appointments')
+          .insert(toStartAndEnd())
+          .select()
+          .single(),
+        15000,
+        'createAppointment (start_time schema)'
+      );
 
       if (!firstAttempt.error) {
         return firstAttempt.data as DbAppointment;
@@ -986,11 +990,15 @@ class DatabaseService {
         return null;
       }
 
-      const secondAttempt = await supabase
-        .from('appointments')
-        .insert(toDateTime())
-        .select()
-        .single();
+      const secondAttempt = await this.raceTimeout(
+        supabase
+          .from('appointments')
+          .insert(toDateTime())
+          .select()
+          .single(),
+        15000,
+        'createAppointment (date/time schema)'
+      );
 
       if (secondAttempt.error) {
         console.error('Error creating appointment:', secondAttempt.error);
@@ -1473,8 +1481,8 @@ class DatabaseService {
   async updateProfile(profileId: string, updates: Partial<DbProfile>): Promise<DbProfile | null> {
     // Try RPC first (SECURITY DEFINER, bypasses RLS)
     try {
-      const { data: rpcData, error: rpcError } = await supabase
-        .rpc('update_team_member_profile', {
+      const { data: rpcData, error: rpcError } = await this.raceTimeout(
+        supabase.rpc('update_team_member_profile', {
           p_profile_id: profileId,
           p_first_name: updates.first_name ?? null,
           p_last_name: updates.last_name ?? null,
@@ -1483,8 +1491,11 @@ class DatabaseService {
           p_department: updates.department ?? null,
           p_phone: updates.phone ?? null,
           p_is_active: updates.is_active ?? null,
-        });
-      
+        }),
+        10000,
+        'updateProfile RPC'
+      );
+
       if (!rpcError && rpcData) {
         return rpcData as DbProfile;
       }
@@ -1496,13 +1507,17 @@ class DatabaseService {
     }
 
     // Fallback: direct table update
-    const { data, error } = await supabase
-      .from('profiles')
-      .update({ ...updates, updated_at: new Date().toISOString() })
-      .eq('id', profileId)
-      .select()
-      .single();
-    
+    const { data, error } = await this.raceTimeout(
+      supabase
+        .from('profiles')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', profileId)
+        .select()
+        .single(),
+      10000,
+      'updateProfile direct'
+    );
+
     if (error) {
       console.error('Error updating profile:', error);
       return null;
