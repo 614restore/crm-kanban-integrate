@@ -131,6 +131,7 @@ export default function SubscriptionView() {
         <stripe-pricing-table
           pricing-table-id="prctbl_1TDTsWQ4qbAu1D2SxpS4c47b"
           publishable-key="pk_live_51T8YyaQ4qbAu1D2STcaoAsxjqScvBgvTttf0k5DXp8t0BbDswCY6Hqdtd81MOlWeQqPBGCkAFBtAidM5Fsa8n0JK006K6b0Uv7"
+          client-reference-id={profile?.company_id ?? undefined}
           customer-email={profile?.email ?? undefined}
         />
       </div>
