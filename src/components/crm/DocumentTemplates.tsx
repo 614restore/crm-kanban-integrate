@@ -1,7 +1,7 @@
 // Document Templates for Contractors
 // Pre-built templates for estimates, invoices, contracts, work orders
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   FileText,
   Plus,
@@ -86,6 +86,7 @@ const DocumentTemplates: React.FC = () => {
   const [customerEditMode, setCustomerEditMode] = useState(false);
   const [selectedContactId, setSelectedContactId] = useState<string>('');
   const [editedContent, setEditedContent] = useState<string>('');
+  const [manualVars, setManualVars] = useState<Record<string, string>>({});
 
   // ── Folder state ────────────────────────────────────────────────────────
   // 'all' = show everything; 'cat:CATEGORY_ID' = system folder; custom string = user folder
@@ -2637,6 +2638,7 @@ const DocumentTemplates: React.FC = () => {
     const contactId = selectedContactId || crmState.contacts[0]?.id || '';
     setSelectedContactId(contactId);
     setEditedContent(fillTemplateForContact(template, contactId));
+    setManualVars({});
     setCustomerEditMode(true);
   };
 
@@ -3248,70 +3250,111 @@ const DocumentTemplates: React.FC = () => {
       )}
 
       {/* Per-Customer Template Editor */}
-      {customerEditMode && selectedTemplate && (
-        <Dialog open={customerEditMode} onOpenChange={() => setCustomerEditMode(false)}>
-          <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Edit "{selectedTemplate.name}" for Customer</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label>Customer</Label>
-                <select
-                  value={selectedContactId}
-                  onChange={(e) => {
-                    setSelectedContactId(e.target.value);
-                    setEditedContent(fillTemplateForContact(selectedTemplate, e.target.value));
-                  }}
-                  className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                >
-                  <option value="">— Select a customer —</option>
-                  {crmState.contacts.map(c => (
-                    <option key={c.id} value={c.id}>{getContactFullName(c)}</option>
-                  ))}
-                </select>
+      {customerEditMode && selectedTemplate && (() => {
+        // Derive unfilled variables from base content
+        const unfilledVars = [...new Set((editedContent.match(/\{\{([A-Z0-9_]+)\}\}/g) || []).map(m => m.slice(2, -2)))];
+        // Build final preview by applying manual overrides on top of base content
+        let customerPreview = editedContent;
+        Object.entries(manualVars).forEach(([key, val]) => {
+          if (val) customerPreview = customerPreview.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), val);
+        });
+        return (
+          <Dialog open={customerEditMode} onOpenChange={() => setCustomerEditMode(false)}>
+            <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Use "{selectedTemplate.name}" for Customer</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                {/* Customer selector */}
+                <div>
+                  <Label>Customer</Label>
+                  <select
+                    value={selectedContactId}
+                    onChange={(e) => {
+                      setSelectedContactId(e.target.value);
+                      setEditedContent(fillTemplateForContact(selectedTemplate, e.target.value));
+                      setManualVars({});
+                    }}
+                    className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                  >
+                    <option value="">— Select a customer —</option>
+                    {crmState.contacts.map(c => (
+                      <option key={c.id} value={c.id}>{getContactFullName(c)}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Remaining fields to fill in */}
+                {unfilledVars.length > 0 && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                    <Label className="text-amber-800 font-semibold text-sm mb-3 block">
+                      Fields to fill in ({unfilledVars.length} remaining)
+                    </Label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {unfilledVars.map(variable => (
+                        <div key={variable}>
+                          <Label className="text-xs text-gray-600 mb-1 block">
+                            {variable.replace(/_/g, ' ')}
+                          </Label>
+                          <Input
+                            value={manualVars[variable] || ''}
+                            onChange={(e) => setManualVars(prev => ({ ...prev, [variable]: e.target.value }))}
+                            placeholder={`Enter ${variable.replace(/_/g, ' ').toLowerCase()}`}
+                            className="text-sm"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Rendered preview */}
+                <div>
+                  <Label className="text-sm font-semibold mb-2 block">Document Preview</Label>
+                  <div className="border rounded-lg overflow-hidden">
+                    <iframe
+                      srcDoc={customerPreview}
+                      className="w-full border-0"
+                      style={{ minHeight: '500px', height: '60vh' }}
+                      title="Document Preview"
+                      sandbox="allow-same-origin"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setCustomerEditMode(false)}>Cancel</Button>
+                  <Button
+                    onClick={() => {
+                      if (!selectedContactId) {
+                        toast({ title: 'Select a customer first', variant: 'destructive' });
+                        return;
+                      }
+                      const contact = crmState.contacts.find(c => c.id === selectedContactId);
+                      const contactName = contact ? getContactFullName(contact) : 'Customer';
+                      const customized: DocumentTemplate = {
+                        ...selectedTemplate,
+                        id: Date.now().toString(),
+                        name: `${selectedTemplate.name} — ${contactName}`,
+                        content: customerPreview,
+                        isDefault: false,
+                        createdAt: new Date().toISOString().split('T')[0],
+                        lastModified: new Date().toISOString().split('T')[0],
+                        usageCount: 0,
+                      };
+                      setTemplates(prev => [customized, ...prev]);
+                      setCustomerEditMode(false);
+                      toast({ title: 'Saved', description: `Customer document saved as "${customized.name}"` });
+                    }}
+                  >
+                    Save as Customer Document
+                  </Button>
+                </div>
               </div>
-              <div>
-                <Label>Document Content (editable)</Label>
-                <Textarea
-                  value={editedContent}
-                  onChange={(e) => setEditedContent(e.target.value)}
-                  className="mt-1 font-mono text-xs"
-                  rows={20}
-                />
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setCustomerEditMode(false)}>Cancel</Button>
-                <Button
-                  onClick={() => {
-                    if (!selectedContactId) {
-                      toast({ title: 'Select a customer first', variant: 'destructive' });
-                      return;
-                    }
-                    const contact = crmState.contacts.find(c => c.id === selectedContactId);
-                    const contactName = contact ? getContactFullName(contact) : 'Customer';
-                    const customized: DocumentTemplate = {
-                      ...selectedTemplate,
-                      id: Date.now().toString(),
-                      name: `${selectedTemplate.name} — ${contactName}`,
-                      content: editedContent,
-                      isDefault: false,
-                      createdAt: new Date().toISOString().split('T')[0],
-                      lastModified: new Date().toISOString().split('T')[0],
-                      usageCount: 0,
-                    };
-                    setTemplates(prev => [customized, ...prev]);
-                    setCustomerEditMode(false);
-                    toast({ title: 'Saved', description: `Customer document saved as "${customized.name}"` });
-                  }}
-                >
-                  Save as Customer Document
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
     </div>
   );
 };
