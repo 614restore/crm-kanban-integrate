@@ -88,7 +88,7 @@ const PlanComparisonChart: React.FC = () => {
               TrussCTR now has a full mobile app — included FREE on every plan
             </p>
             <p className="text-xs" style={{ color: '#86efac' }}>
-              iOS &amp; Android · Real-time updates · Offline-ready · No extra charge
+              iOS · Android coming soon · Real-time updates · No extra charge
             </p>
           </div>
           <span
