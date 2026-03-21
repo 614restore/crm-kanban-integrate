@@ -644,9 +644,11 @@ export default function WorkOrdersView() {
       const result = await createInvoiceFromWorkOrder(workOrder.id, profile.company_id, profile.id);
       if (result.success) {
         toast.success('Invoice created successfully');
-        // Reload invoices
+        // Reload invoices and sync to global state
         const invoices = await db.getInvoices(profile.company_id);
-        // You may need to dispatch to update invoices in state
+        if (invoices.length > 0) {
+          dispatch({ type: 'SET_INVOICES', payload: invoices as any[] });
+        }
       } else {
         toast.error(result.error || 'Failed to create invoice');
       }

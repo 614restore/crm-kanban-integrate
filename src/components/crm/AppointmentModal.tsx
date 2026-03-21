@@ -240,18 +240,22 @@ export default function AppointmentModal({
 
       if (editingAppointment) {
         // Update existing
-        const updated = await db.updateAppointment(editingAppointment.id, {
-          title: title.trim(),
-          type,
-          date,
-          time,
-          duration,
-          contact_id: contactId,
-          assigned_to: assignedTo || undefined,
-          location: location || undefined,
-          notes: notes.trim() || undefined,
-          status: editingAppointment.status,
-        });
+        const updated = await withTimeout(
+          db.updateAppointment(editingAppointment.id, {
+            title: title.trim(),
+            type,
+            date,
+            time,
+            duration,
+            contact_id: contactId,
+            assigned_to: assignedTo || undefined,
+            location: location || undefined,
+            notes: notes.trim() || undefined,
+            status: editingAppointment.status,
+          }),
+          15000,
+          'Update appointment'
+        );
 
         if (!updated) {
           toast.error('Failed to update appointment');

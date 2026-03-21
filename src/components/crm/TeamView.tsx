@@ -224,7 +224,7 @@ export default function TeamView() {
         is_active: selectedMember.isActive,
       });
 
-      await supabase
+      const { error: rateError } = await supabase
         .from('profiles')
         .update({
           commission_rate_self_gen: selectedMember.commission_rate_self_gen ?? 0,
@@ -232,6 +232,11 @@ export default function TeamView() {
           commission_rate_custom:   selectedMember.commission_rate_custom   ?? 0,
         })
         .eq('id', selectedMember.id);
+
+      if (rateError) {
+        console.error('Failed to save commission rates:', rateError);
+        toast.error('Saved profile but failed to update commission rates');
+      }
 
       if (!updated) { toast.error('Failed to save team member'); return; }
 

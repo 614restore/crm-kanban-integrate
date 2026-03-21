@@ -1149,17 +1149,15 @@ class DatabaseService {
   }
 
   async createCommunication(communication: Partial<DbCommunication>): Promise<DbCommunication | null> {
-    const { data, error } = await supabase
-      .from('communications')
-      .insert(communication)
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error creating communication:', error);
-      return null;
-    }
-    return data;
+    try {
+      const { data, error } = await this.raceTimeout(
+        supabase.from('communications').insert(communication).select().single(),
+        10000,
+        'createCommunication'
+      );
+      if (error) { console.error('Error creating communication:', error); return null; }
+      return data;
+    } catch (err) { console.error('createCommunication timed out or failed:', err); return null; }
   }
 
   // Document operations
@@ -1193,30 +1191,27 @@ class DatabaseService {
   }
 
   async createDocument(document: Partial<DbDocument>): Promise<DbDocument | null> {
-    const { data, error } = await supabase
-      .from('documents')
-      .insert(document)
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error creating document:', error);
-      return null;
-    }
-    return data;
+    try {
+      const { data, error } = await this.raceTimeout(
+        supabase.from('documents').insert(document).select().single(),
+        10000,
+        'createDocument'
+      );
+      if (error) { console.error('Error creating document:', error); return null; }
+      return data;
+    } catch (err) { console.error('createDocument timed out or failed:', err); return null; }
   }
 
   async deleteDocument(documentId: string): Promise<boolean> {
-    const { error } = await supabase
-      .from('documents')
-      .delete()
-      .eq('id', documentId);
-    
-    if (error) {
-      console.error('Error deleting document:', error);
-      return false;
-    }
-    return true;
+    try {
+      const { error } = await this.raceTimeout(
+        supabase.from('documents').delete().eq('id', documentId),
+        10000,
+        'deleteDocument'
+      );
+      if (error) { console.error('Error deleting document:', error); return false; }
+      return true;
+    } catch (err) { console.error('deleteDocument timed out or failed:', err); return false; }
   }
 
   // Kanban board operations
@@ -1418,45 +1413,36 @@ class DatabaseService {
   }
 
   async createAutomation(automation: Partial<DbAutomation>): Promise<DbAutomation | null> {
-    const { data, error } = await supabase
-      .from('automations')
-      .insert(automation)
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error creating automation:', error);
-      return null;
-    }
-    return data;
+    try {
+      const { data, error } = await this.raceTimeout(
+        supabase.from('automations').insert(automation).select().single(),
+        10000, 'createAutomation'
+      );
+      if (error) { console.error('Error creating automation:', error); return null; }
+      return data;
+    } catch (err) { console.error('createAutomation timed out or failed:', err); return null; }
   }
 
   async updateAutomation(automationId: string, updates: Partial<DbAutomation>): Promise<DbAutomation | null> {
-    const { data, error } = await supabase
-      .from('automations')
-      .update({ ...updates, updated_at: new Date().toISOString() })
-      .eq('id', automationId)
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error updating automation:', error);
-      return null;
-    }
-    return data;
+    try {
+      const { data, error } = await this.raceTimeout(
+        supabase.from('automations').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', automationId).select().single(),
+        10000, 'updateAutomation'
+      );
+      if (error) { console.error('Error updating automation:', error); return null; }
+      return data;
+    } catch (err) { console.error('updateAutomation timed out or failed:', err); return null; }
   }
 
   async deleteAutomation(automationId: string): Promise<boolean> {
-    const { error } = await supabase
-      .from('automations')
-      .delete()
-      .eq('id', automationId);
-    
-    if (error) {
-      console.error('Error deleting automation:', error);
-      return false;
-    }
-    return true;
+    try {
+      const { error } = await this.raceTimeout(
+        supabase.from('automations').delete().eq('id', automationId),
+        10000, 'deleteAutomation'
+      );
+      if (error) { console.error('Error deleting automation:', error); return false; }
+      return true;
+    } catch (err) { console.error('deleteAutomation timed out or failed:', err); return false; }
   }
 
   // Team member operations
@@ -1869,16 +1855,14 @@ class DatabaseService {
     } catch (err) { console.error('updateEstimate timed out or failed:', err); throw err; }
   }
   async deleteEstimate(estimateId: string): Promise<boolean> {
-    const { error } = await supabase
-      .from('estimates')
-      .delete()
-      .eq('id', estimateId);
-    
-    if (error) {
-      console.error('Error deleting estimate:', error);
-      return false;
-    }
-    return true;
+    try {
+      const { error } = await this.raceTimeout(
+        supabase.from('estimates').delete().eq('id', estimateId),
+        10000, 'deleteEstimate'
+      );
+      if (error) { console.error('Error deleting estimate:', error); return false; }
+      return true;
+    } catch (err) { console.error('deleteEstimate timed out or failed:', err); return false; }
   }
 
   // Update estimate status with tracking
@@ -2202,33 +2186,31 @@ class DatabaseService {
 
   async markAllNotificationsRead(companyId: string, userId?: string): Promise<boolean> {
     if (this.inDemoMode()) return true;
-    let query = supabase
-      .from('notifications')
-      .update({ read: true, updated_at: new Date().toISOString() })
-      .eq('company_id', companyId)
-      .eq('read', false);
-    if (userId) {
-      query = query.or(`user_id.eq.${userId},user_id.is.null`);
-    }
-    const { error } = await query;
-    if (error) {
-      console.error('Error marking all notifications read:', error);
-      return false;
-    }
-    return true;
+    try {
+      let query = supabase
+        .from('notifications')
+        .update({ read: true, updated_at: new Date().toISOString() })
+        .eq('company_id', companyId)
+        .eq('read', false);
+      if (userId) {
+        query = query.or(`user_id.eq.${userId},user_id.is.null`);
+      }
+      const { error } = await this.raceTimeout(query, 10000, 'markAllNotificationsRead');
+      if (error) { console.error('Error marking all notifications read:', error); return false; }
+      return true;
+    } catch (err) { console.error('markAllNotificationsRead timed out or failed:', err); return false; }
   }
 
   async deleteNotification(notificationId: string): Promise<boolean> {
     if (this.inDemoMode()) return true;
-    const { error } = await supabase
-      .from('notifications')
-      .delete()
-      .eq('id', notificationId);
-    if (error) {
-      console.error('Error deleting notification:', error);
-      return false;
-    }
-    return true;
+    try {
+      const { error } = await this.raceTimeout(
+        supabase.from('notifications').delete().eq('id', notificationId),
+        10000, 'deleteNotification'
+      );
+      if (error) { console.error('Error deleting notification:', error); return false; }
+      return true;
+    } catch (err) { console.error('deleteNotification timed out or failed:', err); return false; }
   }
 
   // ─── Expenses ─────────────────────────────────────────────────────────

@@ -223,8 +223,11 @@ export default function QuickAddModal() {
         'Create contact'
       );
 
+      if (!dbContact) {
+        throw new Error('Contact was not saved. Please try again.');
+      }
 
-        const createdContact: Contact = {
+      const createdContact: Contact = {
           id: dbContact.id,
           firstName: dbContact.first_name,
           lastName: dbContact.last_name,

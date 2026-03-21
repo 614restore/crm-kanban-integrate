@@ -209,7 +209,10 @@ export default function InvoiceModal() {
             ${notes ? `<p style="margin-top:16px;color:#64748b">${notes}</p>` : ''}
             <p style="margin-top:24px;color:#64748b;font-size:13px">Please reply to this email or call us if you have any questions.</p>
           </div>`,
-        }).catch(() => {});
+        }).catch((emailErr) => {
+          console.error('Invoice email failed:', emailErr);
+          toast.warning('Invoice saved but email delivery failed — check your email integration settings');
+        });
       } else if (status === 'sent' && !selectedContact?.email) {
         toast.warning('Invoice saved — no email on file for this customer');
       }
@@ -218,7 +221,9 @@ export default function InvoiceModal() {
         contactId: selectedContactId,
         contactName: newInvoice.contactName,
         amount: newInvoice.amount,
-      }).catch(() => {});
+      }).catch((automationErr) => {
+        console.warn('Invoice automation event failed:', automationErr);
+      });
 
       dispatch({
         type: 'ADD_NOTIFICATION',
