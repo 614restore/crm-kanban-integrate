@@ -138,13 +138,29 @@ export default function HailTracePanel({ address, city, state, zip, companyId, c
     setCopied(false);
 
     try {
-      const { data: integrationData } = await supabase
+      // Refresh the session before querying — guards against dormancy and
+      // private-browser scenarios where the in-memory token may be stale.
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setError('Your session has expired. Please sign in again to use HailTrace.');
+        setStatus('idle');
+        return;
+      }
+
+      const { data: integrationData, error: dbError } = await supabase
         .from('company_integrations')
         .select('credentials')
         .eq('company_id', companyId)
         .eq('integration_type', 'hailtrace')
         .eq('is_active', true)
         .single();
+
+      if (dbError && dbError.code !== 'PGRST116') {
+        // PGRST116 = no rows found; anything else is a real DB/auth error
+        setError('Failed to load HailTrace configuration. Please try again.');
+        setStatus('idle');
+        return;
+      }
 
       const apiKey = integrationData?.credentials?.apiKey;
       if (!apiKey) { setStatus('no-config'); return; }
