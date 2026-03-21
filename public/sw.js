@@ -1,212 +1,109 @@
-// Basic service worker for StormCraft CRM
-// This provides offline caching and PWA functionality
+// TrussCTR CRM — Service Worker
+// Provides offline caching and PWA functionality for the root-deployed app.
 
-const CACHE_NAME = 'stormcraft-v6';
+const CACHE_NAME = 'trussctr-v1';
 const urlsToCache = [
-  '/quotes-customize-manage/',
-  '/quotes-customize-manage/index.html',
-  '/quotes-customize-manage/manifest.json',
-  // Static assets will be added by Workbox during build
+  '/',
+  '/index.html',
+  '/manifest.json',
 ];
 
-// Install event - cache the app shell
+// ── Install: cache app shell ──────────────────────────────────────────────────
 self.addEventListener('install', (event) => {
-  console.log('✅ Service Worker installing...');
+  console.log('[SW] Installing TrussCTR service worker...');
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => {
-        console.log('✅ Caching app shell');
-        return cache.addAll(urlsToCache);
-      })
+    caches.open(CACHE_NAME).then((cache) => {
+      console.log('[SW] Caching app shell');
+      // addAll fails silently on individual 404s — catch per-URL
+      return Promise.allSettled(urlsToCache.map(url => cache.add(url)));
+    })
   );
-  // Force the waiting service worker to become the active service worker
+  // Skip waiting so the new SW activates immediately on deploy
   self.skipWaiting();
 });
 
-// Activate event - cleanup old caches
+// ── Activate: delete stale caches ─────────────────────────────────────────────
 self.addEventListener('activate', (event) => {
-  console.log('✅ Service Worker activating...');
+  console.log('[SW] Activating TrussCTR service worker...');
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            console.log('🗑️ Deleting old cache:', cacheName);
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })
+    caches.keys().then((cacheNames) =>
+      Promise.all(
+        cacheNames
+          .filter((name) => name !== CACHE_NAME)
+          .map((name) => {
+            console.log('[SW] Deleting old cache:', name);
+            return caches.delete(name);
+          })
+      )
+    )
   );
-  // Become available to all pages immediately
+  // Take control of all open clients immediately
   self.clients.claim();
 });
 
-// Fetch event - serve from cache when offline
+// ── Fetch handler ─────────────────────────────────────────────────────────────
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
-
   const isSameOrigin = url.origin === self.location.origin;
-  const isAppPath = url.pathname.startsWith('/quotes-customize-manage/');
 
-  // Provide safe fallback for missing JSON assets requested by the app
-  if (isSameOrigin && url.pathname.endsWith('.json') && request.method === 'GET') {
+  // ── Never intercept cross-origin requests (Supabase, Stripe, etc.) ──────────
+  if (!isSameOrigin) return;
+
+  // ── API routes: always network-first, no cache ────────────────────────────
+  if (url.pathname.startsWith('/api/')) {
     event.respondWith(
-      fetch(request).catch(() => {
-        const body = JSON.stringify({ output: '', data: null });
-        return new Response(body, { status: 200, headers: { 'Content-Type': 'application/json' } });
-      })
+      fetch(request).catch(() =>
+        new Response(JSON.stringify({ error: 'offline' }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
     );
     return;
   }
 
-  // Only handle requests from our app path for the rest
-  if (!isAppPath) {
-    return;
-  }
-
-  // Never cache JS bundles - they have content hashes, always fetch fresh
-  if (url.pathname.endsWith('.js')) {
+  // ── JS/CSS bundles: always network-first (content-hashed, never stale) ────
+  if (url.pathname.match(/\.(js|css)$/)) {
     event.respondWith(
-      fetch(request, { cache: 'no-store' }).catch(() => {
-        // If offline, try to find in cache as last resort
-        return caches.match(request);
-      })
+      fetch(request, { cache: 'no-store' }).catch(() => caches.match(request))
     );
     return;
   }
 
-  // Never cache HTML - always fetch fresh
-  if (url.pathname.endsWith('.html') || url.pathname === '/quotes-customize-manage/' || request.mode === 'navigate') {
+  // ── HTML / navigation: always fetch fresh; fall back to index.html offline ─
+  if (
+    request.mode === 'navigate' ||
+    url.pathname === '/' ||
+    url.pathname.endsWith('.html')
+  ) {
     event.respondWith(
-      fetch(request, { cache: 'no-store' }).catch(() => {
-        // If offline, serve cached HTML
-        return caches.match(request).then((cachedPage) => {
-          if (cachedPage) return cachedPage;
-          return caches.match('/quotes-customize-manage/index.html');
-        });
-      })
+      fetch(request, { cache: 'no-store' }).catch(() =>
+        caches.match('/index.html').then((r) => r || caches.match('/'))
+      )
     );
     return;
   }
 
+  // ── Static assets (images, fonts, etc.): stale-while-revalidate ──────────
   event.respondWith(
-    // Always fetch latest app shell first to avoid stale hashed bundles.
-    fetch(request)
-      .then((fetchResponse) => {
-        const shouldCache =
-          request.method === 'GET' &&
-          fetchResponse &&
-          fetchResponse.status === 200 &&
-          (request.mode === 'navigate' || request.destination === 'document');
-
-        if (shouldCache) {
-          const responseToCache = fetchResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(request, responseToCache);
-          });
+    caches.match(request).then((cached) => {
+      const networkFetch = fetch(request).then((response) => {
+        if (response && response.status === 200 && request.method === 'GET') {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
         }
-
-        return fetchResponse;
-      })
-      .catch(() => {
-        if (request.mode === 'navigate' || request.destination === 'document') {
-          return caches.match(request).then((cachedPage) => {
-            if (cachedPage) return cachedPage;
-            return caches.match('/quotes-customize-manage/index.html');
-          });
-        }
-
-        return caches.match(request);
-      })
+        return response;
+      });
+      // Return cached version immediately if available, update in background
+      return cached || networkFetch;
+    })
   );
 });
 
+// ── Message handler ───────────────────────────────────────────────────────────
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
 });
-
-// Background sync for offline actions
-self.addEventListener('sync', (event) => {
-  console.log('🔄 Background sync event:', event.tag);
-  
-  if (event.tag === 'background-sync-photos') {
-    event.waitUntil(syncPhotos());
-  }
-  
-  if (event.tag === 'background-sync-data') {
-    event.waitUntil(syncOfflineData());
-  }
-});
-
-// Handle photo uploads in background
-async function syncPhotos() {
-  try {
-    console.log('📸 Syncing photos in background...');
-    // This would integrate with the sync engine
-    // For now, just log that the sync was attempted
-    return Promise.resolve();
-  } catch (error) {
-    console.error('❌ Photo sync failed:', error);
-    throw error;
-  }
-}
-
-// Handle other offline data sync
-async function syncOfflineData() {
-  try {
-    console.log('💾 Syncing offline data in background...');
-    // This would integrate with the sync engine
-    return Promise.resolve();
-  } catch (error) {
-    console.error('❌ Data sync failed:', error);
-    throw error;
-  }
-}
-
-// Push notification handling (for future enhancement)
-self.addEventListener('push', (event) => {
-  if (!event.data) return;
-
-  const data = event.data.json();
-  const options = {
-    body: data.body,
-    icon: '/quotes-customize-manage/icons/icon-192x192.png',
-    badge: '/quotes-customize-manage/icons/badge-72x72.png',
-    tag: data.tag || 'general',
-    renotify: true,
-    actions: [
-      {
-        action: 'view',
-        title: 'View',
-        icon: '/quotes-customize-manage/icons/view-action.png'
-      },
-      {
-        action: 'dismiss',
-        title: 'Dismiss',
-        icon: '/quotes-customize-manage/icons/dismiss-action.png'
-      }
-    ]
-  };
-
-  event.waitUntil(
-    self.registration.showNotification(data.title, options)
-  );
-});
-
-// Handle notification clicks
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
-
-  if (event.action === 'view') {
-    // Open the app
-    event.waitUntil(
-      clients.openWindow('/quotes-customize-manage/')
-    );
-  }
-});
-
-console.log('✅ StormCraft CRM Service Worker loaded');

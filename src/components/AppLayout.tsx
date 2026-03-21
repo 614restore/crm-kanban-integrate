@@ -468,7 +468,7 @@ const EMPTY_INIT_PAYLOAD = {
 function CRMApp() {
   const { profile, user, loading: authLoading } = useAuth();
   const [state, dispatch] = useReducer(crmReducer, initialState);
-  const [subscriptionBlocked, setSubscriptionBlocked] = useState<boolean | null>(null);
+  const [subscriptionBlocked, setSubscriptionBlocked] = useState(false);
   useEffect(() => {
     try { localStorage.setItem('crm_current_view', state.currentView); } catch (e) { console.warn('[AppLayout] localStorage write failed:', e); }
   }, [state.currentView]);
@@ -787,7 +787,7 @@ function CRMApp() {
     }
   }, [profile]);
 
-  if ((state.isLoading && !state.isInitialized) || subscriptionBlocked === null) return <LoadingScreen />;
+  if (state.isLoading && !state.isInitialized) return <LoadingScreen />;
 
   if (subscriptionBlocked) {
     return (
