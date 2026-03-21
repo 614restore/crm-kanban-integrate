@@ -1,75 +1,26 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db, DbCompany } from '@/lib/database';
-import { supabase } from '@/lib/supabase';
 import {
   CreditCard,
-  Zap,
-  Users,
-  Star,
-  Shield,
-  Check,
   ChevronDown,
-  Loader2,
 } from 'lucide-react';
 
-// Price IDs come from Vite env vars (set in Vercel dashboard for live, .env.local for dev)
-const PRICE_IDS: Record<string, string> = {
-  starter:  import.meta.env.VITE_STRIPE_STARTER_MONTHLY  || '',
-  pro:      import.meta.env.VITE_STRIPE_PRO_MONTHLY      || '',
-  business: import.meta.env.VITE_STRIPE_BUSINESS_MONTHLY || '',
-  scale:    import.meta.env.VITE_STRIPE_SCALE_MONTHLY    || '',
-};
+// Stripe pricing table web component type declaration
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      'stripe-pricing-table': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement> & {
+        'pricing-table-id'?: string;
+        'publishable-key'?: string;
+        'client-reference-id'?: string;
+        'customer-email'?: string;
+      }, HTMLElement>;
+    }
+  }
+}
 
-
-const PLANS = [
-  {
-    key: 'starter' as const,
-    name: 'Starter',
-    price: 59,
-    annualPrice: 49.17,
-    annualTotal: 590,
-    userLimit: 2,
-    features: ['Up to 2 users','Unlimited contacts','Core CRM features','Pipeline board','Invoicing','Email support'],
-    icon: <Zap className="w-5 h-5 text-blue-500" />,
-    color: 'blue',
-  },
-  {
-    key: 'pro' as const,
-    name: 'Pro',
-    price: 119,
-    annualPrice: 99.17,
-    annualTotal: 1190,
-    userLimit: 5,
-    features: ['Up to 5 users','Unlimited contacts','Full pipeline visibility','Insurance claim tracking','Supplement tracking','Team reporting'],
-    icon: <Star className="w-5 h-5 text-indigo-500" />,
-    highlight: true,
-    color: 'indigo',
-  },
-  {
-    key: 'business' as const,
-    name: 'Business',
-    price: 229,
-    annualPrice: 190.83,
-    annualTotal: 2290,
-    userLimit: 15,
-    features: ['Up to 15 users','Unlimited contacts','AI Smart Inspection','Advanced analytics','Material order templates','Priority support'],
-    icon: <Shield className="w-5 h-5 text-emerald-500" />,
-    color: 'emerald',
-  },
-  {
-    key: 'scale' as const,
-    name: 'Scale',
-    price: 399,
-    annualPrice: 332.50,
-    annualTotal: 3990,
-    userLimit: Infinity,
-    features: ['Unlimited users','Unlimited contacts','All features included','Custom onboarding','Dedicated support','QuickBooks sync'],
-    icon: <Users className="w-5 h-5 text-purple-500" />,
-    color: 'purple',
-  },
-];
 
 function StatusBadge({ status }: { status?: string }) {
   if (!status) return null;
@@ -102,14 +53,22 @@ export default function SubscriptionView() {
   const [company, setCompany] = useState<DbCompany | null>(null);
   const [chartVisible, setChartVisible] = useState(false);
   const chartRef = useRef<HTMLDivElement>(null);
-  const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
-  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   useEffect(() => {
     const companyId = profile?.company_id || state.companyId;
     if (!companyId) return;
     db.getCompany(companyId).then((c) => { if (c) setCompany(c); });
   }, [profile?.company_id, state.companyId]);
+
+  useEffect(() => {
+    // Load Stripe pricing table script
+    if (!document.querySelector('script[src="https://js.stripe.com/v3/pricing-table.js"]')) {
+      const script = document.createElement('script');
+      script.src = 'https://js.stripe.com/v3/pricing-table.js';
+      script.async = true;
+      document.head.appendChild(script);
+    }
+  }, []);
 
   useEffect(() => {
     const el = chartRef.current;
@@ -125,7 +84,6 @@ export default function SubscriptionView() {
   const plan = company?.subscription_plan ?? 'trial';
   const status = company?.subscription_status ?? 'trialing';
   const daysLeft = trialDaysRemaining(company?.trial_ends_at);
-  const userCount = state.teamMembers.length || 1;
 
   function handleManageBilling() {
     const a = document.createElement('a');
@@ -136,48 +94,6 @@ export default function SubscriptionView() {
     a.click();
     document.body.removeChild(a);
   }
-
-  const handleCheckout = useCallback(async (planKey: string) => {
-    setCheckoutError(null);
-    const priceId = PRICE_IDS[planKey];
-    if (!priceId) return;
-
-    setLoadingPlan(planKey);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      if (!token) throw new Error('Not authenticated. Please log in again.');
-      const res = await fetch('/api/stripe-checkout', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ priceId }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to start checkout');
-      window.location.href = data.url;
-    } catch (err) {
-      setCheckoutError(err instanceof Error ? err.message : 'Checkout failed. Please try again.');
-    } finally {
-      setLoadingPlan(null);
-    }
-  }, []);
-
-  const highlightColors: Record<string, string> = {
-    blue: 'border-blue-200 bg-blue-50',
-    indigo: 'border-indigo-400 bg-indigo-50 ring-2 ring-indigo-400',
-    emerald: 'border-emerald-200 bg-emerald-50',
-    purple: 'border-purple-200 bg-purple-50',
-  };
-
-  const btnColors: Record<string, string> = {
-    blue: 'bg-blue-600 hover:bg-blue-700',
-    indigo: 'bg-indigo-600 hover:bg-indigo-700',
-    emerald: 'bg-emerald-600 hover:bg-emerald-700',
-    purple: 'bg-purple-600 hover:bg-purple-700',
-  };
 
   return (
     <div className="space-y-6">
@@ -207,90 +123,17 @@ export default function SubscriptionView() {
           </button>
         </div>
 
-        {plan !== 'trial' && (() => {
-          const current = PLANS.find((p) => p.key === plan);
-          if (!current) return null;
-          const userLimitLabel = current.userLimit === Infinity ? '\u221e' : String(current.userLimit);
-          const userPct = current.userLimit === Infinity ? 0 : Math.min(100, (userCount / current.userLimit) * 100);
-          return (
-            <div className="mt-5 grid grid-cols-2 gap-4">
-              <div>
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="text-gray-600">Users</span>
-                  <span className="font-medium text-gray-900">{userCount} / {userLimitLabel}</span>
-                </div>
-                {current.userLimit !== Infinity && (
-                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-blue-500 rounded-full" style={{ width: `${userPct}%` }} />
-                  </div>
-                )}
-              </div>
-              <div>
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="text-gray-600">Contacts</span>
-                  <span className="font-medium text-gray-900">Unlimited</span>
-                </div>
-              </div>
-            </div>
-          );
-        })()}
       </div>
 
-      {/* Pricing grid */}
+      {/* Stripe Pricing Table */}
       <div>
         <h4 className="text-base font-semibold text-gray-900 mb-4">Available Plans</h4>
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-          {PLANS.map((p) => (
-            <div
-              key={p.key}
-              className={`relative rounded-xl border-2 p-5 flex flex-col gap-4 transition-shadow hover:shadow-md ${highlightColors[p.color]}`}
-            >
-              {p.highlight && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-xs font-bold px-3 py-0.5 rounded-full whitespace-nowrap">
-                  Most Popular
-                </div>
-              )}
-              <div className="flex items-center gap-2">
-                {p.icon}
-                <span className="font-semibold text-gray-900 text-sm">{p.name}</span>
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-gray-900">
-                  ${p.price}<span className="text-sm font-normal text-gray-500">/mo</span>
-                </div>
-                <div className="text-xs text-gray-500 mt-0.5">
-                  ${p.annualPrice}/mo annual (${p.annualTotal.toLocaleString()}/yr)
-                </div>
-              </div>
-              <ul className="space-y-1.5 flex-1">
-                {p.features.map((f) => (
-                  <li key={f} className="flex items-start gap-2 text-xs text-gray-700">
-                    <Check className="w-3.5 h-3.5 text-green-500 mt-0.5 flex-shrink-0" />
-                    {f}
-                  </li>
-                ))}
-              </ul>
-              <button
-                onClick={() => handleCheckout(p.key)}
-                disabled={plan === p.key || loadingPlan === p.key}
-                className={`w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg text-white text-sm font-medium transition-colors ${btnColors[p.color]} ${
-                  (plan === p.key || loadingPlan === p.key) ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
-              >
-                {loadingPlan === p.key && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                {plan === p.key ? 'Current Plan' : loadingPlan === p.key ? 'Redirecting…' : 'Get Started'}
-              </button>
-            </div>
-          ))}
-        </div>
+        <stripe-pricing-table
+          pricing-table-id="prctbl_1TDTsWQ4qbAu1D2SxpS4c47b"
+          publishable-key="pk_live_51T8YyaQ4qbAu1D2STcaoAsxjqScvBgvTttf0k5DXp8t0BbDswCY6Hqdtd81MOlWeQqPBGCkAFBtAidM5Fsa8n0JK006K6b0Uv7"
+          customer-email={profile?.email ?? undefined}
+        />
       </div>
-
-      {/* Checkout error banner */}
-      {checkoutError && (
-        <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">
-          {checkoutError}
-        </div>
-      )}
 
       {/* Scroll-down banner + embedded comparison chart */}
       <div ref={chartRef} className="space-y-3">
