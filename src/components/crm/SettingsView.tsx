@@ -941,29 +941,23 @@ export default function SettingsView() {
     setIsUploadingLogo(true);
 
     try {
-      // Convert blob to file
       const croppedFile = new File([croppedBlob], pendingImageFile?.name || 'logo.jpg', {
         type: 'image/jpeg',
       });
 
-      // Show loading toast while resolving company
       const loadingToastId = toast.loading?.('Preparing upload...') || undefined;
-      
       const companyId = effectiveCompanyId || await resolveCompanyId();
 
       if (!companyId) {
-        toast.error('Unable to find your company. Your account may need to be set up. Please sign out and sign back in.');
+        toast.error('Unable to find your company. Please sign out and sign back in.');
         setCompanyLogo(previousLogo);
         setIsUploadingLogo(false);
         return;
       }
-      
-      // Dismiss loading toast
-      if (loadingToastId && toast.dismiss) {
-        toast.dismiss(loadingToastId);
-      }
 
-      // Precompute a local compatibility fallback before network upload.
+      if (loadingToastId && toast.dismiss) toast.dismiss(loadingToastId);
+
+      // Encode a compact fallback data-URL (runs locally, no network needed).
       try {
         precomputedFallbackDataUrl = await withTimeout(
           resizeImageToDataUrl(croppedFile, 520, 0.84),
@@ -974,113 +968,121 @@ export default function SettingsView() {
         console.warn('Logo fallback precompute failed:', precomputeError);
       }
 
-      // Save a compatibility-safe version first, then attempt storage upload as an upgrade.
-      if (precomputedFallbackDataUrl) {
-        try {
-          const baselineSave = await withTimeout(
-            saveCompanyLogoUrl(companyId, precomputedFallbackDataUrl),
-            12000,
-            'Company logo baseline save'
-          );
-          if (baselineSave?.logo_url) {
-            compatibilitySaved = true;
-            setCompanyLogo(baselineSave.logo_url);
-            setCompanyLogoUrlInput(baselineSave.logo_url);
-            window.dispatchEvent(new Event('crm-company-updated'));
-          }
-        } catch (baselineError) {
-          console.warn('Company logo baseline save failed, continuing with upload path:', baselineError);
-        }
-      }
-
+      // Prepare the optimized file for storage upload while potentially running
+      // the baseline DB save concurrently below.
       const uploadFile = await optimizeImageForUpload(croppedFile, 900, 0.84, 450 * 1024);
 
-      // Upload to Supabase if user has company
-      if (companyId) {
-        const result = await withTimeout(uploadCompanyLogo(uploadFile, companyId), 32000, 'Company logo upload');
+      // ── Run baseline DB save and storage upload IN PARALLEL ───────────────
+      // Previously these ran sequentially (12 s + 32 s + 12 s = up to 56 s).
+      // Now the user waits at most max(DB timeout, storage timeout) ≈ 15 s.
+      const baselineSavePromise = precomputedFallbackDataUrl
+        ? withTimeout(saveCompanyLogoUrl(companyId, precomputedFallbackDataUrl), 10000, 'Company logo baseline save')
+            .then((r) => {
+              if (r?.logo_url) {
+                compatibilitySaved = true;
+                setCompanyLogo(r.logo_url);
+                setCompanyLogoUrlInput(r.logo_url);
+                window.dispatchEvent(new Event('crm-company-updated'));
+              }
+              return r;
+            })
+            .catch((e) => { console.warn('Company logo baseline save failed:', e); return null; })
+        : Promise.resolve(null);
 
-        if (result.error) {
-          if (compatibilitySaved) {
-            toast.success('Logo saved using compatibility mode');
-            setIsUploadingLogo(false);
-            return;
-          }
+      const storageUploadPromise = withTimeout(
+        uploadCompanyLogo(uploadFile, companyId),
+        15000,
+        'Company logo upload'
+      ).catch((e) => ({ url: '', path: '', error: getReadableError(e) }));
 
-          try {
-            const fallbackDataUrl = precomputedFallbackDataUrl || await resizeImageToDataUrl(croppedFile, 520, 0.84);
-            const fallbackSave = await withTimeout(saveCompanyLogoUrl(companyId, fallbackDataUrl), 12000, 'Company logo fallback save');
-            if (!fallbackSave?.logo_url) throw new Error('Fallback save did not persist');
-            setCompanyLogo(fallbackSave.logo_url);
-            setCompanyLogoUrlInput(fallbackSave.logo_url);
-            window.dispatchEvent(new Event('crm-company-updated'));
-            toast.success('Logo saved using compatibility mode');
-            setIsUploadingLogo(false);
-            return;
-          } catch (fallbackError) {
-            const fallbackMessage = getReadableError(fallbackError);
-            if (isFileReadError(result.error) && isFileReadError(fallbackMessage)) {
-              toast.error(readErrorHint);
-            } else {
-              toast.error(`Upload failed: ${result.error} | fallback failed: ${fallbackMessage}`);
-            }
-            setCompanyLogo(previousLogo);
-            setIsUploadingLogo(false);
-            return;
-          }
-        } else {
-          // Persist logo URL in company profile.
-          const updatedCompany = await retryCompanyLogoSave(companyId, result.url);
-          if (!updatedCompany?.logo_url) {
-            setCompanyLogo(previousLogo);
-            toast.error('Logo uploaded, but failed to persist to company profile');
-            setIsUploadingLogo(false);
-            return;
-          }
+      // Wait for both to settle.
+      const [storageResult] = await Promise.all([storageUploadPromise, baselineSavePromise]);
 
+      // Storage succeeded → upgrade to CDN URL.
+      if (!storageResult.error) {
+        const updatedCompany = await retryCompanyLogoSave(companyId, storageResult.url);
+        if (updatedCompany?.logo_url) {
           setCompanyLogo(updatedCompany.logo_url);
           setCompanyLogoUrlInput(updatedCompany.logo_url);
           window.dispatchEvent(new Event('crm-company-updated'));
           toast.success('Logo uploaded and saved successfully');
+          return;
         }
-      } else {
-        toast.error('No company context available. Please refresh and sign in again.');
       }
+
+      // Storage failed but baseline DB save already persisted → good enough.
+      if (compatibilitySaved) {
+        toast.success('Logo saved successfully');
+        return;
+      }
+
+      // Both failed — one final attempt to save the data-URL.
+      if (precomputedFallbackDataUrl) {
+        try {
+          const finalSave = await withTimeout(
+            saveCompanyLogoUrl(companyId, precomputedFallbackDataUrl),
+            8000,
+            'Company logo final save'
+          );
+          if (finalSave?.logo_url) {
+            setCompanyLogo(finalSave.logo_url);
+            setCompanyLogoUrlInput(finalSave.logo_url);
+            window.dispatchEvent(new Event('crm-company-updated'));
+            toast.success('Logo saved successfully');
+            return;
+          }
+        } catch (finalErr) {
+          console.warn('Company logo final save failed:', finalErr);
+        }
+      }
+
+      // Everything failed.
+      const uploadErr = storageResult.error || 'Upload failed';
+      if (isFileReadError(uploadErr)) {
+        toast.error(readErrorHint);
+      } else {
+        toast.error('Failed to save logo — please try again or check your connection.');
+      }
+      setCompanyLogo(previousLogo);
+
     } catch (error) {
       console.error('Logo upload error:', error);
       const message = getReadableError(error);
 
       if (compatibilitySaved) {
-        toast.success('Logo saved using compatibility mode');
-        setIsUploadingLogo(false);
+        toast.success('Logo saved successfully');
         return;
       }
 
-      try {
-        const companyId = effectiveCompanyId || await resolveCompanyId();
-        if (companyId) {
-          const croppedFile = new File([croppedBlob], 'logo.jpg', { type: 'image/jpeg' });
-          const fallbackDataUrl = precomputedFallbackDataUrl || await withTimeout(resizeImageToDataUrl(croppedFile, 520, 0.84), 12000, 'Company logo fallback encode');
-          const fallbackSave = await withTimeout(saveCompanyLogoUrl(companyId, fallbackDataUrl), 12000, 'Company logo fallback save');
-          if (fallbackSave?.logo_url) {
-            setCompanyLogo(fallbackSave.logo_url);
-            setCompanyLogoUrlInput(fallbackSave.logo_url);
-            window.dispatchEvent(new Event('crm-company-updated'));
-            toast.success('Logo saved using compatibility mode');
-          } else {
-            throw new Error('Fallback save did not persist');
+      // Emergency fallback using pre-encoded data-URL.
+      if (precomputedFallbackDataUrl) {
+        try {
+          const cid = effectiveCompanyId || await resolveCompanyId();
+          if (cid) {
+            const emergencySave = await withTimeout(
+              saveCompanyLogoUrl(cid, precomputedFallbackDataUrl),
+              8000,
+              'Company logo emergency save'
+            );
+            if (emergencySave?.logo_url) {
+              setCompanyLogo(emergencySave.logo_url);
+              setCompanyLogoUrlInput(emergencySave.logo_url);
+              window.dispatchEvent(new Event('crm-company-updated'));
+              toast.success('Logo saved successfully');
+              return;
+            }
           }
-        } else {
-          throw new Error('No company context available');
+        } catch (emergencyErr) {
+          console.warn('Emergency save failed:', emergencyErr);
         }
-      } catch (fallbackError) {
-        const fallbackMessage = getReadableError(fallbackError);
-        if (isFileReadError(message) && isFileReadError(fallbackMessage)) {
-          toast.error(readErrorHint);
-        } else {
-          toast.error(`Failed to upload logo: ${message} | fallback failed: ${fallbackMessage}`);
-        }
-        setCompanyLogo(previousLogo);
       }
+
+      if (isFileReadError(message)) {
+        toast.error(readErrorHint);
+      } else {
+        toast.error('Failed to save logo — please try again or check your connection.');
+      }
+      setCompanyLogo(previousLogo);
     } finally {
       setIsUploadingLogo(false);
       setPendingImageFile(null);
