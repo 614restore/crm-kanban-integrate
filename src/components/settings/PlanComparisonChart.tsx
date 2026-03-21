@@ -21,11 +21,11 @@ const SECTIONS: Section[] = [
     label: '💰 Pricing & Access',
     defaultOpen: true,
     rows: [
-      { feature: 'Starting Monthly Price',            values: ['$59/mo (2 users)',  P('$25/user/mo'), P('$89/user/mo'), '$89/mo (1 user)', '$49/mo (1 user)',  P('$398/mo+')] },
+      { feature: 'Starting Monthly Price',            values: ['$29/mo (2 users)',  P('$25/user/mo'), P('$89/user/mo'), '$89/mo (1 user)', '$49/mo (1 user)',  P('$398/mo+')] },
       { feature: 'No Per-User Fee (flat rate)',        values: [Y, N, N, N, N, N] },
-      { feature: '5-User Real-World Cost',             values: ['$119/mo', P('$135/mo'), P('$199/mo'), P('$159/mo'), P('$149/mo'), P('$498/mo+')] },
-      { feature: '15-User Real-World Cost',            values: ['$229/mo', P('$375/mo'), P('Custom'), P('$499/mo+'), P('$249/mo'), P('$598/mo+')] },
-      { feature: 'Unlimited Users Tier Available',     values: ['$399/mo', P('$350+'), P('Custom'), P('Custom'), Y, P('Custom')] },
+      { feature: '5-User Real-World Cost',             values: ['$59/mo', P('$135/mo'), P('$199/mo'), P('$159/mo'), P('$149/mo'), P('$498/mo+')] },
+      { feature: '10-User Real-World Cost',            values: ['$99/mo', P('$250/mo'), P('Custom'), P('$299/mo+'), P('$249/mo'), P('$598/mo+')] },
+      { feature: 'Unlimited Users Tier Available',     values: ['$179/mo', P('$350+'), P('Custom'), P('Custom'), Y, P('Custom')] },
       { feature: 'Annual Discount (2 months free)',    values: [Y, Y, P('Custom'), Y, Y, N] },
       { feature: 'Free Trial Available',               values: [Y, Y, P('Demo only'), Y, Y, P('Demo only')] },
       { feature: 'No Implementation / Onboarding Fee', values: [Y, Y, Y, Y, Y, N] },
@@ -190,10 +190,10 @@ const PRICING_CARDS = [
     badge: '★ Best Value',
     note: 'Flat rate — no per-user fees',
     plans: [
-      { name: 'Starter (2 users)',   price: '$59/mo' },
-      { name: 'Pro (5 users)',        price: '$119/mo' },
-      { name: 'Business (15 users)', price: '$229/mo' },
-      { name: 'Scale (∞)',           price: '$399/mo' },
+      { name: 'Starter (2 users)',   price: '$29/mo' },
+      { name: 'Pro (5 users)',        price: '$59/mo' },
+      { name: 'Business (10 users)', price: '$99/mo' },
+      { name: 'Enterprise (∞)',      price: '$179/mo' },
     ],
   },
   {
@@ -256,8 +256,8 @@ const PRICING_CARDS = [
 // ─── Why TrussCTR Wins ─────────────────────────────────────────────────────────
 const WHY_WIN = [
   { val: 'Flat Rate', desc: 'No per-user fees ever — competitors charge $25–$89/seat/mo' },
-  { val: '5-User: $119', desc: 'vs $135–$498/mo for the same team size at competitors' },
-  { val: '15-User: $229', desc: 'vs $375–$598/mo for growing teams — save hundreds per month' },
+  { val: '5-User: $59', desc: 'vs $135–$498/mo for the same team size at competitors' },
+  { val: '10-User: $99', desc: 'vs $250–$598/mo for growing teams — save hundreds per month' },
   { val: 'Web + Mobile', desc: 'Native mobile app + web platform included free in every plan' },
   { val: 'Insurance', desc: 'Built-in claim & supplement tracking — competitors charge add-ons or skip it' },
   { val: 'Fraud Photos', desc: 'Job-site fraud prevention photo capture — exclusive to TrussCTR' },
@@ -390,7 +390,7 @@ const PlanComparisonChart: React.FC = () => {
         </p>
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-end', gap: 6, flexWrap: 'wrap' }}>
           {[
-            { name: 'TrussCTR', price: '$119', highlight: true },
+            { name: 'TrussCTR', price: '$59', highlight: true },
             { name: 'Jobber', price: '$149' },
             { name: 'JobNimbus', price: '~$135' },
             { name: 'Roofr', price: '$159' },
