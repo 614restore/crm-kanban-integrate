@@ -99,7 +99,7 @@ const chartSrc = `${import.meta.env.BASE_URL}crm-user-tier-comparison.html`.repl
 
 export default function SubscriptionView() {
   const { state } = useCRM();
-  const { profile } = useAuth();
+  const { profile, session } = useAuth();
   const [company, setCompany] = useState<DbCompany | null>(null);
   const [chartVisible, setChartVisible] = useState(false);
   const chartRef = useRef<HTMLDivElement>(null);
@@ -146,9 +146,13 @@ export default function SubscriptionView() {
     if (API_BASE && priceId) {
       setLoadingPlan(planKey);
       try {
+        const token = session?.access_token;
         const res = await fetch(`${API_BASE}/api/stripe-checkout`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
           body: JSON.stringify({ priceId }),
         });
         const data = await res.json();
@@ -164,7 +168,7 @@ export default function SubscriptionView() {
 
     // Fallback: send user to the Stripe billing portal to subscribe
     window.open('https://billing.stripe.com/p/login/aFa9AVb73faq5vsfmw6Na00', '_blank', 'noopener,noreferrer');
-  }, []);
+  }, [session]);
 
   const highlightColors: Record<string, string> = {
     blue: 'border-blue-200 bg-blue-50',
