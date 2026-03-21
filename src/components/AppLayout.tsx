@@ -190,9 +190,11 @@ function LoadingScreen() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center">
       <div className="text-center">
-        <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-          <Building2 size={32} className="text-white" />
-        </div>
+        <img
+          src="/trussctr-shield-logo.svg"
+          alt="TrussCTR Shield Logo"
+          className="w-20 h-20 mx-auto mb-4 drop-shadow-lg"
+        />
         <h1 className="text-2xl font-bold text-white mb-2">TrussCTR</h1>
         <div className="flex items-center justify-center gap-2 text-slate-400">
           <Loader2 className="animate-spin" size={20} />
