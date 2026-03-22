@@ -18,6 +18,9 @@ declare global {
   }
 }
 
+const STRIPE_PRICING_TABLE_ID = import.meta.env.VITE_STRIPE_PRICING_TABLE_ID || '';
+const STRIPE_PUBLISHABLE_KEY  = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY  || '';
+
 // Stripe Price IDs — fill these in from your Stripe Dashboard after creating products
 const STRIPE_PRICES = {
   starter_monthly: import.meta.env.VITE_STRIPE_STARTER_MONTHLY || '',
@@ -315,8 +318,9 @@ const BillingSettings: React.FC = () => {
       {/* Stripe Pricing Table — handles all checkout securely */}
       <div className="mb-10">
         <stripe-pricing-table
-          pricing-table-id="prctbl_1T8ahXQ4qbAu1D2SCifFughX"
-          publishable-key="pk_live_51T8YyaQ4qbAu1D2STcaoAsxjqScvBgvTttf0k5DXp8t0BbDswCY6Hqdtd81MOlWeQqPBGCkAFBtAidM5Fsa8n0JK006K6b0Uv7"
+          pricing-table-id={STRIPE_PRICING_TABLE_ID}
+          publishable-key={STRIPE_PUBLISHABLE_KEY}
+          customer-email={profile?.email || undefined}
           client-reference-id={profile?.company_id || undefined}
         />
       </div>
