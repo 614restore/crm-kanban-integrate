@@ -288,6 +288,29 @@ const COST_TABLE_SCRIPT = `
   // Apply initial tax visibility/calculation state
   window.toggleTax(includeTax);
 
+  // ── Editable Terms & Conditions ──
+  document.querySelectorAll('.terms').forEach(function(termsDiv) {
+    // Edit-mode hint label
+    var hint = document.createElement('div');
+    hint.textContent = '✏ Click to edit Terms & Conditions';
+    hint.style.cssText = 'font-size:10px;color:#3b82f6;font-weight:600;text-align:right;margin-bottom:4px;opacity:0.7;cursor:default';
+    termsDiv.parentNode.insertBefore(hint, termsDiv);
+
+    // Make the entire block editable
+    termsDiv.setAttribute('contenteditable', 'true');
+    termsDiv.style.cssText += ';border:2px dashed #3b82f6;cursor:text;outline:none;border-radius:6px;transition:border-color 0.15s';
+    termsDiv.addEventListener('focus', function() { termsDiv.style.borderColor='#1d4ed8'; termsDiv.style.borderStyle='solid'; });
+    termsDiv.addEventListener('blur',  function() { termsDiv.style.borderColor='#3b82f6'; termsDiv.style.borderStyle='dashed'; });
+
+    // Hidden input keeps content in sync so the existing company-field save mechanism captures it
+    var hiddenInp = document.createElement('input');
+    hiddenInp.type = 'hidden';
+    hiddenInp.name = 'TERMS_AND_CONDITIONS';
+    hiddenInp.value = termsDiv.innerHTML;
+    document.body.appendChild(hiddenInp);
+    termsDiv.addEventListener('input', function() { hiddenInp.value = termsDiv.innerHTML; });
+  });
+
   // ── Enhanced signature section (3 lines each party) ──
   var sigsDiv = document.querySelector('.sigs');
   if (sigsDiv) {
@@ -354,6 +377,12 @@ function buildFillableContent(
     const defaultVal = (fieldDefaults[varName] || '').replace(/"/g, '&quot;');
     return `<input type="text" name="${varName}" value="${defaultVal}" placeholder="${label}" style="display:inline-block;border:none;border-bottom:2px solid #3b82f6;background:#eff6ff;color:#1e3a8a;padding:2px 8px;min-width:120px;max-width:260px;border-radius:3px 3px 0 0;font-size:inherit;font-family:inherit;vertical-align:baseline;outline:none;" onfocus="this.style.background='#dbeafe';this.style.borderBottomColor='#1d4ed8'" onblur="this.style.background='#eff6ff';this.style.borderBottomColor='#3b82f6'" />`;
   });
+
+  // ── 5. Restore company-saved Terms & Conditions (replaces entire .terms block) ──
+  const savedTerms = savedCompanyFields['TERMS_AND_CONDITIONS'];
+  if (savedTerms) {
+    content = content.replace(/<div class="terms">[\s\S]*?<\/div>/, `<div class="terms">${savedTerms}</div>`);
+  }
 
   // Inject the cost-table interaction script before </body>
   content = content.replace('</body>', COST_TABLE_SCRIPT + '</body>');
@@ -442,8 +471,8 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
     // Clone the iframe document so we can clean it up for saving without affecting the live view
     const cloneDoc = iframe.contentDocument.cloneNode(true) as Document;
 
-    // Remove interactive buttons, add-line buttons, and scripts from the saved copy
-    cloneDoc.querySelectorAll('button, script').forEach(el => el.remove());
+    // Remove interactive buttons, add-line buttons, scripts, and sync-only hidden inputs from the saved copy
+    cloneDoc.querySelectorAll('button, script, input[type="hidden"]').forEach(el => el.remove());
 
     // Apply pricing visibility: rows marked data-hide-price="true" get price/total cleared
     cloneDoc.querySelectorAll<HTMLElement>('tbody tr[data-hide-price="true"]').forEach(row => {
