@@ -66,9 +66,11 @@ const CSS = `
   .t-grand{font-weight:700;font-size:15px;margin-top:8px;padding-top:8px;border-top:2px solid #1f2937}
   .terms{background:#fef3c7;padding:12px 14px;border-radius:8px;border-left:4px solid #f59e0b;margin:18px 0;font-size:12px;line-height:1.7}
   .sigs{display:flex;gap:40px;margin-top:36px}
-  .sig{flex:1;text-align:center}
-  .sig-line{border-bottom:2px solid #374151;height:34px;margin-bottom:6px}
-  .sig-lbl{font-size:11px;color:#6b7280}
+  .sig{flex:1}
+  .sig-field{margin-bottom:10px}
+  .sig-field-label{font-size:10px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px}
+  .sig-line{border-bottom:1.5px solid #374151;height:28px;margin-bottom:2px}
+  .sig-lbl{font-size:11px;color:#6b7280;font-weight:700;text-align:center;margin-top:6px;padding-top:6px;border-top:2px solid #374151}
   .footer{margin-top:28px;text-align:center;font-size:11px;color:#9ca3af;border-top:1px solid #e5e7eb;padding-top:14px}
   .scope-list{margin:0;padding-left:20px;font-size:13px;line-height:1.9}
   .highlight{background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:10px 14px;margin:10px 0;font-size:13px}
@@ -112,8 +114,18 @@ const header = (titleText: string) => `<!DOCTYPE html>
 </div>`;
 
 const footer = `<div class="sigs">
-  <div class="sig"><div class="sig-line"></div><div class="sig-lbl">Customer Signature / Date</div></div>
-  <div class="sig"><div class="sig-line"></div><div class="sig-lbl">Authorized Contractor / Date</div></div>
+  <div class="sig">
+    <div class="sig-field"><div class="sig-field-label">Print Name</div><div class="sig-line"></div></div>
+    <div class="sig-field"><div class="sig-field-label">Signature</div><div class="sig-line"></div></div>
+    <div class="sig-field"><div class="sig-field-label">Date</div><div class="sig-line"></div></div>
+    <div class="sig-lbl">Customer / Property Owner</div>
+  </div>
+  <div class="sig">
+    <div class="sig-field"><div class="sig-field-label">Print Name</div><div class="sig-line"></div></div>
+    <div class="sig-field"><div class="sig-field-label">Signature</div><div class="sig-line"></div></div>
+    <div class="sig-field"><div class="sig-field-label">Date</div><div class="sig-line"></div></div>
+    <div class="sig-lbl">Authorized Contractor</div>
+  </div>
 </div>
 <div class="footer">Thank you for choosing {{COMPANY_NAME}}&nbsp;·&nbsp;{{COMPANY_PHONE}}&nbsp;·&nbsp;{{COMPANY_EMAIL}}</div>
 </body></html>`;
@@ -128,11 +140,7 @@ const totalsBlock = `<div class="totals">
 
 const termsBlock = `<div class="terms">
   <strong>Terms &amp; Conditions:</strong><br>
-  • This estimate is valid for 30 days from the date shown above.<br>
-  • All work performed to manufacturer specifications and local building codes.<br>
-  • Materials and workmanship warranted for <strong>{{WARRANTY_PERIOD}}</strong> from completion.<br>
-  • Any changes to scope of work require a signed written change order.<br>
-  • Payment terms: {{PAYMENT_TERMS}}
+  {{TERMS_CONTENT}}
 </div>`;
 
 /** Header for contract documents (uses CONTRACT_NUMBER / CONTRACT_DATE instead of estimate fields) */
@@ -174,12 +182,7 @@ const contractHeader = (titleText: string) => `<!DOCTYPE html>
 
 const contractTermsBlock = `<div class="terms">
   <strong>Terms &amp; Conditions:</strong><br>
-  • This contract is a legally binding agreement between the parties named above.<br>
-  • All work performed to manufacturer specifications and applicable local building codes.<br>
-  • Materials and workmanship warranted for <strong>{{WARRANTY_PERIOD}}</strong> from completion.<br>
-  • Any changes to scope of work require a signed written change order prior to work.<br>
-  • Payment constitutes acceptance of completed work.<br>
-  • Payment terms: {{PAYMENT_TERMS}}
+  {{TERMS_CONTENT}}
 </div>`;
 
 // ─── Template Definitions ──────────────────────────────────────────────────
@@ -1548,12 +1551,20 @@ export function buildContactOverrides(
       : '<span style="font-size:11px;color:#9ca3af">[Add logo in Settings → Company Profile]</span>',
     REP_NAME: user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : '',
     ESTIMATE_DATE: today,
+    CONTRACT_DATE: today,
     CURRENT_DATE: today,
     ESTIMATE_EXPIRY: expiry,
     PAYMENT_TERMS: '50% deposit at contract signing; balance due upon completion',
     WARRANTY_PERIOD: '2 years',
     TAX_RATE: '7.5',
     TAX_AMOUNT: '$823.20',
+    CONTRACT_NUMBER: 'CON-' + Date.now().toString().slice(-6),
+    // Plain text — newlines converted to <br> at preview/save time so the textarea looks clean
+    TERMS_CONTENT: '• This estimate is valid for 30 days from the date shown above.\n' +
+      '• All work performed to manufacturer specifications and local building codes.\n' +
+      '• Materials and workmanship warranted for 2 years from completion.\n' +
+      '• Any changes to scope of work require a signed written change order.\n' +
+      '• Payment terms: 50% deposit at contract signing; balance due upon completion.',
     
     // Sample project specs (user should override)
     SHINGLE_BRAND: 'GAF',
