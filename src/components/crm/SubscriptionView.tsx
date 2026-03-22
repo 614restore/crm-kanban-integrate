@@ -23,6 +23,7 @@ const PRICE_IDS: Record<string, string> = {
 
 // Vercel API base (empty on GitHub Pages static hosting — falls back to billing portal)
 const API_BASE: string = import.meta.env.VITE_EMAIL_API_BASE_URL || '';
+const STRIPE_BILLING_PORTAL_URL: string = import.meta.env.VITE_STRIPE_BILLING_PORTAL_URL || '';
 
 const PLANS = [
   {
@@ -99,12 +100,13 @@ const chartSrc = `${import.meta.env.BASE_URL}crm-user-tier-comparison.html`.repl
 
 export default function SubscriptionView() {
   const { state } = useCRM();
-  const { profile } = useAuth();
+  const { profile, session } = useAuth();
   const [company, setCompany] = useState<DbCompany | null>(null);
   const [chartVisible, setChartVisible] = useState(false);
   const chartRef = useRef<HTMLDivElement>(null);
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [portalLoading, setPortalLoading] = useState(false);
 
   useEffect(() => {
     const companyId = profile?.company_id || state.companyId;
@@ -128,15 +130,47 @@ export default function SubscriptionView() {
   const daysLeft = trialDaysRemaining(company?.trial_ends_at);
   const userCount = state.teamMembers.length || 1;
 
-  function handleManageBilling() {
+  const openExternalBillingUrl = useCallback((url: string) => {
     const a = document.createElement('a');
-    a.href = 'https://billing.stripe.com/p/login/aFa9AVb73faq5vsfmw6Na00';
+    a.href = url;
     a.target = '_blank';
     a.rel = 'noopener noreferrer';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-  }
+  }, []);
+
+  const handleManageBilling = useCallback(async () => {
+    setCheckoutError(null);
+
+    if (API_BASE && session?.access_token) {
+      setPortalLoading(true);
+      try {
+        const res = await fetch(`${API_BASE}/api/stripe-portal`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to open billing portal');
+        window.location.href = data.url;
+        return;
+      } catch (err) {
+        setCheckoutError(err instanceof Error ? err.message : 'Could not open billing portal. Please try again.');
+      } finally {
+        setPortalLoading(false);
+      }
+    }
+
+    if (STRIPE_BILLING_PORTAL_URL) {
+      openExternalBillingUrl(STRIPE_BILLING_PORTAL_URL);
+      return;
+    }
+
+    setCheckoutError('Billing portal is not configured. Set VITE_STRIPE_BILLING_PORTAL_URL or connect the app to the Stripe portal API.');
+  }, [openExternalBillingUrl, session?.access_token]);
 
   const handleCheckout = useCallback(async (planKey: string) => {
     setCheckoutError(null);
@@ -163,8 +197,8 @@ export default function SubscriptionView() {
     }
 
     // Fallback: send user to the Stripe billing portal to subscribe
-    window.open('https://billing.stripe.com/p/login/aFa9AVb73faq5vsfmw6Na00', '_blank', 'noopener,noreferrer');
-  }, []);
+    await handleManageBilling();
+  }, [handleManageBilling]);
 
   const highlightColors: Record<string, string> = {
     blue: 'border-blue-200 bg-blue-50',
@@ -200,11 +234,11 @@ export default function SubscriptionView() {
             </div>
           </div>
           <button
-            onClick={handleManageBilling}
+            onClick={() => void handleManageBilling()}
             className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
           >
             <CreditCard className="w-4 h-4" />
-            Manage Billing
+            {portalLoading ? 'Opening…' : 'Manage Billing'}
           </button>
         </div>
 
