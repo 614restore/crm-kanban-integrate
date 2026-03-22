@@ -314,15 +314,31 @@ function buildFillableContent(
   companyProfile: DbCompany | null,
   profile: any,
 ): string {
-  const autoFilled = buildContactOverrides(contact, companyProfile, profile);
   let content = template.content;
 
-  // Apply auto-filled contact/company values first
+  // ── 1. Company-saved fields (highest priority — applied before contact auto-fill) ──
+  // These are values the company has previously customised (rates, terms, specs).
+  // By applying them first the subsequent buildContactOverrides pass has nothing left
+  // to override for those keys, so company-saved values always win.
+  const companyFieldsKey = `crm_company_fields_${(profile as any)?.company_id || companyProfile?.id || 'default'}`;
+  let savedCompanyFields: Record<string, string> = {};
+  try {
+    // Also migrate legacy crm_terms_* key if present
+    const legacyKey = `crm_terms_${(profile as any)?.company_id || companyProfile?.id || 'default'}`;
+    const legacy = JSON.parse(localStorage.getItem(legacyKey) || '{}');
+    savedCompanyFields = { ...legacy, ...JSON.parse(localStorage.getItem(companyFieldsKey) || '{}') };
+  } catch { /* ignore */ }
+  Object.entries(savedCompanyFields).forEach(([key, val]) => {
+    if (val) content = content.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), val);
+  });
+
+  // ── 2. Contact / company auto-fill (fills any keys not already replaced above) ──
+  const autoFilled = buildContactOverrides(contact, companyProfile, profile);
   Object.entries(autoFilled).forEach(([key, val]) => {
     if (val) content = content.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), String(val));
   });
 
-  // Build a lookup of template field defaults
+  // ── 3. Template field defaults for any remaining {{VARIABLE}} ──
   const fieldDefaults: Record<string, string> = {};
   if (template.fields) {
     template.fields.forEach(f => {
@@ -332,14 +348,7 @@ function buildFillableContent(
     });
   }
 
-  // Load company-saved terms (PAYMENT_TERMS, WARRANTY_PERIOD) — override defaults
-  try {
-    const termsKey = `crm_terms_${(profile as any)?.company_id || companyProfile?.id || 'default'}`;
-    const saved = JSON.parse(localStorage.getItem(termsKey) || '{}');
-    Object.assign(fieldDefaults, saved);
-  } catch { /* ignore */ }
-
-  // Convert remaining {{VARIABLE}} into styled inline inputs with pre-filled defaults
+  // ── 4. Convert remaining {{VARIABLE}} into styled inline inputs with defaults ──
   content = content.replace(/\{\{([A-Z0-9_]+)\}\}/g, (_match, varName: string) => {
     const label = varName.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
     const defaultVal = (fieldDefaults[varName] || '').replace(/"/g, '&quot;');
@@ -389,7 +398,7 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
   const handleBack = () => {
     setSelected(null);
     setHidePricing(false);
-    setIncludeTax(true);
+    setIncludeTax(false);
   };
 
   // Capture the live iframe DOM state (with all edits, deletions, and additions applied) and save
@@ -405,15 +414,28 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
       return;
     }
 
-    // Persist PAYMENT_TERMS and WARRANTY_PERIOD so next template opens with saved terms
+    // Persist ALL edited field values per company so they reload on any future template open.
+    // Skip contact/company auto-fill keys (change per contact) and calculated totals.
     try {
-      const termsToSave: Record<string, string> = {};
-      (['PAYMENT_TERMS', 'WARRANTY_PERIOD'] as const).forEach(key => {
-        const el = iframe.contentDocument!.querySelector<HTMLInputElement>(`input[name="${key}"]`);
-        if (el?.value) termsToSave[key] = el.value;
+      const SKIP_SAVE = new Set([
+        'CUSTOMER_NAME','CLIENT_NAME','CUSTOMER_PHONE','CUSTOMER_EMAIL',
+        'PROPERTY_ADDRESS','PROPERTY_CITY','PROPERTY_STATE','PROPERTY_ZIP','PROJECT_ADDRESS',
+        'INSURANCE_COMPANY','POLICY_NUMBER','CLAIM_NUMBER',
+        'COMPANY_NAME','COMPANY_TAGLINE','COMPANY_ADDRESS','COMPANY_CITY','COMPANY_STATE',
+        'COMPANY_ZIP','COMPANY_PHONE','COMPANY_EMAIL','CONTRACTOR_LICENSE','COMPANY_LOGO','REP_NAME',
+        'ESTIMATE_DATE','CURRENT_DATE','ESTIMATE_EXPIRY','ESTIMATE_NUMBER','START_DATE',
+        'SUBTOTAL','TAX_AMOUNT','TOTAL_AMOUNT','DEPOSIT_AMOUNT','BALANCE_DUE',
+      ]);
+      const fieldsToSave: Record<string, string> = {};
+      iframe.contentDocument!.querySelectorAll<HTMLInputElement>('input[name]').forEach(inp => {
+        if (!SKIP_SAVE.has(inp.name) && inp.value.trim()) {
+          fieldsToSave[inp.name] = inp.value.trim();
+        }
       });
-      if (Object.keys(termsToSave).length > 0) {
-        localStorage.setItem(`crm_terms_${profile.company_id}`, JSON.stringify(termsToSave));
+      if (Object.keys(fieldsToSave).length > 0) {
+        const storageKey = `crm_company_fields_${profile.company_id}`;
+        const existing = JSON.parse(localStorage.getItem(storageKey) || '{}');
+        localStorage.setItem(storageKey, JSON.stringify({ ...existing, ...fieldsToSave }));
       }
     } catch { /* ignore */ }
 
