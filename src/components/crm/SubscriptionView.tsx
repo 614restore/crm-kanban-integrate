@@ -153,13 +153,20 @@ export default function SubscriptionView() {
     if (API_BASE && session?.access_token) {
       setPortalLoading(true);
       try {
+<<<<<<< HEAD
         const res = await fetch(`${API_BASE}/api/stripe`, {
+=======
+        const res = await fetch(`${API_BASE}/api/stripe-portal`, {
+>>>>>>> dcbcf53 (Fix Stripe billing table and portal config)
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${session.access_token}`,
           },
+<<<<<<< HEAD
           body: JSON.stringify({ action: 'portal' }),
+=======
+>>>>>>> dcbcf53 (Fix Stripe billing table and portal config)
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed to open billing portal');
