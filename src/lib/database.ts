@@ -168,6 +168,16 @@ export interface DbDocument {
   size?: string;
   uploaded_by?: string;
   created_at: string;
+  // Signing workflow columns (added via add-document-signing-columns.sql)
+  sign_token?: string;
+  html_content?: string;
+  status?: 'draft' | 'sent' | 'viewed' | 'signed';
+  signed_by?: string;
+  signature_data?: string;
+  signed_at?: string;
+  viewed_at?: string;
+  sent_by?: string;
+  contact_email?: string;
 }
 
 export interface DbKanbanBoard {
