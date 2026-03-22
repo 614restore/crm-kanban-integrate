@@ -30,6 +30,8 @@ import {
   Send,
   Eye,
   Printer,
+  Users,
+  XCircle,
 } from 'lucide-react';
 
 type InvoiceFilter = 'all' | 'draft' | 'sent' | 'paid' | 'overdue';
@@ -400,6 +402,61 @@ export default function FinancialDashboard() {
             {formatCurrency(invoiceTotals.overdue)}
           </p>
           <p className="text-gray-500 text-sm mt-1">Overdue Invoices</p>
+        </div>
+      </div>
+
+      {/* Sales Performance Row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+              <Users size={16} className="text-blue-600" />
+            </div>
+            <span className="text-sm font-medium text-gray-600">Active Leads</span>
+          </div>
+          <p className="text-2xl font-bold text-gray-900">{financialStats.leadsGenerated}</p>
+          <p className="text-xs text-gray-400 mt-0.5">in pipeline</p>
+        </div>
+
+        <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+              <CheckCircle size={16} className="text-green-600" />
+            </div>
+            <span className="text-sm font-medium text-gray-600">Deals Closed</span>
+          </div>
+          <p className="text-2xl font-bold text-gray-900">{financialStats.dealsClosedCount}</p>
+          <p className="text-xs text-gray-400 mt-0.5">{formatCurrency(financialStats.dealsClosed)} value</p>
+        </div>
+
+        <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center">
+              <XCircle size={16} className="text-red-500" />
+            </div>
+            <span className="text-sm font-medium text-gray-600">Lost Sales</span>
+          </div>
+          <p className="text-2xl font-bold text-gray-900">{financialStats.lostDealsCount}</p>
+          <p className="text-xs text-gray-400 mt-0.5">{formatCurrency(financialStats.lostSalesValue)} lost</p>
+        </div>
+
+        <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+              <TrendingUp size={16} className="text-purple-600" />
+            </div>
+            <span className="text-sm font-medium text-gray-600">Close Rate</span>
+          </div>
+          {(() => {
+            const total = financialStats.dealsClosedCount + financialStats.lostDealsCount;
+            const rate = total > 0 ? ((financialStats.dealsClosedCount / total) * 100).toFixed(1) : '—';
+            return (
+              <>
+                <p className="text-2xl font-bold text-gray-900">{rate}{rate !== '—' ? '%' : ''}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{total} total decisions</p>
+              </>
+            );
+          })()}
         </div>
       </div>
 

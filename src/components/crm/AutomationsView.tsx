@@ -5,6 +5,7 @@ import { db } from '@/lib/database';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/authContext';
 import { toast } from 'sonner';
+import { getStaleLeadThreshold, setStaleLeadThreshold, DEFAULT_STALE_HOURS } from '@/lib/staleLeadDetection';
 import {
   Dialog,
   DialogContent,
@@ -261,6 +262,18 @@ function RecipientPicker({ companyId, contacts, selected, onChange }: RecipientP
 
 // ─── Main View ────────────────────────────────────────────────────────────────
 
+// Automations that support a custom message body
+const MESSAGE_AUTOMATION_NAMES = ['Welcome Series', 'Job Completion Survey', 'Payment Reminder'];
+// Automation names that drive stale-lead alerts
+const STALE_LEAD_NAMES = ['Stale Lead Alert'];
+
+const STALE_HOUR_PRESETS = [
+  { label: '24 hours', value: 24 },
+  { label: '48 hours', value: 48 },
+  { label: '72 hours', value: 72 },
+  { label: 'Custom', value: 0 },
+];
+
 export default function AutomationsView() {
   const { state, dispatch } = useCRM();
   const { profile } = useAuth();
@@ -270,6 +283,21 @@ export default function AutomationsView() {
   const [nameValue, setNameValue] = useState('');
   const [nameSaving, setNameSaving] = useState(false);
   const [recipients, setRecipients] = useState<AutomationRecipient[]>([]);
+  const [messageBody, setMessageBody] = useState('');
+  const [triggerDelayHours, setTriggerDelayHours] = useState<number>(24);
+  const [customHours, setCustomHours] = useState('');
+  const [useCustomHours, setUseCustomHours] = useState(false);
+
+  // Company-wide stale lead threshold (shown in the suggested automations section)
+  const companyId = state.companyId ?? '';
+  const [globalStaleHours, setGlobalStaleHours] = useState<number>(() =>
+    companyId ? getStaleLeadThreshold(companyId) : DEFAULT_STALE_HOURS
+  );
+  const [globalCustomHours, setGlobalCustomHours] = useState('');
+  const [globalUseCustom, setGlobalUseCustom] = useState(() => {
+    const h = companyId ? getStaleLeadThreshold(companyId) : DEFAULT_STALE_HOURS;
+    return ![24, 48, 72].includes(h);
+  });
 
   const filteredAutomations = state.automations.filter((auto) => {
     const matchesSearch =
@@ -296,16 +324,28 @@ export default function AutomationsView() {
     });
   };
 
-  const handleCreateAutomation = () => {
+  const handleCreateAutomation = (suggestionName?: string) => {
     if (!state.companyId) { toast.error('No company selected'); return; }
-    setNameValue('New Automation');
+    const name = suggestionName || 'New Automation';
+    setNameValue(name);
     setRecipients([]);
+    setMessageBody('');
+    const isStale = STALE_LEAD_NAMES.some(n => name.includes(n));
+    const defaultHours = isStale ? getStaleLeadThreshold(state.companyId) : 24;
+    setTriggerDelayHours(defaultHours);
+    setUseCustomHours(![24, 48, 72].includes(defaultHours));
+    setCustomHours(![24, 48, 72].includes(defaultHours) ? String(defaultHours) : '');
     setNameDialog({ type: 'create' });
   };
 
   const handleEditAutomation = (automation: Automation) => {
     setNameValue(automation.name);
     setRecipients([]);
+    setMessageBody(automation.messageBody || '');
+    const hours = automation.triggerDelayHours ?? 24;
+    setTriggerDelayHours(hours);
+    setUseCustomHours(![24, 48, 72].includes(hours));
+    setCustomHours(![24, 48, 72].includes(hours) ? String(hours) : '');
     setNameDialog({ type: 'edit', automation });
   };
 
@@ -313,23 +353,42 @@ export default function AutomationsView() {
     const trimmed = nameValue.trim();
     if (!trimmed) return;
     setNameSaving(true);
+
+    const isStaleAlert = STALE_LEAD_NAMES.some(n => trimmed.includes(n));
+    const effectiveHours = useCustomHours
+      ? (parseInt(customHours, 10) || 24)
+      : triggerDelayHours;
+
+    // Persist stale-lead threshold to localStorage so detection picks it up immediately
+    if (isStaleAlert && state.companyId) {
+      setStaleLeadThreshold(state.companyId, effectiveHours);
+    }
+
     try {
       if (nameDialog?.type === 'create') {
         const created = await db.createAutomation({
           company_id: state.companyId!,
           name: trimmed,
-          trigger_event: 'status change',
+          trigger_event: isStaleAlert ? `inactive for ${effectiveHours} hours` : 'status change',
           action_type: 'send notification',
           is_active: false,
           created_by: state.currentUser?.id,
           recipients: recipients.length > 0 ? recipients : undefined,
-        });
+          message_body: messageBody.trim() || undefined,
+          trigger_delay_hours: effectiveHours,
+        } as any);
         if (!created) { toast.error('Failed to create automation'); return; }
         dispatch({
           type: 'SET_AUTOMATIONS',
           payload: [...state.automations, {
-            id: created.id, name: created.name, trigger: created.trigger_event,
-            action: created.action_type, isActive: created.is_active, createdBy: created.created_by || '',
+            id: created.id,
+            name: created.name,
+            trigger: created.trigger_event,
+            action: created.action_type,
+            isActive: created.is_active,
+            createdBy: created.created_by || '',
+            messageBody: (created as any).message_body || undefined,
+            triggerDelayHours: (created as any).trigger_delay_hours || undefined,
           }],
         });
         toast.success('Automation created');
@@ -338,11 +397,24 @@ export default function AutomationsView() {
         const updated = await db.updateAutomation(automation.id, {
           name: trimmed,
           recipients: recipients.length > 0 ? recipients : undefined,
-        });
+          message_body: messageBody.trim() || undefined,
+          trigger_delay_hours: effectiveHours,
+          trigger_event: isStaleAlert ? `inactive for ${effectiveHours} hours` : undefined,
+        } as any);
         if (!updated) { toast.error('Failed to update automation'); return; }
         dispatch({
           type: 'SET_AUTOMATIONS',
-          payload: state.automations.map((a) => a.id === automation.id ? { ...a, name: updated.name } : a),
+          payload: state.automations.map((a) =>
+            a.id === automation.id
+              ? {
+                  ...a,
+                  name: updated.name,
+                  messageBody: (updated as any).message_body || undefined,
+                  triggerDelayHours: (updated as any).trigger_delay_hours || undefined,
+                  trigger: isStaleAlert ? `inactive for ${effectiveHours} hours` : a.trigger,
+                }
+              : a
+          ),
         });
         toast.success('Automation updated');
       }
@@ -501,7 +573,7 @@ export default function AutomationsView() {
                     </span>
                   </div>
 
-                  <div className="mt-4 flex items-center gap-4">
+                  <div className="mt-4 flex items-center gap-4 flex-wrap">
                     <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 rounded-lg">
                       {getTriggerIcon(automation.trigger)}
                       <span className="text-sm text-gray-700">{automation.trigger}</span>
@@ -511,7 +583,20 @@ export default function AutomationsView() {
                       {getActionIcon(automation.action)}
                       <span className="text-sm text-blue-700">{automation.action}</span>
                     </div>
+                    {automation.triggerDelayHours && (
+                      <div className="flex items-center gap-1 px-3 py-1 bg-amber-50 border border-amber-200 rounded-lg">
+                        <Clock size={13} className="text-amber-500" />
+                        <span className="text-xs text-amber-700">
+                          {automation.triggerDelayHours}h threshold
+                        </span>
+                      </div>
+                    )}
                   </div>
+                  {automation.messageBody && (
+                    <p className="mt-2 text-xs text-gray-500 italic line-clamp-2 max-w-lg">
+                      "{automation.messageBody}"
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -554,18 +639,14 @@ export default function AutomationsView() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {[
             { name: 'Welcome Series', description: 'Send a series of welcome emails to new leads', icon: <Mail className="text-blue-500" size={20} /> },
-            { name: 'Stale Lead Alert', description: 'Notify sales when a lead has been inactive for 7 days', icon: <Bell className="text-amber-500" size={20} /> },
+            { name: 'Stale Lead Alert', description: `Notify sales when a lead has been inactive — configure 24 h, 48 h, 72 h, or custom`, icon: <Bell className="text-amber-500" size={20} /> },
             { name: 'Job Completion Survey', description: 'Automatically send satisfaction survey after job completion', icon: <FileText className="text-green-500" size={20} /> },
-            { name: 'Payment Reminder', description: 'Send reminder 3 days before invoice due date', icon: <DollarSign className="text-purple-500" size={20} /> },
+            { name: 'Payment Reminder', description: 'Send reminder before invoice due date — customize the message', icon: <DollarSign className="text-purple-500" size={20} /> },
           ].map((suggestion, index) => (
             <div
               key={index}
               className="bg-white rounded-lg p-4 border border-gray-200 hover:border-blue-300 cursor-pointer transition-colors"
-              onClick={() => {
-                setNameValue(suggestion.name);
-                setRecipients([]);
-                setNameDialog({ type: 'create' });
-              }}
+              onClick={() => handleCreateAutomation(suggestion.name)}
             >
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -582,13 +663,19 @@ export default function AutomationsView() {
       </div>
 
       {/* Create / Edit Dialog */}
-      <Dialog open={!!nameDialog} onOpenChange={(open) => { if (!open) { setNameDialog(null); setRecipients([]); } }}>
-        <DialogContent className="max-w-lg">
+      <Dialog
+        open={!!nameDialog}
+        onOpenChange={(open) => {
+          if (!open) { setNameDialog(null); setRecipients([]); setMessageBody(''); }
+        }}
+      >
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{nameDialog?.type === 'create' ? 'Create Automation' : 'Edit Automation'}</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
+            {/* Name */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Automation Name</label>
               <input
@@ -602,6 +689,85 @@ export default function AutomationsView() {
               />
             </div>
 
+            {/* Stale Lead Threshold — shown when name contains "Stale Lead" */}
+            {STALE_LEAD_NAMES.some(n => nameValue.includes(n)) && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Alert after inactivity of
+                </label>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {STALE_HOUR_PRESETS.map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => {
+                        if (preset.value === 0) {
+                          setUseCustomHours(true);
+                        } else {
+                          setUseCustomHours(false);
+                          setTriggerDelayHours(preset.value);
+                        }
+                      }}
+                      className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+                        preset.value === 0
+                          ? useCustomHours
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'border-gray-300 text-gray-600 hover:border-blue-400'
+                          : !useCustomHours && triggerDelayHours === preset.value
+                          ? 'bg-blue-600 text-white border-blue-600'
+                          : 'border-gray-300 text-gray-600 hover:border-blue-400'
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+                {useCustomHours && (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="1"
+                      value={customHours}
+                      onChange={(e) => setCustomHours(e.target.value)}
+                      placeholder="Hours"
+                      className="w-28 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-500">hours of inactivity</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Custom Message — shown for message-capable automations */}
+            {MESSAGE_AUTOMATION_NAMES.some(n => nameValue.includes(n)) && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Custom Message
+                  <span className="ml-2 text-xs font-normal text-gray-400">
+                    (leave blank to use default)
+                  </span>
+                </label>
+                <textarea
+                  value={messageBody}
+                  onChange={(e) => setMessageBody(e.target.value)}
+                  placeholder={
+                    nameValue.includes('Welcome')
+                      ? "Hi {name}, welcome! We're excited to work with you…"
+                      : nameValue.includes('Survey')
+                      ? "Hi {name}, we'd love your feedback on the recently completed job…"
+                      : "Hi {name}, this is a friendly reminder that your invoice is due soon…"
+                  }
+                  rows={5}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  You can use <code className="bg-gray-100 px-1 rounded">{'{name}'}</code>,{' '}
+                  <code className="bg-gray-100 px-1 rounded">{'{company}'}</code>, and{' '}
+                  <code className="bg-gray-100 px-1 rounded">{'{amount}'}</code> as placeholders.
+                </p>
+              </div>
+            )}
+
             {/* Recipient Picker */}
             <RecipientPicker
               companyId={state.companyId ?? ''}
@@ -613,7 +779,7 @@ export default function AutomationsView() {
 
           <DialogFooter>
             <button
-              onClick={() => { setNameDialog(null); setRecipients([]); }}
+              onClick={() => { setNameDialog(null); setRecipients([]); setMessageBody(''); }}
               className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
             >
               Cancel

@@ -248,6 +248,10 @@ export interface Automation {
   action: string;
   isActive: boolean;
   createdBy: string;
+  /** Custom message / email body for this automation */
+  messageBody?: string;
+  /** Hours of inactivity before this automation fires (used by stale-lead alert) */
+  triggerDelayHours?: number;
 }
 
 export interface DocumentTemplate {

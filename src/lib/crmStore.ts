@@ -704,45 +704,109 @@ export function useFinancialStats() {
   const { state } = useCRM();
 
   const stats = {
+    // ── Revenue ──────────────────────────────────────────────────────────────
+    /** Collected payments from contact-level deposit + final payment fields */
+    contactRevenue: 0,
+    /** Collected payments from paid invoices (may overlap with contactRevenue if
+     *  both tracks are used for the same deal — see totalRevenue note below) */
+    invoiceRevenue: 0,
+    /**
+     * Combined revenue.  To avoid double-counting when a contact has both
+     * finalPaymentPaid=true AND a paid invoice, we only add invoice revenue for
+     * invoices whose contactId does NOT already have a fully-paid final payment.
+     */
     totalRevenue: 0,
-    pendingPayments: 0,
+
+    // ── Deposits & payments ───────────────────────────────────────────────────
     depositsCollected: 0,
-    outstandingInvoices: 0,
+    pendingPayments: 0,
+
+    // ── Invoices ─────────────────────────────────────────────────────────────
     paidInvoices: 0,
+    outstandingInvoices: 0,
     overdueInvoices: 0,
+
+    // ── Estimates ────────────────────────────────────────────────────────────
     acceptedEstimatesTotal: 0,
     pendingEstimatesTotal: 0,
+
+    // ── Costs ────────────────────────────────────────────────────────────────
     deliveredMaterialCost: 0,
     pendingMaterialCost: 0,
     totalSubcontractorCost: 0,
     totalLaborCost: 0,
+
+    // ── Pipeline ─────────────────────────────────────────────────────────────
+    /** Number of active leads (not won/lost/closed) */
+    leadsGenerated: 0,
+    /** Total project value of won/completed deals */
+    dealsClosed: 0,
+    /** Number of won/completed deals */
+    dealsClosedCount: 0,
+    /** Total project value of lost deals */
+    lostSalesValue: 0,
+    /** Number of lost deals */
+    lostDealsCount: 0,
   };
 
+  // Build a set of contact IDs that already have a fully-paid final payment so
+  // we can skip their invoices and prevent double-counting.
+  const contactsWithPaidFinalPayment = new Set<string>();
+
   state.contacts.forEach((c) => {
+    // Deposits
     if (c.depositPaid && c.depositAmount) {
       stats.depositsCollected += c.depositAmount;
+      stats.contactRevenue += c.depositAmount;
     }
+
+    // Final payments — deduct deposit to avoid counting it twice (deposit was
+    // already added above; here we add only the remaining balance).
     if (c.finalPaymentPaid && c.finalPaymentAmount) {
       const depositAlreadyCounted = c.depositPaid ? (c.depositAmount || 0) : 0;
-      stats.totalRevenue += c.finalPaymentAmount - depositAlreadyCounted;
+      const balance = c.finalPaymentAmount - depositAlreadyCounted;
+      stats.contactRevenue += balance;
+      contactsWithPaidFinalPayment.add(c.id);
     }
+
+    // Pending final payment (not yet collected)
     if (!c.finalPaymentPaid && c.finalPaymentAmount) {
       stats.pendingPayments += c.finalPaymentAmount;
     }
+
+    // Pipeline / sales metrics
+    const closedStatuses = ['won', 'completed', 'paid'];
+    const lostStatuses = ['lost'];
+    const activeStatuses = ['won', 'lost', 'closed', 'completed', 'paid'];
+
+    if (closedStatuses.includes(c.status)) {
+      stats.dealsClosed += c.projectValue || 0;
+      stats.dealsClosedCount += 1;
+    } else if (lostStatuses.includes(c.status)) {
+      stats.lostSalesValue += c.projectValue || 0;
+      stats.lostDealsCount += 1;
+    } else if (!activeStatuses.includes(c.status)) {
+      stats.leadsGenerated += 1;
+    }
   });
 
-  stats.totalRevenue += stats.depositsCollected;
-
+  // Invoices — skip invoices for contacts whose final payment is already tracked
+  // at the contact level to prevent double-counting.
   state.invoices.forEach((inv) => {
     if (inv.status === 'paid') {
       stats.paidInvoices += inv.amount;
-      stats.totalRevenue += inv.amount;
+      // Only add to revenue if this contact's payment isn't already in contactRevenue
+      if (!contactsWithPaidFinalPayment.has((inv as any).contactId || '')) {
+        stats.invoiceRevenue += inv.amount;
+      }
     } else if (inv.status === 'overdue') {
       stats.overdueInvoices += inv.amount;
     } else if (inv.status === 'sent') {
       stats.outstandingInvoices += inv.amount;
     }
   });
+
+  stats.totalRevenue = stats.contactRevenue + stats.invoiceRevenue;
 
   state.estimates.forEach((est) => {
     if (est.status === 'accepted') {
