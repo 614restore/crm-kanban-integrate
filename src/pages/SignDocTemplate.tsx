@@ -47,7 +47,7 @@ export default function SignDocTemplate() {
   const loadDoc = async () => {
     try {
       const base = getApiBase();
-      const res = await fetch(`${base}/api/sign-doc?action=get&token=${encodeURIComponent(token)}`);
+      const res = await fetch(`${base}/api/document-handler?action=doc-get&token=${encodeURIComponent(token)}`);
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || `Failed to load document (${res.status})`);
 
@@ -62,7 +62,7 @@ export default function SignDocTemplate() {
       setPageState('ready');
 
       // Fire view-tracking in the background (once per load, non-blocking)
-      fetch(`${base}/api/sign-doc?action=track-view&token=${encodeURIComponent(token)}`, {
+      fetch(`${base}/api/document-handler?action=doc-track-view&token=${encodeURIComponent(token)}`, {
         method: 'POST',
       }).catch(() => {/* non-critical */});
     } catch (err: unknown) {
@@ -76,7 +76,7 @@ export default function SignDocTemplate() {
     if (!signerName.trim()) return;
     try {
       const base = getApiBase();
-      const res = await fetch(`${base}/api/sign-doc?action=sign&token=${encodeURIComponent(token)}`, {
+      const res = await fetch(`${base}/api/document-handler?action=doc-sign&token=${encodeURIComponent(token)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ signedBy: signerName.trim(), signatureData }),
