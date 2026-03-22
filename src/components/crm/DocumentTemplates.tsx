@@ -99,6 +99,7 @@ const DocumentTemplates: React.FC = () => {
   const [showNewFolderInput, setShowNewFolderInput] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [movingTemplateId, setMovingTemplateId] = useState<string | null>(null);
+  const [sendingForSign, setSendingForSign] = useState(false);
 
   // ── Create / Edit template state ────────────────────────────────────────
   const [editingTemplate, setEditingTemplate] = useState<DocumentTemplate | null>(null);
@@ -2569,6 +2570,138 @@ const DocumentTemplates: React.FC = () => {
     });
   };
 
+  // Download the customer-specific filled HTML from the customer editor
+  const downloadFilledCustomer = (html: string, docName: string) => {
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${docName.replace(/[^a-z0-9]/gi, '_')}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast({ title: 'Downloaded', description: `"${docName}" saved as HTML file.` });
+  };
+
+  // Upload HTML to Supabase storage, create a documents row, email the customer a signing link
+  const sendForSigning = async (html: string, docName: string, contactId: string) => {
+    if (!profile?.company_id || !profile?.id) {
+      toast({ title: 'Not authenticated', variant: 'destructive' });
+      return;
+    }
+    const contact = crmState.contacts.find(c => c.id === contactId);
+    if (!contact) {
+      toast({ title: 'Select a customer first', variant: 'destructive' });
+      return;
+    }
+    const contactEmail = (contact as any).email || '';
+    if (!contactEmail) {
+      toast({ title: 'No email on file', description: `${getContactFullName(contact)} has no email address saved.`, variant: 'destructive' });
+      return;
+    }
+
+    setSendingForSign(true);
+    try {
+      // Generate a secure token
+      const token = crypto.randomUUID();
+
+      // Store the document record with html_content + sign_token
+      const { uploadDocument } = await import('@/lib/storage');
+      const htmlBlob = new Blob([html], { type: 'text/html' });
+      const htmlFile = new File([htmlBlob], `${docName.replace(/[^a-z0-9]/gi, '_')}.html`, { type: 'text/html' });
+      const uploadResult = await uploadDocument(htmlFile, profile.company_id, contactId);
+
+      // Create document record (uses service layer; sign_token is new column from migration)
+      await (db as any).supabase
+        ? null  // handled below
+        : null;
+
+      // Direct Supabase insert (db.createDocument doesn't yet know about new columns)
+      const { supabase: sbClient } = await import('@/lib/supabase');
+      const { data: docRow, error: insertErr } = await sbClient.from('documents').insert({
+        company_id: profile.company_id,
+        contact_id: contactId,
+        name: docName,
+        type: 'template-document',
+        url: uploadResult.path || '',
+        html_content: html,
+        sign_token: token,
+        sent_by: profile.id,
+        contact_email: contactEmail,
+        status: 'sent',
+      }).select().single();
+
+      if (insertErr) throw new Error(insertErr.message);
+
+      // Send email to customer via existing email API
+      const { sendEmail } = await import('@/lib/emailApi');
+      const appUrl = (import.meta.env.VITE_APP_URL as string | undefined)?.trim() || window.location.origin;
+      const signingUrl = `${appUrl}/sign-doc?token=${encodeURIComponent(token)}`;
+      const contactName = getContactFullName(contact);
+
+      await sendEmail({
+        to: contactEmail,
+        subject: `Please sign: ${docName}`,
+        html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
+          <h2 style="color:#2563eb;">Document Ready for Your Signature</h2>
+          <p>Hi ${contactName},</p>
+          <p>${companyProfile?.name || 'Your contractor'} has sent you <strong>"${docName}"</strong> for your review and signature.</p>
+          <p style="margin:24px 0;">
+            <a href="${signingUrl}" style="display:inline-block;background:#2563eb;color:white;padding:14px 28px;text-decoration:none;border-radius:8px;font-weight:600;">Review &amp; Sign Document</a>
+          </p>
+          <p style="color:#6b7280;font-size:12px;">If the button doesn't work, copy and paste this link into your browser:<br>${signingUrl}</p>
+          <hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;" />
+          <p style="color:#9ca3af;font-size:11px;">Sent by ${companyProfile?.name || 'your contractor'} via 614 Restore CRM</p>
+        </div>`,
+      });
+
+      // In-app notification for the sender
+      sonnerToast.success(`Sent to ${contactName}`, {
+        description: `Signing link emailed to ${contactEmail}. You'll be notified when they open and sign it.`,
+      });
+
+      setCustomerEditMode(false);
+      setTemplates(prev => prev.map(t =>
+        t.id === selectedTemplate?.id ? { ...t, usageCount: t.usageCount + 1 } : t
+      ));
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to send document.';
+      toast({ title: 'Send failed', description: message, variant: 'destructive' });
+    } finally {
+      setSendingForSign(false);
+    }
+  };
+
+  // Open a print-ready window with the filled template content
+  const generateDocument = (template: DocumentTemplate) => {
+    const content = getFillablePreviewContent(template);
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast({ title: 'Popup blocked', description: 'Allow popups for this site to generate documents.', variant: 'destructive' });
+      return;
+    }
+    printWindow.document.write(content);
+    printWindow.document.close();
+    printWindow.focus();
+    // Slight delay so the document renders before the print dialog opens
+    setTimeout(() => { printWindow.print(); }, 400);
+    // Increment usage count
+    setTemplates(prev => prev.map(t => t.id === template.id ? { ...t, usageCount: t.usageCount + 1 } : t));
+  };
+
+  // Download template as an HTML file (sample data pre-filled)
+  const downloadTemplate = (template: DocumentTemplate) => {
+    const content = getPreviewContent(template);
+    const blob = new Blob([content], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${template.name.replace(/[^a-z0-9]/gi, '_')}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setTemplates(prev => prev.map(t => t.id === template.id ? { ...t, usageCount: t.usageCount + 1 } : t));
+    toast({ title: 'Downloaded', description: `"${template.name}" saved as HTML file.` });
+  };
+
   // Duplicate template
   const duplicateTemplate = (template: DocumentTemplate) => {
     const newTemplate: DocumentTemplate = {
@@ -3326,7 +3459,7 @@ const DocumentTemplates: React.FC = () => {
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       )}
-                      <Button size="sm">
+                      <Button size="sm" onClick={() => downloadTemplate(template)} title="Download as HTML">
                         <Download className="w-4 h-4" />
                       </Button>
                     </div>
@@ -3375,7 +3508,7 @@ const DocumentTemplates: React.FC = () => {
                   <User className="w-4 h-4 mr-2" />
                   Use for Customer
                 </Button>
-                <Button>
+                <Button onClick={() => generateDocument(selectedTemplate)}>
                   <Download className="w-4 h-4 mr-2" />
                   Generate Document
                 </Button>
@@ -3458,9 +3591,63 @@ const DocumentTemplates: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex justify-end gap-2">
+                {/* Send for Signing — primary CTA, shown at the bottom of the document */}
+                <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <FileSignature className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold text-blue-900">Ready to send to the customer?</p>
+                      <p className="text-xs text-blue-700 mt-0.5">
+                        They'll receive an email with a link to review and sign. You'll be notified when they open it and again when they sign. The signed copy is saved to their file automatically.
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    className="w-full"
+                    disabled={sendingForSign}
+                    onClick={() => {
+                      if (!selectedContactId) {
+                        toast({ title: 'Select a customer first', variant: 'destructive' });
+                        return;
+                      }
+                      const contact = crmState.contacts.find(c => c.id === selectedContactId);
+                      const contactName = contact ? getContactFullName(contact) : 'Customer';
+                      sendForSigning(customerPreview, `${selectedTemplate.name} — ${contactName}`, selectedContactId);
+                    }}
+                  >
+                    {sendingForSign ? (
+                      <>
+                        <span className="w-4 h-4 mr-2 animate-spin rounded-full border-2 border-white border-t-transparent inline-block" />
+                        Sending…
+                      </>
+                    ) : (
+                      <>
+                        <FileSignature className="w-4 h-4 mr-2" />
+                        Send Document to Customer
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                <div className="flex flex-wrap justify-end gap-2">
                   <Button variant="outline" onClick={() => setCustomerEditMode(false)}>Cancel</Button>
                   <Button
+                    variant="outline"
+                    onClick={() => {
+                      if (!selectedContactId) {
+                        toast({ title: 'Select a customer first', variant: 'destructive' });
+                        return;
+                      }
+                      const contact = crmState.contacts.find(c => c.id === selectedContactId);
+                      const contactName = contact ? getContactFullName(contact) : 'Customer';
+                      downloadFilledCustomer(customerPreview, `${selectedTemplate.name} — ${contactName}`);
+                    }}
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Download
+                  </Button>
+                  <Button
+                    variant="outline"
                     onClick={() => {
                       if (!selectedContactId) {
                         toast({ title: 'Select a customer first', variant: 'destructive' });

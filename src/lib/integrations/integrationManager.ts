@@ -347,29 +347,77 @@ class IntegrationManager {
     }
   }
 
-  // Weather API Tests (simplified for demo)
   private async testOpenWeather(credentials: any): Promise<IntegrationTestResult> {
-    return { success: true, message: 'OpenWeather test passed', timestamp: new Date().toISOString() };
+    const apiKey = credentials?.apiKey;
+    if (!apiKey) return { success: false, message: 'No API key provided', timestamp: new Date().toISOString() };
+    try {
+      const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=Columbus,OH,US&appid=${encodeURIComponent(apiKey)}`);
+      if (res.ok) return { success: true, message: 'OpenWeather connection successful', timestamp: new Date().toISOString() };
+      const body = await res.json().catch(() => ({}));
+      return { success: false, message: body?.message || `HTTP ${res.status}`, timestamp: new Date().toISOString() };
+    } catch {
+      return { success: false, message: 'Network error — could not reach OpenWeather', timestamp: new Date().toISOString() };
+    }
   }
-  
+
   private async testHailTrace(credentials: any): Promise<IntegrationTestResult> {
-    return { success: true, message: 'HailTrace test passed', timestamp: new Date().toISOString() };
+    if (!credentials?.apiKey) return { success: false, message: 'No API key provided', timestamp: new Date().toISOString() };
+    // HailTrace does not expose a public ping endpoint; verify key is non-empty and saved
+    return { success: true, message: 'HailTrace credentials saved — key will be validated on first report request', timestamp: new Date().toISOString() };
   }
-  
+
   private async testTwilio(credentials: any): Promise<IntegrationTestResult> {
-    return { success: true, message: 'Twilio test passed', timestamp: new Date().toISOString() };
+    const { accountSid, authToken } = credentials ?? {};
+    if (!accountSid || !authToken) return { success: false, message: 'Account SID and Auth Token are required', timestamp: new Date().toISOString() };
+    try {
+      const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(accountSid)}.json`, {
+        headers: { Authorization: `Basic ${btoa(`${accountSid}:${authToken}`)}` },
+      });
+      if (res.ok) return { success: true, message: 'Twilio account verified successfully', timestamp: new Date().toISOString() };
+      return { success: false, message: `Twilio auth failed (HTTP ${res.status}) — check your Account SID and Auth Token`, timestamp: new Date().toISOString() };
+    } catch {
+      return { success: false, message: 'Network error — could not reach Twilio', timestamp: new Date().toISOString() };
+    }
   }
-  
+
   private async testSendGrid(credentials: any): Promise<IntegrationTestResult> {
-    return { success: true, message: 'SendGrid test passed', timestamp: new Date().toISOString() };
+    const apiKey = credentials?.apiKey;
+    if (!apiKey) return { success: false, message: 'No API key provided', timestamp: new Date().toISOString() };
+    try {
+      const res = await fetch('https://api.sendgrid.com/v3/user/profile', {
+        headers: { Authorization: `Bearer ${apiKey}` },
+      });
+      if (res.ok) return { success: true, message: 'SendGrid API key verified successfully', timestamp: new Date().toISOString() };
+      return { success: false, message: `SendGrid auth failed (HTTP ${res.status}) — check your API key`, timestamp: new Date().toISOString() };
+    } catch {
+      return { success: false, message: 'Network error — could not reach SendGrid', timestamp: new Date().toISOString() };
+    }
   }
-  
+
   private async testAuth0(credentials: any): Promise<IntegrationTestResult> {
-    return { success: true, message: 'Auth0 test passed', timestamp: new Date().toISOString() };
+    const { domain, clientId } = credentials ?? {};
+    if (!domain || !clientId) return { success: false, message: 'Domain and Client ID are required', timestamp: new Date().toISOString() };
+    try {
+      const res = await fetch(`https://${domain}/.well-known/openid-configuration`);
+      if (res.ok) return { success: true, message: 'Auth0 domain reachable and OIDC configuration found', timestamp: new Date().toISOString() };
+      return { success: false, message: `Auth0 domain not found (HTTP ${res.status}) — check your domain`, timestamp: new Date().toISOString() };
+    } catch {
+      return { success: false, message: 'Network error — could not reach Auth0 domain', timestamp: new Date().toISOString() };
+    }
   }
-  
+
   private async testSquare(credentials: any): Promise<IntegrationTestResult> {
-    return { success: true, message: 'Square test passed', timestamp: new Date().toISOString() };
+    const accessToken = credentials?.accessToken;
+    if (!accessToken) return { success: false, message: 'No access token provided', timestamp: new Date().toISOString() };
+    try {
+      const res = await fetch('https://connect.squareup.com/v2/merchants/me', {
+        headers: { Authorization: `Bearer ${accessToken}`, 'Square-Version': '2024-01-18' },
+      });
+      if (res.ok) return { success: true, message: 'Square account verified successfully', timestamp: new Date().toISOString() };
+      return { success: false, message: `Square auth failed (HTTP ${res.status}) — check your access token`, timestamp: new Date().toISOString() };
+    } catch {
+      return { success: false, message: 'Network error — could not reach Square', timestamp: new Date().toISOString() };
+    }
   }
 
   // Connection methods

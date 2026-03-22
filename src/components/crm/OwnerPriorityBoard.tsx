@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/authContext';
+import { nudgeUserAboutStaleContact } from '@/lib/staleLeadDetection';
+import { toast } from 'sonner';
 
 interface PriorityRow {
   id: string;
@@ -41,6 +44,7 @@ export default function OwnerPriorityBoard() {
   const [rows, setRows] = useState<PriorityRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [nudging, setNudging] = useState<string | null>(null);
+  const { profile } = useAuth();
 
   useEffect(() => {
     fetchPriority();
@@ -57,11 +61,37 @@ export default function OwnerPriorityBoard() {
   }
 
   async function handleNudge(row: PriorityRow) {
+    if (!profile?.company_id || !profile?.id) return;
+
+    if (!row.assigned_to) {
+      toast.warning('No assigned rep', {
+        description: `${row.first_name} ${row.last_name} has no assigned team member to nudge.`,
+      });
+      return;
+    }
+
     setNudging(row.id);
-    // Placeholder — wire to Resend edge function when ready
-    await new Promise(r => setTimeout(r, 800));
-    alert(`Nudge sent to ${row.first_name} ${row.last_name}`);
-    setNudging(null);
+    try {
+      const nudgedByName = [profile.first_name, profile.last_name].filter(Boolean).join(' ') || 'Owner';
+      const success = await nudgeUserAboutStaleContact(
+        profile.company_id,
+        row.id,
+        row.assigned_to,
+        profile.id,
+        nudgedByName,
+      );
+      if (success) {
+        toast.success('Nudge sent', {
+          description: `Reminder sent to your rep about ${row.first_name} ${row.last_name}.`,
+        });
+      } else {
+        toast.error('Nudge failed', { description: 'Could not send the reminder. Please try again.' });
+      }
+    } catch {
+      toast.error('Nudge failed', { description: 'Could not send the reminder. Please try again.' });
+    } finally {
+      setNudging(null);
+    }
   }
 
   async function handleMoveStage(row: PriorityRow, newStatus: string) {

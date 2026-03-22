@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
+import { supabase } from '@/lib/supabase';
 import { 
   ToggleLeft, 
   ToggleRight, 
@@ -188,13 +189,25 @@ export default function FeatureToggles() {
       if (company) {
         setCompanyPlan(company.subscription_plan || 'trial');
         
-        // Load features from company settings (stored in a JSON field or separate table)
-        // For now, we'll use localStorage as a fallback
-        const storedFeatures = localStorage.getItem(`company_features_${profile.company_id}`);
-        if (storedFeatures) {
-          setFeatures({ ...DEFAULT_FEATURES, ...JSON.parse(storedFeatures) });
+        // Load features from database (features JSONB column on companies table)
+        const { data: companyRow } = await supabase
+          .from('companies')
+          .select('features')
+          .eq('id', profile.company_id)
+          .single();
+        const dbFeatures = companyRow?.features;
+        if (dbFeatures && typeof dbFeatures === 'object' && Object.keys(dbFeatures).length > 0) {
+          setFeatures({ ...DEFAULT_FEATURES, ...dbFeatures });
+          // Sync to localStorage as cache for offline use
+          localStorage.setItem(`company_features_${profile.company_id}`, JSON.stringify(dbFeatures));
         } else {
-          setFeatures(DEFAULT_FEATURES);
+          // Fall back to localStorage cache (pre-migration data)
+          const storedFeatures = localStorage.getItem(`company_features_${profile.company_id}`);
+          if (storedFeatures) {
+            setFeatures({ ...DEFAULT_FEATURES, ...JSON.parse(storedFeatures) });
+          } else {
+            setFeatures(DEFAULT_FEATURES);
+          }
         }
       }
     } catch (error) {
@@ -233,11 +246,13 @@ export default function FeatureToggles() {
       const newFeatures = { ...features, [key]: !features[key] };
       setFeatures(newFeatures);
       
-      // Save to localStorage (in production, save to database)
+      // Save to database
+      await supabase
+        .from('companies')
+        .update({ features: newFeatures })
+        .eq('id', profile.company_id);
+      // Also keep localStorage in sync as a local cache
       localStorage.setItem(`company_features_${profile.company_id}`, JSON.stringify(newFeatures));
-      
-      // TODO: Save to database
-      // await db.updateCompany(profile.company_id, { features: newFeatures });
       
       // Show success message
       setTimeout(() => setSaving(null), 500);
