@@ -188,15 +188,37 @@ function ViewLoadingFallback() {
 // Loading Screen
 function LoadingScreen() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center">
-      <div className="text-center">
-        <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-          <Building2 size={32} className="text-white" />
-        </div>
-        <h1 className="text-2xl font-bold text-white mb-2">TrussCTR</h1>
-        <div className="flex items-center justify-center gap-2 text-slate-400">
-          <Loader2 className="animate-spin" size={20} />
-          <span>Loading your data...</span>
+    <div className="min-h-screen bg-black flex items-center justify-center relative overflow-hidden">
+      {/* Spotlight effect */}
+      <div className="absolute inset-0 pointer-events-none" style={{
+        background: 'radial-gradient(ellipse 60% 50% at 50% 0%, rgba(212,170,80,0.18) 0%, transparent 70%)'
+      }} />
+      {/* Dark vignette */}
+      <div className="absolute inset-0 pointer-events-none" style={{
+        background: 'radial-gradient(ellipse 90% 90% at 50% 50%, transparent 40%, rgba(0,0,0,0.7) 100%)'
+      }} />
+
+      <div className="relative text-center flex flex-col items-center">
+        {/* Shield logo */}
+        <img
+          src="/trussctr-logo-shield.png"
+          alt="TrussCTR Logo"
+          className="w-56 h-56 object-contain mb-6 drop-shadow-2xl"
+          style={{ filter: 'drop-shadow(0 0 32px rgba(212,170,80,0.35))' }}
+        />
+
+        {/* Title */}
+        <h1 className="text-3xl font-extrabold text-white tracking-wide mb-1"
+            style={{ textShadow: '0 2px 16px rgba(0,0,0,0.8)' }}>
+          TrussCTR Web&nbsp;
+          <span className="text-yellow-400">•</span>
+          &nbsp;v1.0
+        </h1>
+
+        {/* Loader */}
+        <div className="flex items-center justify-center gap-2 mt-4 text-slate-400">
+          <Loader2 className="animate-spin" size={18} />
+          <span className="text-sm tracking-wider uppercase">Loading your data...</span>
         </div>
       </div>
     </div>

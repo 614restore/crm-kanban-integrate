@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { CreditCard, Plus, Zap, Rocket, Building2, Star, ChevronDown, ChevronRight, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/authContext';
@@ -17,6 +17,11 @@ declare global {
     }
   }
 }
+
+const STRIPE_PRICING_TABLE_ID = import.meta.env.VITE_STRIPE_PRICING_TABLE_ID || '';
+const STRIPE_PUBLISHABLE_KEY  = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY  || '';
+const STRIPE_BILLING_PORTAL_URL = import.meta.env.VITE_STRIPE_BILLING_PORTAL_URL || '';
+const API_BASE: string = import.meta.env.VITE_EMAIL_API_BASE_URL || '';
 
 // Stripe Price IDs — fill these in from your Stripe Dashboard after creating products
 const STRIPE_PRICES = {
@@ -281,17 +286,51 @@ const ComparisonTable: React.FC = () => {
 };
 
 const BillingSettings: React.FC = () => {
-  const { profile } = useAuth();
+  const { profile, session } = useAuth();
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [portalLoading, setPortalLoading] = useState(false);
 
-  const handleManageBilling = () => {
+  const openExternalBillingUrl = useCallback((url: string) => {
     const a = document.createElement('a');
-    a.href = 'https://billing.stripe.com/p/login/aFa9AVb73faq5vsfmw6Na00';
+    a.href = url;
     a.target = '_blank';
     a.rel = 'noopener noreferrer';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-  };
+  }, []);
+
+  const handleManageBilling = useCallback(async () => {
+    setCheckoutError(null);
+
+    if (API_BASE && session?.access_token) {
+      setPortalLoading(true);
+      try {
+        const res = await fetch(`${API_BASE}/api/stripe-portal`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to open billing portal');
+        window.location.href = data.url;
+        return;
+      } catch (err) {
+        setCheckoutError(err instanceof Error ? err.message : 'Could not open billing portal. Please try again.');
+      } finally {
+        setPortalLoading(false);
+      }
+    }
+
+    if (STRIPE_BILLING_PORTAL_URL) {
+      openExternalBillingUrl(STRIPE_BILLING_PORTAL_URL);
+      return;
+    }
+
+    setCheckoutError('Billing portal is not configured. Set VITE_STRIPE_BILLING_PORTAL_URL or connect the app to the Stripe portal API.');
+  }, [openExternalBillingUrl, session?.access_token]);
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -305,9 +344,9 @@ const BillingSettings: React.FC = () => {
             <ExternalLink className="w-4 h-4" />
             Compare Plans
           </Button>
-          <Button variant="outline" onClick={handleManageBilling} className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => void handleManageBilling()} className="flex items-center gap-2" disabled={portalLoading}>
             <CreditCard className="w-4 h-4" />
-            Manage Billing
+            {portalLoading ? 'Opening…' : 'Manage Billing'}
           </Button>
         </div>
       </div>
@@ -315,11 +354,18 @@ const BillingSettings: React.FC = () => {
       {/* Stripe Pricing Table — handles all checkout securely */}
       <div className="mb-10">
         <stripe-pricing-table
-          pricing-table-id="prctbl_1T8ahXQ4qbAu1D2SCifFughX"
-          publishable-key="pk_live_51T8YyaQ4qbAu1D2STcaoAsxjqScvBgvTttf0k5DXp8t0BbDswCY6Hqdtd81MOlWeQqPBGCkAFBtAidM5Fsa8n0JK006K6b0Uv7"
+          pricing-table-id={STRIPE_PRICING_TABLE_ID}
+          publishable-key={STRIPE_PUBLISHABLE_KEY}
+          customer-email={profile?.email || undefined}
           client-reference-id={profile?.company_id || undefined}
         />
       </div>
+
+      {checkoutError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 mb-6">
+          {checkoutError}
+        </div>
+      )}
 
       {/* Add-ons */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -332,7 +378,7 @@ const BillingSettings: React.FC = () => {
                 <p className="text-sm font-medium text-gray-900">{addon.name}</p>
                 <p className="text-xs text-gray-500">${addon.price}{addon.period}</p>
               </div>
-              <button onClick={handleManageBilling} className="flex items-center gap-1 text-xs bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded text-gray-700">
+              <button onClick={() => void handleManageBilling()} className="flex items-center gap-1 text-xs bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded text-gray-700">
                 <Plus className="w-3 h-3" /> Add
               </button>
             </div>
