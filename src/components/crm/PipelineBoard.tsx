@@ -83,6 +83,7 @@ export default function PipelineBoard() {
   const [editingBoard, setEditingBoard] = useState<KanbanBoard | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [showAllBoards, setShowAllBoards] = useState(false);
+  const [showCombinedSales, setShowCombinedSales] = useState(false);
   const [showPriorityPanel, setShowPriorityPanel] = useState(false);
 
   const userRole = (state.currentUser?.role || profile?.role || 'owner') as any;
@@ -93,6 +94,22 @@ export default function PipelineBoard() {
   const getColumnContacts = (column: KanbanColumn): Contact[] => {
     return state.contacts.filter((c) => c.status === column.status);
   };
+
+  // Merge all sales-type boards into one deduplicated column list (by status)
+  const combinedSalesColumns: KanbanColumn[] = (() => {
+    const salesBoards = state.boards.filter((b) => b.type === 'sales');
+    const seen = new Set<string>();
+    const merged: KanbanColumn[] = [];
+    for (const board of salesBoards) {
+      for (const col of board.columns) {
+        if (!seen.has(col.status)) {
+          seen.add(col.status);
+          merged.push(col);
+        }
+      }
+    }
+    return merged;
+  })();
 
   const handleDragStart = (e: React.DragEvent, contact: Contact) => {
     setDraggedContact(contact);
@@ -305,6 +322,8 @@ export default function PipelineBoard() {
               >
                 {showAllBoards ? (
                   <><LayoutGrid size={16} className="text-indigo-600" /><span className="font-semibold text-indigo-700">All Boards</span></>
+                ) : showCombinedSales ? (
+                  <><Users size={16} className="text-blue-600" /><span className="font-semibold text-blue-700">Combined Sales</span></>
                 ) : (
                   <span className="font-semibold text-gray-900">{currentBoard?.name || 'Select Board'}</span>
                 )}
@@ -317,10 +336,10 @@ export default function PipelineBoard() {
                     {state.boards.map((board) => (
                       <div key={board.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 group">
                         <button
-                          onClick={() => { dispatch({ type: 'SELECT_BOARD', payload: board.id }); setShowAllBoards(false); setShowBoardSelector(false); }}
+                          onClick={() => { dispatch({ type: 'SELECT_BOARD', payload: board.id }); setShowAllBoards(false); setShowCombinedSales(false); setShowBoardSelector(false); }}
                           className="flex-1 text-left"
                         >
-                          <span className={`font-medium ${board.id === currentBoard?.id ? 'text-blue-600' : 'text-gray-700'}`}>{board.name}</span>
+                          <span className={`font-medium ${!showAllBoards && !showCombinedSales && board.id === currentBoard?.id ? 'text-blue-600' : 'text-gray-700'}`}>{board.name}</span>
                           <span className="text-xs text-gray-400 ml-2 capitalize">{board.type}</span>
                         </button>
                         {canEdit && !board.isDefault && (
@@ -338,7 +357,13 @@ export default function PipelineBoard() {
                   </div>
                   <div className="border-t border-gray-100 p-2">
                     <button
-                      onClick={() => { setShowAllBoards(true); setShowBoardSelector(false); }}
+                      onClick={() => { setShowCombinedSales(true); setShowAllBoards(false); setShowBoardSelector(false); }}
+                      className={`w-full flex items-center gap-2 p-2 rounded-lg transition-colors ${showCombinedSales ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-700 hover:bg-gray-100'}`}
+                    >
+                      <Users size={16} /><span className="font-medium">Combined Sales View</span>
+                    </button>
+                    <button
+                      onClick={() => { setShowAllBoards(true); setShowCombinedSales(false); setShowBoardSelector(false); }}
                       className={`w-full flex items-center gap-2 p-2 rounded-lg transition-colors ${showAllBoards ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-gray-700 hover:bg-gray-100'}`}
                     >
                       <LayoutGrid size={16} /><span className="font-medium">View All Boards</span>
@@ -393,7 +418,103 @@ export default function PipelineBoard() {
 
       {/* ── Kanban Board ─────────────────────────────────────────── */}
       <div className="flex-1 overflow-x-auto p-6 bg-gray-50">
-        {showAllBoards ? (
+        {showCombinedSales ? (
+          <div className="flex gap-4 h-full min-w-max">
+            {combinedSalesColumns.map((column) => {
+              const contacts = getColumnContacts(column);
+              const columnValue = contacts.reduce((sum, c) => {
+                if (c.projectValue && c.projectValue > 0) return sum + c.projectValue;
+                const bestEstimate = state.estimates.filter(e => e.contactId === c.id && e.status !== 'declined').reduce((max, e) => Math.max(max, Number(e.total || 0)), 0);
+                return sum + bestEstimate;
+              }, 0);
+              return (
+                <div
+                  key={column.id}
+                  className={`w-80 flex-shrink-0 flex flex-col bg-gray-100 rounded-xl transition-colors ${dragOverColumn === column.id ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}
+                  onDragOver={(e) => handleDragOver(e, column.id)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => handleDrop(e, column)}
+                >
+                  <div className="p-4 border-b border-gray-200">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: column.color }} />
+                      <h3 className="font-semibold text-gray-900">{column.title}</h3>
+                      <span className="px-2 py-0.5 bg-gray-200 rounded-full text-xs font-medium text-gray-600">{contacts.length}</span>
+                    </div>
+                    <p className="text-sm text-gray-500 mt-1">{formatCurrency(columnValue)}</p>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                    {contacts.map((contact) => {
+                      const assignee = state.teamMembers.find((tm) => tm.id === contact.assignedTo);
+                      const stageAlert = getStageAlert(contact);
+                      return (
+                        <div
+                          key={contact.id}
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, contact)}
+                          onClick={() => handleContactClick(contact.id)}
+                          className={`bg-white rounded-lg p-4 shadow-sm border border-gray-200 cursor-pointer hover:shadow-md transition-all group ${draggedContact?.id === contact.id ? 'opacity-50' : ''}`}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <GripVertical size={14} className="text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab" />
+                                <h4 className="font-medium text-gray-900 truncate">{getContactFullName(contact)}</h4>
+                              </div>
+                              {contact.projectType && <p className="text-sm text-gray-500 mt-1 truncate">{contact.projectType}</p>}
+                            </div>
+                            {assignee && <img src={assignee.avatar} alt={assignee.name} className="w-7 h-7 rounded-full object-cover flex-shrink-0" title={assignee.name} />}
+                          </div>
+                          <div className="mt-3 space-y-1.5">
+                            <div className="flex items-center gap-2 text-xs text-gray-500">
+                              <MapPin size={12} /><span className="truncate">{contact.city}, {contact.state}</span>
+                            </div>
+                            {contact.projectValue && (
+                              <div className="flex items-center gap-2 text-xs text-green-600 font-medium">
+                                <DollarSign size={12} /><span>{formatCurrency(contact.projectValue)}</span>
+                              </div>
+                            )}
+                          </div>
+                          {contact.tags.length > 0 && (
+                            <div className="mt-3 flex flex-wrap gap-1">
+                              {contact.tags.slice(0, 2).map((tag) => (
+                                <span key={tag} className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">{tag}</span>
+                              ))}
+                              {contact.tags.length > 2 && <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">+{contact.tags.length - 2}</span>}
+                            </div>
+                          )}
+                          {stageAlert && (
+                            <div className="mt-2">
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${stageAlert.className}`}>⚠ {stageAlert.label} in stage</span>
+                            </div>
+                          )}
+                          {(() => {
+                            const ns = getNextStep(contact.status as KanbanStatus);
+                            if (!ns) return null;
+                            const Icon = NEXT_STEP_ICONS[ns.iconName] || ArrowRight;
+                            return (
+                              <button
+                                onClick={(e) => handleNextStepClick(e, contact, ns)}
+                                className={`mt-3 w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-opacity hover:opacity-75 ${ns.bgColor} ${ns.textColor}`}
+                              >
+                                <Icon size={12} className="flex-shrink-0" />
+                                <span className="truncate">{ns.label}</span>
+                                <ArrowRight size={12} className="ml-auto flex-shrink-0 opacity-60" />
+                              </button>
+                            );
+                          })()}
+                        </div>
+                      );
+                    })}
+                    {contacts.length === 0 && (
+                      <div className="text-center py-8 text-gray-400"><p className="text-sm">No contacts</p></div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : showAllBoards ? (
           <div className="flex flex-col gap-8 h-full">
             {state.boards.map((board) => (
               <div key={board.id}>
