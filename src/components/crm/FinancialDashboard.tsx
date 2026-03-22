@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useCRM, useFinancialStats } from '@/lib/crmStore';
 import { db, DbCompany } from '@/lib/database';
 import { sendEmail } from '@/lib/emailApi';
+import { fireAutomationEvent } from '@/lib/automationEngine';
 import { exportToExcel, printDataAsPDF } from '@/lib/exportUtils';
 import { useAuth } from '@/lib/authContext';
 import { toast } from 'sonner';
@@ -179,6 +180,42 @@ export default function FinancialDashboard() {
         paidAt: newStatus === 'paid' ? new Date().toISOString() : invoice.paidAt,
       },
     });
+
+    // Auto-advance contact through the pipeline when invoice milestones are hit
+    if (invoice.contactId && profile?.company_id) {
+      const contact = state.contacts.find((c) => c.id === invoice.contactId);
+      if (contact) {
+        let advanceTo: string | null = null;
+        if (newStatus === 'sent' && contact.status === 'invoicing') {
+          advanceTo = 'pending_payment';
+        } else if (newStatus === 'paid' && (contact.status === 'pending_payment' || contact.status === 'invoicing')) {
+          advanceTo = 'completed';
+        }
+        if (advanceTo) {
+          db.updateContact(contact.id, { status: advanceTo, status_changed_at: new Date().toISOString() }).catch(() => {});
+          dispatch({ type: 'UPDATE_CONTACT_STATUS', payload: { contactId: contact.id, status: advanceTo as any } });
+          fireAutomationEvent('contact_status_changed', profile.company_id, {
+            contactId: contact.id,
+            contactName: invoice.contactName,
+            contactEmail: contact.email,
+            oldStatus: contact.status,
+            newStatus: advanceTo,
+          }).catch(() => {});
+        }
+        // Fire event-specific automation rules
+        const eventType = newStatus === 'paid' ? 'invoice_paid' : newStatus === 'sent' ? 'invoice_sent' : null;
+        if (eventType) {
+          fireAutomationEvent(eventType, profile.company_id, {
+            contactId: contact.id,
+            contactName: invoice.contactName,
+            contactEmail: contact.email,
+            invoiceNumber: invoice.invoiceNumber,
+            amount: invoice.amount,
+          }).catch(() => {});
+        }
+      }
+    }
+
     toast.success(`Invoice marked as ${newStatus}`);
   };
 

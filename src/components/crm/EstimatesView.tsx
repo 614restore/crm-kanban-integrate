@@ -3,6 +3,7 @@ import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
 import { sendEmail } from '@/lib/emailApi';
+import { fireAutomationEvent } from '@/lib/automationEngine';
 import { Estimate, EstimateItem, Contact } from '@/lib/crmData';
 import { exportEstimatesToExcel } from '@/lib/exportUtils';
 import { SignaturePad } from './SignaturePad';
@@ -303,8 +304,18 @@ export default function EstimatesView() {
       if (!contact?.email) {
         // Still mark as sent even without email
         const updated = await db.markEstimateSent(estimateId);
-        if (updated) {
+        if (updated && contact) {
           dispatch({ type: 'UPDATE_ESTIMATE', payload: mapDbEstimateToApp(updated) });
+          db.updateContact(contact.id, { status: 'estimate_sent', status_changed_at: new Date().toISOString() }).catch(() => {});
+          dispatch({ type: 'UPDATE_CONTACT', payload: { ...contact, status: 'estimate_sent', updatedAt: new Date().toISOString() } });
+          if (profile?.company_id) {
+            fireAutomationEvent('estimate_sent', profile.company_id, {
+              contactId: contact.id,
+              contactName: `${contact.firstName} ${contact.lastName}`.trim(),
+              oldStatus: contact.status,
+              newStatus: 'estimate_sent',
+            }).catch(() => {});
+          }
           toast.success('Estimate marked as sent (no email on file for this customer)');
         }
         return;
@@ -396,6 +407,11 @@ export default function EstimatesView() {
         // Sync contact status + projectValue in local state immediately
         const c = state.contacts.find(x => x.id === updated.contact_id);
         if (c) {
+          // Persist status advance to DB so board reflects it immediately
+          db.updateContact(c.id, {
+            status: 'estimate_sent',
+            status_changed_at: new Date().toISOString(),
+          }).catch((err) => console.error('Failed to persist estimate_sent status:', err));
           dispatch({
             type: 'UPDATE_CONTACT',
             payload: {
@@ -405,6 +421,24 @@ export default function EstimatesView() {
               updatedAt: new Date().toISOString(),
             },
           });
+          // Fire automation rules for estimate sent + stage advancement
+          if (profile?.company_id) {
+            fireAutomationEvent('estimate_sent', profile.company_id, {
+              contactId: c.id,
+              contactName: `${c.firstName} ${c.lastName}`.trim(),
+              contactEmail: c.email,
+              amount: Number(updated.total || 0),
+              oldStatus: c.status,
+              newStatus: 'estimate_sent',
+            }).catch(() => {});
+            fireAutomationEvent('contact_status_changed', profile.company_id, {
+              contactId: c.id,
+              contactName: `${c.firstName} ${c.lastName}`.trim(),
+              contactEmail: c.email,
+              oldStatus: c.status,
+              newStatus: 'estimate_sent',
+            }).catch(() => {});
+          }
         }
       }
       toast.success(`Estimate emailed to ${contact.email}`);

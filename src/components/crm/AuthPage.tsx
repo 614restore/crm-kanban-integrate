@@ -33,6 +33,7 @@ export default function AuthPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [inviteToken, setInviteToken] = useState<string | null>(null);
   const [inviteCompanyId, setInviteCompanyId] = useState<string | null>(null);
+  const [inviteCompanyName, setInviteCompanyName] = useState<string | null>(null);
 
   // Check for invite parameters in URL
   useEffect(() => {
@@ -45,35 +46,37 @@ export default function AuthPage() {
       setInviteCompanyId(companyId);
       setMode('signup');
 
-      // Fetch invite details
+      // Fetch invite details + company name in one query
       supabase
         .from('invitations')
-        .select('email, role, accepted, expires_at')
+        .select('email, role, accepted, expires_at, companies(name)')
         .eq('token', token)
         .eq('company_id', companyId)
         .single()
         .then(({ data, error }) => {
           if (error || !data) {
-            setError('Invalid invite link');
+            setError('Invalid invite link. Please ask your team admin to resend the invitation.');
             return;
           }
 
           // Check if already accepted
           if (data.accepted) {
-            setError('This invitation has already been used');
+            setError('This invitation has already been used. Please sign in or contact your team admin.');
             return;
           }
 
           // Check if expired
           const expiresAt = new Date(data.expires_at);
           if (expiresAt < new Date()) {
-            setError('This invitation has expired. Please request a new one.');
+            setError('This invitation has expired. Please ask your team admin to send a new one.');
             return;
           }
 
-          // Valid invitation
+          // Valid invitation — pre-fill and show context
           setEmail(data.email);
           setRole(data.role as UserRole);
+          const cn = (data as any).companies?.name;
+          if (cn) setInviteCompanyName(cn);
         });
     }
   }, []);
@@ -317,11 +320,20 @@ export default function AuthPage() {
 
             {inviteToken && mode === 'signup' && (
               <div className="mb-6 p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <Mail className="text-indigo-500 flex-shrink-0" size={20} />
-                  <p className="text-indigo-800 font-medium text-sm">
-                    You've been invited to join a team! Complete signup to accept.
-                  </p>
+                <div className="flex items-start gap-3">
+                  <Mail className="text-indigo-500 flex-shrink-0 mt-0.5" size={20} />
+                  <div>
+                    <p className="text-indigo-800 font-semibold text-sm mb-0.5">
+                      You've been invited!
+                    </p>
+                    <p className="text-indigo-700 text-sm">
+                      {inviteCompanyName
+                        ? <>Join <strong>{inviteCompanyName}</strong> as a <strong>{roleLabels[role] || role}</strong>.</>
+                        : <>You're joining as a <strong>{roleLabels[role] || role}</strong>.</>
+                      }
+                      {' '}Create your account below to accept.
+                    </p>
+                  </div>
                 </div>
               </div>
             )}

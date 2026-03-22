@@ -8,6 +8,7 @@ import { Contact, defaultLeadSources, CustomerStatus } from '@/lib/crmData';
 import { formatPhoneNumber } from '@/lib/utils';
 import { X, User, Phone, Mail, MapPin, DollarSign, Tag, Shield, Building, Loader2, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
+import { fireAutomationEvent } from '@/lib/automationEngine';
 
 type FormStep = 'basic' | 'project' | 'insurance' | 'appointment';
 
@@ -258,6 +259,17 @@ export default function QuickAddModal() {
         };
 
         dispatch({ type: 'ADD_CONTACT', payload: createdContact });
+
+        // Fire automation rules for new contact creation
+        if (finalCompanyId) {
+          fireAutomationEvent('new_contact_created', finalCompanyId, {
+            contactId: createdContact.id,
+            contactName: `${createdContact.firstName} ${createdContact.lastName}`.trim(),
+            contactEmail: createdContact.email,
+            assignedTo: createdContact.assignedTo,
+            newStatus: createdContact.status,
+          }).catch(() => {});
+        }
 
       // If the user wants to schedule an appointment, navigate to the calendar
       // with the new contact pre-filled in the appointment modal

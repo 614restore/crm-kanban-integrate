@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { Appointment, formatDate } from '@/lib/crmData';
 import { db } from '@/lib/database';
+import { fireAutomationEvent } from '@/lib/automationEngine';
 import { getMentionTargets, validateMentions } from '@/lib/mentions';
 import { toast } from 'sonner';
 import AppointmentModal from './AppointmentModal';
@@ -231,6 +232,23 @@ export default function CalendarView() {
             type: 'UPDATE_CONTACT_STATUS',
             payload: { contactId: appointment.contactId, status: 'inspection_completed' },
           });
+          // Fire automations for stage advancement and appointment completion
+          if (state.companyId) {
+            fireAutomationEvent('appointment_completed', state.companyId, {
+              contactId: contact.id,
+              contactName: `${contact.firstName} ${contact.lastName}`.trim(),
+              contactEmail: contact.email,
+              oldStatus: 'appt_set',
+              newStatus: 'inspection_completed',
+            }).catch(() => {});
+            fireAutomationEvent('contact_status_changed', state.companyId, {
+              contactId: contact.id,
+              contactName: `${contact.firstName} ${contact.lastName}`.trim(),
+              contactEmail: contact.email,
+              oldStatus: 'appt_set',
+              newStatus: 'inspection_completed',
+            }).catch(() => {});
+          }
         }
       }
 
