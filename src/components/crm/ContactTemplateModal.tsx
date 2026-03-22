@@ -215,19 +215,25 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
 
   // When selecting a template, pre-populate with defaults so users see/edit values
   const handleSelect = (t: DocumentTemplate) => {
-    setSelected(t);
-    setLineVisibility('full');
+    try {
+      setSelected(t);
+      setLineVisibility('full');
 
-    const autoFilled = buildContactOverrides(contact, companyProfile, profile);
-    const templateDefaults: Record<string, string> = {};
-    (t.fields || []).forEach(f => {
-      if (f.defaultValue) templateDefaults[f.key] = f.defaultValue;
-    });
-    const merged = { ...autoFilled, ...templateDefaults };
+      const autoFilled = buildContactOverrides(contact, companyProfile, profile);
+      const templateDefaults: Record<string, string> = {};
+      (t.fields || []).forEach(f => {
+        if (f.defaultValue) templateDefaults[f.key] = String(f.defaultValue);
+      });
+      const merged = { ...autoFilled, ...templateDefaults };
 
-    // Run initial auto-calc pass
-    const groups = t.fields ? detectLineItemGroups(t.fields) : [];
-    setFieldValues(recalcTotals(merged, groups));
+      // Run initial auto-calc pass
+      const groups = t.fields ? detectLineItemGroups(t.fields) : [];
+      setFieldValues(recalcTotals(merged, groups));
+    } catch (err) {
+      console.error('[ContactTemplateModal] handleSelect error:', err);
+      // Fall back to empty field values — editor still opens
+      setFieldValues({});
+    }
   };
 
   const handleBack = () => {
