@@ -2664,6 +2664,7 @@ const DocumentTemplates: React.FC = () => {
     }
   };
 
+
   // Open a print-ready window with the filled template content
   const generateDocument = (template: DocumentTemplate) => {
     const content = getFillablePreviewContent(template);
@@ -3621,6 +3622,7 @@ const DocumentTemplates: React.FC = () => {
                     )}
                   </Button>
                 </div>
+
 
                 <div className="flex flex-wrap justify-end gap-2">
                   <Button variant="outline" onClick={() => setCustomerEditMode(false)}>Cancel</Button>
