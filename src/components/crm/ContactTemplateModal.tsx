@@ -1,12 +1,13 @@
-// ContactTemplateModal — Inline document editor with click-to-edit placeholders
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { X, FileText, ChevronLeft, Search, DollarSign, Save, Loader2, Plus, Trash2 } from 'lucide-react';
+// ContactTemplateModal — Redesigned with proper cost breakdown editor
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { X, FileText, ChevronLeft, Search, DollarSign, Save, Loader2, Plus, Trash2, Calculator } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/authContext';
 import { db, DbCompany } from '@/lib/database';
 import { uploadDocument } from '@/lib/storage';
 import {
   DocumentTemplate,
+  LineItemDefault,
   getContractorEstimateTemplates,
   buildContactOverrides,
   fillTemplateVars,
@@ -20,6 +21,15 @@ interface Props {
   onDocumentSaved: (doc: Document) => void;
 }
 
+interface LineItem {
+  id: string;
+  description: string;
+  qty: string;
+  unit: string;
+  unitPrice: string;
+  total: string; // manual override total (used when qty is empty/Lot)
+}
+
 const CATEGORY_LABELS: Record<string, string> = {
   estimate: 'Estimates',
   invoice: 'Invoices',
@@ -28,6 +38,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   proposal: 'Proposals',
   'change-order': 'Change Orders',
   safety: 'Safety',
+  legal: 'Legal',
   other: 'Other',
 };
 
@@ -39,8 +50,68 @@ const CATEGORY_COLORS: Record<string, string> = {
   proposal: 'bg-indigo-100 text-indigo-800',
   'change-order': 'bg-yellow-100 text-yellow-800',
   safety: 'bg-red-100 text-red-800',
+  legal: 'bg-gray-100 text-gray-800',
   other: 'bg-gray-100 text-gray-800',
 };
+
+// Fields that are handled by the line-items / totals UI — excluded from the sidebar form
+const COST_FIELD_PATTERNS = [
+  '_RATE', '_TOTAL', 'SUBTOTAL', 'TAX_RATE', 'TAX_AMOUNT',
+  'TOTAL_AMOUNT', 'DEPOSIT_AMOUNT', 'BALANCE_DUE',
+  'TEAROFF_', 'DECKING_', 'ICE_WATER_', 'UNDERLAY_', 'DRIP_EDGE_',
+  'SHINGLE_RATE', 'SHINGLE_TOTAL', 'RIDGE_', 'FLASHING_', 'VENT_',
+  'CLEANUP_', 'PANEL_RATE', 'PANEL_TOTAL', 'CLIP_RATE', 'CLIP_TOTAL',
+  'TRIM_LF', 'TRIM_RATE', 'TRIM_TOTAL', 'EAVE_LF', 'EAVE_RATE', 'EAVE_TOTAL',
+  'SNOW_GUARD_QTY', 'SNOW_GUARD_RATE', 'SNOW_GUARD_TOTAL',
+  'HARDWARE_TOTAL', 'REMOVAL_', 'WRAP_', 'SIDING_RATE', 'SIDING_TOTAL',
+  'SOFFIT_RATE', 'SOFFIT_TOTAL', 'FASCIA_RATE', 'FASCIA_TOTAL',
+  'WINDOW_TRIM_', 'WINDOW_WRAP_', 'SHEATHING_',
+  'GUTTER_RATE', 'GUTTER_TOTAL', 'DOWNSPOUT_RATE', 'DOWNSPOUT_TOTAL',
+  'GG_RATE', 'GG_TOTAL', 'EXTENSION_RATE', 'EXTENSION_TOTAL',
+  'FASCIA_REPAIR_', 'REMOVE_GUT_',
+];
+
+const TERMS_FIELDS = ['WARRANTY_PERIOD', 'PAYMENT_TERMS'];
+const DOC_INFO_FIELDS = ['ESTIMATE_NUMBER', 'START_DATE', 'ESTIMATED_DURATION', 'ESTIMATE_DATE', 'ESTIMATE_EXPIRY', 'CONTRACT_NUMBER', 'CONTRACT_DATE', 'ESTIMATED_COMPLETION'];
+
+function isCostField(key: string): boolean {
+  return COST_FIELD_PATTERNS.some(p => key.includes(p));
+}
+
+function fmt(n: number): string {
+  return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function parseNum(s: string): number {
+  const n = parseFloat(s.replace(/[^0-9.-]/g, ''));
+  return isNaN(n) ? 0 : n;
+}
+
+function calcItemTotal(item: LineItem): number {
+  const qtyNum = parseNum(item.qty);
+  const price = parseNum(item.unitPrice);
+  if (item.qty.trim() === '' || item.unit.toLowerCase() === 'lot') {
+    // Lot item — use manual total
+    return parseNum(item.total);
+  }
+  if (qtyNum > 0 && price > 0) return qtyNum * price;
+  return parseNum(item.total);
+}
+
+function escHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function fromDefault(d: LineItemDefault): LineItem {
+  return {
+    id: crypto.randomUUID(),
+    description: d.description,
+    qty: d.qty,
+    unit: d.unit,
+    unitPrice: d.unitPrice > 0 ? String(d.unitPrice) : '',
+    total: d.total > 0 ? String(d.total) : '',
+  };
+}
 
 export default function ContactTemplateModal({ contact, onClose, onDocumentSaved }: Props) {
   const { profile } = useAuth();
@@ -52,6 +123,11 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>('all');
 
+  // Line items state (for customer-service-agreement templates)
+  const [lineItems, setLineItems] = useState<LineItem[]>([]);
+  const [taxRate, setTaxRate] = useState('0');
+  const [depositAmount, setDepositAmount] = useState('');
+
   // Load company profile
   useEffect(() => {
     if (!profile?.company_id) return;
@@ -60,26 +136,109 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
       .catch(() => {});
   }, [profile?.company_id]);
 
-  // Build preview content with live values
+  const isAgreement = selected?.templateType === 'customer-service-agreement';
+
+  // Initialize line items when template is selected
+  useEffect(() => {
+    if (!selected) return;
+    if (selected.templateType === 'customer-service-agreement') {
+      const defaults = (selected as any).lineItemDefaults as LineItemDefault[] | undefined;
+      if (defaults && defaults.length > 0) {
+        setLineItems(defaults.map(fromDefault));
+      } else {
+        setLineItems([{ id: crypto.randomUUID(), description: '', qty: '', unit: '', unitPrice: '', total: '' }]);
+      }
+      // Pre-fill tax rate if in fields
+      const taxField = selected.fields?.find(f => f.key === 'TAX_RATE');
+      if (taxField?.defaultValue) setTaxRate(taxField.defaultValue);
+    }
+    // Pre-fill field defaults
+    const defaults: Record<string, string> = {};
+    selected.fields?.forEach(f => {
+      if (f.defaultValue && !isCostField(f.key) && !TERMS_FIELDS.includes(f.key)) {
+        defaults[f.key] = f.defaultValue;
+      }
+      if (f.defaultValue && TERMS_FIELDS.includes(f.key)) {
+        defaults[f.key] = f.defaultValue;
+      }
+    });
+    setFieldValues(defaults);
+  }, [selected]);
+
+  // Computed totals
+  const subtotal = useMemo(() => lineItems.reduce((sum, item) => sum + calcItemTotal(item), 0), [lineItems]);
+  const taxAmount = useMemo(() => subtotal * parseNum(taxRate) / 100, [subtotal, taxRate]);
+  const totalAmount = useMemo(() => subtotal + taxAmount, [subtotal, taxAmount]);
+  const depositNum = useMemo(() => parseNum(depositAmount), [depositAmount]);
+  const balanceDue = useMemo(() => totalAmount - depositNum, [totalAmount, depositNum]);
+
+  // Build preview HTML
   const previewContent = useMemo(() => {
     if (!selected) return '';
-    const base = buildContactOverrides(
-      contact,
-      companyProfile,
-      profile
-    );
+    const base = buildContactOverrides(contact, companyProfile, profile);
     const merged = { ...base, ...fieldValues };
-    return fillTemplateVars(selected.content, merged);
-  }, [selected, companyProfile, profile, fieldValues, contact]);
+    let html = fillTemplateVars(selected.content, merged);
+
+    if (isAgreement) {
+      // Inject dynamic line item rows into the Cost Breakdown tbody
+      const rowsHtml = lineItems.map(item => {
+        const computedTotal = calcItemTotal(item);
+        const isLot = item.qty.trim() === '' || item.unit.toLowerCase() === 'lot';
+        const qtyDisplay = isLot ? 'Lot' : `${item.qty}${item.unit ? ' ' + item.unit : ''}`;
+        const priceDisplay = (!isLot && parseNum(item.unitPrice) > 0) ? `$${fmt(parseNum(item.unitPrice))}` : '—';
+        return `<tr><td>${escHtml(item.description || '—')}</td><td>${escHtml(qtyDisplay)}</td><td>${priceDisplay}</td><td>$${fmt(computedTotal)}</td></tr>`;
+      }).join('\n      ');
+      html = html.replace(/<tbody>[\s\S]*?<\/tbody>/, `<tbody>\n      ${rowsHtml}\n    </tbody>`);
+
+      // Replace totals with computed values
+      html = html.replace(/\{\{SUBTOTAL\}\}/g, `$${fmt(subtotal)}`);
+      html = html.replace(/\{\{TAX_RATE\}\}/g, taxRate || '0');
+      html = html.replace(/\{\{TAX_AMOUNT\}\}/g, `$${fmt(taxAmount)}`);
+      html = html.replace(/\{\{TOTAL_AMOUNT\}\}/g, `$${fmt(totalAmount)}`);
+      html = html.replace(/\{\{DEPOSIT_AMOUNT\}\}/g, depositAmount ? `$${fmt(depositNum)}` : '—');
+      html = html.replace(/\{\{BALANCE_DUE\}\}/g, depositAmount ? `$${fmt(balanceDue)}` : '—');
+    }
+    return html;
+  }, [selected, companyProfile, profile, fieldValues, lineItems, taxRate, depositAmount, isAgreement, subtotal, taxAmount, totalAmount, depositNum, balanceDue, contact]);
 
   const handleSelect = (t: DocumentTemplate) => {
     setSelected(t);
     setFieldValues({});
+    setLineItems([]);
+    setTaxRate('0');
+    setDepositAmount('');
   };
 
   const handleBack = () => {
     setSelected(null);
     setFieldValues({});
+    setLineItems([]);
+  };
+
+  // Line item CRUD
+  const addLineItem = () => {
+    setLineItems(prev => [...prev, { id: crypto.randomUUID(), description: '', qty: '', unit: '', unitPrice: '', total: '' }]);
+  };
+
+  const removeLineItem = (id: string) => {
+    setLineItems(prev => prev.filter(item => item.id !== id));
+  };
+
+  const updateLineItem = (id: string, field: keyof LineItem, value: string) => {
+    setLineItems(prev => prev.map(item => {
+      if (item.id !== id) return item;
+      const updated = { ...item, [field]: value };
+      // Auto-calc total when qty or unitPrice changes
+      if (field === 'qty' || field === 'unitPrice') {
+        const qtyNum = parseNum(updated.qty);
+        const price = parseNum(updated.unitPrice);
+        const isLot = updated.qty.trim() === '' || updated.unit.toLowerCase() === 'lot';
+        if (!isLot && qtyNum > 0 && price > 0) {
+          updated.total = String((qtyNum * price).toFixed(2));
+        }
+      }
+      return updated;
+    }));
   };
 
   const handleSave = async () => {
@@ -88,17 +247,32 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
       return;
     }
 
-    // Check for unfilled required fields
-    const base = buildContactOverrides(
-      contact,
-      companyProfile,
-      profile
-    );
+    const base = buildContactOverrides(contact, companyProfile, profile);
     const merged = { ...base, ...fieldValues };
-    const finalHtml = fillTemplateVars(selected.content, merged);
-    const stillUnfilled = getUnfilledVars(finalHtml);
-    
-    if (stillUnfilled.length > 0) {
+    const finalHtml = (() => {
+      let html = fillTemplateVars(selected.content, merged);
+      if (isAgreement) {
+        const rowsHtml = lineItems.map(item => {
+          const computedTotal = calcItemTotal(item);
+          const isLot = item.qty.trim() === '' || item.unit.toLowerCase() === 'lot';
+          const qtyDisplay = isLot ? 'Lot' : `${item.qty}${item.unit ? ' ' + item.unit : ''}`;
+          const priceDisplay = (!isLot && parseNum(item.unitPrice) > 0) ? `$${fmt(parseNum(item.unitPrice))}` : '—';
+          return `<tr><td>${escHtml(item.description || '—')}</td><td>${escHtml(qtyDisplay)}</td><td>${priceDisplay}</td><td>$${fmt(computedTotal)}</td></tr>`;
+        }).join('\n');
+        html = html.replace(/<tbody>[\s\S]*?<\/tbody>/, `<tbody>${rowsHtml}</tbody>`);
+        html = html.replace(/\{\{SUBTOTAL\}\}/g, `$${fmt(subtotal)}`);
+        html = html.replace(/\{\{TAX_RATE\}\}/g, taxRate || '0');
+        html = html.replace(/\{\{TAX_AMOUNT\}\}/g, `$${fmt(taxAmount)}`);
+        html = html.replace(/\{\{TOTAL_AMOUNT\}\}/g, `$${fmt(totalAmount)}`);
+        html = html.replace(/\{\{DEPOSIT_AMOUNT\}\}/g, depositAmount ? `$${fmt(depositNum)}` : '—');
+        html = html.replace(/\{\{BALANCE_DUE\}\}/g, depositAmount ? `$${fmt(balanceDue)}` : '—');
+      }
+      return html;
+    })();
+
+    // Check for unfilled vars (non-agreement templates only check fields; agreement skips cost vars)
+    const stillUnfilled = getUnfilledVars(finalHtml).filter(v => !isCostField(v) && !TERMS_FIELDS.includes(v) || (!isAgreement));
+    if (!isAgreement && stillUnfilled.length > 0) {
       toast.error(`Please fill in: ${stillUnfilled.slice(0, 3).join(', ')}${stillUnfilled.length > 3 ? '...' : ''}`);
       return;
     }
@@ -170,31 +344,58 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
     return ['all', ...Array.from(cats)];
   }, [templates]);
 
-  const editableFields = useMemo(() => {
-    if (!selected) return [];
-    
-    // Get auto-filled fields from contact/company data
-    const autoFilledFields = buildContactOverrides(contact, companyProfile, profile);
-    const autoFilledKeys = Object.keys(autoFilledFields).filter(key => autoFilledFields[key]);
-    
-    // Show ONLY fields that are NOT auto-filled
-    if (selected.fields && selected.fields.length > 0) {
-      return selected.fields
-        .map(f => f.key)
-        .filter(key => !autoFilledKeys.includes(key));
-    }
-    
-    // Fallback: show all variables found in template that aren't auto-filled
-    const merged = { ...autoFilledFields, ...fieldValues };
-    const html = fillTemplateVars(selected.content, merged);
-    return getUnfilledVars(html).filter(key => !autoFilledKeys.includes(key));
+  // Categorized editable fields
+  const { docInfoFields, specFields, termsFields } = useMemo(() => {
+    if (!selected) return { docInfoFields: [], specFields: [], termsFields: [] };
+    const base = buildContactOverrides(contact, companyProfile, profile);
+    const autoFilled = Object.keys(base).filter(k => base[k]);
+
+    const allEditable = (selected.fields ?? [])
+      .map(f => f.key)
+      .filter(k => !autoFilled.includes(k));
+
+    return {
+      docInfoFields: allEditable.filter(k => DOC_INFO_FIELDS.includes(k)),
+      specFields: allEditable.filter(k => !DOC_INFO_FIELDS.includes(k) && !isCostField(k) && !TERMS_FIELDS.includes(k)),
+      termsFields: allEditable.filter(k => TERMS_FIELDS.includes(k)),
+    };
   }, [selected, contact, companyProfile, profile]);
 
-  const unfilledCount = useMemo(() => {
-    return editableFields.filter(field => !fieldValues[field]).length;
-  }, [editableFields, fieldValues]);
+  const getFieldMeta = (key: string) => selected?.fields?.find(f => f.key === key);
 
-  // Template list view
+  const renderFieldInput = (key: string) => {
+    const meta = getFieldMeta(key);
+    const label = meta?.label || key.replace(/_/g, ' ');
+    const placeholder = meta?.placeholder || `Enter ${label.toLowerCase()}…`;
+    const type = meta?.type || 'text';
+    return (
+      <div key={key}>
+        <label className="block text-xs font-medium text-gray-600 mb-1">
+          {label}
+          {fieldValues[key] && <span className="ml-1 text-green-600 text-xs">✓</span>}
+        </label>
+        {type === 'textarea' ? (
+          <textarea
+            value={fieldValues[key] || ''}
+            onChange={e => setFieldValues(prev => ({ ...prev, [key]: e.target.value }))}
+            placeholder={placeholder}
+            rows={3}
+            className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+          />
+        ) : (
+          <input
+            type={type === 'date' ? 'date' : 'text'}
+            value={fieldValues[key] || ''}
+            onChange={e => setFieldValues(prev => ({ ...prev, [key]: e.target.value }))}
+            placeholder={placeholder}
+            className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        )}
+      </div>
+    );
+  };
+
+  // ── Template list view ──────────────────────────────────────────────────
   const renderList = () => (
     <div className="flex flex-col h-full">
       <div className="p-4 border-b border-gray-200 space-y-3">
@@ -214,9 +415,7 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
               key={cat}
               onClick={() => setActiveCategory(cat)}
               className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                activeCategory === cat
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                activeCategory === cat ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
               {cat === 'all' ? 'All Templates' : CATEGORY_LABELS[cat] || cat}
@@ -224,7 +423,6 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
           ))}
         </div>
       </div>
-
       <div className="flex-1 overflow-y-auto p-4">
         {filteredTemplates.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
@@ -240,8 +438,8 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
                 className="text-left p-4 border border-gray-200 rounded-xl hover:border-blue-400 hover:bg-blue-50 transition-all group"
               >
                 <div className="flex items-start justify-between gap-2 mb-2">
-                  <div className="w-9 h-9 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <DollarSign size={18} className="text-green-700" />
+                  <div className="w-9 h-9 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <FileText size={18} className="text-blue-700" />
                   </div>
                   <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${CATEGORY_COLORS[t.category] || 'bg-gray-100 text-gray-700'}`}>
                     {CATEGORY_LABELS[t.category] || t.category}
@@ -249,13 +447,11 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
                 </div>
                 <p className="font-semibold text-gray-900 text-sm leading-snug group-hover:text-blue-700">{t.name}</p>
                 <p className="text-xs text-gray-500 mt-1 line-clamp-2">{t.description}</p>
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {t.tags.slice(0, 3).map(tag => (
-                    <span key={tag} className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">
-                      {tag}
-                    </span>
-                  ))}
-                </div>
+                {t.templateType === 'customer-service-agreement' && (
+                  <span className="inline-flex items-center gap-1 mt-2 text-xs text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
+                    <Calculator size={10} /> Fillable cost breakdown
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -264,99 +460,233 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
     </div>
   );
 
-  // Document editor view
+  // ── Document editor view ────────────────────────────────────────────────
   const renderEditor = () => (
-    <div className="flex h-full">
-      {/* Left sidebar: Form fields */}
-      <div className="w-80 flex-shrink-0 border-r border-gray-200 overflow-y-auto p-4 space-y-4 bg-gray-50">
-        <button
-          onClick={handleBack}
-          className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 mb-2"
-        >
-          <ChevronLeft size={16} />
-          Back to templates
-        </button>
-        
-        <div>
-          <h3 className="font-semibold text-gray-900 mb-1">{selected!.name}</h3>
-          <p className="text-xs text-gray-500">Filling in data for {getContactFullName(contact)}</p>
-        </div>
+    <div className="flex h-full min-h-0">
+      {/* LEFT: Form panel */}
+      <div className="w-[420px] flex-shrink-0 border-r border-gray-200 overflow-y-auto bg-gray-50">
+        <div className="p-4 space-y-5">
+          {/* Back + title */}
+          <div>
+            <button onClick={handleBack} className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-800 mb-3">
+              <ChevronLeft size={14} /> Back to templates
+            </button>
+            <h3 className="font-bold text-gray-900 text-sm leading-snug">{selected!.name}</h3>
+            <p className="text-xs text-gray-500 mt-0.5">Filling in for <strong>{getContactFullName(contact)}</strong> — customer & company info is auto-filled.</p>
+          </div>
 
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-          <p className="text-xs font-medium text-blue-900 mb-1">📝 Fill In Values</p>
-          <p className="text-xs text-blue-700 leading-relaxed">
-            Customer and company info is auto-filled. Enter project-specific values below to complete the document.
-          </p>
-        </div>
+          {/* Document Info */}
+          {docInfoFields.length > 0 && (
+            <section>
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Document Info</p>
+              <div className="space-y-2 bg-white rounded-xl border border-gray-200 p-3">
+                {docInfoFields.map(renderFieldInput)}
+              </div>
+            </section>
+          )}
 
-        {editableFields.length > 0 && (
-          <div className="space-y-3">
-            {editableFields.map((field, index) => {
-              // Add section headers for better organization
-              const showSectionHeader = (
-                (field === 'ESTIMATE_NUMBER' && index === 0) ||
-                (field === 'SHINGLE_BRAND') ||
-                (field === 'TEAROFF_RATE') ||
-                (field === 'SUBTOTAL') ||
-                (field === 'WARRANTY_PERIOD')
-              );
-              
-              const sectionTitle = 
-                field === 'ESTIMATE_NUMBER' ? '📋 Basic Info' :
-                field === 'SHINGLE_BRAND' ? '🏠 Project Specs' :
-                field === 'TEAROFF_RATE' ? '💰 Cost Breakdown' :
-                field === 'SUBTOTAL' ? '🧾 Totals' :
-                field === 'WARRANTY_PERIOD' ? '📜 Terms' : '';
-              
-              return (
-                <div key={field}>
-                  {showSectionHeader && sectionTitle && (
-                    <div className="text-xs font-bold text-gray-900 mt-4 mb-2 pt-3 border-t border-gray-200 first:mt-0 first:pt-0 first:border-t-0">
-                      {sectionTitle}
-                    </div>
-                  )}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      {field.replace(/_/g, ' ')}
-                      {fieldValues[field] && <span className="ml-1 text-green-600">✓</span>}
-                    </label>
+          {/* Project Specs */}
+          {specFields.length > 0 && (
+            <section>
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Project Specs</p>
+              <div className="space-y-2 bg-white rounded-xl border border-gray-200 p-3">
+                {specFields.map(renderFieldInput)}
+              </div>
+            </section>
+          )}
+
+          {/* Cost Breakdown — only for customer-service-agreement */}
+          {isAgreement && (
+            <section>
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Cost Breakdown</p>
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                {/* Table header */}
+                <div className="grid grid-cols-[1fr_70px_75px_75px_28px] gap-1 px-3 py-2 bg-gray-50 border-b border-gray-200">
+                  <span className="text-xs font-semibold text-gray-500">Description</span>
+                  <span className="text-xs font-semibold text-gray-500">Qty</span>
+                  <span className="text-xs font-semibold text-gray-500">Unit Price</span>
+                  <span className="text-xs font-semibold text-gray-500 text-right">Total</span>
+                  <span />
+                </div>
+
+                {/* Line item rows */}
+                <div className="divide-y divide-gray-100">
+                  {lineItems.map((item) => {
+                    const isLot = item.qty.trim() === '' || item.unit.toLowerCase() === 'lot';
+                    const computedTotal = calcItemTotal(item);
+                    return (
+                      <div key={item.id} className="grid grid-cols-[1fr_70px_75px_75px_28px] gap-1 px-3 py-2 items-start hover:bg-gray-50">
+                        {/* Description */}
+                        <div className="space-y-1">
+                          <input
+                            value={item.description}
+                            onChange={e => updateLineItem(item.id, 'description', e.target.value)}
+                            placeholder="Description…"
+                            className="w-full px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          />
+                          <div className="flex gap-1">
+                            <input
+                              value={item.unit}
+                              onChange={e => updateLineItem(item.id, 'unit', e.target.value)}
+                              placeholder="sq / LF / Lot"
+                              className="w-full px-2 py-0.5 text-xs border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-gray-500"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Qty */}
+                        <input
+                          value={item.qty}
+                          onChange={e => updateLineItem(item.id, 'qty', e.target.value)}
+                          placeholder="—"
+                          className="px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-right"
+                        />
+
+                        {/* Unit Price */}
+                        <div className="relative">
+                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">$</span>
+                          <input
+                            value={item.unitPrice}
+                            onChange={e => updateLineItem(item.id, 'unitPrice', e.target.value)}
+                            placeholder={isLot ? '—' : '0.00'}
+                            disabled={isLot}
+                            className="w-full pl-4 pr-1 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-right disabled:bg-gray-50 disabled:text-gray-400"
+                          />
+                        </div>
+
+                        {/* Total */}
+                        <div className="relative">
+                          {isLot ? (
+                            <>
+                              <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">$</span>
+                              <input
+                                value={item.total}
+                                onChange={e => updateLineItem(item.id, 'total', e.target.value)}
+                                placeholder="0.00"
+                                className="w-full pl-4 pr-1 py-1 text-xs border border-blue-300 rounded bg-blue-50 focus:outline-none focus:ring-1 focus:ring-blue-500 text-right font-medium"
+                              />
+                            </>
+                          ) : (
+                            <div className="px-2 py-1 text-xs text-right font-semibold text-gray-800 bg-green-50 border border-green-200 rounded min-h-[26px] flex items-center justify-end">
+                              {computedTotal > 0 ? `$${fmt(computedTotal)}` : '—'}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Delete */}
+                        <button
+                          onClick={() => removeLineItem(item.id)}
+                          className="p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors mt-0.5"
+                          title="Remove line"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Add line button */}
+                <div className="px-3 py-2 border-t border-gray-100">
+                  <button
+                    onClick={addLineItem}
+                    className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 font-medium"
+                  >
+                    <Plus size={13} /> Add Line Item
+                  </button>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* Totals — only for customer-service-agreement */}
+          {isAgreement && (
+            <section>
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Totals</p>
+              <div className="bg-white rounded-xl border border-gray-200 p-3 space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600">Subtotal</span>
+                  <span className="font-semibold">${fmt(subtotal)}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600 flex-shrink-0">Tax Rate</span>
+                  <div className="flex items-center gap-1 ml-auto">
                     <input
                       type="text"
-                      value={fieldValues[field] || ''}
-                      onChange={e => setFieldValues(prev => ({ ...prev, [field]: e.target.value }))}
-                      placeholder={`Enter ${field.replace(/_/g, ' ').toLowerCase()}...`}
-                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      value={taxRate}
+                      onChange={e => setTaxRate(e.target.value)}
+                      className="w-16 px-2 py-1 text-sm text-right border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-500">%</span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600">Tax Amount</span>
+                  <span>${fmt(taxAmount)}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm font-bold border-t border-gray-200 pt-2">
+                  <span>Total</span>
+                  <span className="text-blue-700 text-base">${fmt(totalAmount)}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600 flex-shrink-0">Deposit</span>
+                  <div className="flex items-center gap-1 ml-auto">
+                    <span className="text-sm text-gray-400">$</span>
+                    <input
+                      type="text"
+                      value={depositAmount}
+                      onChange={e => setDepositAmount(e.target.value)}
+                      placeholder="0.00"
+                      className="w-24 px-2 py-1 text-sm text-right border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        )}
+                <div className="flex items-center justify-between text-sm border-t border-gray-100 pt-1">
+                  <span className="text-gray-600">Balance Due</span>
+                  <span className="font-semibold">{depositAmount ? `$${fmt(balanceDue)}` : '—'}</span>
+                </div>
+              </div>
+            </section>
+          )}
 
-        {unfilledCount === 0 && editableFields.length > 0 && (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-            <p className="text-xs font-medium text-green-900 mb-1">✓ All fields filled</p>
-            <p className="text-xs text-green-700">Document is ready to save.</p>
-          </div>
-        )}
+          {/* Terms */}
+          {termsFields.length > 0 && (
+            <section>
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Terms</p>
+              <div className="space-y-2 bg-white rounded-xl border border-gray-200 p-3">
+                {termsFields.map(renderFieldInput)}
+              </div>
+            </section>
+          )}
+
+          {/* Legal doc fields (non-agreement) */}
+          {!isAgreement && (
+            <section>
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Fill In Values</p>
+              <div className="space-y-2 bg-white rounded-xl border border-gray-200 p-3">
+                {[...docInfoFields, ...specFields, ...termsFields].map(renderFieldInput)}
+              </div>
+            </section>
+          )}
+        </div>
       </div>
 
-      {/* Right: Document preview */}
-      <div className="flex-1 flex flex-col overflow-hidden bg-white">
-        <div className="p-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
-          <p className="text-xs font-medium text-gray-600">Live Document Preview</p>
-          {unfilledCount > 0 && (
-            <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
-              {unfilledCount} field(s) still blank
+      {/* RIGHT: Preview */}
+      <div className="flex-1 flex flex-col overflow-hidden bg-gray-100">
+        <div className="px-4 py-2 border-b border-gray-200 bg-white flex items-center justify-between">
+          <p className="text-xs font-medium text-gray-500">Live Preview</p>
+          {isAgreement && (
+            <span className="text-xs text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full font-medium">
+              Total: ${fmt(totalAmount)}
             </span>
           )}
         </div>
-        <div className="flex-1 overflow-auto p-6 bg-gray-100">
+        <div className="flex-1 overflow-auto p-4">
           <div className="max-w-4xl mx-auto bg-white shadow-lg rounded-lg overflow-hidden">
             <iframe
               srcDoc={previewContent}
-              className="w-full h-full min-h-[800px] border-0"
+              className="w-full border-0"
+              style={{ minHeight: '800px', height: '100%' }}
               title="Document Preview"
               sandbox="allow-scripts allow-same-origin"
             />
@@ -368,23 +698,27 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl flex flex-col w-full max-w-7xl" style={{ height: '90vh' }}>
+      <div className="bg-white rounded-2xl shadow-2xl flex flex-col w-full max-w-7xl" style={{ height: '92vh' }}>
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
-          <div>
-            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-              <FileText size={20} className="text-blue-600" />
-              Use Document Template
-            </h2>
-            <p className="text-sm text-gray-500 mt-0.5">
-              Select a template — customer and company details will be auto-filled.
-            </p>
+        <div className="flex items-center justify-between px-6 py-3.5 border-b border-gray-200 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            {selected && (
+              <button onClick={handleBack} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800">
+                <ChevronLeft size={16} /> Back
+              </button>
+            )}
+            {selected && <span className="text-gray-300">|</span>}
+            <div>
+              <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                <FileText size={18} className="text-blue-600" />
+                {selected ? selected.name : 'Use Document Template'}
+              </h2>
+              {selected && (
+                <p className="text-xs text-gray-400 mt-0">— {getContactFullName(contact)}</p>
+              )}
+            </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            title="Close"
-          >
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="Close">
             <X size={20} className="text-gray-500" />
           </button>
         </div>
@@ -394,14 +728,16 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
           {selected ? renderEditor() : renderList()}
         </div>
 
-        {/* Footer (only show when editing) */}
+        {/* Footer (editor only) */}
         {selected && (
-          <div className="p-4 border-t border-gray-200 flex items-center justify-between gap-3 flex-shrink-0">
-            <p className="text-xs text-gray-500">
-              {unfilledCount > 0
-                ? `${unfilledCount} field(s) still blank — please fill them in before saving.`
-                : '✓ All fields filled. Ready to save.'}
-            </p>
+          <div className="px-5 py-3 border-t border-gray-200 flex items-center justify-between gap-3 flex-shrink-0 bg-gray-50">
+            {isAgreement ? (
+              <p className="text-xs text-gray-500">
+                <strong>{lineItems.length}</strong> line item{lineItems.length !== 1 ? 's' : ''} · Total: <strong className="text-blue-700">${fmt(totalAmount)}</strong>
+              </p>
+            ) : (
+              <p className="text-xs text-gray-500">Fill in all fields before saving.</p>
+            )}
             <div className="flex gap-2">
               <button
                 onClick={onClose}
@@ -416,9 +752,9 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
                 className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSaving ? (
-                  <><Loader2 size={16} className="animate-spin" /> Saving…</>
+                  <><Loader2 size={15} className="animate-spin" /> Saving…</>
                 ) : (
-                  <><Save size={16} /> Save to {getContactFullName(contact)}</>
+                  <><Save size={15} /> Save to {getContactFullName(contact)}</>
                 )}
               </button>
             </div>
