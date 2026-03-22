@@ -171,6 +171,32 @@ export default function PipelineBoard() {
     dispatch({ type: 'SELECT_CONTACT', payload: contactId });
   };
 
+  const handleAcknowledgeClick = async (e: React.MouseEvent, contact: Contact) => {
+    e.stopPropagation();
+    try {
+      if (effectiveCompanyId) {
+        await db.updateContact(contact.id, { status: 'ordering_material', status_changed_at: new Date().toISOString() });
+      }
+      dispatch({
+        type: 'UPDATE_CONTACT_STATUS',
+        payload: { contactId: contact.id, status: 'ordering_material' },
+      });
+      toast.success(`${getContactFullName(contact)} acknowledged — ordering materials`);
+      if (effectiveCompanyId) {
+        fireAutomationEvent('contact_status_changed', effectiveCompanyId, {
+          contactId: contact.id,
+          contactName: getContactFullName(contact),
+          contactEmail: contact.email,
+          oldStatus: contact.status,
+          newStatus: 'ordering_material',
+        }).catch(() => {});
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Failed to acknowledge';
+      toast.error(msg);
+    }
+  };
+
   const handleNextStepClick = (e: React.MouseEvent, contact: Contact, nextStep: NextStep) => {
     e.stopPropagation();
     switch (nextStep.action) {
@@ -695,6 +721,16 @@ export default function PipelineBoard() {
                               </button>
                             );
                           })()}
+                          {currentBoard?.type === 'production' && column.status === 'signed' && (
+                            <button
+                              onClick={(e) => handleAcknowledgeClick(e, contact)}
+                              className="mt-3 w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-50 text-amber-700 hover:opacity-75 transition-opacity border border-amber-200"
+                            >
+                              <Package size={12} className="flex-shrink-0" />
+                              <span className="truncate">Acknowledge & Order Materials</span>
+                              <ArrowRight size={12} className="ml-auto flex-shrink-0 opacity-60" />
+                            </button>
+                          )}
                         </div>
                       );
                     })}
