@@ -1,5 +1,6 @@
 // Consolidated document handler: estimates (sign/track) + change orders
 import { createClient } from '@supabase/supabase-js';
+import nodemailer from 'nodemailer';
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -7,9 +8,27 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY;
 
 const db = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-async function sendEmail(to, subject, html, from = '614 Restore <scopemgr@614restore.com>') {
-  if (!RESEND_API_KEY) return;
+// smtpConfig: { host, port, user, pass, secure, fromName, fromEmail } — if provided, use SMTP; else Resend
+async function sendEmail(to, subject, html, from = '614 Restore <scopemgr@614restore.com>', smtpConfig = null) {
   try {
+    if (smtpConfig?.host && smtpConfig?.user && smtpConfig?.pass) {
+      const transporter = nodemailer.createTransport({
+        host: smtpConfig.host,
+        port: Number(smtpConfig.port) || 587,
+        secure: Boolean(smtpConfig.secure),
+        auth: { user: smtpConfig.user, pass: smtpConfig.pass },
+      });
+      const fromAddr = smtpConfig.fromEmail || smtpConfig.user;
+      const fromName = smtpConfig.fromName || fromAddr;
+      await transporter.sendMail({
+        from: `${fromName} <${fromAddr}>`,
+        to,
+        subject,
+        html,
+      });
+      return;
+    }
+    if (!RESEND_API_KEY) { console.warn('sendEmail: no SMTP config and RESEND_API_KEY not set'); return; }
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${RESEND_API_KEY}` },
@@ -19,6 +38,25 @@ async function sendEmail(to, subject, html, from = '614 Restore <scopemgr@614res
   } catch (err) {
     console.error('sendEmail error:', err?.message || err);
   }
+}
+
+async function getCompanySmtp(companyId) {
+  if (!companyId) return null;
+  const { data } = await db
+    .from('companies')
+    .select('smtp_host,smtp_port,smtp_user,smtp_pass,smtp_secure,from_name,from_email,name')
+    .eq('id', companyId)
+    .single();
+  if (!data?.smtp_host) return null;
+  return {
+    host: data.smtp_host,
+    port: data.smtp_port,
+    user: data.smtp_user,
+    pass: data.smtp_pass,
+    secure: data.smtp_secure,
+    fromName: data.from_name || data.name,
+    fromEmail: data.from_email,
+  };
 }
 
 function setCors(req, res) {
@@ -190,13 +228,14 @@ export default async function handler(req, res) {
     if (doc.sent_by) {
       const { data: sender } = await db.from('profiles').select('email,full_name').eq('id', doc.sent_by).single();
       await db.from('notifications').insert({ user_id: doc.sent_by, type: 'document_viewed', title: 'Document Opened', message: `"${doc.name}" has been opened by the customer`, link: '/documents' });
+      const smtp = await getCompanySmtp(doc.company_id);
       const fromAddress = doc.companies?.from_email
         ? `${doc.companies.name || 'Your contractor'} <${doc.companies.from_email}>`
         : '614 Restore <scopemgr@614restore.com>';
       if (sender?.email) {
         await sendEmail(sender.email, `Document Opened: ${doc.name}`,
           `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;"><h2 style="color:#2563eb;">📧 Document Opened</h2><p>Hi ${sender.full_name || 'there'},</p><p>The customer has just opened <strong>"${doc.name}"</strong>.</p><p style="color:#6b7280;font-size:13px;">You'll receive another notification once they sign.</p></div>`,
-          fromAddress);
+          fromAddress, smtp);
       }
     }
     return res.status(200).json({ success: true });
@@ -226,17 +265,18 @@ export default async function handler(req, res) {
       const { data: sender } = await db.from('profiles').select('email,full_name').eq('id', doc.sent_by).single();
       await db.from('notifications').insert({ user_id: doc.sent_by, type: 'document_signed', title: 'Document Signed', message: `"${doc.name}" has been signed by ${signedBy}`, link: '/documents' });
       const appUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://crm-kanban-integrate.vercel.app';
+      const smtp = await getCompanySmtp(doc.company_id);
       const companyFromEmail = doc.companies?.from_email || null;
       const fromAddress = companyFromEmail ? `${doc.companies?.name || 'Your contractor'} <${companyFromEmail}>` : '614 Restore <scopemgr@614restore.com>';
       if (sender?.email) {
         await sendEmail(sender.email, `✅ Document Signed: ${doc.name}`,
           `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;"><h2 style="color:#16a34a;">✅ Document Signed!</h2><p>Hi ${sender.full_name || 'there'},</p><p><strong>${signedBy}</strong> has signed <strong>"${doc.name}"</strong>. The signed copy has been saved to the customer's file.</p><a href="${appUrl}" style="display:inline-block;background:#16a34a;color:white;padding:12px 24px;text-decoration:none;border-radius:6px;margin-top:16px;">Open CRM</a></div>`,
-          fromAddress);
+          fromAddress, smtp);
       }
       if (doc.contact_email) {
         await sendEmail(doc.contact_email, `Your signed copy: ${doc.name}`,
           `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;"><h2 style="color:#1e40af;">Your Signed Document</h2><p>Hi ${signedBy},</p><p>This confirms that you have electronically signed <strong>"${doc.name}"</strong> on ${new Date().toLocaleDateString()}.</p><p style="color:#6b7280;font-size:12px;">This email serves as your receipt. Please save it for your records.</p></div>`,
-          fromAddress);
+          fromAddress, smtp);
       }
     }
     return res.status(200).json({ success: true });

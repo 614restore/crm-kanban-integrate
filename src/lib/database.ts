@@ -34,6 +34,12 @@ export interface DbCompany {
   tax_id?: string;
   from_email?: string;
   from_name?: string;
+  // Custom SMTP settings (add-smtp-settings-20260322.sql)
+  smtp_host?: string;
+  smtp_port?: number;
+  smtp_user?: string;
+  smtp_pass?: string;
+  smtp_secure?: boolean;
   subscription_plan?: 'starter' | 'pro' | 'business' | 'scale' | 'trial';
   subscription_status?: 'active' | 'past_due' | 'canceled' | 'trialing';
   trial_ends_at?: string;
@@ -607,6 +613,18 @@ class DatabaseService {
       if (error) { console.error('Error updating company:', error); return null; }
       return data;
     } catch (err) { console.error('updateCompany timed out or failed:', err); return null; }
+  }
+
+  async updateSmtpSettings(companyId: string, settings: Pick<DbCompany, 'smtp_host' | 'smtp_port' | 'smtp_user' | 'smtp_pass' | 'smtp_secure'>): Promise<boolean> {
+    assertCompanyId(companyId, 'updateSmtpSettings');
+    try {
+      const { error } = await this.raceTimeout(
+        supabase.from('companies').update({ ...settings, updated_at: new Date().toISOString() }).eq('id', companyId),
+        5000, 'updateSmtpSettings'
+      );
+      if (error) { console.error('Error updating SMTP settings:', error); return false; }
+      return true;
+    } catch (err) { console.error('updateSmtpSettings failed:', err); return false; }
   }
 
   // Contact operations

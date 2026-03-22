@@ -46,6 +46,10 @@ import {
   DollarSign,
   Receipt,
   ToggleLeft,
+  Eye,
+  EyeOff,
+  Send,
+  Server,
 } from 'lucide-react';
 import { supabase, isDemoMode } from '@/lib/supabase';
 import { ensureDefaultLeadSources } from '@/lib/setupCompany';
@@ -68,6 +72,11 @@ interface CompanyFormData {
   tax_id: string;
   from_email: string;
   from_name: string;
+  smtp_host: string;
+  smtp_port: string;
+  smtp_user: string;
+  smtp_pass: string;
+  smtp_secure: boolean;
 }
 
 function normalizeCompanyName(rawName?: string | null, email?: string | null): string {
@@ -101,6 +110,9 @@ export default function SettingsView() {
   const [isSavingLeadSource, setIsSavingLeadSource] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
   const [isSavingCompany, setIsSavingCompany] = useState(false);
+  const [isSavingSmtp, setIsSavingSmtp] = useState(false);
+  const [isTestingSmtp, setIsTestingSmtp] = useState(false);
+  const [showSmtpPass, setShowSmtpPass] = useState(false);
 
   // Integration hooks
   const {
@@ -134,6 +146,11 @@ export default function SettingsView() {
     tax_id: '',
     from_email: '',
     from_name: '',
+    smtp_host: '',
+    smtp_port: '587',
+    smtp_user: '',
+    smtp_pass: '',
+    smtp_secure: false,
   });
   
   const [profileForm, setProfileForm] = useState({
@@ -276,6 +293,11 @@ export default function SettingsView() {
             tax_id: company.tax_id || '',
             from_email: company.from_email || '',
             from_name: company.from_name || '',
+            smtp_host: company.smtp_host || '',
+            smtp_port: String(company.smtp_port || 587),
+            smtp_user: company.smtp_user || '',
+            smtp_pass: company.smtp_pass || '',
+            smtp_secure: company.smtp_secure ?? false,
           });
           if (company.logo_url && !company.logo_url.startsWith('blob:')) {
             setCompanyLogo(company.logo_url);
@@ -394,6 +416,44 @@ export default function SettingsView() {
       toast.error(errorMessage);
     } finally {
       setIsSavingCompany(false);
+    }
+  };
+
+  const handleSaveSmtp = async () => {
+    const companyId = effectiveCompanyId || await resolveCompanyId();
+    if (!companyId) { toast.error('Unable to find your company.'); return; }
+    setIsSavingSmtp(true);
+    try {
+      const ok = await db.updateSmtpSettings(companyId, {
+        smtp_host: companyForm.smtp_host || undefined,
+        smtp_port: companyForm.smtp_port ? parseInt(companyForm.smtp_port, 10) : undefined,
+        smtp_user: companyForm.smtp_user || undefined,
+        smtp_pass: companyForm.smtp_pass || undefined,
+        smtp_secure: companyForm.smtp_secure,
+      });
+      if (ok) toast.success('SMTP settings saved.');
+      else toast.error('Failed to save SMTP settings.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save SMTP settings.');
+    } finally {
+      setIsSavingSmtp(false);
+    }
+  };
+
+  const handleTestSmtp = async () => {
+    setIsTestingSmtp(true);
+    try {
+      const { sendEmail } = await import('@/lib/emailApi');
+      await sendEmail({
+        to: profile?.email || user?.email || '',
+        subject: 'SMTP Test — CRM',
+        html: '<p>Your custom SMTP settings are working correctly.</p>',
+      });
+      toast.success('Test email sent! Check your inbox.');
+    } catch (err) {
+      toast.error(`Test failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setIsTestingSmtp(false);
     }
   };
 
@@ -1548,10 +1608,12 @@ export default function SettingsView() {
             {/* Email Sender Settings */}
             <div>
               <h3 className="text-xl font-semibold text-gray-900 mb-6">Email Sender Settings</h3>
-              <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
-                <p className="text-sm text-gray-500 mb-2">
-                  Configure the sender name and email address used when sending invoices, estimates, and other emails to your customers.
-                  Leave blank to use the system default.
+
+              {/* Display name + from address */}
+              <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4 mb-6">
+                <p className="text-sm text-gray-500">
+                  The name and address shown in the "From" field on all outgoing emails.
+                  {!companyForm.smtp_host && ' Leave blank to use the system default.'}
                 </p>
                 <div className="grid grid-cols-2 gap-6">
                   <div>
@@ -1574,7 +1636,9 @@ export default function SettingsView() {
                       className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                       placeholder="invoices@yourdomain.com"
                     />
-                    <p className="text-xs text-gray-400 mt-1">Must be a verified domain in your email service (Resend, SendGrid, etc.)</p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {companyForm.smtp_host ? 'Must match your SMTP username / sending address.' : 'Used as the display address when sending via system mail.'}
+                    </p>
                   </div>
                 </div>
                 <button
@@ -1582,18 +1646,104 @@ export default function SettingsView() {
                   disabled={isSavingCompany}
                   className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isSavingCompany ? (
-                    <>
-                      <Loader2 size={18} className="animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <Save size={18} />
-                      Save Email Settings
-                    </>
-                  )}
+                  {isSavingCompany ? <><Loader2 size={18} className="animate-spin" />Saving...</> : <><Save size={18} />Save Display Settings</>}
                 </button>
+              </div>
+
+              {/* Custom SMTP */}
+              <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
+                <div className="flex items-center gap-3">
+                  <Server size={20} className="text-gray-500" />
+                  <div>
+                    <h4 className="font-semibold text-gray-900">Custom SMTP Server</h4>
+                    <p className="text-sm text-gray-500">Send emails directly from your own mail server or provider (Gmail, Outlook, SendGrid, etc.). Leave blank to use the system default.</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-5">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">SMTP Host</label>
+                    <input
+                      type="text"
+                      value={companyForm.smtp_host}
+                      onChange={(e) => setCompanyForm({ ...companyForm, smtp_host: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                      placeholder="smtp.gmail.com"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Port</label>
+                    <input
+                      type="number"
+                      value={companyForm.smtp_port}
+                      onChange={(e) => setCompanyForm({ ...companyForm, smtp_port: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                      placeholder="587"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                    <input
+                      type="text"
+                      value={companyForm.smtp_user}
+                      onChange={(e) => setCompanyForm({ ...companyForm, smtp_user: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                      placeholder="you@yourdomain.com"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Password / App Password</label>
+                    <div className="relative">
+                      <input
+                        type={showSmtpPass ? 'text' : 'password'}
+                        value={companyForm.smtp_pass}
+                        onChange={(e) => setCompanyForm({ ...companyForm, smtp_pass: e.target.value })}
+                        className="w-full px-4 py-2 pr-10 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                        placeholder="••••••••••••"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSmtpPass(!showSmtpPass)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      >
+                        {showSmtpPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">For Gmail/Outlook, use an App Password — not your account password.</p>
+                  </div>
+                </div>
+
+                <label className="flex items-center gap-3 cursor-pointer w-fit">
+                  <input
+                    type="checkbox"
+                    checked={companyForm.smtp_secure}
+                    onChange={(e) => setCompanyForm({ ...companyForm, smtp_secure: e.target.checked })}
+                    className="w-4 h-4 rounded border-gray-300 text-blue-600"
+                  />
+                  <span className="text-sm text-gray-700">Use SSL/TLS (port 465) — uncheck for STARTTLS (port 587)</span>
+                </label>
+
+                <div className="flex items-center gap-3 pt-1">
+                  <button
+                    onClick={handleSaveSmtp}
+                    disabled={isSavingSmtp}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isSavingSmtp ? <><Loader2 size={18} className="animate-spin" />Saving...</> : <><Save size={18} />Save SMTP Settings</>}
+                  </button>
+                  <button
+                    onClick={handleTestSmtp}
+                    disabled={isTestingSmtp || !companyForm.smtp_host}
+                    className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isTestingSmtp ? <><Loader2 size={18} className="animate-spin" />Sending...</> : <><Send size={18} />Send Test Email</>}
+                  </button>
+                </div>
+                {companyForm.smtp_host && (
+                  <p className="text-xs text-green-600 flex items-center gap-1">
+                    <Check size={13} /> Custom SMTP active — emails will be sent from your server.
+                  </p>
+                )}
               </div>
             </div>
 
