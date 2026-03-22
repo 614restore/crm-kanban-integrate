@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../lib/authContext';
 import { 
   Calendar as CalendarIcon, 
   Plus, 
@@ -86,6 +87,8 @@ interface TeamMember {
 }
 
 const CalendarScheduler: React.FC = () => {
+  const { profile } = useAuth();
+  const companyId = profile?.company_id;
   const [currentView, setCurrentView] = useState<'month' | 'week' | 'day' | 'agenda'>('agenda');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [events, setEvents] = useState<CalendarEvent[]>([]);
@@ -98,13 +101,13 @@ const CalendarScheduler: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState<string>('all');
 
   useEffect(() => {
-    loadCalendarData();
-  }, []);
+    if (companyId) loadCalendarData();
+  }, [companyId]);
 
   const loadCalendarData = () => {
     // Load events and team members from localStorage
-    const savedEvents = localStorage.getItem('calendarEvents');
-    const savedTeamMembers = localStorage.getItem('teamMembers');
+    const savedEvents = localStorage.getItem(`crm_calendar_events_${companyId}`);
+    const savedTeamMembers = localStorage.getItem(`crm_teamMembers_${companyId}`);
 
     if (savedEvents) {
       setEvents(JSON.parse(savedEvents));
@@ -167,7 +170,7 @@ const CalendarScheduler: React.FC = () => {
         }
       ];
       setEvents(sampleEvents);
-      localStorage.setItem('calendarEvents', JSON.stringify(sampleEvents));
+      localStorage.setItem(`crm_calendar_events_${companyId}`, JSON.stringify(sampleEvents));
     }
 
     if (savedTeamMembers) {
@@ -228,13 +231,13 @@ const CalendarScheduler: React.FC = () => {
         }
       ];
       setTeamMembers(sampleTeam);
-      localStorage.setItem('teamMembers', JSON.stringify(sampleTeam));
+      localStorage.setItem(`crm_teamMembers_${companyId}`, JSON.stringify(sampleTeam));
     }
   };
 
   const saveEvents = (updatedEvents: CalendarEvent[]) => {
     setEvents(updatedEvents);
-    localStorage.setItem('calendarEvents', JSON.stringify(updatedEvents));
+    if (companyId) localStorage.setItem(`crm_calendar_events_${companyId}`, JSON.stringify(updatedEvents));
   };
 
   const getEventTypeIcon = (type: string) => {

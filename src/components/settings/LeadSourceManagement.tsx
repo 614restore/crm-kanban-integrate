@@ -25,12 +25,15 @@ import {
 } from 'lucide-react';
 import { LeadSource } from '../../lib/crmData';
 import { usePermissions, withPermission } from '../../lib/permissions/PermissionProvider';
+import { useAuth } from '../../lib/authContext';
 
 // Remove userRole prop since we'll get it from permission context
 type LeadSourceManagementProps = Record<string, never>;
 
 const LeadSourceManagement: React.FC<LeadSourceManagementProps> = () => {
   const { user, hasPermission, canManageResource, isManagerOrHigher } = usePermissions();
+  const { profile } = useAuth();
+  const companyId = profile?.company_id;
   const [leadSources, setLeadSources] = useState<LeadSource[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
@@ -42,11 +45,11 @@ const LeadSourceManagement: React.FC<LeadSourceManagementProps> = () => {
   const canManageLeadSources = canManageResource('lead-sources') && isManagerOrHigher();
 
   useEffect(() => {
-    loadLeadSources();
-  }, []);
+    if (companyId) loadLeadSources();
+  }, [companyId]);
 
   const loadLeadSources = () => {
-    const savedSources = localStorage.getItem('leadSources');
+    const savedSources = localStorage.getItem(`crm_lead_sources_${companyId}`);
     if (savedSources) {
       setLeadSources(JSON.parse(savedSources));
     } else {
@@ -114,13 +117,13 @@ const LeadSourceManagement: React.FC<LeadSourceManagementProps> = () => {
         },
       ];
       setLeadSources(defaultSources);
-      localStorage.setItem('leadSources', JSON.stringify(defaultSources));
+      localStorage.setItem(`crm_lead_sources_${companyId}`, JSON.stringify(defaultSources));
     }
   };
 
   const saveLeadSources = (sources: LeadSource[]) => {
     setLeadSources(sources);
-    localStorage.setItem('leadSources', JSON.stringify(sources));
+    if (companyId) localStorage.setItem(`crm_lead_sources_${companyId}`, JSON.stringify(sources));
   };
 
   const filteredSources = leadSources.filter(source => {

@@ -62,20 +62,20 @@ function normalizeStatus(raw: string | undefined): OrderStatus {
   return 'pending';
 }
 
-const STORAGE_KEY = (contactId: string) => `ev_order_${contactId}`;
+const STORAGE_KEY = (companyId: string, contactId: string) => `crm_ev_order_${companyId}_${contactId}`;
 
 /** Try localStorage first, then fall back gracefully (private browser, etc.) */
-function readOrderFromStorage(contactId: string): PendingOrder | null {
+function readOrderFromStorage(companyId: string, contactId: string): PendingOrder | null {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY(contactId));
+    const saved = localStorage.getItem(STORAGE_KEY(companyId, contactId));
     return saved ? JSON.parse(saved) : null;
   } catch { return null; }
 }
 
-function writeOrderToStorage(contactId: string, order: PendingOrder | null) {
+function writeOrderToStorage(companyId: string, contactId: string, order: PendingOrder | null) {
   try {
-    if (order) localStorage.setItem(STORAGE_KEY(contactId), JSON.stringify(order));
-    else localStorage.removeItem(STORAGE_KEY(contactId));
+    if (order) localStorage.setItem(STORAGE_KEY(companyId, contactId), JSON.stringify(order));
+    else localStorage.removeItem(STORAGE_KEY(companyId, contactId));
   } catch { /* private browser — ignore, state is still held in React */ }
 }
 
@@ -98,7 +98,7 @@ export default function EagleViewPanel({
   // ── Load saved order + EagleView credentials ─────────────────────────────
   useEffect(() => {
     // Restore any in-progress order from storage (graceful in private browsers)
-    const saved = readOrderFromStorage(contactId);
+    const saved = readOrderFromStorage(companyId, contactId);
     if (saved) setOrder(saved);
 
     if (!companyId) { setConfigStatus('missing'); return; }
@@ -145,8 +145,8 @@ export default function EagleViewPanel({
   // ── Persist order to storage ──────────────────────────────────────────────
   const persistOrder = useCallback((o: PendingOrder | null) => {
     setOrder(o);
-    writeOrderToStorage(contactId, o);
-  }, [contactId]);
+    writeOrderToStorage(companyId, contactId, o);
+  }, [companyId, contactId]);
 
   // ── Order a new report ────────────────────────────────────────────────────
   const handleOrderReport = async () => {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
+import { useAuth } from '@/lib/authContext';
 import {
   FileText, Plus, Eye, Trash2, Search, Star, Lock,
   ChevronDown, ChevronUp, X, Printer, Send, PenLine,
@@ -453,6 +454,8 @@ const SignaturePad: React.FC<{
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 const DocumentManager: React.FC = () => {
+  const { profile } = useAuth();
+  const companyId = profile?.company_id;
   const [documents, setDocuments] = useState<GeneratedDocument[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState<DocumentTemplate | null>(null);
@@ -460,13 +463,14 @@ const DocumentManager: React.FC = () => {
   const [showComingSoon, setShowComingSoon] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem('generatedDocuments_v2');
+    if (!companyId) return;
+    const saved = localStorage.getItem(`crm_generated_docs_${companyId}`);
     if (saved) setDocuments(JSON.parse(saved));
-  }, []);
+  }, [companyId]);
 
   const saveDocuments = (docs: GeneratedDocument[]) => {
     setDocuments(docs);
-    localStorage.setItem('generatedDocuments_v2', JSON.stringify(docs));
+    if (companyId) localStorage.setItem(`crm_generated_docs_${companyId}`, JSON.stringify(docs));
   };
 
   const handleGenerate = (data: Record<string, any>, lineItems: LineItem[], template: DocumentTemplate) => {

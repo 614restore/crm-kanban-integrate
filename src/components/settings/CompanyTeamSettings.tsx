@@ -40,15 +40,17 @@ const CompanyTeamSettings: React.FC = () => {
   }>({ type: null });
 
   useEffect(() => {
-    loadCompanyData();
-  }, []);
+    if (profile?.company_id) loadCompanyData();
+  }, [profile?.company_id]);
 
   const loadCompanyData = async () => {
+    const cid = profile?.company_id;
+    if (!cid) return;
     // Load from localStorage or API
-    const savedCompany = localStorage.getItem('companySettings');
-    const savedOffices = localStorage.getItem('companyOffices');
-    const savedTeam = localStorage.getItem('teamMembers');
-    const savedRoles = localStorage.getItem('teamRoles');
+    const savedCompany = localStorage.getItem(`crm_companySettings_${cid}`);
+    const savedOffices = localStorage.getItem(`crm_companyOffices_${cid}`);
+    const savedTeam = localStorage.getItem(`crm_teamMembers_${cid}`);
+    const savedRoles = localStorage.getItem(`crm_teamRoles_${cid}`);
 
     if (savedCompany) setCompany(JSON.parse(savedCompany));
     if (savedOffices) setOffices(JSON.parse(savedOffices));
@@ -111,12 +113,14 @@ const CompanyTeamSettings: React.FC = () => {
         }
       ];
       setRoles(defaultRoles);
-      localStorage.setItem('teamRoles', JSON.stringify(defaultRoles));
+      localStorage.setItem(`crm_teamRoles_${cid}`, JSON.stringify(defaultRoles));
     }
   };
 
   const saveCompanyData = (data: any, key: string) => {
-    localStorage.setItem(key, JSON.stringify(data));
+    const cid = profile?.company_id;
+    if (!cid) return;
+    localStorage.setItem(`crm_${key}_${cid}`, JSON.stringify(data));
   };
 
   const tabs = [

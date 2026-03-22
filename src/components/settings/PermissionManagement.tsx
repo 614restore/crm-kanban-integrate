@@ -17,14 +17,15 @@ import {
   Trash2,
   Search
 } from 'lucide-react';
-import { 
-  usePermissions, 
-  UserRole, 
-  Permission, 
-  ResourceType, 
-  ActionType, 
-  DEFAULT_ROLES 
+import {
+  usePermissions,
+  UserRole,
+  Permission,
+  ResourceType,
+  ActionType,
+  DEFAULT_ROLES
 } from '../../lib/permissions/PermissionProvider';
+import { useAuth } from '../../lib/authContext';
 
 interface FeatureToggle {
   id: string;
@@ -198,6 +199,8 @@ const FEATURE_TOGGLES: FeatureToggle[] = [
 
 const PermissionManagement: React.FC = () => {
   const { user, isAdminOrHigher, hasPermission, updatePermissions } = usePermissions();
+  const { profile } = useAuth();
+  const companyId = profile?.company_id;
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
   const [customRoles, setCustomRoles] = useState<UserRole[]>([]);
   const [featureToggles, setFeatureToggles] = useState<Record<string, boolean>>({});
@@ -210,12 +213,13 @@ const PermissionManagement: React.FC = () => {
   const canManagePermissions = isAdminOrHigher() && hasPermission('settings', 'admin');
 
   useEffect(() => {
+    if (!companyId) return;
     loadFeatureToggles();
     loadCustomRoles();
-  }, []);
+  }, [companyId]);
 
   const loadFeatureToggles = () => {
-    const saved = localStorage.getItem('featureToggles');
+    const saved = localStorage.getItem(`crm_feature_toggles_${companyId}`);
     if (saved) {
       setFeatureToggles(JSON.parse(saved));
     } else {
@@ -229,14 +233,14 @@ const PermissionManagement: React.FC = () => {
   };
 
   const loadCustomRoles = () => {
-    const saved = localStorage.getItem('customRoles');
+    const saved = localStorage.getItem(`crm_custom_roles_${companyId}`);
     if (saved) {
       setCustomRoles(JSON.parse(saved));
     }
   };
 
   const saveFeatureToggles = () => {
-    localStorage.setItem('featureToggles', JSON.stringify(featureToggles));
+    if (companyId) localStorage.setItem(`crm_feature_toggles_${companyId}`, JSON.stringify(featureToggles));
     // Update user permissions based on feature toggles
     updateUserPermissions();
     setHasUnsavedChanges(false);

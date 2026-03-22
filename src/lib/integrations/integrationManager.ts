@@ -527,7 +527,7 @@ class IntegrationManager {
       const safe = Array.from(this.integrations.values()).map(i => ({
         id: i.id, enabled: i.enabled, settings: i.settings
       }));
-      localStorage.setItem('integrations_meta', JSON.stringify(safe));
+      localStorage.setItem('crm_integrations_meta', JSON.stringify(safe));
       return;
     }
 
@@ -552,7 +552,7 @@ class IntegrationManager {
   // Load integrations from Supabase (falls back to localStorage)
   private loadSavedIntegrations(): BaseIntegration[] {
     // Supabase load is async — handled separately via loadSavedIntegrationsAsync()
-    const saved = localStorage.getItem('integrations_meta');
+    const saved = localStorage.getItem('crm_integrations_meta');
     return saved ? JSON.parse(saved) : [];
   }
 
