@@ -21,6 +21,10 @@ import { DbCompany } from '@/lib/database';
 import { getContactFullName } from '@/lib/crmData';
 import { DOCUMENT_CATEGORIES } from '@/lib/documentCategories';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/lib/authContext';
+import { sendEmail } from '@/lib/emailApi';
+import { uploadDocument } from '@/lib/storage';
+import { supabase } from '@/lib/supabase';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -206,7 +210,9 @@ const FullScreenDocumentEditor: React.FC<FullScreenDocumentEditorProps> = ({
   initialContactId = '',
 }) => {
   const { toast } = useToast();
+  const { profile } = useAuth();
   const printRef = useRef<HTMLDivElement>(null);
+  const [sendingToCustomer, setSendingToCustomer] = useState(false);
 
   const selectedContact = useMemo(
     () => contacts.find((c) => c.id === initialContactId) ?? null,
@@ -278,6 +284,66 @@ const FullScreenDocumentEditor: React.FC<FullScreenDocumentEditorProps> = ({
     URL.revokeObjectURL(url);
   };
 
+  const handleSendToCustomer = async () => {
+    if (!profile?.company_id || !profile?.id) {
+      toast({ title: 'Not authenticated', variant: 'destructive' });
+      return;
+    }
+    const contactEmail = selectedContact?.email ?? (selectedContact as any)?.email ?? '';
+    if (!contactEmail) {
+      toast({ title: 'No customer email', description: 'Select a customer with an email address, or add one to their profile first.', variant: 'destructive' });
+      return;
+    }
+    if (!printRef.current) return;
+
+    setSendingToCustomer(true);
+    try {
+      const bodyHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${template.name}</title><style>body{font-family:Arial,sans-serif;padding:40px;max-width:900px;margin:0 auto;color:#111}table{width:100%;border-collapse:collapse}th,td{padding:8px;border:1px solid #ddd;text-align:left}th{background:#f5f5f5}</style></head><body>${printRef.current.innerHTML}</body></html>`;
+
+      const token = crypto.randomUUID();
+      const htmlFile = new File([new Blob([bodyHtml], { type: 'text/html' })], `${template.name.replace(/\s+/g, '_')}.html`, { type: 'text/html' });
+      const uploadResult = await uploadDocument(htmlFile, profile.company_id, selectedContact?.id);
+
+      await supabase.from('documents').insert({
+        company_id: profile.company_id,
+        contact_id: selectedContact?.id ?? null,
+        name: template.name,
+        type: 'template-document',
+        url: uploadResult.path || '',
+        html_content: bodyHtml,
+        sign_token: token,
+        sent_by: profile.id,
+        contact_email: contactEmail,
+        status: 'sent',
+      });
+
+      const appUrl = (import.meta.env.VITE_APP_URL as string | undefined)?.trim() || window.location.origin;
+      const signingUrl = `${appUrl}/sign-doc?token=${encodeURIComponent(token)}`;
+      const contactName = selectedContact ? getContactFullName(selectedContact) : 'Customer';
+
+      await sendEmail({
+        to: contactEmail,
+        subject: `Please sign: ${template.name}`,
+        html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
+          <h2 style="color:#2563eb;">Document Ready for Your Signature</h2>
+          <p>Hi ${contactName},</p>
+          <p>${(companyProfile as any)?.name || 'Your contractor'} has sent you <strong>"${template.name}"</strong> for your review and signature.</p>
+          <p style="margin:24px 0;">
+            <a href="${signingUrl}" style="display:inline-block;background:#2563eb;color:white;padding:14px 28px;text-decoration:none;border-radius:8px;font-weight:600;">Review &amp; Sign Document</a>
+          </p>
+          <p style="color:#6b7280;font-size:12px;">If the button doesn't work, copy and paste this link:<br>${signingUrl}</p>
+        </div>`,
+      });
+
+      toast({ title: 'Sent!', description: `Signing link emailed to ${contactEmail}. You'll be notified when they open and sign it.` });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to send document.';
+      toast({ title: 'Send failed', description: message, variant: 'destructive' });
+    } finally {
+      setSendingToCustomer(false);
+    }
+  };
+
   const cat = DOCUMENT_CATEGORIES.find(c => c.id === template.category);
   const logoUrl = (companyProfile as any)?.logo_url ?? '';
   const filledCount = template.variables.filter(v => vals[v]?.trim()).length;
@@ -340,9 +406,12 @@ const FullScreenDocumentEditor: React.FC<FullScreenDocumentEditorProps> = ({
             Save Draft
           </Button>
           <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white gap-1.5"
-            onClick={() => toast({ title: 'Coming soon', description: 'Send to customer is coming soon.' })}>
-            <Send className="w-3.5 h-3.5" />
-            Send to Customer
+            disabled={sendingToCustomer}
+            onClick={handleSendToCustomer}>
+            {sendingToCustomer
+              ? <span className="w-3.5 h-3.5 animate-spin rounded-full border-2 border-white border-t-transparent inline-block" />
+              : <Send className="w-3.5 h-3.5" />}
+            {sendingToCustomer ? 'Sending…' : 'Send to Customer'}
           </Button>
         </div>
       </div>
