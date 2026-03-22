@@ -11,6 +11,14 @@ export interface DocumentField {
   placeholder?: string;
 }
 
+export interface LineItemDefault {
+  description: string;
+  qty: string;       // e.g. "24", "" for Lot items
+  unit: string;      // e.g. "sq", "LF", "sheets", ""
+  unitPrice: number; // dollar amount, 0 = manual total
+  total: number;     // default total (used when qty is empty/Lot)
+}
+
 export interface DocumentTemplate {
   id: string;
   name: string;
@@ -20,6 +28,7 @@ export interface DocumentTemplate {
   content: string;
   variables: string[];
   fields?: DocumentField[];
+  lineItemDefaults?: LineItemDefault[];
   favorite: boolean;
   isDefault: boolean;
   tags: string[];
@@ -510,6 +519,18 @@ ${footer}`,
         { key: 'WARRANTY_PERIOD', label: 'Warranty Period', type: 'text', defaultValue: '2 years', required: true },
         { key: 'PAYMENT_TERMS', label: 'Payment Terms', type: 'text', defaultValue: '50% deposit at contract signing; balance due upon completion', required: true },
       ],
+      lineItemDefaults: [
+        { description: 'Tear-off & disposal (1 layer)', qty: '24', unit: 'sq', unitPrice: 85, total: 2040 },
+        { description: 'Decking repair / replacement (4×8 sheets)', qty: '3', unit: 'sheets', unitPrice: 65, total: 195 },
+        { description: 'Ice & water shield', qty: '28', unit: 'sq', unitPrice: 32, total: 896 },
+        { description: 'Synthetic underlayment', qty: '28', unit: 'sq', unitPrice: 18, total: 504 },
+        { description: 'Drip edge (aluminum)', qty: '310', unit: 'LF', unitPrice: 4.5, total: 1395 },
+        { description: 'Shingles', qty: '24', unit: 'sq', unitPrice: 195, total: 4680 },
+        { description: 'Ridge cap shingles', qty: '45', unit: 'LF', unitPrice: 12, total: 540 },
+        { description: 'Flashings (step, counter, pipe boots)', qty: '', unit: 'Lot', unitPrice: 0, total: 450 },
+        { description: 'Ridge vent / ventilation', qty: '2', unit: 'units', unitPrice: 85, total: 170 },
+        { description: 'Cleanup & haul-away', qty: '', unit: 'Lot', unitPrice: 0, total: 350 },
+      ],
       content: contractHeader('Customer Service Agreement - Asphalt Shingle Roof Replacement') + `
 <div class="sec">
   <h3>Project Specifications</h3>
@@ -615,6 +636,16 @@ ${footer}`,
         // Terms
         { key: 'WARRANTY_PERIOD', label: 'Warranty Period', type: 'text', defaultValue: '2 years', required: true },
         { key: 'PAYMENT_TERMS', label: 'Payment Terms', type: 'textarea', defaultValue: 'Payment is due within 30 days of invoice date.\nLate payments subject to 1.5% monthly finance charge.\nQuestions? Contact us at (614) 808-8899.', required: true },
+      ],
+      lineItemDefaults: [
+        { description: 'Tear-off & disposal', qty: '24', unit: 'sq', unitPrice: 75, total: 1800 },
+        { description: 'Decking repair / replacement', qty: '2', unit: 'sheets', unitPrice: 65, total: 130 },
+        { description: 'Underlayment', qty: '24', unit: 'sq', unitPrice: 22, total: 528 },
+        { description: 'Corrugated metal panels', qty: '24', unit: 'sq', unitPrice: 285, total: 6840 },
+        { description: 'Ridge cap & hip cap', qty: '45', unit: 'LF', unitPrice: 18, total: 810 },
+        { description: 'Eave & rake trim, flashings', qty: '310', unit: 'LF', unitPrice: 6.5, total: 2015 },
+        { description: 'Fasteners, butyl tape, sealant', qty: '', unit: 'Lot', unitPrice: 0, total: 450 },
+        { description: 'Cleanup & haul-away', qty: '', unit: 'Lot', unitPrice: 0, total: 350 },
       ],
       content: contractHeader('Customer Service Agreement - Corrugated Metal Roof') + `
 <div class="sec">
@@ -726,6 +757,18 @@ ${footer}`,
         // Terms
         { key: 'WARRANTY_PERIOD', label: 'Warranty Period', type: 'text', defaultValue: '2 years', required: true },
         { key: 'PAYMENT_TERMS', label: 'Payment Terms', type: 'textarea', defaultValue: 'Payment is due within 30 days of invoice date.\nLate payments subject to 1.5% monthly finance charge.\nQuestions? Contact us at (614) 808-8899.', required: true },
+      ],
+      lineItemDefaults: [
+        { description: 'Tear-off & disposal', qty: '24', unit: 'sq', unitPrice: 75, total: 1800 },
+        { description: 'Decking repair / replacement', qty: '2', unit: 'sheets', unitPrice: 65, total: 130 },
+        { description: 'High-temp peel & stick underlayment', qty: '24', unit: 'sq', unitPrice: 45, total: 1080 },
+        { description: 'Standing seam panels', qty: '24', unit: 'sq', unitPrice: 425, total: 10200 },
+        { description: 'Concealed clip system', qty: '24', unit: 'sq', unitPrice: 35, total: 840 },
+        { description: 'Ridge, hip & rake trim', qty: '310', unit: 'LF', unitPrice: 12, total: 3720 },
+        { description: 'Eave cleat / starter strip', qty: '120', unit: 'LF', unitPrice: 8, total: 960 },
+        { description: 'Flashings & penetration boots', qty: '', unit: 'Lot', unitPrice: 0, total: 650 },
+        { description: 'Snow guards (if applicable)', qty: '0', unit: 'sets', unitPrice: 125, total: 0 },
+        { description: 'Cleanup & haul-away', qty: '', unit: 'Lot', unitPrice: 0, total: 400 },
       ],
       content: contractHeader('Customer Service Agreement - Standing Seam Metal Roof') + `
 <div class="sec">
