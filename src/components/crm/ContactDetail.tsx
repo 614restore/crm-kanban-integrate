@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { consumePendingContactTab } from '@/lib/nextStepActions';
 import { useCRM, useCurrentContact } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
@@ -239,6 +240,13 @@ export default function ContactDetail() {
     if (!contactId) return;
     setQuickNote(contactNotes);
   }, [contactId, contactNotes]);
+
+  // When opening a contact from a "Next Step" pill, jump straight to the requested tab
+  useEffect(() => {
+    if (!contactId) return;
+    const tab = consumePendingContactTab();
+    if (tab) setActiveTab(tab as TabType);
+  }, [contactId]);
 
   // Load contact projects, estimates, work orders, and material orders
   useEffect(() => {

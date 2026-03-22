@@ -29,7 +29,35 @@ import {
   ArrowDown,
   LayoutGrid,
   AlertTriangle,
+  ArrowRight,
+  Calendar,
+  FileText,
+  ClipboardList,
+  Wrench,
+  Package,
+  CheckSquare,
+  Receipt,
+  MessageSquare,
+  PenLine,
+  Users,
 } from 'lucide-react';
+import { getNextStep, setPendingContactTab, type NextStep } from '@/lib/nextStepActions';
+import type { KanbanStatus } from '@/lib/kanbanStatuses';
+
+const NEXT_STEP_ICONS: Record<string, React.ElementType> = {
+  Calendar,
+  FileText,
+  ClipboardList,
+  Wrench,
+  Package,
+  CheckSquare,
+  Receipt,
+  MessageSquare,
+  PenLine,
+  DollarSign,
+  AlertTriangle,
+  Users,
+};
 
 
 function getStageAlert(contact: Contact): { label: string; className: string } | null {
@@ -113,6 +141,44 @@ export default function PipelineBoard() {
 
   const handleContactClick = (contactId: string) => {
     dispatch({ type: 'SELECT_CONTACT', payload: contactId });
+  };
+
+  const handleNextStepClick = (e: React.MouseEvent, contact: Contact, nextStep: NextStep) => {
+    e.stopPropagation();
+    switch (nextStep.action) {
+      case 'calendar':
+        dispatch({ type: 'SET_PENDING_APPOINTMENT_CONTACT', payload: contact.id });
+        dispatch({ type: 'SET_VIEW', payload: 'calendar' });
+        break;
+      case 'material-orders':
+        dispatch({ type: 'SET_VIEW', payload: 'material-orders' });
+        break;
+      case 'crew-schedule':
+        dispatch({ type: 'SET_VIEW', payload: 'crew-schedule' });
+        break;
+      case 'estimates':
+        dispatch({ type: 'SET_VIEW', payload: 'estimates' });
+        break;
+      case 'invoice':
+        dispatch({ type: 'TOGGLE_INVOICE_MODAL', payload: contact.id });
+        break;
+      case 'documents-tab':
+        setPendingContactTab('documents');
+        dispatch({ type: 'SELECT_CONTACT', payload: contact.id });
+        break;
+      case 'financial-tab':
+        setPendingContactTab('financial');
+        dispatch({ type: 'SELECT_CONTACT', payload: contact.id });
+        break;
+      case 'job-status-tab':
+        setPendingContactTab('jobStatus');
+        dispatch({ type: 'SELECT_CONTACT', payload: contact.id });
+        break;
+      case 'select':
+      default:
+        dispatch({ type: 'SELECT_CONTACT', payload: contact.id });
+        break;
+    }
   };
 
   const handleCreateBoard = () => {
@@ -374,6 +440,21 @@ export default function PipelineBoard() {
                                   {stageAlert && <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 ${stageAlert.className}`}>{stageAlert.label}</span>}
                                 </div>
                                 {assignee && <p className="text-xs text-gray-400 mt-1">{assignee.name}</p>}
+                                {(() => {
+                                  const ns = getNextStep(contact.status as KanbanStatus);
+                                  if (!ns) return null;
+                                  const Icon = NEXT_STEP_ICONS[ns.iconName] || ArrowRight;
+                                  return (
+                                    <button
+                                      onClick={(e) => handleNextStepClick(e, contact, ns)}
+                                      className={`mt-2 w-full flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-semibold transition-opacity hover:opacity-75 ${ns.bgColor} ${ns.textColor}`}
+                                    >
+                                      <Icon size={10} className="flex-shrink-0" />
+                                      <span className="truncate">{ns.label}</span>
+                                      <ArrowRight size={10} className="ml-auto flex-shrink-0" />
+                                    </button>
+                                  );
+                                })()}
                               </div>
                             );
                           })}
@@ -467,6 +548,21 @@ export default function PipelineBoard() {
                               <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${stageAlert.className}`}>⚠ {stageAlert.label} in stage</span>
                             </div>
                           )}
+                          {(() => {
+                            const ns = getNextStep(contact.status as KanbanStatus);
+                            if (!ns) return null;
+                            const Icon = NEXT_STEP_ICONS[ns.iconName] || ArrowRight;
+                            return (
+                              <button
+                                onClick={(e) => handleNextStepClick(e, contact, ns)}
+                                className={`mt-3 w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-opacity hover:opacity-75 ${ns.bgColor} ${ns.textColor}`}
+                              >
+                                <Icon size={12} className="flex-shrink-0" />
+                                <span className="truncate">{ns.label}</span>
+                                <ArrowRight size={12} className="ml-auto flex-shrink-0 opacity-60" />
+                              </button>
+                            );
+                          })()}
                         </div>
                       );
                     })}

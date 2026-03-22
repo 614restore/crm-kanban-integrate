@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
@@ -9,6 +9,14 @@ import {
   getContactFullName,
   Communication,
 } from '@/lib/crmData';
+import {
+  getMentionTargets,
+  findActiveMentionQuery,
+  getMentionSuggestions,
+  applyMention,
+  extractMentionHandles,
+  type MentionTarget,
+} from '@/lib/mentions';
 import {
   Mail,
   MessageSquare,
@@ -283,6 +291,38 @@ export default function CommunicationHub() {
   const [composeText, setComposeText] = useState('');
   const [composeType, setComposeType] = useState<'note' | 'email' | 'sms' | 'call'>('note');
   const [isAiDrafting, setIsAiDrafting] = useState(false);
+  const [composeMentionStart, setComposeMentionStart] = useState<number | null>(null);
+  const composeInputRef = useRef<HTMLTextAreaElement>(null);
+
+  const mentionTargets = useMemo(() => getMentionTargets(state.teamMembers), [state.teamMembers]);
+  const composeMentionSuggestions = useMemo<MentionTarget[]>(() => {
+    if (composeMentionStart === null) return [];
+    const caret = composeInputRef.current?.selectionStart ?? composeText.length;
+    const active = findActiveMentionQuery(composeText, caret);
+    if (!active) return [];
+    return getMentionSuggestions(mentionTargets, active.query);
+  }, [composeMentionStart, composeText, mentionTargets]);
+
+  const syncComposeMentionSuggestions = (text: string, caret: number) => {
+    const active = findActiveMentionQuery(text, caret);
+    if (!active) {
+      setComposeMentionStart(null);
+      return;
+    }
+    setComposeMentionStart(active.start);
+  };
+
+  const insertComposeMention = (handle: string) => {
+    if (!composeInputRef.current || composeMentionStart === null) return;
+    const caret = composeInputRef.current.selectionStart ?? composeText.length;
+    const updated = applyMention(composeText, composeMentionStart, caret, handle);
+    setComposeText(updated.text);
+    setComposeMentionStart(null);
+    requestAnimationFrame(() => {
+      composeInputRef.current?.focus();
+      composeInputRef.current?.setSelectionRange(updated.caret, updated.caret);
+    });
+  };
 
   // Gather all communications from all contacts
   const allCommunications = state.contacts.flatMap((contact) =>
@@ -496,6 +536,10 @@ export default function CommunicationHub() {
 
   const handleSaveCompose = async () => {
     if (!composeText.trim() || !composeContactId) return;
+    const mentionedHandles = extractMentionHandles(composeText.trim());
+    if (mentionedHandles.length > 0) {
+      console.log('[CommunicationHub] mentioned handles:', mentionedHandles);
+    }
     await persistCommunication(composeContactId, composeText.trim(), composeType);
 
     // If type is email, actually send it to the contact
@@ -1050,13 +1094,41 @@ export default function CommunicationHub() {
                     </button>
                   )}
                 </div>
-                <textarea
-                  value={composeText}
-                  onChange={(e) => setComposeText(e.target.value)}
-                  placeholder={composeType === 'email' ? 'Type your message or click ✨ AI Draft to generate one...' : 'Type your message or note...'}
-                  rows={5}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none resize-none"
-                />
+                <div className="relative">
+                  <textarea
+                    ref={composeInputRef}
+                    value={composeText}
+                    onChange={(e) => {
+                      setComposeText(e.target.value);
+                      syncComposeMentionSuggestions(e.target.value, e.target.selectionStart ?? e.target.value.length);
+                    }}
+                    onKeyUp={(e) => {
+                      const el = e.currentTarget;
+                      syncComposeMentionSuggestions(el.value, el.selectionStart ?? el.value.length);
+                    }}
+                    placeholder={composeType === 'email' ? 'Type your message or click ✨ AI Draft to generate one...' : 'Type your message or note... (use @ to mention team members)'}
+                    rows={5}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none resize-none"
+                  />
+                  {composeMentionSuggestions.length > 0 && (
+                    <div className="absolute z-10 bottom-full mb-1 left-0 w-56 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+                      {composeMentionSuggestions.map((target) => (
+                        <button
+                          key={target.id}
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            insertComposeMention(target.handle);
+                          }}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center gap-2"
+                        >
+                          <span className="font-medium text-gray-900">@{target.handle}</span>
+                          <span className="text-gray-500 truncate">{target.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
             <div className="flex gap-3 p-6 pt-0">
