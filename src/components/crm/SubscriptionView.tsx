@@ -1,3 +1,4 @@
+// Subscription view — pricing table loaded from VITE_STRIPE_PRICING_TABLE_ID
 import React, { useEffect, useRef, useState } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
