@@ -40,6 +40,7 @@ import {
   MessageSquare,
   PenLine,
   Users,
+  CheckCircle,
 } from 'lucide-react';
 import { getNextStep, setPendingContactTab, type NextStep } from '@/lib/nextStepActions';
 import { fireAutomationEvent } from '@/lib/automationEngine';
@@ -509,6 +510,13 @@ export default function PipelineBoard() {
                               {contact.tags.length > 2 && <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">+{contact.tags.length - 2}</span>}
                             </div>
                           )}
+                          {contact.inspectionCompleted && (
+                            <div className="mt-2">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                <CheckCircle size={10} />Inspection Complete
+                              </span>
+                            </div>
+                          )}
                           {stageAlert && (
                             <div className="mt-2">
                               <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${stageAlert.className}`}>⚠ {stageAlert.label} in stage</span>
@@ -597,6 +605,13 @@ export default function PipelineBoard() {
                                   </div>
                                   {stageAlert && <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 ${stageAlert.className}`}>{stageAlert.label}</span>}
                                 </div>
+                                {contact.inspectionCompleted && (
+                                  <div className="mt-1.5">
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                      <CheckCircle size={9} />Inspection Complete
+                                    </span>
+                                  </div>
+                                )}
                                 {assignee && <p className="text-xs text-gray-400 mt-1">{assignee.name}</p>}
                                 {(() => {
                                   const ns = getNextStep(contact.status as KanbanStatus);

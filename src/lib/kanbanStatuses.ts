@@ -3,7 +3,7 @@ export type KanbanStatus =
   | 'new_lead'
   | 'contacted'
   | 'inspection_scheduled'
-  | 'inspection_complete'
+  | 'estimating'
   | 'estimate_sent'
   | 'follow_up'
   | 'signed_won'
@@ -29,7 +29,7 @@ export const STATUS_LABELS: Record<KanbanStatus, string> = {
   new_lead:             'New Lead',
   contacted:            'Contacted',
   inspection_scheduled: 'Inspection Scheduled',
-  inspection_complete:  'Inspection Complete',
+  estimating:           'Estimating',
   estimate_sent:        'Estimate Sent',
   follow_up:            'Follow Up',
   signed_won:           'Signed / Won',
@@ -53,7 +53,7 @@ export const STATUS_COLORS: Record<KanbanStatus, string> = {
   new_lead:             '#6366f1',
   contacted:            '#3b82f6',
   inspection_scheduled: '#f59e0b',
-  inspection_complete:  '#10b981',
+  estimating:           '#0ea5e9',
   estimate_sent:        '#8b5cf6',
   follow_up:            '#f97316',
   signed_won:           '#22c55e',
@@ -74,7 +74,7 @@ export const STATUS_COLORS: Record<KanbanStatus, string> = {
 }
 
 export const BOARD_STATUSES: Record<string, KanbanStatus[]> = {
-  sales:     ['new_lead','contacted','inspection_scheduled','inspection_complete','estimate_sent','follow_up','signed_won','lost'],
+  sales:     ['new_lead','contacted','inspection_scheduled','estimating','estimate_sent','follow_up','signed_won','lost'],
   project:   ['project_scheduled','materials_ordered','in_progress','punch_list','complete'],
   financial: ['invoice_sent','partial_payment','paid_in_full','collections'],
   owner:     ['needs_attention','awaiting_approval','on_hold','escalated'],

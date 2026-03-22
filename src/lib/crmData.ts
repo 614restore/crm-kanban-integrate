@@ -5,6 +5,7 @@ export type CustomerStatus =
   | 'lead'
   | 'appt_set'
   | 'inspection_completed'
+  | 'estimating'
   | 'estimate_sent'
   | 'contingency'
   | 'retail'
@@ -545,15 +546,16 @@ export const defaultBoards: KanbanBoard[] = [
     columns: [
       { id: 'ret-1',  title: 'New Lead',                    status: 'prospect',    color: '#94a3b8', order: 0 },
       { id: 'ret-2',  title: 'Contacted / Qualifying',       status: 'lead',        color: '#6366f1', order: 1 },
-      { id: 'ret-3',  title: 'Inspection Scheduled',         status: 'appt_set',    color: '#8b5cf6', order: 2 },
-      { id: 'ret-4',  title: 'Estimate Sent',                status: 'estimate_sent', color: '#a855f7', order: 3 },
-      { id: 'ret-5',  title: 'Follow-up / Negotiation',      status: 'contingency', color: '#f59e0b', order: 4 },
-      { id: 'ret-6',  title: 'Sold / Ready for Production',  status: 'signed',      color: '#22c55e', order: 5 },
-      { id: 'ret-7',  title: 'Scheduled',                    status: 'in_progress', color: '#3b82f6', order: 6 },
-      { id: 'ret-8',  title: 'In Progress',                  status: 'build_phase', color: '#06b6d4', order: 7 },
-      { id: 'ret-9',  title: 'Punch List',                   status: 'cleanup',     color: '#f97316', order: 8 },
-      { id: 'ret-10', title: 'Completed',                    status: 'completed',   color: '#10b981', order: 9 },
-      { id: 'ret-11', title: 'Lost',                         status: 'lost',        color: '#ef4444', order: 10 },
+      { id: 'ret-3',  title: 'Inspection Scheduled',         status: 'appt_set',      color: '#8b5cf6', order: 2 },
+      { id: 'ret-3b', title: 'Estimating',                   status: 'estimating',    color: '#0ea5e9', order: 3 },
+      { id: 'ret-4',  title: 'Estimate Sent',                status: 'estimate_sent', color: '#a855f7', order: 4 },
+      { id: 'ret-5',  title: 'Follow-up / Negotiation',      status: 'contingency',   color: '#f59e0b', order: 5 },
+      { id: 'ret-6',  title: 'Sold / Ready for Production',  status: 'signed',        color: '#22c55e', order: 6 },
+      { id: 'ret-7',  title: 'Scheduled',                    status: 'in_progress',   color: '#3b82f6', order: 7 },
+      { id: 'ret-8',  title: 'In Progress',                  status: 'build_phase',   color: '#06b6d4', order: 8 },
+      { id: 'ret-9',  title: 'Punch List',                   status: 'cleanup',       color: '#f97316', order: 9 },
+      { id: 'ret-10', title: 'Completed',                    status: 'completed',     color: '#10b981', order: 10 },
+      { id: 'ret-11', title: 'Lost',                         status: 'lost',          color: '#ef4444', order: 11 },
     ],
   },
   {
@@ -1491,6 +1493,7 @@ export const statusLabels: Record<CustomerStatus, string> = {
   lead: 'Lead',
   appt_set: 'Appointment Set',
   inspection_completed: 'Inspection Completed',
+  estimating: 'Estimating',
   estimate_sent: 'Estimate Sent',
   contingency: 'Contingency',
   retail: 'Retail Customer',
@@ -1514,6 +1517,7 @@ export const statusColors: Record<CustomerStatus, string> = {
   lead: 'bg-blue-100 text-blue-800',
   appt_set: 'bg-purple-100 text-purple-800',
   inspection_completed: 'bg-cyan-100 text-cyan-800',
+  estimating: 'bg-sky-100 text-sky-800',
   estimate_sent: 'bg-indigo-100 text-indigo-800',
   contingency: 'bg-yellow-100 text-yellow-800',
   retail: 'bg-teal-100 text-teal-800',

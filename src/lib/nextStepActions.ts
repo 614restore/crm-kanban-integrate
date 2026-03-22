@@ -47,19 +47,19 @@ export function getNextStep(status: KanbanStatus): NextStep | null {
     case 'inspection_scheduled':
       return {
         label: 'Log Inspection',
-        description: 'Open the job status to document the inspection.',
+        description: 'Document the inspection to move to Estimating.',
         iconName: 'ClipboardList',
         bgColor: 'bg-amber-50',
         textColor: 'text-amber-700',
         action: 'job-status-tab',
       };
-    case 'inspection_complete':
+    case 'estimating':
       return {
         label: 'Build Estimate',
         description: 'Create and send a quote.',
         iconName: 'FileText',
-        bgColor: 'bg-purple-50',
-        textColor: 'text-purple-700',
+        bgColor: 'bg-sky-50',
+        textColor: 'text-sky-700',
         action: 'estimates',
       };
     case 'estimate_sent':

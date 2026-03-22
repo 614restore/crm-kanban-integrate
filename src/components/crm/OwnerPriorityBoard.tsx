@@ -29,6 +29,7 @@ const borderColor = (row: PriorityRow) => {
 const badgeLabel = (row: PriorityRow) => {
   if (row.concern === 'payment') return { label: 'OVERDUE', color: 'bg-red-100 text-red-700' };
   if (row.status === 'estimate_viewed') return { label: 'CALL NOW', color: 'bg-green-100 text-green-700 animate-pulse' };
+  if (row.status === 'estimating') return { label: 'ESTIMATING', color: 'bg-sky-100 text-sky-700' };
   if (row.status === 'estimate_sent') return { label: 'STALE ESTIMATE', color: 'bg-amber-100 text-amber-700' };
   return { label: 'NO TOUCH', color: 'bg-amber-100 text-amber-700' };
 };
@@ -36,6 +37,7 @@ const badgeLabel = (row: PriorityRow) => {
 const recommendedAction = (row: PriorityRow) => {
   if (row.concern === 'payment') return 'Send payment reminder';
   if (row.status === 'estimate_viewed') return 'Call now — they just looked';
+  if (row.status === 'estimating') return 'Build and send the estimate';
   if (row.status === 'estimate_sent') return 'Follow up on estimate';
   return 'Make first contact';
 };
@@ -177,6 +179,7 @@ export default function OwnerPriorityBoard() {
               >
                 <option value="" disabled>Move Stage →</option>
                 <option value="contacted">Contacted</option>
+                <option value="estimating">Estimating</option>
                 <option value="estimate_sent">Estimate Sent</option>
                 <option value="estimate_viewed">Estimate Viewed</option>
                 <option value="signed">Signed</option>
