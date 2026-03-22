@@ -2897,6 +2897,50 @@ const DocumentTemplates: React.FC = () => {
     return content;
   };
 
+  // Build a version of the template with auto-filled company/date fields and
+  // remaining {{VARIABLE}} placeholders converted to styled inline input elements.
+  const getFillablePreviewContent = (template: DocumentTemplate): string => {
+    let content = template.content;
+
+    // Auto-fill known company + date fields so the document looks real
+    const autoFill: Record<string, string> = {
+      'COMPANY_NAME': companyProfile?.name || 'TrussCTR',
+      'COMPANY_TAGLINE': companyProfile?.tagline || 'Professional Storm Damage Restoration',
+      'COMPANY_ADDRESS': companyProfile?.address || '1234 Commerce Blvd',
+      'COMPANY_CITY': companyProfile?.city || 'Columbus',
+      'COMPANY_STATE': companyProfile?.state || 'OH',
+      'COMPANY_ZIP': companyProfile?.zip || '43215',
+      'COMPANY_PHONE': companyProfile?.phone || '(614) 555-0199',
+      'COMPANY_EMAIL': companyProfile?.email || 'info@614restore.com',
+      'CONTRACTOR_LICENSE': companyProfile?.contractor_license || 'OH-RC-2024-8812',
+      'COMPANY_LOGO': companyProfile?.logo_url
+        ? `<img src="${companyProfile.logo_url}" alt="${companyProfile.name || 'Company'} Logo" style="max-height:80px;max-width:200px;object-fit:contain;display:block;" />`
+        : `<span style="font-size:11px;color:#9ca3af;font-style:italic;">[No logo — upload in Settings › Company Profile]</span>`,
+      'TAX_ID': companyProfile?.tax_id || '31-1234567',
+      'ROC_NUMBER': companyProfile?.contractor_license || 'ROC-123456',
+      'REP_NAME': (profile?.first_name && profile?.last_name) ? `${profile.first_name} ${profile.last_name}` : 'Your Name',
+      'REP_TITLE': (profile as any)?.title || 'Project Manager',
+      'ESTIMATE_DATE': new Date().toLocaleDateString(),
+      'CONTRACT_DATE': new Date().toLocaleDateString(),
+      'INVOICE_DATE': new Date().toLocaleDateString(),
+      'SIGNATURE_DATE': new Date().toLocaleDateString(),
+      'INSPECTION_DATE': new Date().toLocaleDateString(),
+      'CHANGE_DATE': new Date().toLocaleDateString(),
+    };
+
+    Object.entries(autoFill).forEach(([key, val]) => {
+      content = content.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), val);
+    });
+
+    // Replace remaining {{VARIABLE}} with styled fillable input elements
+    content = content.replace(/\{\{([A-Z0-9_]+)\}\}/g, (_match, varName) => {
+      const label = varName.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
+      return `<input type="text" name="${varName}" placeholder="${label}" style="display:inline-block;border:none;border-bottom:2px solid #3b82f6;background:#eff6ff;color:#1e3a8a;padding:2px 8px;min-width:120px;max-width:260px;border-radius:3px 3px 0 0;font-size:inherit;font-family:inherit;vertical-align:baseline;outline:none;" onfocus="this.style.background='#dbeafe';this.style.borderBottomColor='#1d4ed8'" onblur="this.style.background='#eff6ff';this.style.borderBottomColor='#3b82f6'" />`;
+    });
+
+    return content;
+  };
+
   // Get all unique tags
   const allTags = Array.from(new Set(templates.flatMap(t => t.tags))).sort();
 
@@ -3308,31 +3352,18 @@ const DocumentTemplates: React.FC = () => {
             </DialogHeader>
             
             <div className="space-y-4">
-              <div className="bg-gray-50 p-4 rounded">
-                <Label>Variables in this template:</Label>
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {selectedTemplate.variables.map(variable => (
-                    <Badge key={variable} variant="secondary" className="text-xs">
-                      {variable}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-              
-              <div className="border rounded p-4 bg-white">
-                {selectedTemplate.content.trim().startsWith('<!DOCTYPE') || selectedTemplate.content.trim().startsWith('<html') ? (
-                  <iframe
-                    srcDoc={getPreviewContent(selectedTemplate)}
-                    className="w-full border-0 rounded"
-                    style={{ minHeight: '600px', height: '70vh' }}
-                    title={`Preview: ${selectedTemplate.name}`}
-                    sandbox="allow-same-origin"
-                  />
-                ) : (
-                  <pre className="whitespace-pre-wrap font-mono text-sm">
-                    {getPreviewContent(selectedTemplate)}
-                  </pre>
-                )}
+              <p className="text-sm text-muted-foreground">
+                Blue underlined fields are fillable — click any field to type in a value.
+              </p>
+
+              <div className="border rounded bg-white overflow-hidden">
+                <iframe
+                  srcDoc={getFillablePreviewContent(selectedTemplate)}
+                  className="w-full border-0"
+                  style={{ minHeight: '640px', height: '72vh' }}
+                  title={`Preview: ${selectedTemplate.name}`}
+                  sandbox="allow-same-origin allow-scripts"
+                />
               </div>
               
               <div className="flex justify-end gap-2">
