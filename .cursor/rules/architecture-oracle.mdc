@@ -12,7 +12,7 @@ and prevent architectural drift — when new code breaks established patterns.
 ## Project Architecture
 - **Structure**: hybrid
 - **Top-level dirs**: Mobile App Development Expert, api, public, scripts, src, supabase, supabase-migrations, tests, workflows
-- **Files**: 319 files across 27 directories
+- **Files**: 341 files across 29 directories
 
 
 ### API Layer (7 routes)

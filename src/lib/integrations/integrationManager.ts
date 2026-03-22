@@ -17,22 +17,36 @@ class IntegrationManager {
 
   // Initialize all available integrations
   async initializeIntegrations(): Promise<void> {
-    // Load from localStorage or API
+    // Load saved state (credentials, enabled flag) from localStorage
     const savedIntegrations = this.loadSavedIntegrations();
-    
+
     Object.entries(INTEGRATION_TEMPLATES).forEach(([id, template]) => {
-      const existing = savedIntegrations.find(i => i.id === id);
-      if (existing) {
-        this.integrations.set(id, existing);
-      } else {
-        this.integrations.set(id, {
-          ...template,
-          id,
-          isEnabled: false,
-          isConfigured: false,
-          status: 'disconnected'
-        } as BaseIntegration);
+      // Always start from the template so name/description/category are never undefined
+      const base: BaseIntegration = {
+        ...(template as BaseIntegration),
+        id,
+        isEnabled: false,
+        isConfigured: false,
+        status: 'disconnected' as const,
+      };
+
+      // Overlay only runtime state from saved data — never overwrite display fields
+      const saved = savedIntegrations.find(i => i.id === id);
+      if (saved) {
+        // Support both `enabled` (legacy localStorage) and `isEnabled` field names
+        const wasEnabled = (saved as any).isEnabled ?? (saved as any).enabled ?? false;
+        base.isEnabled = wasEnabled;
+        if ((saved as any).credentials) {
+          base.credentials = (saved as any).credentials;
+          base.isConfigured = true;
+          base.status = 'disconnected'; // will upgrade to 'connected' after auto-connect
+        }
+        if ((saved as any).settings) {
+          base.settings = (saved as any).settings;
+        }
       }
+
+      this.integrations.set(id, base);
     });
 
     // Auto-connect enabled integrations
@@ -329,27 +343,27 @@ class IntegrationManager {
   }
 
   // Weather API Tests (simplified for demo)
-  private async testOpenWeather(credentials: any): Promise<IntegrationTestResult> {
+  private async testOpenWeather(credentials: any, settings?: any): Promise<IntegrationTestResult> {
     return { success: true, message: 'OpenWeather test passed', timestamp: new Date().toISOString() };
   }
   
-  private async testHailTrace(credentials: any): Promise<IntegrationTestResult> {
+  private async testHailTrace(credentials: any, settings?: any): Promise<IntegrationTestResult> {
     return { success: true, message: 'HailTrace test passed', timestamp: new Date().toISOString() };
   }
   
-  private async testTwilio(credentials: any): Promise<IntegrationTestResult> {
+  private async testTwilio(credentials: any, settings?: any): Promise<IntegrationTestResult> {
     return { success: true, message: 'Twilio test passed', timestamp: new Date().toISOString() };
   }
   
-  private async testSendGrid(credentials: any): Promise<IntegrationTestResult> {
+  private async testSendGrid(credentials: any, settings?: any): Promise<IntegrationTestResult> {
     return { success: true, message: 'SendGrid test passed', timestamp: new Date().toISOString() };
   }
   
-  private async testAuth0(credentials: any): Promise<IntegrationTestResult> {
+  private async testAuth0(credentials: any, settings?: any): Promise<IntegrationTestResult> {
     return { success: true, message: 'Auth0 test passed', timestamp: new Date().toISOString() };
   }
   
-  private async testSquare(credentials: any): Promise<IntegrationTestResult> {
+  private async testSquare(credentials: any, settings?: any): Promise<IntegrationTestResult> {
     return { success: true, message: 'Square test passed', timestamp: new Date().toISOString() };
   }
 
@@ -458,7 +472,7 @@ class IntegrationManager {
     if (!user) {
       // Fallback: save non-sensitive settings only (no credentials) to localStorage
       const safe = Array.from(this.integrations.values()).map(i => ({
-        id: i.id, enabled: i.enabled, settings: i.settings
+        id: i.id, isEnabled: i.isEnabled, settings: i.settings
       }));
       localStorage.setItem('integrations_meta', JSON.stringify(safe));
       return;
@@ -474,7 +488,7 @@ class IntegrationManager {
         integration_id: integration.id,
         credentials: integration.credentials || {},
         settings: integration.settings || {},
-        enabled: integration.enabled,
+        enabled: integration.isEnabled,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'company_id,integration_id' });
     }
@@ -504,7 +518,7 @@ class IntegrationManager {
         if (existing) {
           existing.credentials = row.credentials || {};
           existing.settings = row.settings || {};
-          existing.enabled = row.enabled;
+          existing.isEnabled = row.enabled ?? false;
         }
       }
     }

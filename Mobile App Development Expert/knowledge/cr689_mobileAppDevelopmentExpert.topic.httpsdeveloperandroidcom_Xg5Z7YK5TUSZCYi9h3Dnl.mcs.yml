@@ -1,5 +1,6 @@
-# Name: https://developer.android.com/
-# This knowledge source searches information on the web found in https://developer.android.com/ website
+mcs.metadata:
+  componentName: https://developer.android.com/
+  description: This knowledge source searches information on the web found in https://developer.android.com/ website
 kind: KnowledgeSourceConfiguration
 source:
   kind: PublicSiteSearchSource

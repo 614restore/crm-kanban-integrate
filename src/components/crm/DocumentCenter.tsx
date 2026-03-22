@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { formatDate, getContactFullName } from '@/lib/crmData';
 import { db } from '@/lib/database';
-import { uploadDocument, validateDocumentFile, formatFileSize, getDocumentSignedUrl, isHttpUrl } from '@/lib/storage';
+import { uploadDocument, validateDocumentFile, formatFileSize, getDocumentSignedUrl, isHttpUrl, deleteFile, extractDocumentPath } from '@/lib/storage';
 import { toast } from 'sonner';
 import {
   FileText,
@@ -182,20 +182,60 @@ export default function DocumentCenter() {
     }
   };
 
-  const handleDeleteDocument = (docId: string) => {
+  const handleDeleteDocument = (docId: string, fileUrl?: string) => {
     toast.warning('Delete this document? This cannot be undone.', {
       action: {
         label: 'Delete',
         onClick: async () => {
+          // Delete the DB record first
           const ok = await db.deleteDocument(docId);
           if (!ok) { toast.error('Failed to delete document'); return; }
+
+          // Also delete the underlying file from Supabase Storage (best-effort)
+          if (fileUrl) {
+            try {
+              const path = extractDocumentPath(fileUrl);
+              if (path && !isHttpUrl(path)) {
+                await deleteFile('projectceo-documents', path);
+              }
+            } catch (storageErr) {
+              // Non-fatal: DB record is already gone; log and continue
+              console.warn('[DocumentCenter] Storage file delete failed (non-fatal):', storageErr);
+            }
+          }
+
           setUploadedDocuments((prev) => prev.filter((doc) => doc.id !== docId));
           toast.success('Document deleted');
         },
       },
-      cancel: { label: 'Cancel' },
+      cancel: { label: 'Cancel', onClick: () => {} },
       duration: 8000,
     });
+  };
+
+  const handleDownloadDocument = async (url?: string, fileName?: string) => {
+    const resolved = await resolveDocumentUrl(url);
+    if (!resolved) {
+      toast.error('Unable to download: file not found. Make sure the Supabase "projectceo-documents" storage bucket exists.');
+      return;
+    }
+    try {
+      // Fetch the file and trigger a browser download so it saves instead of opening
+      const response = await fetch(resolved);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const blob = await response.blob();
+      const anchor = document.createElement('a');
+      anchor.href = URL.createObjectURL(blob);
+      anchor.download = fileName || 'document';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(anchor.href);
+    } catch (err) {
+      console.error('[DocumentCenter] Download failed:', err);
+      // Fallback: open in new tab
+      window.open(resolved, '_blank', 'noopener,noreferrer');
+    }
   };
 
   // Gather all documents from contacts
@@ -289,9 +329,10 @@ export default function DocumentCenter() {
   const handleOpenDocument = async (url?: string) => {
     const resolved = await resolveDocumentUrl(url);
     if (!resolved) {
-      console.error('[DocumentCenter] Failed to resolve document URL');
-      console.error('[DocumentCenter] Check browser console for detailed [Storage] logs above');
-      toast.error('Unable to open document. Check console for details or verify Supabase bucket setup.');
+      toast.error(
+        'Unable to open file — Supabase storage bucket "projectceo-documents" is missing or empty. ' +
+        'Create it in Supabase Dashboard → Storage → New Bucket (name: projectceo-documents, private).'
+      );
       return;
     }
     window.open(resolved, '_blank', 'noopener,noreferrer');
@@ -539,20 +580,23 @@ export default function DocumentCenter() {
                             />
                           </button>
                           <button
-                            onClick={() => handleOpenDocument(doc.url)}
+                            onClick={() => handleDownloadDocument(doc.url, doc.name)}
                             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                            title="Download file"
                           >
                             <Download size={16} className="text-gray-500" />
                           </button>
                           <button
                             onClick={() => handleCopyDocumentLink(doc.url)}
                             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                            title="Copy share link"
                           >
                             <Share2 size={16} className="text-gray-500" />
                           </button>
                           <button
-                            onClick={() => handleDeleteDocument(doc.id)}
+                            onClick={() => handleDeleteDocument(doc.id, doc.url)}
                             className="p-2 hover:bg-red-100 rounded-lg transition-colors"
+                            title="Delete document"
                           >
                             <Trash2 size={16} className="text-red-500" />
                           </button>
@@ -603,12 +647,13 @@ export default function DocumentCenter() {
                     </span>
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
-                        onClick={() => handleOpenDocument(doc.url)}
+                        onClick={() => handleDownloadDocument(doc.url, doc.name)}
                         className="p-1 hover:bg-gray-100 rounded"
+                        title="Download file"
                       >
                         <Download size={14} className="text-gray-500" />
                       </button>
-                      <button onClick={() => handleDeleteDocument(doc.id)} className="p-1 hover:bg-red-100 rounded">
+                      <button onClick={() => handleDeleteDocument(doc.id, doc.url)} className="p-1 hover:bg-red-100 rounded" title="Delete document">
                         <Trash2 size={14} className="text-red-500" />
                       </button>
                     </div>

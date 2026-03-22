@@ -34,7 +34,7 @@ swallowed errors, dead code, and quality anti-patterns.
 
 ## Project Context
 - No contracts yet — be extra vigilant about response shapes
-- 88 dependencies tracked
+- 82 dependencies tracked
 - Project maturity: growing (62%)
 
 ---

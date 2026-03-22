@@ -2,6 +2,7 @@
 // Pre-built templates for estimates, invoices, contracts, work orders
 
 import React, { useState, useEffect } from 'react';
+import TemplateBuilder from './TemplateBuilder';
 import {
   FileText,
   Plus,
@@ -86,6 +87,7 @@ const DocumentTemplates: React.FC = () => {
   const [customerEditMode, setCustomerEditMode] = useState(false);
   const [selectedContactId, setSelectedContactId] = useState<string>('');
   const [editedContent, setEditedContent] = useState<string>('');
+  const [showBuilderMode, setShowBuilderMode] = useState(false);
 
   // ── Folder state ────────────────────────────────────────────────────────
   // 'all' = show everything; 'cat:CATEGORY_ID' = system folder; custom string = user folder
@@ -2799,6 +2801,49 @@ const DocumentTemplates: React.FC = () => {
     return content;
   };
 
+  /** Preview with company/date auto-filled; remaining vars shown as blue dashed placeholders */
+  const getFillablePreviewContent = (template: DocumentTemplate) => {
+    const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    const expiry = new Date(Date.now() + 30 * 86400000).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    const knownVars: Record<string, string> = {
+      COMPANY_NAME: companyProfile?.name || 'Your Company Name',
+      COMPANY_TAGLINE: (companyProfile as any)?.tagline || 'Professional Contractor Services',
+      COMPANY_ADDRESS: companyProfile?.address || '',
+      COMPANY_CITY: companyProfile?.city || '',
+      COMPANY_STATE: companyProfile?.state || '',
+      COMPANY_ZIP: companyProfile?.zip || '',
+      COMPANY_PHONE: companyProfile?.phone || '',
+      COMPANY_EMAIL: companyProfile?.email || '',
+      CONTRACTOR_LICENSE: companyProfile?.contractor_license || '',
+      COMPANY_LOGO: companyProfile?.logo_url
+        ? `<img src="${companyProfile.logo_url}" alt="Logo" style="max-height:70px;max-width:180px;object-fit:contain;" />`
+        : '<span style="font-size:11px;color:#9ca3af">[Add logo in Settings → Company Profile]</span>',
+      REP_NAME: profile ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() : '',
+      ESTIMATE_DATE: today,
+      CURRENT_DATE: today,
+      ESTIMATE_EXPIRY: expiry,
+      CONTRACT_DATE: today,
+      ESTIMATE_NUMBER: `EST-${Date.now().toString().slice(-6)}`,
+      CONTRACT_NUMBER: `CTR-${Date.now().toString().slice(-6)}`,
+      PAYMENT_TERMS: '50% deposit at signing; balance due upon completion',
+      WARRANTY_PERIOD: '2 years',
+      TAX_RATE: '0',
+      TAX_AMOUNT: '$0.00',
+    };
+
+    let html = template.content;
+    // Auto-fill known vars
+    for (const [k, v] of Object.entries(knownVars)) {
+      if (v) html = html.replace(new RegExp(`\\{\\{${k}\\}\\}`, 'g'), v);
+    }
+    // Replace remaining placeholders with styled blue inputs
+    html = html.replace(/\{\{([A-Z0-9_]+)\}\}/g, (_m: string, varName: string) => {
+      const label = varName.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
+      return `<span style="display:inline-block;min-width:80px;padding:1px 4px;border-bottom:2px dashed #93c5fd;color:#1e40af;background:#eff6ff;border-radius:2px;font-style:italic;font-size:0.88em;">${label}</span>`;
+    });
+    return html;
+  };
+
   // Get all unique tags
   const allTags = Array.from(new Set(templates.flatMap(t => t.tags))).sort();
 
@@ -3189,80 +3234,74 @@ const DocumentTemplates: React.FC = () => {
         </div>  {/* end main content */}
       </div>  {/* end flex row with sidebar */}
 
-      {/* Template Preview Modal */}
-      {selectedTemplate && previewMode && (
+      {/* Template Preview Modal — shows rendered document with fillable placeholders */}
+      {selectedTemplate && previewMode && !showBuilderMode && (
         <Dialog open={previewMode} onOpenChange={() => {
           setPreviewMode(false);
           setSelectedTemplate(null);
         }}>
-          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>{selectedTemplate.name} - Preview</DialogTitle>
-            </DialogHeader>
-            
-            <div className="space-y-4">
-              <div className="bg-gray-50 p-4 rounded">
-                <Label>Variables in this template:</Label>
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {selectedTemplate.variables.map(variable => (
-                    <Badge key={variable} variant="secondary" className="text-xs">
-                      {variable}
-                    </Badge>
-                  ))}
+          <DialogContent className="max-w-5xl" style={{ maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+            <DialogHeader className="flex-shrink-0">
+              <DialogTitle className="flex items-center justify-between">
+                <span>{selectedTemplate.name}</span>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => duplicateTemplate(selectedTemplate)}>
+                    <Copy className="w-4 h-4 mr-1.5" /> Duplicate
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setShowBuilderMode(true);
+                      setPreviewMode(false);
+                    }}
+                  >
+                    <User className="w-4 h-4 mr-1.5" /> Use for Customer
+                  </Button>
                 </div>
-              </div>
-              
-              <div className="border rounded p-4 bg-white">
-                {selectedTemplate.content.trim().startsWith('<!DOCTYPE') || selectedTemplate.content.trim().startsWith('<html') ? (
-                  <iframe
-                    srcDoc={getPreviewContent(selectedTemplate)}
-                    className="w-full border-0 rounded"
-                    style={{ minHeight: '600px', height: '70vh' }}
-                    title={`Preview: ${selectedTemplate.name}`}
-                    sandbox="allow-same-origin"
-                  />
-                ) : (
-                  <pre className="whitespace-pre-wrap font-mono text-sm">
-                    {getPreviewContent(selectedTemplate)}
-                  </pre>
-                )}
-              </div>
-              
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => duplicateTemplate(selectedTemplate)}>
-                  <Copy className="w-4 h-4 mr-2" />
-                  Duplicate
-                </Button>
-                <Button variant="outline" onClick={() => openCustomerEdit(selectedTemplate)}>
-                  <User className="w-4 h-4 mr-2" />
-                  Use for Customer
-                </Button>
-                <Button>
-                  <Download className="w-4 h-4 mr-2" />
-                  Generate Document
-                </Button>
-              </div>
+              </DialogTitle>
+            </DialogHeader>
+            <p className="text-xs text-gray-500 -mt-1 mb-2">
+              Company and date fields are pre-filled. Blue dashed fields will be filled when you use the template for a customer.
+            </p>
+            <div className="flex-1 overflow-hidden border rounded bg-white">
+              <iframe
+                srcDoc={getFillablePreviewContent(selectedTemplate)}
+                className="w-full border-0"
+                style={{ minHeight: '560px', height: '68vh' }}
+                title={`Preview: ${selectedTemplate.name}`}
+                sandbox="allow-same-origin allow-scripts"
+              />
             </div>
           </DialogContent>
         </Dialog>
       )}
 
-      {/* Per-Customer Template Editor */}
-      {customerEditMode && selectedTemplate && (
+      {/* TemplateBuilder — full live document builder for customer-specific docs */}
+      {showBuilderMode && selectedTemplate && (
+        <TemplateBuilder
+          template={selectedTemplate}
+          contact={crmState.contacts.find(c => c.id === selectedContactId) ?? null}
+          onClose={() => {
+            setShowBuilderMode(false);
+            setSelectedTemplate(null);
+            setSelectedContactId('');
+          }}
+        />
+      )}
+
+      {/* Legacy Per-Customer picker → now just shows a contact selector then opens builder */}
+      {customerEditMode && selectedTemplate && !showBuilderMode && (
         <Dialog open={customerEditMode} onOpenChange={() => setCustomerEditMode(false)}>
-          <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>Edit "{selectedTemplate.name}" for Customer</DialogTitle>
+              <DialogTitle>Use "{selectedTemplate.name}" for a Customer</DialogTitle>
             </DialogHeader>
-            <div className="space-y-4">
+            <div className="space-y-4 py-2">
               <div>
-                <Label>Customer</Label>
+                <Label>Select Customer</Label>
                 <select
                   value={selectedContactId}
-                  onChange={(e) => {
-                    setSelectedContactId(e.target.value);
-                    setEditedContent(fillTemplateForContact(selectedTemplate, e.target.value));
-                  }}
+                  onChange={(e) => setSelectedContactId(e.target.value)}
                   className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                 >
                   <option value="">— Select a customer —</option>
@@ -3271,41 +3310,16 @@ const DocumentTemplates: React.FC = () => {
                   ))}
                 </select>
               </div>
-              <div>
-                <Label>Document Content (editable)</Label>
-                <Textarea
-                  value={editedContent}
-                  onChange={(e) => setEditedContent(e.target.value)}
-                  className="mt-1 font-mono text-xs"
-                  rows={20}
-                />
-              </div>
+              <p className="text-xs text-gray-500">Customer info will be pre-filled in the document builder. You can edit all fields before saving.</p>
               <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setCustomerEditMode(false)}>Cancel</Button>
                 <Button
                   onClick={() => {
-                    if (!selectedContactId) {
-                      toast({ title: 'Select a customer first', variant: 'destructive' });
-                      return;
-                    }
-                    const contact = crmState.contacts.find(c => c.id === selectedContactId);
-                    const contactName = contact ? getContactFullName(contact) : 'Customer';
-                    const customized: DocumentTemplate = {
-                      ...selectedTemplate,
-                      id: Date.now().toString(),
-                      name: `${selectedTemplate.name} — ${contactName}`,
-                      content: editedContent,
-                      isDefault: false,
-                      createdAt: new Date().toISOString().split('T')[0],
-                      lastModified: new Date().toISOString().split('T')[0],
-                      usageCount: 0,
-                    };
-                    setTemplates(prev => [customized, ...prev]);
                     setCustomerEditMode(false);
-                    toast({ title: 'Saved', description: `Customer document saved as "${customized.name}"` });
+                    setShowBuilderMode(true);
                   }}
                 >
-                  Save as Customer Document
+                  <User className="w-4 h-4 mr-2" /> Open Document Builder
                 </Button>
               </div>
             </div>

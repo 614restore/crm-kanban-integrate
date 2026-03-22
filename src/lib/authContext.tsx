@@ -27,6 +27,7 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: Error | null }>;
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: Error | null }>;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -126,9 +127,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!session?.user) return;
         setSession(session);
         setUser(session.user);
-        // Only reload profile if missing — avoids unnecessary refetch on every tab focus
+        // Always re-fetch profile if missing after returning to tab
+        // (covers cases where profile load failed during dormancy or token refresh)
         setProfile(prev => {
           if (!prev) {
+            // Clear the shared promise so a fresh fetch runs (not a stale cached null)
+            profileFetchPromise.current = null;
             loadProfileOnce(session.user.id, session.user.email || '')
               .then(p => { if (p) setProfile(p); });
           }
@@ -153,6 +157,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (event === 'TOKEN_REFRESHED') {
         setSession(session);
         setUser(session?.user ?? null);
+        // After dormancy the token refreshes but profile may be null — re-fetch if needed
+        if (session?.user) {
+          setProfile(prev => {
+            if (!prev) {
+              profileFetchPromise.current = null; // clear stale promise
+              loadProfileOnce(session.user.id, session.user.email || '')
+                .then(p => { if (p) setProfile(p); });
+            }
+            return prev;
+          });
+        }
         return;
       }
 
@@ -222,6 +237,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, 12000);
     return () => window.clearTimeout(timer);
   }, [loading]);
+
+  // Safety-net: if user is present but profile is null and we're not loading,
+  // schedule a re-fetch. This catches any edge case not covered by the event handlers.
+  useEffect(() => {
+    if (loading || !user || profile) return;
+    const timer = window.setTimeout(() => {
+      console.warn('[Auth] User present but profile missing — attempting recovery fetch.');
+      profileFetchPromise.current = null; // ensure a fresh request
+      loadProfileOnce(user.id, user.email || '')
+        .then(p => { if (p) setProfile(p); });
+    }, 1500); // short delay to avoid racing with the initial load
+    return () => window.clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, user, profile]);
 
   // ── Demo helpers ──────────────────────────────────────────────────────
   const generateDemoUserId = (email: string): string => {
@@ -354,6 +383,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // ── refreshProfile ────────────────────────────────────────────────────
+  // Re-fetches the current user's profile from the server and updates state.
+  // Call this after avatar changes, role updates, or any server-side profile mutation.
+  const refreshProfile = async (): Promise<void> => {
+    if (!user) return;
+    profileFetchPromise.current = null; // clear stale promise so a fresh request runs
+    const profileData = await loadProfileOnce(user.id, user.email || '');
+    if (profileData) setProfile(profileData);
+  };
+
   // ── updateProfile ─────────────────────────────────────────────────────
   const updateProfile = async (updates: Partial<Profile>) => {
     if (!user) return { error: new Error('No user logged in') };
@@ -383,7 +422,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ session, user, profile, loading, isPasswordReset, signIn, signUp, signOut, resetPassword, updateProfile }}>
+    <AuthContext.Provider value={{ session, user, profile, loading, isPasswordReset, signIn, signUp, signOut, resetPassword, updateProfile, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );

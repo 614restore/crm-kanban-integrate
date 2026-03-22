@@ -23,7 +23,7 @@ Fires after every `vibecheck scan` completes.
 - Recurring pattern → create new targeted rule
 
 ## IDE Targets
-Currently writing to: cursor, claude, copilot
+Currently writing to: cursor, windsurf, claude, copilot
 
 ---
 <!-- vibecheck:context-engine:v2 -->

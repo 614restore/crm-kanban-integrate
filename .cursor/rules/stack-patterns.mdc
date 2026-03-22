@@ -6,10 +6,10 @@ alwaysApply: true
 # React Stack Patterns
 
 ## Project Identity
-- **Name**: vite_react_shadcn_ts
+- **Name**: 614restore-crm
 - **Stack**: React + typescript + node
 - **Maturity**: growing (62% score)
-- **Structure**: hybrid (319 files, 27 dirs)
+- **Structure**: hybrid (341 files, 29 dirs)
 
 ## Styling Rules
 - Primary: **Tailwind CSS** with **Radix UI**
@@ -38,7 +38,7 @@ alwaysApply: true
 
 ## Pattern: Environment-based Config
 - Uses 2 environment-specific .env files
-- Files: `.env`, `.env.local`
+- Files: `.env.local`, `.env.production`
 
 ---
 <!-- vibecheck:context-engine:v2 -->
