@@ -1,20 +1,21 @@
 // CRM Data Types and Mock Data
 
-export type CustomerStatus = 
-  | 'prospect' 
-  | 'lead' 
-  | 'appt_set' 
+export type CustomerStatus =
+  | 'prospect'
+  | 'lead'
+  | 'appt_set'
   | 'inspection_completed'
-  | 'estimate_sent' 
-  | 'contingency' 
-  | 'retail' 
-  | 'signed' 
-  | 'in_progress' 
-  | 'build_phase' 
-  | 'cleanup' 
-  | 'invoicing' 
-  | 'pending_payment' 
-  | 'completed' 
+  | 'estimate_sent'
+  | 'contingency'
+  | 'retail'
+  | 'signed'
+  | 'ordering_material'
+  | 'in_progress'
+  | 'build_phase'
+  | 'cleanup'
+  | 'invoicing'
+  | 'pending_payment'
+  | 'completed'
   | 'lost'
   | 'claim_filed'
   | 'adjuster_scheduled'
@@ -586,11 +587,12 @@ export const defaultBoards: KanbanBoard[] = [
     createdBy: 'system',
     isDefault: true,
     columns: [
-      { id: 'col-p1', title: 'Sold / New',   status: 'signed',      color: '#3b82f6', order: 0 },
-      { id: 'col-p2', title: 'Scheduled',    status: 'in_progress', color: '#8b5cf6', order: 1 },
-      { id: 'col-p3', title: 'In Progress',  status: 'build_phase', color: '#06b6d4', order: 2 },
-      { id: 'col-p4', title: 'Punch List',   status: 'cleanup',     color: '#f97316', order: 3 },
-      { id: 'col-p5', title: 'Completed',    status: 'completed',   color: '#22c55e', order: 4 },
+      { id: 'col-p1', title: 'Sold / New',         status: 'signed',             color: '#3b82f6', order: 0 },
+      { id: 'col-p6', title: 'Ordering Material',  status: 'ordering_material',  color: '#f59e0b', order: 1 },
+      { id: 'col-p2', title: 'Scheduled',          status: 'in_progress',        color: '#8b5cf6', order: 2 },
+      { id: 'col-p3', title: 'In Progress',        status: 'build_phase',        color: '#06b6d4', order: 3 },
+      { id: 'col-p4', title: 'Punch List',         status: 'cleanup',            color: '#f97316', order: 4 },
+      { id: 'col-p5', title: 'Completed',          status: 'completed',          color: '#22c55e', order: 5 },
     ],
   },
   {
@@ -1493,6 +1495,7 @@ export const statusLabels: Record<CustomerStatus, string> = {
   contingency: 'Contingency',
   retail: 'Retail Customer',
   signed: 'Signed Customer',
+  ordering_material: 'Ordering Material',
   in_progress: 'In Progress',
   build_phase: 'Build Phase',
   cleanup: 'Cleanup',
@@ -1515,6 +1518,7 @@ export const statusColors: Record<CustomerStatus, string> = {
   contingency: 'bg-yellow-100 text-yellow-800',
   retail: 'bg-teal-100 text-teal-800',
   signed: 'bg-green-100 text-green-800',
+  ordering_material: 'bg-amber-100 text-amber-800',
   in_progress: 'bg-cyan-100 text-cyan-800',
   build_phase: 'bg-orange-100 text-orange-800',
   cleanup: 'bg-pink-100 text-pink-800',
