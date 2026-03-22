@@ -71,7 +71,9 @@ const COST_FIELD_PATTERNS = [
   'FASCIA_REPAIR_', 'REMOVE_GUT_',
 ];
 
-const TERMS_FIELDS = ['WARRANTY_PERIOD', 'PAYMENT_TERMS'];
+// TERMS_CONTENT is always editable (shown as textarea); WARRANTY_PERIOD + PAYMENT_TERMS are now
+// embedded inside TERMS_CONTENT so we don't show them as separate fields.
+const TERMS_FIELDS = ['TERMS_CONTENT'];
 const DOC_INFO_FIELDS = ['ESTIMATE_NUMBER', 'START_DATE', 'ESTIMATED_DURATION', 'ESTIMATE_DATE', 'ESTIMATE_EXPIRY', 'CONTRACT_NUMBER', 'CONTRACT_DATE', 'ESTIMATED_COMPLETION'];
 
 function isCostField(key: string): boolean {
@@ -138,13 +140,13 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
 
   const isAgreement = selected?.templateType === 'customer-service-agreement';
 
-  // Initialize line items when template is selected
+  // Initialize line items and field values when template is selected
   useEffect(() => {
     if (!selected) return;
     if (selected.templateType === 'customer-service-agreement') {
-      const defaults = (selected as any).lineItemDefaults as LineItemDefault[] | undefined;
-      if (defaults && defaults.length > 0) {
-        setLineItems(defaults.map(fromDefault));
+      const lineDefaults = (selected as any).lineItemDefaults as LineItemDefault[] | undefined;
+      if (lineDefaults && lineDefaults.length > 0) {
+        setLineItems(lineDefaults.map(fromDefault));
       } else {
         setLineItems([{ id: crypto.randomUUID(), description: '', qty: '', unit: '', unitPrice: '', total: '' }]);
       }
@@ -152,18 +154,25 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
       const taxField = selected.fields?.find(f => f.key === 'TAX_RATE');
       if (taxField?.defaultValue) setTaxRate(taxField.defaultValue);
     }
-    // Pre-fill field defaults
+
+    // Seed field values: start from buildContactOverrides auto-fills so TERMS_CONTENT,
+    // CONTRACT_DATE, CONTRACT_NUMBER etc. are pre-populated even if not in fields[].
+    const autoBase = buildContactOverrides(contact, companyProfile, profile);
     const defaults: Record<string, string> = {};
+
+    // Pick useful auto-fill defaults into fieldValues so the user can override them
+    const autoKeysToSeed = ['TERMS_CONTENT', 'CONTRACT_NUMBER', 'CONTRACT_DATE', 'ESTIMATE_DATE', 'ESTIMATE_NUMBER', 'ESTIMATE_EXPIRY', 'START_DATE', 'PAYMENT_TERMS', 'WARRANTY_PERIOD'];
+    autoKeysToSeed.forEach(k => { if (autoBase[k]) defaults[k] = autoBase[k]; });
+
+    // Also pull defaults from the template's fields[] definition
     selected.fields?.forEach(f => {
-      if (f.defaultValue && !isCostField(f.key) && !TERMS_FIELDS.includes(f.key)) {
-        defaults[f.key] = f.defaultValue;
-      }
-      if (f.defaultValue && TERMS_FIELDS.includes(f.key)) {
-        defaults[f.key] = f.defaultValue;
+      if (f.defaultValue && !isCostField(f.key)) {
+        defaults[f.key] = defaults[f.key] ?? f.defaultValue;
       }
     });
+
     setFieldValues(defaults);
-  }, [selected]);
+  }, [selected, contact, companyProfile, profile]);
 
   // Computed totals
   const subtotal = useMemo(() => lineItems.reduce((sum, item) => sum + calcItemTotal(item), 0), [lineItems]);
@@ -177,6 +186,10 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
     if (!selected) return '';
     const base = buildContactOverrides(contact, companyProfile, profile);
     const merged = { ...base, ...fieldValues };
+    // Convert TERMS_CONTENT plain-text newlines → HTML <br> for the document
+    if (merged.TERMS_CONTENT) {
+      merged.TERMS_CONTENT = merged.TERMS_CONTENT.replace(/\n/g, '<br>');
+    }
     let html = fillTemplateVars(selected.content, merged);
 
     if (isAgreement) {
@@ -249,6 +262,10 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
 
     const base = buildContactOverrides(contact, companyProfile, profile);
     const merged = { ...base, ...fieldValues };
+    // Convert TERMS_CONTENT plain-text newlines → HTML <br>
+    if (merged.TERMS_CONTENT) {
+      merged.TERMS_CONTENT = merged.TERMS_CONTENT.replace(/\n/g, '<br>');
+    }
     const finalHtml = (() => {
       let html = fillTemplateVars(selected.content, merged);
       if (isAgreement) {
@@ -348,16 +365,30 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
   const { docInfoFields, specFields, termsFields } = useMemo(() => {
     if (!selected) return { docInfoFields: [], specFields: [], termsFields: [] };
     const base = buildContactOverrides(contact, companyProfile, profile);
-    const autoFilled = Object.keys(base).filter(k => base[k]);
+    const autoFilled = new Set(Object.keys(base).filter(k => base[k]));
+    const templateKeys = new Set((selected.fields ?? []).map(f => f.key));
 
+    // Fields that need user input (not auto-filled) — but DOC_INFO and TERMS fields
+    // are always shown so users can override/edit auto-filled values.
     const allEditable = (selected.fields ?? [])
       .map(f => f.key)
-      .filter(k => !autoFilled.includes(k));
+      .filter(k => !autoFilled.has(k));
+
+    // Doc info: always show DOC_INFO fields if present in template (even if auto-filled)
+    const docInfoKeys = DOC_INFO_FIELDS.filter(k => templateKeys.has(k));
+
+    // Terms: always show TERMS_CONTENT if present in template (even if auto-filled)
+    const termsKeys = TERMS_FIELDS.filter(k => templateKeys.has(k));
+
+    // Spec fields: not auto-filled, not doc-info, not cost, not terms
+    const specKeys = allEditable.filter(
+      k => !DOC_INFO_FIELDS.includes(k) && !isCostField(k) && !TERMS_FIELDS.includes(k)
+    );
 
     return {
-      docInfoFields: allEditable.filter(k => DOC_INFO_FIELDS.includes(k)),
-      specFields: allEditable.filter(k => !DOC_INFO_FIELDS.includes(k) && !isCostField(k) && !TERMS_FIELDS.includes(k)),
-      termsFields: allEditable.filter(k => TERMS_FIELDS.includes(k)),
+      docInfoFields: docInfoKeys,
+      specFields: specKeys,
+      termsFields: termsKeys,
     };
   }, [selected, contact, companyProfile, profile]);
 
@@ -365,22 +396,28 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
 
   const renderFieldInput = (key: string) => {
     const meta = getFieldMeta(key);
-    const label = meta?.label || key.replace(/_/g, ' ');
-    const placeholder = meta?.placeholder || `Enter ${label.toLowerCase()}…`;
+    const isTermsContent = key === 'TERMS_CONTENT';
+    const label = isTermsContent
+      ? 'Terms & Conditions'
+      : (meta?.label || key.replace(/_/g, ' '));
+    const placeholder = isTermsContent
+      ? 'Enter your terms and conditions… (each bullet on a new line)'
+      : (meta?.placeholder || `Enter ${label.toLowerCase()}…`);
     const type = meta?.type || 'text';
+    const isAutoFilled = !!fieldValues[key];
     return (
       <div key={key}>
         <label className="block text-xs font-medium text-gray-600 mb-1">
           {label}
-          {fieldValues[key] && <span className="ml-1 text-green-600 text-xs">✓</span>}
+          {isAutoFilled && <span className="ml-1 text-green-600 text-xs">✓</span>}
         </label>
-        {type === 'textarea' ? (
+        {(type === 'textarea' || isTermsContent) ? (
           <textarea
             value={fieldValues[key] || ''}
             onChange={e => setFieldValues(prev => ({ ...prev, [key]: e.target.value }))}
             placeholder={placeholder}
-            rows={3}
-            className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            rows={isTermsContent ? 8 : 3}
+            className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
           />
         ) : (
           <input
