@@ -2610,14 +2610,7 @@ const DocumentTemplates: React.FC = () => {
       const htmlFile = new File([htmlBlob], `${docName.replace(/[^a-z0-9]/gi, '_')}.html`, { type: 'text/html' });
       const uploadResult = await uploadDocument(htmlFile, profile.company_id, contactId);
 
-      // Create document record (uses service layer; sign_token is new column from migration)
-      await (db as any).supabase
-        ? null  // handled below
-        : null;
-
-      // Direct Supabase insert (db.createDocument doesn't yet know about new columns)
-      const { supabase: sbClient } = await import('@/lib/supabase');
-      const { data: docRow, error: insertErr } = await sbClient.from('documents').insert({
+      const docRow = await db.createDocument({
         company_id: profile.company_id,
         contact_id: contactId,
         name: docName,
@@ -2628,9 +2621,9 @@ const DocumentTemplates: React.FC = () => {
         sent_by: profile.id,
         contact_email: contactEmail,
         status: 'sent',
-      }).select().single();
+      });
 
-      if (insertErr) throw new Error(insertErr.message);
+      if (!docRow) throw new Error('Failed to create document record');
 
       // Send email to customer via existing email API
       const { sendEmail } = await import('@/lib/emailApi');
