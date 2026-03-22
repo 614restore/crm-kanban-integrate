@@ -5,6 +5,7 @@ export type CustomerStatus =
   | 'lead' 
   | 'appt_set' 
   | 'inspection_completed'
+  | 'estimating'
   | 'estimate_sent' 
   | 'contingency' 
   | 'retail' 

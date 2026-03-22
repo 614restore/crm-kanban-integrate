@@ -225,7 +225,7 @@ export default function CalendarView() {
         if (contact && contact.status === 'appt_set') {
           const now = new Date().toISOString();
           db.updateContact(appointment.contactId, {
-            status: 'inspection_completed',
+            status: 'estimating',
             status_changed_at: now,
           }).catch((err) => console.error('Failed to advance contact status:', err));
           dispatch({
@@ -239,14 +239,14 @@ export default function CalendarView() {
               contactName: `${contact.firstName} ${contact.lastName}`.trim(),
               contactEmail: contact.email,
               oldStatus: 'appt_set',
-              newStatus: 'inspection_completed',
+              newStatus: 'estimating',
             }).catch(() => {});
             fireAutomationEvent('contact_status_changed', state.companyId, {
               contactId: contact.id,
               contactName: `${contact.firstName} ${contact.lastName}`.trim(),
               contactEmail: contact.email,
               oldStatus: 'appt_set',
-              newStatus: 'inspection_completed',
+              newStatus: 'estimating',
             }).catch(() => {});
           }
         }
