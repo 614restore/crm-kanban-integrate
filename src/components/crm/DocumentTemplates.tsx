@@ -2569,6 +2569,37 @@ const DocumentTemplates: React.FC = () => {
     });
   };
 
+  // Open a print-ready window with the filled template content
+  const generateDocument = (template: DocumentTemplate) => {
+    const content = getFillablePreviewContent(template);
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast({ title: 'Popup blocked', description: 'Allow popups for this site to generate documents.', variant: 'destructive' });
+      return;
+    }
+    printWindow.document.write(content);
+    printWindow.document.close();
+    printWindow.focus();
+    // Slight delay so the document renders before the print dialog opens
+    setTimeout(() => { printWindow.print(); }, 400);
+    // Increment usage count
+    setTemplates(prev => prev.map(t => t.id === template.id ? { ...t, usageCount: t.usageCount + 1 } : t));
+  };
+
+  // Download template as an HTML file (sample data pre-filled)
+  const downloadTemplate = (template: DocumentTemplate) => {
+    const content = getPreviewContent(template);
+    const blob = new Blob([content], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${template.name.replace(/[^a-z0-9]/gi, '_')}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setTemplates(prev => prev.map(t => t.id === template.id ? { ...t, usageCount: t.usageCount + 1 } : t));
+    toast({ title: 'Downloaded', description: `"${template.name}" saved as HTML file.` });
+  };
+
   // Duplicate template
   const duplicateTemplate = (template: DocumentTemplate) => {
     const newTemplate: DocumentTemplate = {
@@ -3326,7 +3357,7 @@ const DocumentTemplates: React.FC = () => {
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       )}
-                      <Button size="sm">
+                      <Button size="sm" onClick={() => downloadTemplate(template)} title="Download as HTML">
                         <Download className="w-4 h-4" />
                       </Button>
                     </div>
@@ -3375,7 +3406,7 @@ const DocumentTemplates: React.FC = () => {
                   <User className="w-4 h-4 mr-2" />
                   Use for Customer
                 </Button>
-                <Button>
+                <Button onClick={() => generateDocument(selectedTemplate)}>
                   <Download className="w-4 h-4 mr-2" />
                   Generate Document
                 </Button>
