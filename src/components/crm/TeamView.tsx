@@ -42,6 +42,7 @@ export default function TeamView() {
   const [copied, setCopied] = useState(false);
   const [isSendingInvite, setIsSendingInvite] = useState(false);
   const [isSavingMember, setIsSavingMember] = useState(false);
+  const [companyName, setCompanyName] = useState<string>('');
 
   const [pendingInvites, setPendingInvites] = useState<Array<{
     id: string; email: string; role: string; created_at: string; expires_at: string; accepted: boolean;
@@ -63,7 +64,10 @@ export default function TeamView() {
     const companyId = state.companyId || profile?.company_id;
     if (!companyId) return;
     db.getCompany(companyId)
-      .then(c => { if (c?.subscription_plan) setSubscriptionPlan(c.subscription_plan); })
+      .then(c => {
+        if (c?.subscription_plan) setSubscriptionPlan(c.subscription_plan);
+        if (c?.name) setCompanyName(c.name);
+      })
       .catch(() => {});
   }, [state.companyId, profile?.company_id]);
 
@@ -201,7 +205,11 @@ export default function TeamView() {
 
 
       // Send email via our Vercel API (Resend)
-      const inviteUrl = `${window.location.origin}${window.location.pathname}#/join?token=${token}`;
+      // Use proper query params so AuthPage can detect the invite on load.
+      // The #/join?token= format puts params in the hash which window.location.search cannot read.
+      const inviteUrl = `${window.location.origin}/?invite=${token}&company=${effectiveCompanyId}`;
+      const displayCompany = companyName || state.currentUser?.name || 'TrussCTR';
+      const displayRole = inviteRole.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
       const emailRes = await fetch(`${window.location.origin}/api/send-email`, {
         method: 'POST',
         headers: {
@@ -210,12 +218,18 @@ export default function TeamView() {
         },
         body: JSON.stringify({
           to: inviteEmail.trim().toLowerCase(),
-          subject: `You're invited to join ${state.currentUser?.name || 'TrussCTR'}`,
-          html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto">
-            <h2>You've been invited!</h2>
-            <p>You've been invited to join as a <strong>${inviteRole.replace('_', ' ')}</strong>.</p>
-            <p><a href="${inviteUrl}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:white;border-radius:8px;text-decoration:none;font-weight:600">Accept Invitation</a></p>
-            <p style="color:#6b7280;font-size:13px">This invite expires in 7 days.</p>
+          subject: `You've been invited to join ${displayCompany} on TrussCTR`,
+          html: `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;background:#f9fafb;padding:32px">
+            <div style="background:white;border-radius:12px;padding:32px;border:1px solid #e5e7eb">
+              <h2 style="margin:0 0 8px;color:#111827;font-size:22px">You've been invited!</h2>
+              <p style="color:#6b7280;margin:0 0 24px;font-size:15px">
+                <strong style="color:#111827">${state.currentUser?.name || 'Someone'}</strong> has invited you to join
+                <strong style="color:#111827">${displayCompany}</strong> on TrussCTR as a
+                <strong style="color:#2563eb">${displayRole}</strong>.
+              </p>
+              <a href="${inviteUrl}" style="display:inline-block;padding:13px 28px;background:#2563eb;color:white;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Create Your Account</a>
+              <p style="color:#9ca3af;font-size:12px;margin:24px 0 0">This invite expires in 7 days. If you weren't expecting this, you can safely ignore it.</p>
+            </div>
           </div>`,
         }),
       });
