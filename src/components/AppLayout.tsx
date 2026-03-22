@@ -475,10 +475,10 @@ function CRMApp() {
   const loadData = useCallback(async (options?: { silent?: boolean }) => {
     const silent = options?.silent ?? false;
     if (!profile?.company_id) {
-      // If auth is still loading, don't mark as done — wait for profile to arrive
-      if (!authLoading && !silent) {
-        dispatch({ type: 'SET_LOADING', payload: false });
-      }
+      // profile.company_id not yet available — keep the loading screen up.
+      // The LoadingScreen is now also shown while !profile?.company_id, so we
+      // don't need to dispatch SET_LOADING: false here. Dispatching it too early
+      // caused a blank-contacts flash before the profile arrived.
       return;
     }
 
@@ -942,11 +942,12 @@ function CRMApp() {
     return () => window.clearInterval(poller);
   }, [profile?.company_id, requestSoftReload]);
 
-// Load data on mount
+// Load data whenever company_id becomes available (fires on mount AND when profile arrives late)
 useEffect(() => {
-  if (!profile?.company_id || authLoading) return;
+  if (authLoading || !profile?.company_id) return;
   loadData();
-}, [loadData]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [profile?.company_id, authLoading]);
 
   // Track idle time and reload data when the tab regains focus.
   // After >30 min dormant, re-validate the auth session before refreshing.
@@ -1050,7 +1051,11 @@ useEffect(() => {
     }
   }, [profile]);
 
-  if (state.isLoading && !state.isInitialized) {
+  // Keep the loading screen visible while:
+  // 1. CRM data is still being fetched (isLoading, not yet initialized), OR
+  // 2. Auth finished but profile.company_id hasn't arrived yet (prevents blank-contacts flash).
+  //    The 12s auth timeout in authContext is the outer safety net.
+  if ((state.isLoading && !state.isInitialized) || (!profile?.company_id && !state.isInitialized)) {
     return <LoadingScreen />;
   }
 
