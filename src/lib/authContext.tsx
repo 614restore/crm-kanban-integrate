@@ -163,6 +163,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (event === 'SIGNED_OUT') {
+        // Wipe all CRM-specific localStorage keys so one company's data (contacts,
+        // terms, T&C, cached templates) cannot bleed to the next user on this browser.
+        try {
+          Object.keys(localStorage)
+            .filter(k => k.startsWith('crm_'))
+            .forEach(k => localStorage.removeItem(k));
+        } catch { /* private browsing / storage disabled — ignore */ }
         setSession(null);
         setUser(null);
         setProfile(null);

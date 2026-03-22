@@ -58,7 +58,10 @@ const CommissionPayrollView = lazy(() => import('./crm/CommissionPayrollView'));
 
 // --- LocalStorage data cache (stale-while-revalidate) ---
 const DATA_CACHE_KEY = 'crm_app_data_v1';
-const DATA_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+// 8-hour TTL: keeps data visible in an idle tab for a full working day.
+// The tab-focus handler and 20s polling fallback still reload fresh data
+// from Supabase in the background — the cache just prevents an empty flash.
+const DATA_CACHE_TTL = 8 * 60 * 60 * 1000;
 
 function readDataCache(companyId: string): Record<string, unknown> | null {
   try {

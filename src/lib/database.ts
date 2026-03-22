@@ -2,17 +2,16 @@
 import { supabase, isDemoMode } from './supabase';
 
 // ── Company ID safety assertion ───────────────────────────────────────────────
-// Defense-in-depth: throws in dev, logs in prod if any method fires without
-// a company_id. RLS policies are the real enforcement layer.
+// Defense-in-depth: blocks any database method that fires without a company_id.
+// RLS policies are the real enforcement layer at the Supabase level, but this
+// prevents accidental cross-tenant queries from ever reaching the network.
 function assertCompanyId(companyId: string | undefined | null, method: string): void {
   if (!companyId) {
     const msg = `[database] ${method} called without company_id — query blocked`;
-    if (import.meta.env.DEV) {
-      console.warn(msg); return;
-
-    } else {
-      console.error(msg);
-    }
+    // Throw in all environments: a missing company_id means unauthenticated or
+    // uninitialized context. Better to surface this immediately than allow a
+    // query that RLS would silently return empty results for.
+    throw new Error(msg);
   }
 }
 // ─────────────────────────────────────────────────────────────────────────────
