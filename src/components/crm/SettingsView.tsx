@@ -33,6 +33,7 @@ import {
   MessageSquare,
   Calendar,
   FileText,
+  FilePlus,
   User,
   Upload,
   Loader2,
@@ -49,8 +50,9 @@ import {
 import { supabase, isDemoMode } from '@/lib/supabase';
 import { ensureDefaultLeadSources } from '@/lib/setupCompany';
 import ImageCropDialog from '@/components/ui/ImageCropDialog';
+import DocumentTemplates from '@/components/crm/DocumentTemplates';
 
-type SettingsTab = 'company' | 'profile' | 'integrations' | 'ai-assistant' | 'notifications' | 'security' | 'billing' | 'customer-billing' | 'api' | 'features';
+type SettingsTab = 'company' | 'profile' | 'integrations' | 'ai-assistant' | 'notifications' | 'security' | 'billing' | 'customer-billing' | 'api' | 'features' | 'document-templates';
 
 interface CompanyFormData {
   name: string;
@@ -1260,6 +1262,7 @@ export default function SettingsView() {
     { id: 'billing', label: 'My Plan', icon: <CreditCard size={18} /> },
     { id: 'customer-billing', label: 'Customer Billing', icon: <Receipt size={18} /> },
     { id: 'api', label: 'API Access', icon: <Key size={18} /> },
+    { id: 'document-templates', label: 'Document Templates', icon: <FilePlus size={18} /> },
   ];
 
   useEffect(() => {
@@ -2255,6 +2258,12 @@ export default function SettingsView() {
                 </a>
               </div>
             </div>
+          </div>
+        )}
+
+        {activeTab === 'document-templates' && (
+          <div className="w-full">
+            <DocumentTemplates />
           </div>
         )}
       </div>

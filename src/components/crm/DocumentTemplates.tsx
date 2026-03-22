@@ -3591,6 +3591,44 @@ const DocumentTemplates: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Send for Signing — primary CTA, shown at the bottom of the document */}
+                <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <FileSignature className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold text-blue-900">Ready to send to the customer?</p>
+                      <p className="text-xs text-blue-700 mt-0.5">
+                        They'll receive an email with a link to review and sign. You'll be notified when they open it and again when they sign. The signed copy is saved to their file automatically.
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    className="w-full"
+                    disabled={sendingForSign}
+                    onClick={() => {
+                      if (!selectedContactId) {
+                        toast({ title: 'Select a customer first', variant: 'destructive' });
+                        return;
+                      }
+                      const contact = crmState.contacts.find(c => c.id === selectedContactId);
+                      const contactName = contact ? getContactFullName(contact) : 'Customer';
+                      sendForSigning(customerPreview, `${selectedTemplate.name} — ${contactName}`, selectedContactId);
+                    }}
+                  >
+                    {sendingForSign ? (
+                      <>
+                        <span className="w-4 h-4 mr-2 animate-spin rounded-full border-2 border-white border-t-transparent inline-block" />
+                        Sending…
+                      </>
+                    ) : (
+                      <>
+                        <FileSignature className="w-4 h-4 mr-2" />
+                        Send Document to Customer
+                      </>
+                    )}
+                  </Button>
+                </div>
+
                 <div className="flex flex-wrap justify-end gap-2">
                   <Button variant="outline" onClick={() => setCustomerEditMode(false)}>Cancel</Button>
                   <Button
@@ -3633,30 +3671,6 @@ const DocumentTemplates: React.FC = () => {
                     }}
                   >
                     Save as Customer Document
-                  </Button>
-                  <Button
-                    disabled={sendingForSign}
-                    onClick={() => {
-                      if (!selectedContactId) {
-                        toast({ title: 'Select a customer first', variant: 'destructive' });
-                        return;
-                      }
-                      const contact = crmState.contacts.find(c => c.id === selectedContactId);
-                      const contactName = contact ? getContactFullName(contact) : 'Customer';
-                      sendForSigning(customerPreview, `${selectedTemplate.name} — ${contactName}`, selectedContactId);
-                    }}
-                  >
-                    {sendingForSign ? (
-                      <>
-                        <span className="w-4 h-4 mr-2 animate-spin rounded-full border-2 border-white border-t-transparent inline-block" />
-                        Sending…
-                      </>
-                    ) : (
-                      <>
-                        <FileSignature className="w-4 h-4 mr-2" />
-                        Send for Signing
-                      </>
-                    )}
                   </Button>
                 </div>
               </div>
