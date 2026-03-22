@@ -56,6 +56,26 @@ const CrewScheduleView = lazy(() => import('./crm/CrewScheduleView'));
 const EquipmentView = lazy(() => import('./crm/EquipmentView'));
 const CommissionPayrollView = lazy(() => import('./crm/CommissionPayrollView'));
 
+// --- LocalStorage data cache (stale-while-revalidate) ---
+const DATA_CACHE_KEY = 'crm_app_data_v1';
+const DATA_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
+function readDataCache(companyId: string): Record<string, unknown> | null {
+  try {
+    const raw = localStorage.getItem(DATA_CACHE_KEY);
+    if (!raw) return null;
+    const { v, cid, ts, data } = JSON.parse(raw);
+    if (v !== 1 || cid !== companyId || Date.now() - ts > DATA_CACHE_TTL) return null;
+    return data as Record<string, unknown>;
+  } catch { return null; }
+}
+
+function writeDataCache(companyId: string, data: unknown): void {
+  try {
+    localStorage.setItem(DATA_CACHE_KEY, JSON.stringify({ v: 1, cid: companyId, ts: Date.now(), data }));
+  } catch { /* quota exceeded or private browsing — silently skip */ }
+}
+
 // Initial CRM state (completely empty)
 const getInitialView = (): ViewType => {
   try {
@@ -444,6 +464,7 @@ function CRMApp() {
   const realtimeChannelRef = useRef<any>(null);
   const isReloadingRef = useRef(false);
   const queuedReloadRef = useRef(false);
+  const lastHiddenAtRef = useRef<number>(0);
 
   // Race a DB fetch against a per-query timeout; resolves to fallback on timeout instead of
   // blocking the whole Promise.all. Prevents a single slow Supabase query from stalling the UI.
@@ -461,10 +482,17 @@ function CRMApp() {
       return;
     }
 
-    if (!silent) {
+    dispatch({ type: 'SET_COMPANY_ID', payload: profile.company_id });
+
+    // Serve cached data immediately so the UI isn't blank while fresh data loads.
+    // On the first-ever load (no cache) we show the loading screen as before.
+    const cached = !silent ? readDataCache(profile.company_id) : null;
+    if (cached) {
+      dispatch({ type: 'INITIALIZE_DATA', payload: cached as any });
+      // Don't show the loading screen — continue fetching fresh data silently.
+    } else if (!silent) {
       dispatch({ type: 'SET_LOADING', payload: true });
     }
-    dispatch({ type: 'SET_COMPANY_ID', payload: profile.company_id });
 
     try {
       // Load all data in parallel (including company to pre-warm cache for Sidebar)
@@ -757,25 +785,27 @@ function CRMApp() {
         updatedAt: mo.updated_at,
       }));
 
-      dispatch({
-        type: 'INITIALIZE_DATA',
-        payload: {
-          contacts: enrichedContacts,
-          appointments,
-          invoices,
-          boards,
-          leadSources,
-          automations,
-          teamMembers,
-          suppliers,
-          materialOrders,
-          estimates,
-          projects,
-          workOrders,
-          documentTemplates: [],
-          companyGoals: [],
-        },
-      });
+      const freshPayload = {
+        contacts: enrichedContacts,
+        appointments,
+        invoices,
+        boards,
+        leadSources,
+        automations,
+        teamMembers,
+        suppliers,
+        materialOrders,
+        estimates,
+        projects,
+        workOrders,
+        documentTemplates: [],
+        companyGoals: [],
+      };
+
+      dispatch({ type: 'INITIALIZE_DATA', payload: freshPayload });
+
+      // Persist to localStorage so next refresh shows data instantly
+      writeDataCache(profile.company_id, freshPayload);
 
     } catch (error) {
       console.error('Error loading CRM data:', error);
@@ -916,17 +946,41 @@ useEffect(() => {
   loadData();
 }, [loadData]);
 
-  // Re-load data when tab becomes visible (fixes stale/blank state after idle)
+  // Track idle time and reload data when the tab regains focus.
+  // After >30 min dormant, re-validate the auth session before refreshing.
   useEffect(() => {
     if (!profile?.company_id) return;
-    const handleVisible = () => {
-      if (document.visibilityState === 'visible') {
-        requestSoftReload();
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        lastHiddenAtRef.current = Date.now();
+      } else if (document.visibilityState === 'visible') {
+        const idleMs = lastHiddenAtRef.current ? Date.now() - lastHiddenAtRef.current : 0;
+        if (idleMs > 30 * 60 * 1000) {
+          // Dormant >30 min — re-validate session first, then reload
+          supabase.auth.getSession().then(({ data: { session } }) => {
+            if (session) requestSoftReload();
+            // No session → onAuthStateChange listener handles sign-out automatically
+          });
+        } else {
+          requestSoftReload();
+        }
       }
     };
-    document.addEventListener('visibilitychange', handleVisible);
-    return () => document.removeEventListener('visibilitychange', handleVisible);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, [profile?.company_id, requestSoftReload]);
+
+  // Keep the Supabase auth token alive during long page sessions.
+  // Supabase auto-refreshes tokens, but this ensures we catch silent expiry.
+  useEffect(() => {
+    const interval = window.setInterval(async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session && profile?.company_id) {
+        await supabase.auth.signOut();
+      }
+    }, 10 * 60 * 1000); // every 10 minutes
+    return () => window.clearInterval(interval);
+  }, [profile?.company_id]);
 
   // Fail-safe: avoid getting stuck on the loading screen if initial data calls stall
   useEffect(() => {
