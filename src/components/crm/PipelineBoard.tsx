@@ -42,6 +42,7 @@ import {
   Users,
 } from 'lucide-react';
 import { getNextStep, setPendingContactTab, type NextStep } from '@/lib/nextStepActions';
+import { fireAutomationEvent } from '@/lib/automationEngine';
 import type { KanbanStatus } from '@/lib/kanbanStatuses';
 
 const NEXT_STEP_ICONS: Record<string, React.ElementType> = {
@@ -129,6 +130,16 @@ export default function PipelineBoard() {
             read: false,
           },
         });
+        // Fire automation rules for manual board moves
+        if (effectiveCompanyId) {
+          fireAutomationEvent('contact_status_changed', effectiveCompanyId, {
+            contactId: draggedContact.id,
+            contactName: getContactFullName(draggedContact),
+            contactEmail: draggedContact.email,
+            oldStatus: draggedContact.status,
+            newStatus: column.status,
+          }).catch(() => {});
+        }
       } catch (error) {
         console.error('Error updating contact status:', error);
         const msg = error instanceof Error ? error.message : 'Failed to move contact';

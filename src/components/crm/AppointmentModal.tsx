@@ -3,6 +3,7 @@ import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { Appointment, Contact } from '@/lib/crmData';
 import { db } from '@/lib/database';
+import { fireAutomationEvent } from '@/lib/automationEngine';
 import {
   getMentionTargets,
   getMentionSuggestions,
@@ -355,7 +356,26 @@ export default function AppointmentModal({
               type: 'UPDATE_CONTACT_STATUS',
               payload: { contactId, status: 'appt_set' },
             });
+            // Notify automations that this contact's stage advanced
+            if (effectiveCompanyId) {
+              fireAutomationEvent('contact_status_changed', effectiveCompanyId, {
+                contactId,
+                contactName,
+                contactEmail: contact.email,
+                oldStatus: contact.status,
+                newStatus: 'appt_set',
+              }).catch(() => {});
+            }
           }
+        }
+        // Fire appointment_created for any notification/email automations
+        if (effectiveCompanyId) {
+          fireAutomationEvent('appointment_created', effectiveCompanyId, {
+            contactId,
+            contactName,
+            contactEmail: contact?.email,
+            assignedTo,
+          }).catch(() => {});
         }
 
         // If no assignee, create unassigned notification
