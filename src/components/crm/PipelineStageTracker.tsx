@@ -28,11 +28,16 @@ const PIPELINE_STAGES: PipelineStage[] = [
 interface PipelineStageTrackerProps {
   currentStatus: CustomerStatus;
   statusChangedAt?: string;
+  inspectionCompleted?: boolean;
 }
 
-export function PipelineStageTracker({ currentStatus, statusChangedAt }: PipelineStageTrackerProps) {
+export function PipelineStageTracker({ currentStatus, statusChangedAt, inspectionCompleted }: PipelineStageTrackerProps) {
+  // If inspection is done but status hasn't advanced past appt_set yet, show inspection_completed
+  const effectiveStatus: CustomerStatus =
+    inspectionCompleted && currentStatus === 'appt_set' ? 'inspection_completed' : currentStatus;
+
   // Find current stage index
-  const currentStageIndex = PIPELINE_STAGES.findIndex(stage => stage.status === currentStatus);
+  const currentStageIndex = PIPELINE_STAGES.findIndex(stage => stage.status === effectiveStatus);
   
   // Handle special statuses
   if (currentStatus === 'lost') {
@@ -167,7 +172,7 @@ export function PipelineStageTracker({ currentStatus, statusChangedAt }: Pipelin
       )}
 
       {/* Completion Message */}
-      {currentStatus === 'completed' && (
+      {effectiveStatus === 'completed' && (
         <div className="mt-6 p-4 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg">
           <div className="flex items-center gap-3">
             <div className="flex-shrink-0">

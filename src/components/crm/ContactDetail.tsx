@@ -1351,9 +1351,10 @@ export default function ContactDetail() {
             {/* Sidebar */}
             <div className="space-y-6">
               {/* Pipeline Stage Tracker */}
-              <PipelineStageTracker 
-                currentStatus={contact.status} 
+              <PipelineStageTracker
+                currentStatus={contact.status}
                 statusChangedAt={contact.statusChangedAt}
+                inspectionCompleted={contact.inspectionCompleted}
               />
 
               {/* Project Pricing Card */}
