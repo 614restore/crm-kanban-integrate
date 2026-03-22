@@ -9,8 +9,6 @@ import {
   DocumentTemplate,
   getContractorEstimateTemplates,
   buildContactOverrides,
-  fillTemplateVars,
-  getUnfilledVars,
 } from '@/lib/contractorTemplates';
 import { Contact, Document, getContactFullName } from '@/lib/crmData';
 
@@ -36,9 +34,194 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 // ─── Fillable document builder ────────────────────────────────────────────────
-// Renders the template with auto-filled contact/company values and converts
-// remaining {{VARIABLE}} placeholders into blue underlined inline inputs that
-// users can click and type into directly on the document.
+// Renders the template with auto-filled contact/company values, converts
+// remaining {{VARIABLE}} placeholders into inline inputs, and injects an
+// interactive cost-table script that enables editable Qty/Price, auto-calc
+// totals, row deletion, and adding new line items.
+
+const COST_TABLE_SCRIPT = `
+<script>
+(function() {
+  var INP = 'border:none;border-bottom:2px solid #3b82f6;background:#eff6ff;color:#1e3a8a;padding:2px 6px;border-radius:3px 3px 0 0;font-size:inherit;font-family:inherit;outline:none';
+
+  function parseMoney(s) {
+    return parseFloat(String(s || '').replace(/[^0-9.]/g, '')) || 0;
+  }
+  function fmt(n) {
+    return '$' + n.toFixed(2).replace(/\\B(?=(\\d{3})+(?!\\d))/g, ',');
+  }
+
+  function updateTotals(tbl) {
+    var sub = 0;
+    tbl.querySelectorAll('.line-total').forEach(function(sp) { sub += parseMoney(sp.textContent); });
+    var taxInp = document.querySelector('input[name="TAX_RATE"]');
+    var rate = taxInp ? parseMoney(taxInp.value) : 0;
+    var tax = sub * rate / 100;
+    var total = sub + tax;
+    function setV(nm, v) {
+      var el = document.querySelector('input[name="' + nm + '"]');
+      if (el) el.value = fmt(v);
+    }
+    setV('SUBTOTAL', sub);
+    setV('TAX_AMOUNT', tax);
+    setV('TOTAL_AMOUNT', total);
+    setV('DEPOSIT_AMOUNT', total / 2);
+    setV('BALANCE_DUE', total / 2);
+  }
+
+  function addRowBehavior(row, tbl, qtyIdx, priceIdx, totalIdx) {
+    var cells = row.querySelectorAll('td');
+    if (cells.length <= totalIdx) return;
+
+    // ── Description ──
+    var desc = cells[0];
+    Array.from(desc.querySelectorAll('input')).forEach(function(inp) {
+      desc.replaceChild(document.createTextNode(inp.value || inp.placeholder || inp.name || ''), inp);
+    });
+    desc.setAttribute('contenteditable', 'true');
+    desc.style.cssText += ';background:#eff6ff;outline:none;border-bottom:2px solid #3b82f6;border-radius:3px 3px 0 0;cursor:text';
+
+    // ── Qty ──
+    var qtyCell = cells[qtyIdx];
+    var existQ = qtyCell.querySelector('input');
+    var qtyRaw = (existQ ? existQ.value || existQ.placeholder : qtyCell.textContent).trim();
+    var isLot = /^lot$/i.test(qtyRaw);
+    var qm = qtyRaw.match(/^([\\d.]+)\\s*(.*)/);
+    var qNum = qm ? qm[1] : (isLot ? '' : qtyRaw);
+    var qUnit = qm ? qm[2].trim() : '';
+    qtyCell.innerHTML = '';
+    var qInp = document.createElement('input');
+    qInp.type = 'text'; qInp.value = isLot ? 'Lot' : qNum; qInp.placeholder = 'Qty';
+    qInp.style.cssText = INP + ';width:55px';
+    qtyCell.appendChild(qInp);
+    if (qUnit) {
+      var us = document.createElement('span');
+      us.textContent = '\\u00a0' + qUnit; us.style.cssText = 'color:#6b7280;font-size:12px';
+      qtyCell.appendChild(us);
+    }
+
+    // ── Unit Price ──
+    var prCell = cells[priceIdx];
+    var existP = prCell.querySelector('input');
+    var prRaw = (existP ? existP.value || existP.placeholder : prCell.textContent).trim();
+    var isDash = (prRaw === '\\u2014' || prRaw === '-' || prRaw === '');
+    prCell.innerHTML = '';
+    var pInp = document.createElement('input');
+    pInp.type = 'text'; pInp.value = isDash ? '\\u2014' : prRaw; pInp.placeholder = '$0.00';
+    pInp.style.cssText = INP + ';width:80px';
+    prCell.appendChild(pInp);
+
+    // ── Total (read-only, calculated) ──
+    var totCell = cells[totalIdx];
+    var existT = totCell.querySelector('input');
+    var totRaw = (existT ? existT.value || existT.placeholder : totCell.textContent).trim();
+    totCell.innerHTML = '';
+    var totSpan = document.createElement('span');
+    totSpan.className = 'line-total'; totSpan.style.cssText = 'font-weight:600';
+    totSpan.textContent = totRaw || '\\u2014';
+    totCell.style.cssText += ';background:#f8fafc';
+    totCell.appendChild(totSpan);
+
+    function recalc() {
+      var q = parseFloat(qInp.value.replace(/[^0-9.]/g, '')) || 0;
+      var p = parseMoney(pInp.value);
+      if (q > 0 && p > 0) totSpan.textContent = fmt(q * p);
+      updateTotals(tbl);
+    }
+    qInp.addEventListener('input', recalc);
+    pInp.addEventListener('input', recalc);
+    // Initial calc from pre-filled values
+    var iq = parseFloat(qNum) || 0, ip = parseMoney(prRaw);
+    if (iq > 0 && ip > 0) totSpan.textContent = fmt(iq * ip);
+
+    // ── Delete button ──
+    var dTd = document.createElement('td');
+    dTd.style.cssText = 'text-align:center;vertical-align:middle;width:36px;padding:4px';
+    var dBtn = document.createElement('button');
+    dBtn.innerHTML = '&times;'; dBtn.title = 'Remove line item';
+    dBtn.style.cssText = 'background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;border-radius:4px;width:22px;height:22px;cursor:pointer;font-size:14px;font-weight:bold;line-height:1;padding:0;display:inline-flex;align-items:center;justify-content:center';
+    dBtn.onmouseenter = function() { dBtn.style.background='#fecaca'; };
+    dBtn.onmouseleave = function() { dBtn.style.background='#fee2e2'; };
+    dBtn.addEventListener('click', function() { row.remove(); updateTotals(tbl); });
+    dTd.appendChild(dBtn);
+    row.appendChild(dTd);
+  }
+
+  document.querySelectorAll('table').forEach(function(tbl) {
+    var ths = Array.from(tbl.querySelectorAll('thead th'));
+    var qIdx = -1, pIdx = -1, tIdx = -1;
+    ths.forEach(function(th, i) {
+      var t = th.textContent.trim();
+      if (t.indexOf('Qty') >= 0) qIdx = i;
+      if (t.indexOf('Unit Price') >= 0) pIdx = i;
+      if (t === 'Total') tIdx = i;
+    });
+    if (qIdx < 0 || pIdx < 0 || tIdx < 0) return;
+
+    // Add delete column header
+    var hRow = tbl.querySelector('thead tr');
+    var dTh = document.createElement('th'); dTh.style.width = '36px';
+    hRow.appendChild(dTh);
+
+    tbl.querySelectorAll('tbody tr').forEach(function(row) {
+      addRowBehavior(row, tbl, qIdx, pIdx, tIdx);
+    });
+
+    // Add row button
+    var addBtn = document.createElement('button');
+    addBtn.textContent = '+ Add Line Item';
+    addBtn.style.cssText = 'margin-top:8px;padding:4px 14px;background:#eff6ff;color:#2563eb;border:1px dashed #93c5fd;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600';
+    addBtn.onmouseenter = function() { addBtn.style.background = '#dbeafe'; };
+    addBtn.onmouseleave = function() { addBtn.style.background = '#eff6ff'; };
+    addBtn.addEventListener('click', function() {
+      var tbody = tbl.querySelector('tbody');
+      var nr = document.createElement('tr');
+
+      var descTd = document.createElement('td');
+      descTd.setAttribute('contenteditable','true'); descTd.textContent = 'New item';
+      descTd.style.cssText = 'background:#eff6ff;outline:none;border-bottom:2px solid #3b82f6;border-radius:3px 3px 0 0;cursor:text';
+      nr.appendChild(descTd);
+
+      var qTd = document.createElement('td');
+      var nqInp = document.createElement('input');
+      nqInp.type='text'; nqInp.placeholder='Qty'; nqInp.style.cssText = INP+';width:55px';
+      qTd.appendChild(nqInp); nr.appendChild(qTd);
+
+      var pTd = document.createElement('td');
+      var npInp = document.createElement('input');
+      npInp.type='text'; npInp.placeholder='$0.00'; npInp.style.cssText = INP+';width:80px';
+      pTd.appendChild(npInp); nr.appendChild(pTd);
+
+      var ttTd = document.createElement('td'); ttTd.style.background='#f8fafc';
+      var ttSp = document.createElement('span');
+      ttSp.className='line-total'; ttSp.style.cssText='font-weight:600'; ttSp.textContent='\\u2014';
+      ttTd.appendChild(ttSp); nr.appendChild(ttTd);
+
+      function nr_recalc() {
+        var q=parseFloat(nqInp.value.replace(/[^0-9.]/g,''))||0;
+        var p=parseMoney(npInp.value);
+        ttSp.textContent = (q>0&&p>0) ? fmt(q*p) : '\\u2014';
+        updateTotals(tbl);
+      }
+      nqInp.addEventListener('input', nr_recalc);
+      npInp.addEventListener('input', nr_recalc);
+
+      var dTd2=document.createElement('td'); dTd2.style.cssText='text-align:center;vertical-align:middle;width:36px;padding:4px';
+      var dBtn2=document.createElement('button'); dBtn2.innerHTML='&times;'; dBtn2.title='Remove';
+      dBtn2.style.cssText='background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;border-radius:4px;width:22px;height:22px;cursor:pointer;font-size:14px;font-weight:bold;line-height:1;padding:0';
+      dBtn2.addEventListener('click',function(){nr.remove();updateTotals(tbl);});
+      dTd2.appendChild(dBtn2); nr.appendChild(dTd2);
+
+      tbody.appendChild(nr);
+      nqInp.focus();
+    });
+    tbl.parentNode.insertBefore(addBtn, tbl.nextSibling);
+
+    updateTotals(tbl);
+  });
+})();
+</script>
+`;
 
 function buildFillableContent(
   template: DocumentTemplate,
@@ -59,6 +242,9 @@ function buildFillableContent(
     const label = varName.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
     return `<input type="text" name="${varName}" placeholder="${label}" style="display:inline-block;border:none;border-bottom:2px solid #3b82f6;background:#eff6ff;color:#1e3a8a;padding:2px 8px;min-width:120px;max-width:260px;border-radius:3px 3px 0 0;font-size:inherit;font-family:inherit;vertical-align:baseline;outline:none;" onfocus="this.style.background='#dbeafe';this.style.borderBottomColor='#1d4ed8'" onblur="this.style.background='#eff6ff';this.style.borderBottomColor='#3b82f6'" />`;
   });
+
+  // Inject the cost-table interaction script before </body>
+  content = content.replace('</body>', COST_TABLE_SCRIPT + '</body>');
 
   return content;
 }
@@ -90,31 +276,43 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
     setSelected(null);
   };
 
-  // Collect values typed into the fillable iframe inputs, then save
+  // Capture the live iframe DOM state (with all edits, deletions, and additions applied) and save
   const handleSave = async () => {
     if (!selected || !profile?.company_id) {
       toast.error('Unable to save — missing company context.');
       return;
     }
 
-    // Read values from iframe inline inputs
-    const iframeValues: Record<string, string> = {};
     const iframe = iframeRef.current;
-    if (iframe?.contentDocument) {
-      iframe.contentDocument.querySelectorAll<HTMLInputElement>('input[name]').forEach(el => {
-        if (el.name && el.value.trim()) iframeValues[el.name] = el.value.trim();
-      });
-    }
-
-    const base = buildContactOverrides(contact, companyProfile, profile);
-    const merged = { ...base, ...iframeValues };
-    const finalHtml = fillTemplateVars(selected.content, merged);
-    const stillUnfilled = getUnfilledVars(finalHtml);
-
-    if (stillUnfilled.length > 0) {
-      toast.error(`Please fill in: ${stillUnfilled.slice(0, 3).join(', ')}${stillUnfilled.length > 3 ? '…' : ''}`);
+    if (!iframe?.contentDocument) {
+      toast.error('Document not ready. Please try again.');
       return;
     }
+
+    // Clone the iframe document so we can clean it up for saving without affecting the live view
+    const cloneDoc = iframe.contentDocument.cloneNode(true) as Document;
+
+    // Remove interactive buttons and scripts from the saved copy
+    cloneDoc.querySelectorAll('button, script').forEach(el => el.remove());
+
+    // Replace all remaining inputs with plain text spans showing their current values
+    cloneDoc.querySelectorAll<HTMLInputElement>('input').forEach(inp => {
+      const span = cloneDoc.createElement('span');
+      span.textContent = inp.value || inp.placeholder || '';
+      inp.parentNode?.replaceChild(span, inp);
+    });
+
+    // Strip contenteditable and inline editing styles from cost table cells
+    cloneDoc.querySelectorAll<HTMLElement>('[contenteditable]').forEach(el => {
+      el.removeAttribute('contenteditable');
+      el.style.background = '';
+      el.style.borderBottom = '';
+      el.style.borderRadius = '';
+      el.style.cursor = '';
+      el.style.outline = '';
+    });
+
+    const finalHtml = '<!DOCTYPE html>' + cloneDoc.documentElement.outerHTML;
 
     setIsSaving(true);
     try {
