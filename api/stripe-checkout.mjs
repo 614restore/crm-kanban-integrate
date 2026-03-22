@@ -5,7 +5,7 @@
 //   APP_URL            — your app's base URL (e.g. https://crm-kanban-integrate.vercel.app)
 
 import Stripe from 'stripe';
-import { requireAuth } from './_auth-middleware.mjs';
+import { optionalAuth } from './_auth-middleware.mjs';
 
 /**
  * Build a server-side price ID → plan name map from env vars.
@@ -32,8 +32,9 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const user = await requireAuth(req, res);
-  if (!user) return;
+  // Auth is optional here — the checkout session itself is safe to create without it.
+  // If a logged-in user's token is present we pre-fill their email in Stripe's form.
+  const user = await optionalAuth(req);
 
   const stripeKey = process.env.STRIPE_SECRET_KEY;
   if (!stripeKey) {
@@ -69,6 +70,7 @@ export default async function handler(req, res) {
       mode: 'subscription',
       payment_method_types: ['card'],
       line_items: [{ price: priceId, quantity: 1 }],
+      ...(user?.email ? { customer_email: user.email } : {}),
       // Store the server-derived plan name at both the session level (readable
       // immediately in checkout.session.completed) and the subscription level
       // (readable in all future subscription events). Never trust client-supplied values.

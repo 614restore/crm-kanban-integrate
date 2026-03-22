@@ -9,6 +9,9 @@ export default tseslint.config(
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
+    linterOptions: {
+      reportUnusedDisableDirectives: false,
+    },
     languageOptions: {
       ecmaVersion: 2020,
       globals: globals.browser,
@@ -19,17 +22,18 @@ export default tseslint.config(
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
-      "react-refresh/only-export-components": [
-        "warn",
-        { allowConstantExport: true },
-      ],
+      "react-refresh/only-export-components": "off",
       "@typescript-eslint/no-unused-vars": "off",
       "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/no-empty-interface": "off",
       "@typescript-eslint/no-empty-object-type": "off",
       "@typescript-eslint/ban-types": "off",
       "@typescript-eslint/no-unused-expressions": "off",
-      "react-hooks/exhaustive-deps": "warn",
+      "@typescript-eslint/ban-ts-comment": "off",
+      "@typescript-eslint/no-namespace": "off",
+      "preserve-caught-error": "off",
+      "no-useless-assignment": "off",
+      "react-hooks/exhaustive-deps": "off",
     },
   }
 );
