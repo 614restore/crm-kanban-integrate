@@ -271,8 +271,11 @@ const STALE_HOUR_PRESETS = [
   { label: '24 hours', value: 24 },
   { label: '48 hours', value: 48 },
   { label: '72 hours', value: 72 },
+  { label: '1 week', value: 168 },
   { label: 'Custom', value: 0 },
 ];
+
+const STALE_PRESET_VALUES = [24, 48, 72, 168];
 
 export default function AutomationsView() {
   const { state, dispatch } = useCRM();
@@ -296,7 +299,7 @@ export default function AutomationsView() {
   const [globalCustomHours, setGlobalCustomHours] = useState('');
   const [globalUseCustom, setGlobalUseCustom] = useState(() => {
     const h = companyId ? getStaleLeadThreshold(companyId) : DEFAULT_STALE_HOURS;
-    return ![24, 48, 72].includes(h);
+    return !STALE_PRESET_VALUES.includes(h);
   });
 
   const filteredAutomations = state.automations.filter((auto) => {
@@ -333,8 +336,8 @@ export default function AutomationsView() {
     const isStale = STALE_LEAD_NAMES.some(n => name.includes(n));
     const defaultHours = isStale ? getStaleLeadThreshold(state.companyId) : 24;
     setTriggerDelayHours(defaultHours);
-    setUseCustomHours(![24, 48, 72].includes(defaultHours));
-    setCustomHours(![24, 48, 72].includes(defaultHours) ? String(defaultHours) : '');
+    setUseCustomHours(!STALE_PRESET_VALUES.includes(defaultHours));
+    setCustomHours(!STALE_PRESET_VALUES.includes(defaultHours) ? String(defaultHours) : '');
     setNameDialog({ type: 'create' });
   };
 
@@ -344,8 +347,8 @@ export default function AutomationsView() {
     setMessageBody(automation.messageBody || '');
     const hours = automation.triggerDelayHours ?? 24;
     setTriggerDelayHours(hours);
-    setUseCustomHours(![24, 48, 72].includes(hours));
-    setCustomHours(![24, 48, 72].includes(hours) ? String(hours) : '');
+    setUseCustomHours(!STALE_PRESET_VALUES.includes(hours));
+    setCustomHours(!STALE_PRESET_VALUES.includes(hours) ? String(hours) : '');
     setNameDialog({ type: 'edit', automation });
   };
 
