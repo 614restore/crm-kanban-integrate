@@ -1,3 +1,4 @@
+// Subscription view — pricing table loaded from VITE_STRIPE_PRICING_TABLE_ID
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
@@ -6,6 +7,11 @@ import {
   CreditCard,
   ChevronDown,
 } from 'lucide-react';
+
+const STRIPE_PRICING_TABLE_ID = import.meta.env.VITE_STRIPE_PRICING_TABLE_ID || '';
+const STRIPE_PUBLISHABLE_KEY  = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY  || '';
+const API_BASE: string = import.meta.env.VITE_EMAIL_API_BASE_URL || '';
+const STRIPE_BILLING_PORTAL_URL: string = import.meta.env.VITE_STRIPE_BILLING_PORTAL_URL || '';
 
 // Stripe pricing table web component type declaration
 declare global {
@@ -20,9 +26,6 @@ declare global {
     }
   }
 }
-
-const API_BASE: string = import.meta.env.VITE_EMAIL_API_BASE_URL || '';
-const STRIPE_BILLING_PORTAL_URL: string = import.meta.env.VITE_STRIPE_BILLING_PORTAL_URL || '';
 
 
 function StatusBadge({ status }: { status?: string }) {
@@ -166,8 +169,8 @@ export default function SubscriptionView() {
       <div>
         <h4 className="text-base font-semibold text-gray-900 mb-4">Available Plans</h4>
         <stripe-pricing-table
-          pricing-table-id="prctbl_1TDTsWQ4qbAu1D2SxpS4c47b"
-          publishable-key="pk_live_51T8YyaQ4qbAu1D2STcaoAsxjqScvBgvTttf0k5DXp8t0BbDswCY6Hqdtd81MOlWeQqPBGCkAFBtAidM5Fsa8n0JK006K6b0Uv7"
+          pricing-table-id={STRIPE_PRICING_TABLE_ID}
+          publishable-key={STRIPE_PUBLISHABLE_KEY}
           client-reference-id={profile?.company_id ?? undefined}
           customer-email={profile?.email ?? undefined}
         />
