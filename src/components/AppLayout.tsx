@@ -258,7 +258,7 @@ function dbContactToAppContact(dbContact: any): Contact {
     city: dbContact.city || '',
     state: dbContact.state || '',
     zip: dbContact.zip || '',
-    status: dbContact.status || 'prospect',
+    status: dbContact.status,
     leadSource: dbContact.lead_source || '',
     assignedTo: dbContact.assigned_to || '',
     createdAt: dbContact.created_at,
