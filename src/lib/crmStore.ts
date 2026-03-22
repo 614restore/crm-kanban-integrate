@@ -640,8 +640,8 @@ function parseAppointmentDate(appointment: Appointment): Date {
   if (!raw) return new Date(NaN);
 
   if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-    const [year, month, day] = raw.split('-').map(Number);
-    return new Date(year, month - 1, day, 23, 59, 59, 999);
+    const time = appointment.time?.trim() || '00:00';
+    return new Date(`${raw}T${time}`);
   }
 
   return new Date(raw);
