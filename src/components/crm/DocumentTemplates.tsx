@@ -3623,6 +3623,7 @@ const DocumentTemplates: React.FC = () => {
                   </Button>
                 </div>
 
+
                 <div className="flex flex-wrap justify-end gap-2">
                   <Button variant="outline" onClick={() => setCustomerEditMode(false)}>Cancel</Button>
                   <Button
@@ -3665,6 +3666,30 @@ const DocumentTemplates: React.FC = () => {
                     }}
                   >
                     Save as Customer Document
+                  </Button>
+                  <Button
+                    disabled={sendingForSign}
+                    onClick={() => {
+                      if (!selectedContactId) {
+                        toast({ title: 'Select a customer first', variant: 'destructive' });
+                        return;
+                      }
+                      const contact = crmState.contacts.find(c => c.id === selectedContactId);
+                      const contactName = contact ? getContactFullName(contact) : 'Customer';
+                      sendForSigning(customerPreview, `${selectedTemplate.name} — ${contactName}`, selectedContactId);
+                    }}
+                  >
+                    {sendingForSign ? (
+                      <>
+                        <span className="w-4 h-4 mr-2 animate-spin rounded-full border-2 border-white border-t-transparent inline-block" />
+                        Sending…
+                      </>
+                    ) : (
+                      <>
+                        <FileSignature className="w-4 h-4 mr-2" />
+                        Send for Signing
+                      </>
+                    )}
                   </Button>
                 </div>
               </div>
