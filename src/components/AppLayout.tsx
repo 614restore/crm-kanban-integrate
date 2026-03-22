@@ -404,12 +404,19 @@ function TrialBanner({ companyId }: { companyId: string | null }) {
   if (showUrgency) {
     return (
       <div className="flex items-center justify-between gap-3 bg-yellow-50 border-b border-yellow-200 px-4 py-2 text-sm text-yellow-800">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Zap className="w-4 h-4 flex-shrink-0" />
           <span>
             Your free trial ends in <strong>{daysLeft} day{daysLeft !== 1 ? 's' : ''}</strong>.{' '}
-            Use code <strong className="font-mono">{LAUNCH_PROMO_CODE}</strong> at checkout for <strong>50% off 3 months</strong> (monthly plans only).
+            Use code at checkout for <strong>50% off 3 months</strong> (monthly plans only).
           </span>
+          <button
+            onClick={handleCopy}
+            className="flex-shrink-0 flex items-center gap-1 bg-yellow-200 hover:bg-yellow-300 border border-yellow-400 rounded px-2 py-0.5 text-xs font-mono font-bold transition-colors"
+            title="Copy promo code"
+          >
+            {copied ? '✓ Copied!' : LAUNCH_PROMO_CODE}
+          </button>
         </div>
         <button
           onClick={() => setDismissed(true)}
