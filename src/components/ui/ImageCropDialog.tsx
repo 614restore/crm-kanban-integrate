@@ -95,9 +95,12 @@ export default function ImageCropDialog({
   aspectRatio,
   title = 'Crop Image',
 }: ImageCropDialogProps) {
-  // Logo crops (no fixed aspect ratio) start zoomed out so the full logo is
-  // visible immediately. Avatar/profile crops (aspectRatio=1) start at 1x.
-  const initialZoom = aspectRatio === undefined ? 0.4 : 1;
+  // Logo crops start at 1x so the image fills the crop frame by default.
+  // Avatar/profile crops (aspectRatio=1) also start at 1x.
+  const initialZoom = 1;
+  // When no aspect ratio is provided (logo), default to 3:1 landscape so a
+  // visible crop frame exists and the user can pan the image behind it.
+  const effectiveAspect = aspectRatio !== undefined ? aspectRatio : 3 / 1;
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(initialZoom);
   const [rotation, setRotation] = useState(0);
@@ -183,9 +186,7 @@ export default function ImageCropDialog({
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            {aspectRatio
-              ? 'Adjust the zoom, rotation, and position to crop your image perfectly'
-              : 'Drag to reposition · use sliders to zoom and rotate · then click Save & Upload'}
+            Drag to reposition · use sliders to zoom and rotate · then click Save & Upload
           </DialogDescription>
         </DialogHeader>
 
@@ -202,7 +203,8 @@ export default function ImageCropDialog({
                 zoom={zoom}
                 minZoom={0.1}
                 rotation={rotation}
-                {...(aspectRatio !== undefined ? { aspect: aspectRatio } : {})}
+                aspect={effectiveAspect}
+                restrictPosition={false}
                 onCropChange={onCropChange}
                 onZoomChange={onZoomChange}
                 onCropComplete={onCropCompleteInternal}
