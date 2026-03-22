@@ -2664,6 +2664,7 @@ const DocumentTemplates: React.FC = () => {
     }
   };
 
+
   // Open a print-ready window with the filled template content
   const generateDocument = (template: DocumentTemplate) => {
     const content = getFillablePreviewContent(template);
