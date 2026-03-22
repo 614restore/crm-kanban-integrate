@@ -95,8 +95,11 @@ export default function ImageCropDialog({
   aspectRatio,
   title = 'Crop Image',
 }: ImageCropDialogProps) {
+  // Logo crops (no fixed aspect ratio) start zoomed out so the full logo is
+  // visible immediately. Avatar/profile crops (aspectRatio=1) start at 1x.
+  const initialZoom = aspectRatio === undefined ? 0.4 : 1;
   const [crop, setCrop] = useState({ x: 0, y: 0 });
-  const [zoom, setZoom] = useState(1);
+  const [zoom, setZoom] = useState(initialZoom);
   const [rotation, setRotation] = useState(0);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<CroppedAreaPixels | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -108,7 +111,7 @@ export default function ImageCropDialog({
   useEffect(() => {
     if (open && imageUrl) {
       setCrop({ x: 0, y: 0 });
-      setZoom(1);
+      setZoom(initialZoom);
       setRotation(0);
       setCroppedAreaPixels(null);
       setImageLoadError(null);
@@ -197,7 +200,7 @@ export default function ImageCropDialog({
                 image={imageUrl}
                 crop={crop}
                 zoom={zoom}
-                minZoom={0.4}
+                minZoom={0.1}
                 rotation={rotation}
                 {...(aspectRatio !== undefined ? { aspect: aspectRatio } : {})}
                 onCropChange={onCropChange}
@@ -236,7 +239,7 @@ export default function ImageCropDialog({
                 </div>
                 <Slider
                   value={[zoom]}
-                  min={0.4}
+                  min={0.1}
                   max={3}
                   step={0.1}
                   onValueChange={(value) => setZoom(value[0])}
