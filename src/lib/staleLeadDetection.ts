@@ -10,46 +10,75 @@ export interface StaleContact {
   assignedToName?: string;
 }
 
+export const DEFAULT_STALE_HOURS = 24;
+
 /**
- * Detects contacts that have been created but have no activity within 24 hours
- * Returns list of stale contacts with details
+ * Reads the stale-lead threshold (hours) for a company.
+ * Stored in the automations table as trigger_delay_hours on a "Stale Lead Alert" automation,
+ * with a localStorage fallback for offline/fast reads.
  */
-export async function detectStaleContacts(companyId: string): Promise<StaleContact[]> {
+export function getStaleLeadThreshold(companyId: string): number {
+  try {
+    const stored = localStorage.getItem(`stale_lead_hours_${companyId}`);
+    if (stored) {
+      const parsed = parseInt(stored, 10);
+      if (!isNaN(parsed) && parsed > 0) return parsed;
+    }
+  } catch {
+    // localStorage not available
+  }
+  return DEFAULT_STALE_HOURS;
+}
+
+export function setStaleLeadThreshold(companyId: string, hours: number): void {
+  try {
+    localStorage.setItem(`stale_lead_hours_${companyId}`, String(hours));
+  } catch {
+    // localStorage not available
+  }
+}
+
+/**
+ * Detects contacts that have been created but have no activity within the configured threshold.
+ * Returns list of stale contacts with details.
+ */
+export async function detectStaleContacts(companyId: string, thresholdHours?: number): Promise<StaleContact[]> {
+  const hours = thresholdHours ?? getStaleLeadThreshold(companyId);
   try {
     // Get all contacts for the company
     const contacts = await db.getContacts(companyId);
-    
+
     // Get all appointments for the company
     const appointments = await db.getAppointments(companyId);
-    
+
     // Get team members to map assigned_to names
     const teamMembers = await db.getTeamMembers(companyId);
     const teamMap = new Map(teamMembers.map(tm => [tm.id, `${tm.first_name} ${tm.last_name}`.trim() || tm.email]));
-    
+
     const now = new Date();
     const staleContacts: StaleContact[] = [];
-    
+
     for (const contact of contacts) {
       // Skip if contact is already in a closed/won/lost status
       if (['won', 'lost', 'closed', 'completed'].includes(contact.status.toLowerCase())) {
         continue;
       }
-      
-      // Calculate days since created
+
+      // Calculate time since created
       const createdAt = new Date(contact.created_at);
       const hoursSinceCreated = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
       const daysSinceCreated = Math.floor(hoursSinceCreated / 24);
-      
-      // Check if contact is older than 24 hours
-      if (hoursSinceCreated < 24) {
-        continue; // Too new, skip
+
+      // Check if contact is older than the configured threshold
+      if (hoursSinceCreated < hours) {
+        continue;
       }
-      
+
       // Check if contact has any appointments
       const contactAppointments = appointments.filter(apt => apt.contact_id === contact.id);
       const hasAppointments = contactAppointments.length > 0;
-      
-      // If no appointments after 24 hours, mark as stale
+
+      // If no appointments after threshold, mark as stale
       if (!hasAppointments) {
         staleContacts.push({
           contact,
@@ -60,7 +89,7 @@ export async function detectStaleContacts(companyId: string): Promise<StaleConta
         });
       }
     }
-    
+
     return staleContacts;
   } catch (error) {
     console.error('[StaleLeads] Error detecting stale contacts:', error);
@@ -251,8 +280,8 @@ export async function runStaleLeadDetection(companyId: string): Promise<{
 /**
  * Get stale contacts for display in UI
  */
-export async function getStaleContactsForDisplay(companyId: string): Promise<StaleContact[]> {
-  return detectStaleContacts(companyId);
+export async function getStaleContactsForDisplay(companyId: string, thresholdHours?: number): Promise<StaleContact[]> {
+  return detectStaleContacts(companyId, thresholdHours);
 }
 
 /**

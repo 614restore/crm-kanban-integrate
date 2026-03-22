@@ -627,6 +627,8 @@ function CRMApp() {
         action: auto.action_type,
         isActive: auto.is_active,
         createdBy: auto.created_by || '',
+        messageBody: (auto as any).message_body || undefined,
+        triggerDelayHours: (auto as any).trigger_delay_hours || undefined,
       }));
 
       // Convert DB team members to app team members

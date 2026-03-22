@@ -326,21 +326,31 @@ export default function SettingsView() {
       const userEmail = user?.email || profile?.email || '';
       
       if (userEmail) {
-        const { setupNewUser } = await import('@/lib/setupCompany');
-        const setupSuccess = await setupNewUser(userId, userEmail);
-        
-        if (setupSuccess) {
-          // Fetch the profile again to get the new company_id
-          const retryResult = await supabase
-            .from('profiles')
-            .select('company_id')
-            .eq('id', userId)
-            .single();
-          
-          if (retryResult.data?.company_id) {
-            dispatch({ type: 'SET_COMPANY_ID', payload: retryResult.data.company_id });
-            return retryResult.data.company_id;
+        try {
+          const { setupNewUser } = await import('@/lib/setupCompany');
+          // Guard against setupNewUser hanging indefinitely (no internal timeout).
+          const setupSuccess = await Promise.race([
+            setupNewUser(userId, userEmail),
+            new Promise<boolean>((_, reject) =>
+              setTimeout(() => reject(new Error('setupNewUser timed out')), 10000)
+            ),
+          ]);
+
+          if (setupSuccess) {
+            // Fetch the profile again to get the new company_id
+            const retryResult = await supabase
+              .from('profiles')
+              .select('company_id')
+              .eq('id', userId)
+              .single();
+
+            if (retryResult.data?.company_id) {
+              dispatch({ type: 'SET_COMPANY_ID', payload: retryResult.data.company_id });
+              return retryResult.data.company_id;
+            }
           }
+        } catch (setupErr) {
+          console.warn('resolveCompanyId: setupNewUser failed or timed out:', setupErr);
         }
       }
 
@@ -1115,22 +1125,13 @@ export default function SettingsView() {
         type: 'image/jpeg',
       });
 
-      const loadingToastId = toast.loading?.('Preparing upload...') || undefined;
       const companyId = effectiveCompanyId || await resolveCompanyId();
-
-      // Always dismiss the loading toast before any early return or continuation
-      if (loadingToastId && toast.dismiss) {
-        toast.dismiss(loadingToastId);
-      }
 
       if (!companyId) {
         toast.error('Unable to find your company. Please sign out and sign back in.');
         setCompanyLogo(previousLogo);
-        setIsUploadingLogo(false);
         return;
       }
-
-      if (loadingToastId && toast.dismiss) toast.dismiss(loadingToastId);
 
       // Encode a compact fallback data-URL (runs locally, no network needed).
       try {

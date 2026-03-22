@@ -43,7 +43,7 @@ const COST_TABLE_SCRIPT = `
 <script>
 (function() {
   var INP = 'border:none;border-bottom:2px solid #3b82f6;background:#eff6ff;color:#1e3a8a;padding:2px 6px;border-radius:3px 3px 0 0;font-size:inherit;font-family:inherit;outline:none';
-  var includeTax = true;
+  var includeTax = false;
 
   function parseMoney(s) {
     return parseFloat(String(s || '').replace(/[^0-9.]/g, '')) || 0;
@@ -151,11 +151,17 @@ const COST_TABLE_SCRIPT = `
     // ── Qty ──
     var qtyCell = cells[qtyIdx];
     var existQ = qtyCell.querySelector('input');
-    var qtyRaw = (existQ ? existQ.value || existQ.placeholder : qtyCell.textContent).trim();
+    // Use value only (not placeholder) — and preserve any unit suffix from text nodes (e.g. " sq", " LF")
+    var qUnitSuffix = '';
+    if (existQ) {
+      qtyCell.childNodes.forEach(function(n) { if (n.nodeType === 3) qUnitSuffix += n.textContent; });
+      qUnitSuffix = qUnitSuffix.trim();
+    }
+    var qtyRaw = (existQ ? existQ.value : qtyCell.textContent).trim();
     var isLot = /^lot$/i.test(qtyRaw);
     var qm = qtyRaw.match(/^([\\d.]+)\\s*(.*)/);
     var qNum = qm ? qm[1] : (isLot ? '' : qtyRaw);
-    var qUnit = qm ? qm[2].trim() : '';
+    var qUnit = qm ? qm[2].trim() : qUnitSuffix;
     qtyCell.innerHTML = '';
     var qInp = document.createElement('input');
     qInp.type = 'text'; qInp.value = isLot ? 'Lot' : qNum; qInp.placeholder = 'Qty';
@@ -170,7 +176,7 @@ const COST_TABLE_SCRIPT = `
     // ── Unit Price ──
     var prCell = cells[priceIdx];
     var existP = prCell.querySelector('input');
-    var prRaw = (existP ? existP.value || existP.placeholder : prCell.textContent).trim();
+    var prRaw = (existP ? existP.value : prCell.textContent).trim();
     var isDash = (prRaw === '\\u2014' || prRaw === '-' || prRaw === '');
     prCell.innerHTML = '';
     var pInp = document.createElement('input');
@@ -178,16 +184,20 @@ const COST_TABLE_SCRIPT = `
     pInp.style.cssText = INP + ';width:80px';
     prCell.appendChild(pInp);
 
-    // ── Total (calculated, read-only) ──
+    // ── Total (auto-calc; directly editable for Lot/dash rows) ──
     var totCell = cells[totalIdx];
     var existT = totCell.querySelector('input');
-    var totRaw = (existT ? existT.value || existT.placeholder : totCell.textContent).trim();
+    var totRaw = (existT ? existT.value : totCell.textContent).trim();
     totCell.innerHTML = '';
     var totSpan = document.createElement('span');
-    totSpan.className = 'line-total'; totSpan.style.cssText = 'font-weight:600';
+    totSpan.className = 'line-total';
+    totSpan.setAttribute('contenteditable', 'true');
+    totSpan.style.cssText = 'font-weight:600;outline:none;display:inline-block;min-width:60px;cursor:text;border-bottom:1px dashed #94a3b8;border-radius:2px;padding:0 2px';
+    totSpan.title = 'Auto-calculated from Qty \u00d7 Price. Click to edit manually for Lot items.';
     totSpan.textContent = totRaw || '\\u2014';
     totCell.style.cssText += ';background:#f8fafc';
     totCell.appendChild(totSpan);
+    totSpan.addEventListener('input', function() { updateTotals(tbl); });
 
     function recalc() {
       var q = parseFloat(qInp.value.replace(/[^0-9.]/g, '')) || 0;
@@ -251,8 +261,13 @@ const COST_TABLE_SCRIPT = `
 
       var ttTd = document.createElement('td'); ttTd.style.background='#f8fafc';
       var ttSp = document.createElement('span');
-      ttSp.className='line-total'; ttSp.style.cssText='font-weight:600'; ttSp.textContent='\\u2014';
+      ttSp.className='line-total';
+      ttSp.setAttribute('contenteditable','true');
+      ttSp.style.cssText='font-weight:600;outline:none;display:inline-block;min-width:60px;cursor:text;border-bottom:1px dashed #94a3b8;border-radius:2px;padding:0 2px';
+      ttSp.title='Auto-calculated. Click to edit manually for Lot items.';
+      ttSp.textContent='\\u2014';
       ttTd.appendChild(ttSp); nr.appendChild(ttTd);
+      ttSp.addEventListener('input', function() { updateTotals(tbl); });
 
       function nr_recalc() {
         var q=parseFloat(nqInp.value.replace(/[^0-9.]/g,''))||0, p=parseMoney(npInp.value);
@@ -269,6 +284,9 @@ const COST_TABLE_SCRIPT = `
     tbl.parentNode.insertBefore(addBtn, tbl.nextSibling);
     updateTotals(tbl);
   });
+
+  // Apply initial tax visibility/calculation state
+  window.toggleTax(includeTax);
 
   // ── Enhanced signature section (3 lines each party) ──
   var sigsDiv = document.querySelector('.sigs');
@@ -296,18 +314,45 @@ function buildFillableContent(
   companyProfile: DbCompany | null,
   profile: any,
 ): string {
-  const autoFilled = buildContactOverrides(contact, companyProfile, profile);
   let content = template.content;
 
-  // Apply auto-filled values first
+  // ── 1. Company-saved fields (highest priority — applied before contact auto-fill) ──
+  // These are values the company has previously customised (rates, terms, specs).
+  // By applying them first the subsequent buildContactOverrides pass has nothing left
+  // to override for those keys, so company-saved values always win.
+  const companyFieldsKey = `crm_company_fields_${(profile as any)?.company_id || companyProfile?.id || 'default'}`;
+  let savedCompanyFields: Record<string, string> = {};
+  try {
+    // Also migrate legacy crm_terms_* key if present
+    const legacyKey = `crm_terms_${(profile as any)?.company_id || companyProfile?.id || 'default'}`;
+    const legacy = JSON.parse(localStorage.getItem(legacyKey) || '{}');
+    savedCompanyFields = { ...legacy, ...JSON.parse(localStorage.getItem(companyFieldsKey) || '{}') };
+  } catch { /* ignore */ }
+  Object.entries(savedCompanyFields).forEach(([key, val]) => {
+    if (val) content = content.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), val);
+  });
+
+  // ── 2. Contact / company auto-fill (fills any keys not already replaced above) ──
+  const autoFilled = buildContactOverrides(contact, companyProfile, profile);
   Object.entries(autoFilled).forEach(([key, val]) => {
     if (val) content = content.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), String(val));
   });
 
-  // Convert remaining {{VARIABLE}} into styled inline inputs
+  // ── 3. Template field defaults for any remaining {{VARIABLE}} ──
+  const fieldDefaults: Record<string, string> = {};
+  if (template.fields) {
+    template.fields.forEach(f => {
+      if (f.defaultValue !== undefined && f.defaultValue !== null) {
+        fieldDefaults[f.key] = String(f.defaultValue);
+      }
+    });
+  }
+
+  // ── 4. Convert remaining {{VARIABLE}} into styled inline inputs with defaults ──
   content = content.replace(/\{\{([A-Z0-9_]+)\}\}/g, (_match, varName: string) => {
     const label = varName.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
-    return `<input type="text" name="${varName}" placeholder="${label}" style="display:inline-block;border:none;border-bottom:2px solid #3b82f6;background:#eff6ff;color:#1e3a8a;padding:2px 8px;min-width:120px;max-width:260px;border-radius:3px 3px 0 0;font-size:inherit;font-family:inherit;vertical-align:baseline;outline:none;" onfocus="this.style.background='#dbeafe';this.style.borderBottomColor='#1d4ed8'" onblur="this.style.background='#eff6ff';this.style.borderBottomColor='#3b82f6'" />`;
+    const defaultVal = (fieldDefaults[varName] || '').replace(/"/g, '&quot;');
+    return `<input type="text" name="${varName}" value="${defaultVal}" placeholder="${label}" style="display:inline-block;border:none;border-bottom:2px solid #3b82f6;background:#eff6ff;color:#1e3a8a;padding:2px 8px;min-width:120px;max-width:260px;border-radius:3px 3px 0 0;font-size:inherit;font-family:inherit;vertical-align:baseline;outline:none;" onfocus="this.style.background='#dbeafe';this.style.borderBottomColor='#1d4ed8'" onblur="this.style.background='#eff6ff';this.style.borderBottomColor='#3b82f6'" />`;
   });
 
   // Inject the cost-table interaction script before </body>
@@ -327,7 +372,7 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [hidePricing, setHidePricing] = useState(false);
-  const [includeTax, setIncludeTax] = useState(true);
+  const [includeTax, setIncludeTax] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   // Communicate toggle changes to the live iframe
@@ -353,7 +398,7 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
   const handleBack = () => {
     setSelected(null);
     setHidePricing(false);
-    setIncludeTax(true);
+    setIncludeTax(false);
   };
 
   // Capture the live iframe DOM state (with all edits, deletions, and additions applied) and save
@@ -368,6 +413,31 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
       toast.error('Document not ready. Please try again.');
       return;
     }
+
+    // Persist ALL edited field values per company so they reload on any future template open.
+    // Skip contact/company auto-fill keys (change per contact) and calculated totals.
+    try {
+      const SKIP_SAVE = new Set([
+        'CUSTOMER_NAME','CLIENT_NAME','CUSTOMER_PHONE','CUSTOMER_EMAIL',
+        'PROPERTY_ADDRESS','PROPERTY_CITY','PROPERTY_STATE','PROPERTY_ZIP','PROJECT_ADDRESS',
+        'INSURANCE_COMPANY','POLICY_NUMBER','CLAIM_NUMBER',
+        'COMPANY_NAME','COMPANY_TAGLINE','COMPANY_ADDRESS','COMPANY_CITY','COMPANY_STATE',
+        'COMPANY_ZIP','COMPANY_PHONE','COMPANY_EMAIL','CONTRACTOR_LICENSE','COMPANY_LOGO','REP_NAME',
+        'ESTIMATE_DATE','CURRENT_DATE','ESTIMATE_EXPIRY','ESTIMATE_NUMBER','START_DATE',
+        'SUBTOTAL','TAX_AMOUNT','TOTAL_AMOUNT','DEPOSIT_AMOUNT','BALANCE_DUE',
+      ]);
+      const fieldsToSave: Record<string, string> = {};
+      iframe.contentDocument!.querySelectorAll<HTMLInputElement>('input[name]').forEach(inp => {
+        if (!SKIP_SAVE.has(inp.name) && inp.value.trim()) {
+          fieldsToSave[inp.name] = inp.value.trim();
+        }
+      });
+      if (Object.keys(fieldsToSave).length > 0) {
+        const storageKey = `crm_company_fields_${profile.company_id}`;
+        const existing = JSON.parse(localStorage.getItem(storageKey) || '{}');
+        localStorage.setItem(storageKey, JSON.stringify({ ...existing, ...fieldsToSave }));
+      }
+    } catch { /* ignore */ }
 
     // Clone the iframe document so we can clean it up for saving without affecting the live view
     const cloneDoc = iframe.contentDocument.cloneNode(true) as Document;

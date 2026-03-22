@@ -227,6 +227,12 @@ export interface DbAutomation {
   created_by?: string;
   created_at: string;
   updated_at: string;
+  /** Custom message/body for email or SMS automations */
+  message_body?: string;
+  /** Hours of inactivity before a stale-lead alert fires (default 24) */
+  trigger_delay_hours?: number;
+  /** Persisted recipient list as JSON */
+  recipients?: unknown;
 }
 
 export interface DbProfile {
