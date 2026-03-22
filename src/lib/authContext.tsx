@@ -239,7 +239,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         sessionStorage.removeItem('pending_password_reset');
         sessionStorage.removeItem('auth_url_cleanup_pending');
       } catch { /* ignore */ }
-    }, 5000); // Reduced to 5s for faster recovery
+    }, 12000); // 12s — allows profile.company_id fetch to complete before giving up
     return () => window.clearTimeout(timer);
   }, [loading]);
 
