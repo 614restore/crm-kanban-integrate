@@ -27,7 +27,8 @@ import {
   FolderPlus,
   FolderX,
   ChevronRight,
-  X
+  X,
+  Save
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -98,7 +99,25 @@ const DocumentTemplates: React.FC = () => {
   const [showNewFolderInput, setShowNewFolderInput] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [movingTemplateId, setMovingTemplateId] = useState<string | null>(null);
-  
+
+  // ── Create / Edit template state ────────────────────────────────────────
+  const [editingTemplate, setEditingTemplate] = useState<DocumentTemplate | null>(null);
+  const [templateFormData, setTemplateFormData] = useState<{
+    name: string;
+    description: string;
+    category: DocumentTemplate['category'];
+    fileType: DocumentTemplate['fileType'];
+    tags: string;
+    content: string;
+  }>({
+    name: '',
+    description: '',
+    category: 'estimate',
+    fileType: 'html',
+    tags: '',
+    content: '',
+  });
+
   const { toast } = useToast();
   const { profile } = useAuth();
   const { state: crmState, dispatch } = useCRM();
@@ -2590,6 +2609,83 @@ const DocumentTemplates: React.FC = () => {
     });
   };
 
+  // Open create dialog
+  const openCreateTemplate = () => {
+    setEditingTemplate(null);
+    setTemplateFormData({ name: '', description: '', category: 'estimate', fileType: 'html', tags: '', content: '' });
+    setShowCreateTemplate(true);
+  };
+
+  // Open edit dialog for an existing template
+  const openEditTemplate = (template: DocumentTemplate) => {
+    setEditingTemplate(template);
+    setTemplateFormData({
+      name: template.name,
+      description: template.description,
+      category: template.category,
+      fileType: template.fileType,
+      tags: template.tags.join(', '),
+      content: template.content,
+    });
+    setShowCreateTemplate(true);
+  };
+
+  // Save (create or update) a template
+  const handleSaveTemplate = () => {
+    const name = templateFormData.name.trim();
+    if (!name) {
+      toast({ title: 'Name required', description: 'Please enter a template name.', variant: 'destructive' });
+      return;
+    }
+    if (!templateFormData.content.trim()) {
+      toast({ title: 'Content required', description: 'Please enter template content.', variant: 'destructive' });
+      return;
+    }
+    const tags = templateFormData.tags
+      .split(',')
+      .map(t => t.trim())
+      .filter(Boolean);
+    const variables = [...new Set(
+      (templateFormData.content.match(/\{\{([A-Z0-9_]+)\}\}/g) || []).map(m => m.slice(2, -2))
+    )];
+    const now = new Date().toISOString().split('T')[0];
+
+    if (editingTemplate) {
+      setTemplates(prev => prev.map(t => t.id === editingTemplate.id ? {
+        ...t,
+        name,
+        description: templateFormData.description.trim(),
+        category: templateFormData.category,
+        fileType: templateFormData.fileType,
+        tags,
+        content: templateFormData.content,
+        variables,
+        lastModified: now,
+      } : t));
+      toast({ title: 'Template Updated', description: `"${name}" has been saved.` });
+    } else {
+      const newTemplate: DocumentTemplate = {
+        id: Date.now().toString(),
+        name,
+        description: templateFormData.description.trim(),
+        category: templateFormData.category,
+        fileType: templateFormData.fileType,
+        tags,
+        content: templateFormData.content,
+        variables,
+        favorite: false,
+        isDefault: false,
+        createdAt: now,
+        lastModified: now,
+        usageCount: 0,
+      };
+      setTemplates(prev => [newTemplate, ...prev]);
+      toast({ title: 'Template Created', description: `"${name}" has been added.` });
+    }
+    setShowCreateTemplate(false);
+    setEditingTemplate(null);
+  };
+
   // Fill template variables for a specific contact
   const fillTemplateForContact = (template: DocumentTemplate, contactId: string): string => {
     const contact = crmState.contacts.find(c => c.id === contactId);
@@ -2843,7 +2939,7 @@ const DocumentTemplates: React.FC = () => {
           <FileText className="w-6 h-6" />
           <h1 className="text-3xl font-bold">Document Templates</h1>
         </div>
-        <Button onClick={() => setShowCreateTemplate(true)}>
+        <Button onClick={openCreateTemplate}>
           <Plus className="w-4 h-4 mr-2" />
           New Template
         </Button>
@@ -3038,8 +3134,8 @@ const DocumentTemplates: React.FC = () => {
           <div className="md:col-span-3 text-center py-8">
             <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-600">No templates found</p>
-            <Button 
-              onClick={() => setShowCreateTemplate(true)} 
+            <Button
+              onClick={openCreateTemplate}
               className="mt-4"
             >
               Create Your First Template
@@ -3118,9 +3214,18 @@ const DocumentTemplates: React.FC = () => {
                         <Eye className="w-4 h-4 mr-1" />
                         Preview
                       </Button>
-                      <Button 
-                        size="sm" 
+                      <Button
+                        size="sm"
                         variant="outline"
+                        title="Edit template"
+                        onClick={() => openEditTemplate(template)}
+                      >
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        title="Duplicate template"
                         onClick={() => duplicateTemplate(template)}
                       >
                         <Copy className="w-4 h-4" />
@@ -3355,6 +3460,140 @@ const DocumentTemplates: React.FC = () => {
           </Dialog>
         );
       })()}
+
+      {/* ── Create / Edit Template Dialog ───────────────────────────────── */}
+      {showCreateTemplate && (
+        <Dialog open={showCreateTemplate} onOpenChange={(open) => {
+          if (!open) { setShowCreateTemplate(false); setEditingTemplate(null); }
+        }}>
+          <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+            <DialogHeader>
+              <DialogTitle>{editingTemplate ? `Edit "${editingTemplate.name}"` : 'Create New Template'}</DialogTitle>
+            </DialogHeader>
+
+            <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+              {/* Name */}
+              <div>
+                <Label htmlFor="tpl-name" className="text-sm font-medium">Template Name <span className="text-red-500">*</span></Label>
+                <Input
+                  id="tpl-name"
+                  value={templateFormData.name}
+                  onChange={e => setTemplateFormData(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="e.g. Roofing Estimate — Standard"
+                  className="mt-1"
+                />
+              </div>
+
+              {/* Description */}
+              <div>
+                <Label htmlFor="tpl-desc" className="text-sm font-medium">Description</Label>
+                <Input
+                  id="tpl-desc"
+                  value={templateFormData.description}
+                  onChange={e => setTemplateFormData(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="Short description of what this template is for"
+                  className="mt-1"
+                />
+              </div>
+
+              {/* Category + File Type */}
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <Label className="text-sm font-medium">Category</Label>
+                  <Select
+                    value={templateFormData.category}
+                    onValueChange={(v) => setTemplateFormData(prev => ({ ...prev, category: v as DocumentTemplate['category'] }))}
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="estimate">Estimate</SelectItem>
+                      <SelectItem value="invoice">Invoice</SelectItem>
+                      <SelectItem value="contract">Contract</SelectItem>
+                      <SelectItem value="work-order">Work Order</SelectItem>
+                      <SelectItem value="proposal">Proposal</SelectItem>
+                      <SelectItem value="change-order">Change Order</SelectItem>
+                      <SelectItem value="safety">Safety Form</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex-1">
+                  <Label className="text-sm font-medium">File Type</Label>
+                  <Select
+                    value={templateFormData.fileType}
+                    onValueChange={(v) => setTemplateFormData(prev => ({ ...prev, fileType: v as DocumentTemplate['fileType'] }))}
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="html">HTML</SelectItem>
+                      <SelectItem value="docx">DOCX</SelectItem>
+                      <SelectItem value="pdf">PDF</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Tags */}
+              <div>
+                <Label htmlFor="tpl-tags" className="text-sm font-medium">Tags <span className="text-gray-400 font-normal">(comma-separated)</span></Label>
+                <Input
+                  id="tpl-tags"
+                  value={templateFormData.tags}
+                  onChange={e => setTemplateFormData(prev => ({ ...prev, tags: e.target.value }))}
+                  placeholder="e.g. roofing, insurance, storm damage"
+                  className="mt-1"
+                />
+              </div>
+
+              {/* Content */}
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="tpl-content" className="text-sm font-medium">
+                  Template Content <span className="text-red-500">*</span>
+                  <span className="ml-2 text-xs text-gray-400 font-normal">Use {'{{VARIABLE_NAME}}'} for dynamic fields</span>
+                </Label>
+                <Textarea
+                  id="tpl-content"
+                  value={templateFormData.content}
+                  onChange={e => setTemplateFormData(prev => ({ ...prev, content: e.target.value }))}
+                  placeholder={`<!DOCTYPE html>\n<html><body>\n  <h1>{{COMPANY_NAME}}</h1>\n  <p>Customer: {{CUSTOMER_NAME}}</p>\n</body></html>`}
+                  className="mt-1 font-mono text-xs resize-none"
+                  rows={14}
+                />
+                {/* Detected variables */}
+                {templateFormData.content && (() => {
+                  const vars = [...new Set(
+                    (templateFormData.content.match(/\{\{([A-Z0-9_]+)\}\}/g) || []).map(m => m.slice(2, -2))
+                  )];
+                  return vars.length > 0 ? (
+                    <div className="mt-1">
+                      <p className="text-xs text-gray-500 mb-1">Detected variables ({vars.length}):</p>
+                      <div className="flex flex-wrap gap-1">
+                        {vars.map(v => (
+                          <Badge key={v} variant="secondary" className="text-xs font-mono">{`{{${v}}}`}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null;
+                })()}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-4 border-t mt-2">
+              <Button variant="outline" onClick={() => { setShowCreateTemplate(false); setEditingTemplate(null); }}>
+                Cancel
+              </Button>
+              <Button onClick={handleSaveTemplate}>
+                <Save className="w-4 h-4 mr-2" />
+                {editingTemplate ? 'Save Changes' : 'Create Template'}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 };
