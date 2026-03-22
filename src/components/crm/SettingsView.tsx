@@ -50,11 +50,111 @@ import {
   EyeOff,
   Send,
   Server,
+  ChevronDown,
+  ChevronUp,
+  HelpCircle,
 } from 'lucide-react';
 import { supabase, isDemoMode } from '@/lib/supabase';
 import { ensureDefaultLeadSources } from '@/lib/setupCompany';
 import ImageCropDialog from '@/components/ui/ImageCropDialog';
 import DocumentTemplates from '@/components/crm/DocumentTemplates';
+
+// ── SMTP provider quick-setup presets ────────────────────────────────────────
+const SMTP_PROVIDERS = [
+  {
+    id: 'gmail',
+    label: 'Gmail',
+    host: 'smtp.gmail.com',
+    port: '587',
+    secure: false,
+    badge: 'App Password required',
+    badgeColor: 'bg-yellow-50 text-yellow-700 border-yellow-200',
+    steps: [
+      { n: 1, text: 'Go to myaccount.google.com → Security' },
+      { n: 2, text: 'Enable 2-Step Verification (required before App Passwords appear)' },
+      { n: 3, text: 'Search "App Passwords" → create one, select Mail / Other' },
+      { n: 4, text: 'Copy the 16-character code — paste it in the Password field below' },
+      { n: 5, text: 'Username = your full Gmail address (e.g. you@gmail.com)' },
+    ],
+    note: 'Gmail free accounts are limited to 500 emails/day. For higher volume, use Google Workspace or a transactional provider.',
+  },
+  {
+    id: 'outlook',
+    label: 'Outlook',
+    host: 'smtp.office365.com',
+    port: '587',
+    secure: false,
+    badge: 'App Password required',
+    badgeColor: 'bg-yellow-50 text-yellow-700 border-yellow-200',
+    steps: [
+      { n: 1, text: 'Go to account.microsoft.com → Security → Advanced security options' },
+      { n: 2, text: 'Under "App passwords" click Create a new app password' },
+      { n: 3, text: 'Copy the generated password — paste it in the Password field below' },
+      { n: 4, text: 'Username = your full Microsoft email (e.g. you@outlook.com)' },
+    ],
+    note: 'Personal Outlook accounts: use smtp-mail.outlook.com instead. Microsoft 365 Business: use smtp.office365.com.',
+  },
+  {
+    id: 'yahoo',
+    label: 'Yahoo',
+    host: 'smtp.mail.yahoo.com',
+    port: '465',
+    secure: true,
+    badge: 'App Password required',
+    badgeColor: 'bg-yellow-50 text-yellow-700 border-yellow-200',
+    steps: [
+      { n: 1, text: 'Go to login.yahoo.com → Account Security' },
+      { n: 2, text: 'Click "Generate app password" → select Other app' },
+      { n: 3, text: 'Copy the generated password — paste it in the Password field below' },
+      { n: 4, text: 'Username = your full Yahoo address (e.g. you@yahoo.com)' },
+      { n: 5, text: 'Check "Use SSL/TLS" — Yahoo uses port 465 with SSL' },
+    ],
+    note: null,
+  },
+  {
+    id: 'sendgrid',
+    label: 'SendGrid',
+    host: 'smtp.sendgrid.net',
+    port: '587',
+    secure: false,
+    badge: 'API key as password',
+    badgeColor: 'bg-blue-50 text-blue-700 border-blue-200',
+    steps: [
+      { n: 1, text: 'Log into app.sendgrid.com → Settings → API Keys' },
+      { n: 2, text: 'Click Create API Key → give it "Mail Send" permission' },
+      { n: 3, text: 'Username: enter the literal word  apikey  (not your email)' },
+      { n: 4, text: 'Password: paste your SendGrid API key' },
+      { n: 5, text: 'Verify your sender address in SendGrid under Sender Authentication first' },
+    ],
+    note: 'SendGrid free tier: 100 emails/day. Upgrade for higher volume with full analytics.',
+  },
+  {
+    id: 'mailgun',
+    label: 'Mailgun',
+    host: 'smtp.mailgun.org',
+    port: '587',
+    secure: false,
+    badge: 'Domain required',
+    badgeColor: 'bg-purple-50 text-purple-700 border-purple-200',
+    steps: [
+      { n: 1, text: 'Log into app.mailgun.com → Sending → Domains' },
+      { n: 2, text: 'Select your verified domain → SMTP credentials tab' },
+      { n: 3, text: 'Copy the username (e.g. postmaster@mg.yourdomain.com) and password shown' },
+      { n: 4, text: 'Paste those into the Username and Password fields below' },
+    ],
+    note: 'You must verify a domain in Mailgun before sending. Sandbox domains are limited to authorized recipients only.',
+  },
+] as const;
+
+function detectSmtpProvider(host: string) {
+  const h = host.toLowerCase();
+  if (h.includes('gmail')) return SMTP_PROVIDERS.find(p => p.id === 'gmail') ?? null;
+  if (h.includes('office365') || h.includes('outlook')) return SMTP_PROVIDERS.find(p => p.id === 'outlook') ?? null;
+  if (h.includes('yahoo')) return SMTP_PROVIDERS.find(p => p.id === 'yahoo') ?? null;
+  if (h.includes('sendgrid')) return SMTP_PROVIDERS.find(p => p.id === 'sendgrid') ?? null;
+  if (h.includes('mailgun')) return SMTP_PROVIDERS.find(p => p.id === 'mailgun') ?? null;
+  return null;
+}
 
 type SettingsTab = 'company' | 'profile' | 'integrations' | 'ai-assistant' | 'notifications' | 'security' | 'billing' | 'customer-billing' | 'api' | 'features' | 'document-templates';
 
@@ -113,6 +213,7 @@ export default function SettingsView() {
   const [isSavingSmtp, setIsSavingSmtp] = useState(false);
   const [isTestingSmtp, setIsTestingSmtp] = useState(false);
   const [showSmtpPass, setShowSmtpPass] = useState(false);
+  const [smtpGuideOpen, setSmtpGuideOpen] = useState(true);
 
   // Integration hooks
   const {
@@ -1656,9 +1757,78 @@ export default function SettingsView() {
                   <Server size={20} className="text-gray-500" />
                   <div>
                     <h4 className="font-semibold text-gray-900">Custom SMTP Server</h4>
-                    <p className="text-sm text-gray-500">Send emails directly from your own mail server or provider (Gmail, Outlook, SendGrid, etc.). Leave blank to use the system default.</p>
+                    <p className="text-sm text-gray-500">Send emails directly from your own address. Click your provider below to auto-fill the settings, then follow the steps shown.</p>
                   </div>
                 </div>
+
+                {/* Quick-setup provider buttons */}
+                <div>
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Quick Setup</p>
+                  <div className="flex flex-wrap gap-2">
+                    {SMTP_PROVIDERS.map(p => {
+                      const active = companyForm.smtp_host === p.host;
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => {
+                            setCompanyForm(f => ({ ...f, smtp_host: p.host, smtp_port: p.port, smtp_secure: p.secure }));
+                            setSmtpGuideOpen(true);
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${active ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400 hover:text-blue-600'}`}
+                        >
+                          {p.label}
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => setCompanyForm(f => ({ ...f, smtp_host: '', smtp_port: '587', smtp_secure: false }))}
+                      className="px-3 py-1.5 rounded-lg text-sm font-medium border border-gray-300 text-gray-500 hover:text-gray-700 transition-colors"
+                    >
+                      Other / Clear
+                    </button>
+                  </div>
+                </div>
+
+                {/* Contextual setup guide — auto-shows when a known provider is detected */}
+                {(() => {
+                  const provider = detectSmtpProvider(companyForm.smtp_host);
+                  if (!provider) return null;
+                  return (
+                    <div className="rounded-lg border border-blue-200 bg-blue-50 overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => setSmtpGuideOpen(o => !o)}
+                        className="w-full flex items-center justify-between px-4 py-3 text-left"
+                      >
+                        <div className="flex items-center gap-2">
+                          <HelpCircle size={16} className="text-blue-600" />
+                          <span className="text-sm font-semibold text-blue-800">How to set up {provider.label} SMTP</span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${provider.badgeColor}`}>{provider.badge}</span>
+                        </div>
+                        {smtpGuideOpen ? <ChevronUp size={16} className="text-blue-600" /> : <ChevronDown size={16} className="text-blue-600" />}
+                      </button>
+                      {smtpGuideOpen && (
+                        <div className="px-4 pb-4 space-y-3">
+                          <ol className="space-y-2">
+                            {provider.steps.map(s => (
+                              <li key={s.n} className="flex gap-3 text-sm text-blue-900">
+                                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center font-bold">{s.n}</span>
+                                <span>{s.text}</span>
+                              </li>
+                            ))}
+                          </ol>
+                          {provider.note && (
+                            <p className="text-xs text-blue-700 bg-blue-100 rounded px-3 py-2 border border-blue-200">
+                              ℹ️ {provider.note}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 <div className="grid grid-cols-2 gap-5">
                   <div>
@@ -1666,7 +1836,10 @@ export default function SettingsView() {
                     <input
                       type="text"
                       value={companyForm.smtp_host}
-                      onChange={(e) => setCompanyForm({ ...companyForm, smtp_host: e.target.value })}
+                      onChange={(e) => {
+                        setCompanyForm({ ...companyForm, smtp_host: e.target.value });
+                        setSmtpGuideOpen(true);
+                      }}
                       className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                       placeholder="smtp.gmail.com"
                     />
@@ -1688,11 +1861,16 @@ export default function SettingsView() {
                       value={companyForm.smtp_user}
                       onChange={(e) => setCompanyForm({ ...companyForm, smtp_user: e.target.value })}
                       className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                      placeholder="you@yourdomain.com"
+                      placeholder={detectSmtpProvider(companyForm.smtp_host)?.id === 'sendgrid' ? 'apikey' : 'you@yourdomain.com'}
                     />
+                    {detectSmtpProvider(companyForm.smtp_host)?.id === 'sendgrid' && (
+                      <p className="text-xs text-blue-600 mt-1">SendGrid username is literally the word <code className="bg-blue-50 px-1 rounded">apikey</code></p>
+                    )}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Password / App Password</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {detectSmtpProvider(companyForm.smtp_host)?.id === 'sendgrid' ? 'API Key (as password)' : 'App Password'}
+                    </label>
                     <div className="relative">
                       <input
                         type={showSmtpPass ? 'text' : 'password'}
@@ -1709,7 +1887,9 @@ export default function SettingsView() {
                         {showSmtpPass ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
                     </div>
-                    <p className="text-xs text-gray-400 mt-1">For Gmail/Outlook, use an App Password — not your account password.</p>
+                    {!detectSmtpProvider(companyForm.smtp_host) && (
+                      <p className="text-xs text-gray-400 mt-1">Use an App Password for Gmail/Outlook — not your account password.</p>
+                    )}
                   </div>
                 </div>
 
