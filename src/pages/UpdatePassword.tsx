@@ -21,49 +21,60 @@ export default function UpdatePassword() {
     const [success, setSuccess] = useState<string | null>(null);
 
     useEffect(() => {
-        // Listen for the PASSWORD_RECOVERY event — fired by Supabase when it
-        // detects an implicit-flow recovery token in the URL hash.
-        // This is more reliable than getSession() which can race against the
-        // async hash processing that happens on client initialisation.
+        // supabase.ts sets this flag from the raw URL *before* Supabase clears
+        // the hash, so we can detect an implicit-flow recovery link even after
+        // the hash is gone from window.location.
+        const isPendingReset = sessionStorage.getItem('pending_password_reset') === 'true';
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get('code');
+
+        // PASSWORD_RECOVERY fires once Supabase finishes processing the
+        // #access_token hash (implicit flow).
         const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-            if (event === 'PASSWORD_RECOVERY') {
-                // Session is ready — show the new-password form
-                setExchanging(false);
-            } else if (event === 'SIGNED_IN' && session) {
-                // Covers the case where the session was already restored before
-                // this component mounted
+            if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && session && isPendingReset)) {
+                sessionStorage.removeItem('pending_password_reset');
                 setExchanging(false);
             }
         });
 
-        // Also handle PKCE flow (?code=...) for completeness
-        const params = new URLSearchParams(window.location.search);
-        const code = params.get('code');
-
         if (code) {
+            // PKCE flow: exchange the one-time code for a session
             supabase.auth.exchangeCodeForSession(code)
                 .then(({ error }) => {
                     if (error) {
                         setError('Invalid or expired reset link. Please request a new one.');
                         setExchanging(false);
                     }
-                    // On success, onAuthStateChange SIGNED_IN fires and clears exchanging
+                    // On success, onAuthStateChange SIGNED_IN fires above
                 })
                 .catch(() => {
                     setError('Invalid or expired reset link. Please request a new one.');
                     setExchanging(false);
                 });
-        } else if (!window.location.hash.includes('access_token')) {
-            // No code and no hash token — check if there's already a valid session
+        } else if (isPendingReset) {
+            // Implicit flow: Supabase is asynchronously processing the hash token.
+            // Wait for PASSWORD_RECOVERY via onAuthStateChange, but add a 5s
+            // fallback in case the event never fires (expired / already-used token).
+            const timer = setTimeout(async () => {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session) {
+                    sessionStorage.removeItem('pending_password_reset');
+                    setExchanging(false);
+                } else {
+                    setError('Invalid or expired reset link. Please request a new one.');
+                    setExchanging(false);
+                }
+            }, 5000);
+            return () => { clearTimeout(timer); subscription.unsubscribe(); };
+        } else {
+            // No recovery signal — check for a pre-existing session
             supabase.auth.getSession().then(({ data: { session } }) => {
                 if (!session) {
                     setError('No valid reset session found. Please request a new reset link.');
-                    setExchanging(false);
                 }
-                // If there is a session, onAuthStateChange SIGNED_IN will fire
+                setExchanging(false);
             });
         }
-        // If hash contains access_token, onAuthStateChange PASSWORD_RECOVERY will fire
 
         return () => subscription.unsubscribe();
     }, []);
