@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/authContext';
 import {
     Building2,
     Lock,
@@ -12,72 +13,13 @@ import {
 } from 'lucide-react';
 
 export default function UpdatePassword() {
+    const { user, updateProfile } = useAuth();
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [exchanging, setExchanging] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
-
-    useEffect(() => {
-        // supabase.ts sets this flag from the raw URL *before* Supabase clears
-        // the hash, so we can detect an implicit-flow recovery link even after
-        // the hash is gone from window.location.
-        const isPendingReset = sessionStorage.getItem('pending_password_reset') === 'true';
-        const params = new URLSearchParams(window.location.search);
-        const code = params.get('code');
-
-        // PASSWORD_RECOVERY fires once Supabase finishes processing the
-        // #access_token hash (implicit flow).
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-            if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && session && isPendingReset)) {
-                sessionStorage.removeItem('pending_password_reset');
-                setExchanging(false);
-            }
-        });
-
-        if (code) {
-            // PKCE flow: exchange the one-time code for a session
-            supabase.auth.exchangeCodeForSession(code)
-                .then(({ error }) => {
-                    if (error) {
-                        setError('Invalid or expired reset link. Please request a new one.');
-                        setExchanging(false);
-                    }
-                    // On success, onAuthStateChange SIGNED_IN fires above
-                })
-                .catch(() => {
-                    setError('Invalid or expired reset link. Please request a new one.');
-                    setExchanging(false);
-                });
-        } else if (isPendingReset) {
-            // Implicit flow: Supabase is asynchronously processing the hash token.
-            // Wait for PASSWORD_RECOVERY via onAuthStateChange, but add a 5s
-            // fallback in case the event never fires (expired / already-used token).
-            const timer = setTimeout(async () => {
-                const { data: { session } } = await supabase.auth.getSession();
-                if (session) {
-                    sessionStorage.removeItem('pending_password_reset');
-                    setExchanging(false);
-                } else {
-                    setError('Invalid or expired reset link. Please request a new one.');
-                    setExchanging(false);
-                }
-            }, 5000);
-            return () => { clearTimeout(timer); subscription.unsubscribe(); };
-        } else {
-            // No recovery signal — check for a pre-existing session
-            supabase.auth.getSession().then(({ data: { session } }) => {
-                if (!session) {
-                    setError('No valid reset session found. Please request a new reset link.');
-                }
-                setExchanging(false);
-            });
-        }
-
-        return () => subscription.unsubscribe();
-    }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -85,31 +27,25 @@ export default function UpdatePassword() {
         setSuccess(null);
 
         if (password !== confirmPassword) {
-            setError('Passwords do not match');
+            setError('Passwords do not match.');
             return;
         }
-
-        if (password.length < 6) {
-            setError('Password must be at least 6 characters');
+        if (password.length < 8) {
+            setError('Password must be at least 8 characters.');
             return;
         }
 
         setLoading(true);
-
         try {
-            const { error } = await supabase.auth.updateUser({ password });
+            const { error: pwError } = await supabase.auth.updateUser({ password });
+            if (pwError) throw pwError;
 
-            if (error) {
-                setError(error.message);
-            } else {
-                setSuccess('Password updated successfully! Redirecting...');
-                setTimeout(() => {
-                    try { sessionStorage.removeItem('pending_password_reset'); } catch (e) { console.warn('[UpdatePassword] sessionStorage cleanup failed:', e); }
-                    window.location.href = window.location.origin + (import.meta.env.BASE_URL || '/');
-                }, 2000);
-            }
+            // Clear the forced-change flag
+            await updateProfile({ must_change_password: false });
+
+            setSuccess('Password updated! Taking you to the app…');
         } catch (err: any) {
-            setError('An unexpected error occurred. Please try again.');
+            setError(err.message || 'Failed to update password. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -126,32 +62,27 @@ export default function UpdatePassword() {
                 </div>
 
                 <div className="bg-white rounded-2xl shadow-2xl p-8">
-                    <div className="text-center mb-8">
-                        <h2 className="text-2xl font-bold text-gray-900">Update Password</h2>
-                        <p className="text-gray-500 mt-2">Enter a new secure password for your account</p>
+                    <div className="text-center mb-6">
+                        <h2 className="text-2xl font-bold text-gray-900">Set New Password</h2>
+                        <p className="text-gray-500 mt-2 text-sm">
+                            You signed in with a temporary password.
+                            Please set a permanent password to continue.
+                        </p>
                     </div>
 
-                    {exchanging && (
-                        <div className="flex justify-center py-8">
-                            <Loader2 className="animate-spin text-blue-500" size={32} />
-                        </div>
-                    )}
-
-                    {!exchanging && error && (
-                        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3">
+                    {error && (
+                        <div className="mb-5 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3">
                             <AlertCircle className="text-red-500 flex-shrink-0" size={20} />
                             <p className="text-red-700 text-sm font-medium">{error}</p>
                         </div>
                     )}
 
-                    {!exchanging && success && (
-                        <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3">
+                    {success ? (
+                        <div className="p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3">
                             <CheckCircle className="text-green-500 flex-shrink-0" size={20} />
                             <p className="text-green-700 text-sm font-medium">{success}</p>
                         </div>
-                    )}
-
-                    {!exchanging && !error && !success && (
+                    ) : (
                         <form onSubmit={handleSubmit} className="space-y-5">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
@@ -163,7 +94,7 @@ export default function UpdatePassword() {
                                         value={password}
                                         onChange={(e) => setPassword(e.target.value)}
                                         className="w-full pl-10 pr-12 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                                        placeholder="••••••••"
+                                        placeholder="Min. 8 characters"
                                         required
                                     />
                                     <button
@@ -185,7 +116,7 @@ export default function UpdatePassword() {
                                         value={confirmPassword}
                                         onChange={(e) => setConfirmPassword(e.target.value)}
                                         className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                                        placeholder="••••••••"
+                                        placeholder="Re-enter new password"
                                         required
                                     />
                                 </div>
@@ -196,7 +127,7 @@ export default function UpdatePassword() {
                                 disabled={loading}
                                 className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed mt-2 shadow-sm"
                             >
-                                {loading ? <Loader2 className="animate-spin" size={20} /> : <><ArrowRight size={18} />Update Password</>}
+                                {loading ? <Loader2 className="animate-spin" size={20} /> : <><ArrowRight size={18} />Set Password</>}
                             </button>
                         </form>
                     )}

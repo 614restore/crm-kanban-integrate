@@ -1149,12 +1149,12 @@ function AuthGate() {
     return <LoadingScreen />;
   }
 
-  if (isPasswordReset) {
-    return <UpdatePassword />;
-  }
-
   if (!session) {
     return <AuthPage />;
+  }
+
+  if (isPasswordReset) {
+    return <UpdatePassword />;
   }
 
   return <CRMApp />;

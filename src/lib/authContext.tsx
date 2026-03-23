@@ -15,6 +15,7 @@ export interface Profile {
   phone?: string;
   avatar_url?: string;
   is_active?: boolean;
+  must_change_password?: boolean;
 }
 
 interface AuthContextType {
@@ -42,11 +43,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // how many callers race (getSession + onAuthStateChange on hard reload).
   const profileFetchPromise = useRef<Promise<Profile | null> | null>(null);
 
-  const [isPasswordReset, setIsPasswordReset] = useState(() => {
-    try {
-      return sessionStorage.getItem('pending_password_reset') === 'true';
-    } catch (_) { return false; }
-  });
+  // Derived from the profile flag set by the temp-password-reset edge function
+  const isPasswordReset = profile?.must_change_password === true;
 
   // ── Raw profile fetch (no dedup, no retry) ────────────────────────────
   const fetchProfile = async (userId: string): Promise<Profile | null> => {
@@ -363,12 +361,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // ── resetPassword ─────────────────────────────────────────────────────
+  // Calls the temp-password-reset edge function which generates a temporary
+  // password, emails it to the user, and sets must_change_password = true.
+  // No redirect links are involved, so it works from any device or email client.
   const resetPassword = async (email: string) => {
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}${import.meta.env.BASE_URL}reset-password`,
+      const res = await fetch(`${supabaseUrl}/functions/v1/temp-password-reset`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY },
+        body: JSON.stringify({ email }),
       });
-      return { error };
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        return { error: new Error(data?.error || 'Failed to send temporary password.') };
+      }
+      return { error: null };
     } catch (err) {
       return { error: err as Error };
     }
