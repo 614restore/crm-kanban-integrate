@@ -38,13 +38,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isRecoverySession, setIsRecoverySession] = useState(false);
 
   // Shared promise ref — ensures only ONE profile fetch runs at a time no matter
   // how many callers race (getSession + onAuthStateChange on hard reload).
   const profileFetchPromise = useRef<Promise<Profile | null> | null>(null);
 
-  // Derived from the profile flag set by the temp-password-reset edge function
-  const isPasswordReset = profile?.must_change_password === true;
+  // True when signed in via a Supabase recovery link OR a temp password
+  const isPasswordReset = isRecoverySession || profile?.must_change_password === true;
 
   // ── Raw profile fetch (no dedup, no retry) ────────────────────────────
   const fetchProfile = async (userId: string): Promise<Profile | null> => {
@@ -148,7 +149,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         recoveryEventFired = true;
         setSession(session);
         setUser(session?.user ?? null);
-        setIsPasswordReset(true);
+        setIsRecoverySession(true);
         setLoading(false);
         try { sessionStorage.removeItem('pending_password_reset'); } catch { /* ignore */ }
         return;

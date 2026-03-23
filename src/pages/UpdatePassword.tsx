@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 
 export default function UpdatePassword() {
-    const { user, updateProfile } = useAuth();
+    const { user, loading: authLoading, updateProfile } = useAuth();
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -51,6 +51,14 @@ export default function UpdatePassword() {
         }
     };
 
+    if (authLoading) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-900 flex items-center justify-center p-4">
+                <Loader2 className="animate-spin text-white" size={40} />
+            </div>
+        );
+    }
+
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-900 flex items-center justify-center p-4">
             <div className="w-full max-w-md">
@@ -65,8 +73,7 @@ export default function UpdatePassword() {
                     <div className="text-center mb-6">
                         <h2 className="text-2xl font-bold text-gray-900">Set New Password</h2>
                         <p className="text-gray-500 mt-2 text-sm">
-                            You signed in with a temporary password.
-                            Please set a permanent password to continue.
+                            {user ? 'Choose a new password for your account.' : 'Your session is being verified…'}
                         </p>
                     </div>
 
@@ -124,7 +131,7 @@ export default function UpdatePassword() {
 
                             <button
                                 type="submit"
-                                disabled={loading}
+                                disabled={loading || !user}
                                 className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed mt-2 shadow-sm"
                             >
                                 {loading ? <Loader2 className="animate-spin" size={20} /> : <><ArrowRight size={18} />Set Password</>}
