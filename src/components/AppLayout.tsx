@@ -55,6 +55,9 @@ const SupplementTrackingView = lazy(() => import('./crm/SupplementTrackingView')
 const CrewScheduleView = lazy(() => import('./crm/CrewScheduleView'));
 const EquipmentView = lazy(() => import('./crm/EquipmentView'));
 const CommissionPayrollView = lazy(() => import('./crm/CommissionPayrollView'));
+const TimeTrackingView = lazy(() => import('./crm/TimeTrackingView'));
+const JobMapView = lazy(() => import('./crm/JobMapView'));
+const StormAlertEngine = lazy(() => import('./crm/StormAlertEngine'));
 
 // --- LocalStorage data cache (stale-while-revalidate) ---
 const DATA_CACHE_KEY = 'crm_app_data_v1';
@@ -177,6 +180,12 @@ function ViewRouter() {
         return <EquipmentView />;
       case 'commission-payroll':
         return <CommissionPayrollView />;
+      case 'time-tracking':
+        return <TimeTrackingView />;
+      case 'job-map':
+        return <JobMapView />;
+      case 'storm-alerts':
+        return <StormAlertEngine />;
       case 'settings':
         return <SettingsView />;
       case 'ai-assistant':

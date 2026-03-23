@@ -45,7 +45,10 @@ export type ViewType =
   | 'crew-schedule'
   | 'equipment'
   | 'commission-payroll'
-  | 'sales-analytics';
+  | 'sales-analytics'
+  | 'time-tracking'
+  | 'job-map'
+  | 'storm-alerts';
 
 export interface CRMState {
   // Current user
