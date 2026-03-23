@@ -65,7 +65,7 @@ const supabase = createClient(
       detectSessionInUrl: true,
       storage: typeof window !== 'undefined' ? window.localStorage : undefined,
       storageKey: 'sb-auth-token',
-      flowType: 'pkce',
+      flowType: 'implicit',
     },
     global: {
       headers: {
