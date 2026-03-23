@@ -1,5 +1,8 @@
 // EagleViewPanel — order aerial roof measurement reports for a customer property,
 // poll for completion, and auto-upload the PDF to the customer's documents.
+//
+// All EagleView API calls route through the eagleview-proxy Supabase Edge Function
+// so that credentials are never exposed to the browser and CORS is handled server-side.
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Satellite, Loader2, Settings, CheckCircle, AlertTriangle,
@@ -8,9 +11,51 @@ import {
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { db } from '@/lib/database';
-import { EagleViewIntegration } from '@/lib/integrations/eagleview';
 import { uploadDocument } from '@/lib/storage';
 import { Document } from '@/lib/crmData';
+
+/** Call the eagleview-proxy Edge Function with the given action and params */
+async function evProxy(action: string, params: Record<string, any> = {}): Promise<any> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  const { data, error } = await supabase.functions.invoke('eagleview-proxy', {
+    body: params,
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    // Pass action as a query param because the Edge Function reads it from the URL
+    // supabase-js doesn't support query params in invoke(), so we use a workaround:
+    // the body also contains the action for POST requests.
+  });
+  // The Edge Function reads action from ?action= on the URL. supabase-js invoke
+  // calls POST /functions/v1/{name}. We can't append query params directly, so
+  // the Edge Function also reads action from the body as a fallback.
+  if (error) throw new Error(error.message || 'EagleView proxy error');
+  return data;
+}
+
+/** Fetch a binary download from the eagleview-proxy (returns Blob) */
+async function evProxyDownload(orderId: string, format = 'pdf'): Promise<Blob> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const anonKey    = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  const res = await fetch(
+    `${supabaseUrl}/functions/v1/eagleview-proxy?action=download&orderId=${encodeURIComponent(orderId)}&format=${format}`,
+    {
+      method: 'GET',
+      headers: {
+        'apikey': anonKey,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    }
+  );
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`Download failed (${res.status}): ${txt}`);
+  }
+  return res.blob();
+}
 
 interface Props {
   address: string;
@@ -86,7 +131,6 @@ export default function EagleViewPanel({
   const [checkingStatus, setCheckingStatus] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [configStatus, setConfigStatus] = useState<'unknown' | 'ok' | 'missing'>('unknown');
-  const [eagleView, setEagleView] = useState<EagleViewIntegration | null>(null);
   const [order, setOrder] = useState<PendingOrder | null>(null);
   const [reportType, setReportType] = useState<'standard' | 'premium'>('standard');
   const [error, setError] = useState<string | null>(null);
@@ -95,7 +139,7 @@ export default function EagleViewPanel({
   const fullAddress = [address, city, state, zip].filter(Boolean).join(', ');
   const repName = contactName || 'Customer';
 
-  // ── Load saved order + EagleView credentials ─────────────────────────────
+  // ── Load saved order + verify EagleView is configured via proxy ───────────
   useEffect(() => {
     // Restore any in-progress order from storage (graceful in private browsers)
     const saved = readOrderFromStorage(contactId);
@@ -105,37 +149,17 @@ export default function EagleViewPanel({
 
     const load = async () => {
       try {
-        // Ensure the session is active before hitting Supabase — prevents
-        // false "not configured" state after dormancy or in private browsers.
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) { setConfigStatus('missing'); return; }
 
-        const { data, error: dbError } = await supabase
-          .from('company_integrations')
-          .select('credentials')
-          .eq('company_id', companyId)
-          .eq('integration_type', 'eagleview')
-          .eq('is_active', true)
-          .single();
-
-        if (dbError && dbError.code !== 'PGRST116') {
-          // Real DB / auth error — not just "no rows found"
-          setConfigStatus('missing');
-          return;
-        }
-
-        const apiKey = data?.credentials?.apiKey;
-        const clientId = data?.credentials?.clientId;
-        const env = data?.credentials?.environment || 'production';
-        if (!apiKey || !clientId) { setConfigStatus('missing'); return; }
-        const ev = new EagleViewIntegration(apiKey, clientId, env);
-        setEagleView(ev);
+        // Use the proxy's 'credits' action as a lightweight config check —
+        // the proxy reads credentials server-side; if it returns ok, EV is configured.
+        const result = await evProxy('credits', { action: 'credits' });
         setConfigStatus('ok');
-        try {
-          const credits = await ev.getAccountCredits();
-          setAccountCredits(credits?.credits_available ?? credits?.balance ?? null);
-        } catch { /* non-critical */ }
+        const bal = result?.credits_available ?? result?.balance ?? result?.credits ?? null;
+        setAccountCredits(typeof bal === 'number' ? bal : null);
       } catch {
+        // If the proxy errors (no credentials stored, etc.) treat as not configured
         setConfigStatus('missing');
       }
     };
@@ -150,13 +174,15 @@ export default function EagleViewPanel({
 
   // ── Order a new report ────────────────────────────────────────────────────
   const handleOrderReport = async () => {
-    if (!eagleView) return;
     setLoading(true);
     setError(null);
     try {
-      const result = await eagleView.orderReport(fullAddress, reportType, {
-        contact_id: contactId,
-        customer_name: contactName,
+      const result = await evProxy('order', {
+        action: 'order',
+        address: fullAddress,
+        reportType,
+        contactId,
+        customerName: contactName,
       });
       const newOrder: PendingOrder = {
         orderId: result.order_id ?? result.id ?? `DEMO-${Date.now()}`,
@@ -170,7 +196,7 @@ export default function EagleViewPanel({
       toast.success('EagleView report ordered! Check back in a few minutes for results.');
     } catch (err: any) {
       // Demo fallback: create a mock order so the flow can be tested without live credentials
-      console.warn('[EagleViewPanel] API error, using demo order:', err.message);
+      console.warn('[EagleViewPanel] Proxy error, using demo order:', err.message);
       const demoOrder: PendingOrder = {
         orderId: `DEMO-${Date.now()}`,
         address: fullAddress,
@@ -195,8 +221,8 @@ export default function EagleViewPanel({
       let newStatus: OrderStatus = order.status;
       let statusMessage = order.statusMessage;
 
-      if (eagleView && !order.orderId.startsWith('DEMO-')) {
-        const result = await eagleView.getOrderStatus(order.orderId);
+      if (!order.orderId.startsWith('DEMO-')) {
+        const result = await evProxy('status', { action: 'status', orderId: order.orderId });
         newStatus = normalizeStatus(result.status);
         statusMessage = result.status_message ?? result.message ?? statusMessage;
       } else {
@@ -248,8 +274,8 @@ export default function EagleViewPanel({
     try {
       let pdfBlob: Blob;
 
-      if (eagleView && !order.orderId.startsWith('DEMO-')) {
-        pdfBlob = await eagleView.downloadReport(order.orderId, 'pdf');
+      if (!order.orderId.startsWith('DEMO-')) {
+        pdfBlob = await evProxyDownload(order.orderId, 'pdf');
       } else {
         // Demo: create a simple HTML placeholder "report"
         const html = `<!DOCTYPE html><html><head><title>EagleView Report (Demo)</title>

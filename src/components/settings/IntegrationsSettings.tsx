@@ -33,8 +33,43 @@ const IntegrationsSettings: React.FC = () => {
   useEffect(() => {
     initializeIntegrations();
 
-    // Handle QuickBooks OAuth redirect params
+    // Handle QuickBooks OAuth callback — Intuit redirects back here with ?code=&realmId=&state=
     const params = new URLSearchParams(window.location.search);
+    const qbCode    = params.get('code');
+    const qbRealmId = params.get('realmId');
+    const qbState   = params.get('state');
+
+    if (qbCode && qbRealmId && qbState) {
+      // Exchange the authorization code for tokens via the Edge Function
+      window.history.replaceState({}, '', window.location.pathname);
+      (async () => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const token = session?.access_token;
+          const { data, error } = await supabase.functions.invoke('quickbooks-oauth', {
+            body: {
+              action:      'callback',
+              code:        qbCode,
+              realmId:     qbRealmId,
+              state:       qbState,
+              redirectUri: window.location.origin + window.location.pathname,
+            },
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          });
+          if (error || !data?.success) {
+            setQbBanner({ type: 'error', message: `QuickBooks connection failed: ${data?.error || error?.message || 'Unknown error'}` });
+          } else {
+            setQbBanner({ type: 'success', message: 'QuickBooks connected successfully!' });
+            await initializeIntegrations();
+          }
+        } catch (err: any) {
+          setQbBanner({ type: 'error', message: `QuickBooks connection failed: ${err?.message || 'Unknown error'}` });
+        }
+      })();
+      return;
+    }
+
+    // Legacy params from older redirect style
     if (params.get('qb_connected') === '1') {
       setQbBanner({ type: 'success', message: 'QuickBooks connected successfully!' });
       window.history.replaceState({}, '', window.location.pathname);
@@ -280,25 +315,19 @@ const IntegrationConfigModal: React.FC<IntegrationConfigModalProps> = ({ integra
       const { data: { session } } = await supabaseClient.auth.getSession();
       const token = session?.access_token;
 
-      const res = await fetch('/api/quickbooks-auth', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+      // The redirect URI is this page — Intuit will redirect back here with ?code=&realmId=&state=
+      const redirectUri = window.location.origin + window.location.pathname;
+
+      const { data, error } = await supabaseClient.functions.invoke('quickbooks-oauth', {
+        body: { action: 'initiate', redirectUri },
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(err.error || `Server error ${res.status}`);
-      }
+      if (error) throw new Error(error.message || 'Edge Function error');
+      if (!data?.authUri) throw new Error(data?.error || 'No auth URI returned from server');
 
-      const { authUri } = await res.json();
-      if (authUri) {
-        window.location.href = authUri;
-      } else {
-        throw new Error('No auth URI returned from server');
-      }
+      // Redirect the user to Intuit's authorization page
+      window.location.href = data.authUri;
     } catch (err) {
       alert(`Could not start QuickBooks connection: ${err instanceof Error ? err.message : 'Unknown error'}`);
       setQbConnecting(false);
