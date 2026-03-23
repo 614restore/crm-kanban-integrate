@@ -21,39 +21,51 @@ export default function UpdatePassword() {
     const [success, setSuccess] = useState<string | null>(null);
 
     useEffect(() => {
-        // With PKCE flow, Supabase appends ?code=... to the redirectTo URL.
-        // We need to exchange that code for a session before the user can update their password.
+        // Listen for the PASSWORD_RECOVERY event — fired by Supabase when it
+        // detects an implicit-flow recovery token in the URL hash.
+        // This is more reliable than getSession() which can race against the
+        // async hash processing that happens on client initialisation.
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+            if (event === 'PASSWORD_RECOVERY') {
+                // Session is ready — show the new-password form
+                setExchanging(false);
+            } else if (event === 'SIGNED_IN' && session) {
+                // Covers the case where the session was already restored before
+                // this component mounted
+                setExchanging(false);
+            }
+        });
+
+        // Also handle PKCE flow (?code=...) for completeness
         const params = new URLSearchParams(window.location.search);
         const code = params.get('code');
 
         if (code) {
             supabase.auth.exchangeCodeForSession(code)
-                .then(async ({ data, error }) => {
+                .then(({ error }) => {
                     if (error) {
                         setError('Invalid or expired reset link. Please request a new one.');
-                        return;
+                        setExchanging(false);
                     }
-                    // Verify session is actually available before showing form
-                    if (!data?.session) {
-                        // Give Supabase a moment to persist the session
-                        await new Promise(resolve => setTimeout(resolve, 500));
-                        const { data: { session } } = await supabase.auth.getSession();
-                        if (!session) {
-                            setError('Could not establish session. Please request a new reset link.');
-                        }
-                    }
+                    // On success, onAuthStateChange SIGNED_IN fires and clears exchanging
                 })
-                .catch(() => setError('Invalid or expired reset link. Please request a new one.'))
-                .finally(() => setExchanging(false));
-        } else {
-            // No code — check if we already have a session (PASSWORD_RECOVERY flow)
+                .catch(() => {
+                    setError('Invalid or expired reset link. Please request a new one.');
+                    setExchanging(false);
+                });
+        } else if (!window.location.hash.includes('access_token')) {
+            // No code and no hash token — check if there's already a valid session
             supabase.auth.getSession().then(({ data: { session } }) => {
                 if (!session) {
                     setError('No valid reset session found. Please request a new reset link.');
+                    setExchanging(false);
                 }
-                setExchanging(false);
+                // If there is a session, onAuthStateChange SIGNED_IN will fire
             });
         }
+        // If hash contains access_token, onAuthStateChange PASSWORD_RECOVERY will fire
+
+        return () => subscription.unsubscribe();
     }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
