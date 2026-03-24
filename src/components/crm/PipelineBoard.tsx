@@ -72,6 +72,21 @@ function getStageAlert(contact: Contact): { label: string; className: string } |
   return null;
 }
 
+function normalizePipelineStatus(rawStatus: string | undefined | null): CustomerStatus | undefined {
+  if (!rawStatus) return undefined;
+  const status = rawStatus.trim().toLowerCase();
+  const aliases: Record<string, CustomerStatus> = {
+    new_lead: 'lead',
+    appointment_set: 'appt_set',
+    inspection_scheduled: 'appt_set',
+    inspection_complete: 'inspection_completed',
+    signed_won: 'signed',
+    paid: 'completed',
+  };
+
+  return (aliases[status] ?? (status as CustomerStatus));
+}
+
 export default function PipelineBoard() {
   const { state, dispatch } = useCRM();
   const { profile } = useAuth();
@@ -93,7 +108,7 @@ export default function PipelineBoard() {
   const effectiveCompanyId = profile?.company_id || state.companyId || null;
 
   const getColumnContacts = (column: KanbanColumn): Contact[] => {
-    return state.contacts.filter((c) => c.status === column.status);
+    return state.contacts.filter((c) => normalizePipelineStatus(c.status) === column.status);
   };
 
   // Merge all sales-type boards into one deduplicated column list (by status)
