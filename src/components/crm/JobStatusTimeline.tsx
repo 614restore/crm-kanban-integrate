@@ -44,8 +44,24 @@ const statusSteps: {
   { status: 'completed', label: 'Completed', description: 'Project finished successfully', icon: CheckCircle, color: 'emerald' },
 ];
 
+function normalizePipelineStatus(rawStatus: string | undefined | null): CustomerStatus | undefined {
+  if (!rawStatus) return undefined;
+  const status = rawStatus.trim().toLowerCase();
+  const aliases: Record<string, CustomerStatus> = {
+    new_lead: 'lead',
+    appointment_set: 'appt_set',
+    inspection_scheduled: 'appt_set',
+    inspection_complete: 'inspection_completed',
+    signed_won: 'signed',
+    paid: 'completed',
+  };
+
+  return aliases[status] ?? (status as CustomerStatus);
+}
+
 const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({ contact, jobs = [], onStatusChange, onScheduleInspection, onSendEstimate }) => {
-  const currentStatusIndex = statusSteps.findIndex(step => step.status === contact.status);
+  const normalizedStatus = normalizePipelineStatus(contact.status);
+  const currentStatusIndex = statusSteps.findIndex(step => step.status === normalizedStatus);
   
   const getStatusColor = (index: number) => {
     if (index < currentStatusIndex) return 'text-green-600 border-green-600 bg-green-50';
@@ -73,10 +89,10 @@ const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({ contact, jobs = [
           <div className="bg-blue-50 rounded-lg p-4">
             <div className="text-sm font-medium text-blue-900">Current Stage</div>
             <div className="text-lg font-semibold text-blue-700">
-              {statusSteps.find(step => step.status === contact.status)?.label || contact.status}
+              {statusSteps.find(step => step.status === normalizedStatus)?.label || contact.status}
             </div>
             <div className="text-sm text-blue-600">
-              {statusSteps.find(step => step.status === contact.status)?.description}
+              {statusSteps.find(step => step.status === normalizedStatus)?.description}
             </div>
           </div>
           
@@ -249,7 +265,7 @@ const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({ contact, jobs = [
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {contact.status === 'lead' && (
+          {normalizedStatus === 'lead' && (
             <button
               onClick={onScheduleInspection}
               className="p-3 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors text-sm font-medium disabled:opacity-50"
@@ -259,7 +275,7 @@ const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({ contact, jobs = [
             </button>
           )}
           
-          {contact.status === 'inspection_completed' && (
+          {normalizedStatus === 'inspection_completed' && (
             <button
               onClick={onSendEstimate}
               className="p-3 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm font-medium disabled:opacity-50"
@@ -269,7 +285,7 @@ const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({ contact, jobs = [
             </button>
           )}
           
-          {contact.status === 'estimate_sent' && (
+          {normalizedStatus === 'estimate_sent' && (
             <button
               onClick={() => onStatusChange?.('contingency')}
               className="p-3 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 transition-colors text-sm font-medium disabled:opacity-50"
@@ -279,7 +295,7 @@ const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({ contact, jobs = [
             </button>
           )}
 
-          {contact.status === 'contingency' && (
+          {normalizedStatus === 'contingency' && (
             <button
               onClick={() => onStatusChange?.('signed')}
               className="p-3 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors text-sm font-medium disabled:opacity-50"
@@ -289,7 +305,7 @@ const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({ contact, jobs = [
             </button>
           )}
 
-          {contact.status === 'signed' && (
+          {normalizedStatus === 'signed' && (
             <button
               onClick={() => onStatusChange?.('in_progress')}
               className="p-3 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors text-sm font-medium disabled:opacity-50"
@@ -299,7 +315,7 @@ const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({ contact, jobs = [
             </button>
           )}
 
-          {contact.status === 'in_progress' && (
+          {normalizedStatus === 'in_progress' && (
             <button
               onClick={() => onStatusChange?.('invoicing')}
               className="p-3 bg-rose-100 text-rose-700 rounded-lg hover:bg-rose-200 transition-colors text-sm font-medium disabled:opacity-50"
@@ -309,7 +325,7 @@ const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({ contact, jobs = [
             </button>
           )}
 
-          {contact.status === 'invoicing' && (
+          {normalizedStatus === 'invoicing' && (
             <button
               onClick={() => onStatusChange?.('completed')}
               className="p-3 bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200 transition-colors text-sm font-medium disabled:opacity-50"
@@ -319,7 +335,7 @@ const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({ contact, jobs = [
             </button>
           )}
           
-          {(contact.status === 'completed' || jobs.some(j => j.status === 'complete')) && (
+          {(normalizedStatus === 'completed' || jobs.some(j => j.status === 'complete')) && (
             <button className="p-3 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 transition-colors text-sm font-medium">
               Request Review
             </button>
