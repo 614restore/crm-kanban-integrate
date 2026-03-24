@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
-import { supabase, isDemoMode } from '@/lib/supabase';
+import { supabase, supabaseUrl, isDemoMode } from '@/lib/supabase';
 import { setupNewUser } from '@/lib/setupCompany';
 import type { Session, User } from '@supabase/supabase-js';
 import { logAuthState } from '@/lib/authDebug';
