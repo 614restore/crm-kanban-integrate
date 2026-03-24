@@ -105,7 +105,7 @@ export default async function handler(req, res) {
         ? JSON.parse(row.credentials)
         : row.credentials;
 
-      const stored = normalisePhone(creds?.from_number || '');
+      const stored = normalisePhone(creds?.fromNumber || '');
       if (stored && stored === toNumber) {
         companyId = row.company_id;
         break;
@@ -137,7 +137,7 @@ export default async function handler(req, res) {
     ? JSON.parse(intRow.credentials)
     : intRow?.credentials || {};
 
-  const authToken = creds.auth_token || '';
+  const authToken = creds.authToken || '';
 
   if (authToken) {
     const signature = req.headers['x-twilio-signature'] || '';

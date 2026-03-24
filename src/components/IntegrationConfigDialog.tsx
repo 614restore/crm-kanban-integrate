@@ -314,6 +314,32 @@ export function IntegrationConfigDialog({
           </div>
           )}
 
+          {/* Twilio Inbound Webhook Instructions */}
+          {integration.id === 'twilio' && (
+            <div className="space-y-2 border-t border-gray-200 pt-4">
+              <label className="block text-sm font-medium text-gray-700">Inbound SMS Webhook</label>
+              <p className="text-xs text-gray-500">
+                To receive replies from customers, paste this URL into your Twilio phone number's
+                "A MESSAGE COMES IN" webhook (set to HTTP POST):
+              </p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-800 select-all break-all">
+                  {window.location.origin}/api/twilio-inbound
+                </code>
+                <button
+                  type="button"
+                  onClick={() => navigator.clipboard.writeText(`${window.location.origin}/api/twilio-inbound`)}
+                  className="px-3 py-2 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap"
+                >
+                  Copy
+                </button>
+              </div>
+              <p className="text-xs text-gray-400">
+                In Twilio Console → Phone Numbers → Manage → Active Numbers → click your number → Messaging Configuration.
+              </p>
+            </div>
+          )}
+
           {/* Settings Section */}
           {Object.keys(settings).length > 0 && (
             <div className="space-y-3 border-t border-gray-200 pt-4">
