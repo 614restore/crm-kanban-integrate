@@ -177,6 +177,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       if (recoveryEventFired || pendingReset) return;
 
+      // If a user is signing in, ensure loading stays true while the profile
+      // fetches. Without this, a prior SIGNED_OUT (loading=false) + SIGNED_IN
+      // sequence briefly renders CRMApp before the profile arrives.
+      if (session?.user) setLoading(true);
+
       setSession(session);
       setUser(session?.user ?? null);
 
