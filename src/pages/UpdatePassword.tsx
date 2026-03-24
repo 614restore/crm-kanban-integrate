@@ -37,13 +37,26 @@ export default function UpdatePassword() {
 
         setLoading(true);
         try {
-            const { error: pwError } = await supabase.auth.updateUser({ password });
-            if (pwError) throw pwError;
+            // Use the edge function so the admin API sets the password —
+            // supabase.auth.updateUser() is blocked by "Secure password change"
+            // unless you're in a PASSWORD_RECOVERY session (temp-password logins aren't).
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.access_token) throw new Error('No active session. Please sign in again.');
 
-            // Clear the forced-change flag in DB first, then hard-reload so the
-            // auth context fetches a fresh profile (must_change_password: false)
-            // rather than racing against the USER_UPDATED auth event re-fetch.
-            await updateProfile({ must_change_password: false });
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+            const res = await fetch(`${supabaseUrl}/functions/v1/confirm-password-change`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.access_token}`,
+                    'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+                },
+                body: JSON.stringify({ password }),
+            });
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data?.error || 'Failed to update password.');
+            }
 
             setSuccess('Password updated! Taking you to the app…');
             setTimeout(() => { window.location.reload(); }, 1500);
