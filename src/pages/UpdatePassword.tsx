@@ -40,10 +40,13 @@ export default function UpdatePassword() {
             const { error: pwError } = await supabase.auth.updateUser({ password });
             if (pwError) throw pwError;
 
-            // Clear the forced-change flag
+            // Clear the forced-change flag in DB first, then hard-reload so the
+            // auth context fetches a fresh profile (must_change_password: false)
+            // rather than racing against the USER_UPDATED auth event re-fetch.
             await updateProfile({ must_change_password: false });
 
             setSuccess('Password updated! Taking you to the app…');
+            setTimeout(() => { window.location.reload(); }, 1500);
         } catch (err: any) {
             setError(err.message || 'Failed to update password. Please try again.');
         } finally {
