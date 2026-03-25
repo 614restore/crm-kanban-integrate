@@ -88,6 +88,7 @@ import {
   Tag,
   Loader2,
   Eye,
+  EyeOff,
   Package,
   ClipboardList,
   Truck,
@@ -1935,25 +1936,43 @@ export default function ContactDetail() {
                   <div className="flex items-center justify-between mb-2">
                     <label className="text-sm font-medium text-gray-700">Line Items</label>
                     <button
-                      onClick={() => setNewEstItems(prev => [...prev, {id: crypto.randomUUID(), description: '', quantity: 1, unit: 'ea', unitPrice: 0, total: 0}])}
+                      onClick={() => setNewEstItems(prev => [...prev, {id: crypto.randomUUID(), description: '', quantity: 1, unit: 'ea', unitPrice: 0, total: 0, hidePrice: false}])}
                       className="text-xs text-blue-600 hover:underline"
                     >+ Add Row</button>
                   </div>
                   <div className="space-y-2">
                     <div className="grid grid-cols-12 gap-2 text-xs font-medium text-gray-500 px-2">
-                      <span className="col-span-5">Description</span>
+                      <span className="col-span-4">Description</span>
                       <span className="col-span-2 text-center">Qty</span>
                       <span className="col-span-2">Unit</span>
                       <span className="col-span-2 text-right">Price</span>
-                      <span className="col-span-1" />
+                      <span className="col-span-2 text-right">Hide $</span>
                     </div>
                     {newEstItems.map((item, idx) => (
-                      <div key={item.id} className="grid grid-cols-12 gap-2 items-center">
-                        <input value={item.description} onChange={e => { const n=[...newEstItems]; n[idx]={...n[idx],description:e.target.value}; setNewEstItems(n); }} placeholder="Description" className="col-span-5 px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                      <div key={item.id} className={`grid grid-cols-12 gap-2 items-center rounded px-1 py-0.5 ${item.hidePrice ? 'bg-amber-50' : ''}`}>
+                        <input value={item.description} onChange={e => { const n=[...newEstItems]; n[idx]={...n[idx],description:e.target.value}; setNewEstItems(n); }} placeholder="Description" className="col-span-4 px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
                         <input type="number" value={item.quantity} onChange={e => { const q=Number(e.target.value); const n=[...newEstItems]; n[idx]={...n[idx],quantity:q,total:q*n[idx].unitPrice}; setNewEstItems(n); }} className="col-span-2 px-2 py-1.5 border border-gray-200 rounded text-sm text-center focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                        <input value={item.unit} onChange={e => { const n=[...newEstItems]; n[idx]={...n[idx],unit:e.target.value}; setNewEstItems(n); }} className="col-span-2 px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                        <select value={item.unit} onChange={e => { const n=[...newEstItems]; n[idx]={...n[idx],unit:e.target.value}; setNewEstItems(n); }} className="col-span-2 px-1 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white">
+                          <option value="ea">ea</option>
+                          <option value="sq">sq</option>
+                          <option value="roll">roll</option>
+                          <option value="lf">lf</option>
+                          <option value="sf">sf</option>
+                          <option value="box">box</option>
+                          <option value="pcs">pcs</option>
+                          <option value="lbs">lbs</option>
+                          <option value="hr">hr</option>
+                          <option value="day">day</option>
+                          <option value="ft">ft</option>
+                          <option value="lot">lot</option>
+                        </select>
                         <input type="number" value={item.unitPrice} onChange={e => { const p=Number(e.target.value); const n=[...newEstItems]; n[idx]={...n[idx],unitPrice:p,total:n[idx].quantity*p}; setNewEstItems(n); }} className="col-span-2 px-2 py-1.5 border border-gray-200 rounded text-sm text-right focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                        <button onClick={() => newEstItems.length > 1 && setNewEstItems(prev => prev.filter((_,i)=>i!==idx))} className="col-span-1 flex justify-center text-red-400 hover:text-red-600"><X size={14} /></button>
+                        <div className="col-span-2 flex items-center justify-end gap-1">
+                          <button type="button" onClick={() => { const n=[...newEstItems]; n[idx]={...n[idx],hidePrice:!n[idx].hidePrice}; setNewEstItems(n); }} title={item.hidePrice ? 'Price hidden from customer' : 'Show price to customer'} className={`p-1 rounded transition-colors ${item.hidePrice ? 'text-amber-600 bg-amber-100' : 'text-gray-400 hover:text-gray-600'}`}>
+                            {item.hidePrice ? <EyeOff size={13} /> : <Eye size={13} />}
+                          </button>
+                          <button onClick={() => newEstItems.length > 1 && setNewEstItems(prev => prev.filter((_,i)=>i!==idx))} className="text-red-400 hover:text-red-600 p-1"><X size={13} /></button>
+                        </div>
                       </div>
                     ))}
                   </div>

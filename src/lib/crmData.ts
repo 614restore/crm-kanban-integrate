@@ -372,6 +372,7 @@ export interface EstimateItem {
   unit: string;
   unitPrice: number;
   total: number;
+  hidePrice?: boolean;
 }
 
 export interface Project {
