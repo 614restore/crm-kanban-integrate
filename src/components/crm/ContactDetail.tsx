@@ -1,5 +1,27 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { consumePendingContactTab } from '@/lib/nextStepActions';
+
+// ── Schedule-data helpers ──────────────────────────────────────────────────
+// The mobile app serialises milestone data into the notes field using the
+// format: [TRUSSCTR_SCHEDULE]{json}\n\nplain notes
+// The web app should strip that prefix before displaying or editing notes,
+// and restore it when saving so mobile data is not lost.
+const TRUSSCTR_SCHEDULE_PREFIX = '[TRUSSCTR_SCHEDULE]';
+
+function stripSchedulePrefix(notes: string | null | undefined): string {
+  if (!notes) return '';
+  if (!notes.startsWith(TRUSSCTR_SCHEDULE_PREFIX)) return notes;
+  const brk = notes.indexOf('\n\n');
+  return brk === -1 ? '' : notes.slice(brk + 2);
+}
+
+function rebuildWithSchedulePrefix(original: string | null | undefined, newPlainNotes: string): string {
+  if (!original?.startsWith(TRUSSCTR_SCHEDULE_PREFIX)) return newPlainNotes;
+  const brk = original.indexOf('\n\n');
+  const prefix = brk === -1 ? original : original.slice(0, brk);
+  return `${prefix}\n\n${newPlainNotes.trim()}`;
+}
+// ──────────────────────────────────────────────────────────────────────────
 import { useCRM, useCurrentContact } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
@@ -234,7 +256,7 @@ export default function ContactDetail() {
   const mentionTargets = useMemo(() => getMentionTargets(state.teamMembers), [state.teamMembers]);
   const effectiveCompanyId = profile?.company_id || state.companyId || null;
   const contactId = contact?.id;
-  const contactNotes = contact?.notes ?? '';
+  const contactNotes = stripSchedulePrefix(contact?.notes);
 
   useEffect(() => {
     if (!contactId) return;
@@ -688,11 +710,13 @@ export default function ContactDetail() {
 
   const handleSaveQuickNote = async () => {
     const trimmed = quickNote.trim();
+    // Preserve any [TRUSSCTR_SCHEDULE] prefix that the mobile app wrote
+    const fullNotes = rebuildWithSchedulePrefix(contact.notes, trimmed);
 
     setIsSavingQuickNote(true);
     try {
       if (profile?.company_id) {
-        const updated = await db.updateContact(contact.id, { notes: trimmed || null });
+        const updated = await db.updateContact(contact.id, { notes: fullNotes || null });
         if (!updated) {
           toast.error('Failed to save note');
           return;
@@ -703,7 +727,7 @@ export default function ContactDetail() {
         type: 'UPDATE_CONTACT',
         payload: {
           ...contact,
-          notes: trimmed || undefined,
+          notes: fullNotes || undefined,
           updatedAt: new Date().toISOString(),
         },
       });
@@ -1322,9 +1346,9 @@ export default function ContactDetail() {
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Notes</h3>
                 {isEditing ? (
                   <textarea
-                    value={currentData.notes || ''}
+                    value={stripSchedulePrefix(currentData.notes) || ''}
                     onChange={(e) =>
-                      setEditedContact({ ...currentData, notes: e.target.value })
+                      setEditedContact({ ...currentData, notes: rebuildWithSchedulePrefix(contact.notes, e.target.value) })
                     }
                     rows={4}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none resize-none"
@@ -1332,7 +1356,7 @@ export default function ContactDetail() {
                 ) : (
                   <div className="space-y-3">
                     <p className="text-gray-700 whitespace-pre-wrap">
-                      {contact.notes || 'No notes added yet.'}
+                      {stripSchedulePrefix(contact.notes) || 'No notes added yet.'}
                     </p>
                     <textarea
                       value={quickNote}
