@@ -97,10 +97,30 @@ export default function UpdatePassword() {
         setLoading(true);
 
         try {
-            const { error } = await supabase.auth.updateUser({ password });
+            const { data: { session } } = await supabase.auth.getSession();
 
-            if (error) {
-                setError(error.message);
+            if (!session?.access_token) {
+                setError('No active session. Please log in again.');
+                setLoading(false);
+                return;
+            }
+
+            // Use confirm-password-change edge function — works for both the
+            // temp-password flow (must_change_password flag) and Supabase
+            // recovery links. Also clears must_change_password in the profile.
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+            const res = await fetch(`${supabaseUrl}/functions/v1/confirm-password-change`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.access_token}`,
+                },
+                body: JSON.stringify({ password }),
+            });
+
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                setError(data?.error || 'Failed to update password. Please try again.');
             } else {
                 setSuccess('Password updated successfully! Redirecting...');
                 setTimeout(() => {

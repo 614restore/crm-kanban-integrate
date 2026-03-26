@@ -15,6 +15,7 @@ export interface Profile {
   phone?: string;
   avatar_url?: string;
   is_active?: boolean;
+  must_change_password?: boolean;
 }
 
 interface AuthContextType {
@@ -185,6 +186,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Share the same promise with getSession below — only one fetch runs
         const profileData = await loadProfileOnce(session.user.id, session.user.email || '');
         setProfile(profileData);
+        if (profileData?.must_change_password) setIsPasswordReset(true);
         
         // Clean up auth URL parameters after successful sign-in
         try {
@@ -216,6 +218,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (session?.user) {
         const profileData = await loadProfileOnce(session.user.id, session.user.email || '');
         setProfile(profileData);
+        if (profileData?.must_change_password) setIsPasswordReset(true);
       }
 
       setLoading(false);
@@ -365,10 +368,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // ── resetPassword ─────────────────────────────────────────────────────
   const resetPassword = async (email: string) => {
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}${import.meta.env.BASE_URL}reset-password`,
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const res = await fetch(`${supabaseUrl}/functions/v1/temp-password-reset`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': anonKey },
+        body: JSON.stringify({ email }),
       });
-      return { error };
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        return { error: new Error(data?.error || 'Failed to send temporary password.') };
+      }
+      return { error: null };
     } catch (err) {
       return { error: err as Error };
     }
