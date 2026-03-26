@@ -183,7 +183,7 @@ export default function AuthPage() {
         if (error) {
           setError(error.message || 'Failed to send reset email. Please try again.');
         } else {
-          setSuccess('Password reset email sent! Check your inbox.');
+          setSuccess('Temporary password sent! Check your inbox and sign in with it — you\'ll be prompted to set a new password right away.');
         }
       }
     } catch (err) {
