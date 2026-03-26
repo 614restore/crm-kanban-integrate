@@ -1,12 +1,16 @@
-import React from 'react';
+import { Component, ReactNode } from "react";
+
+interface Props {
+  children: ReactNode;
+}
 
 interface State {
   hasError: boolean;
   error: Error | null;
 }
 
-export default class ErrorBoundary extends React.Component<React.PropsWithChildren, State> {
-  constructor(props: React.PropsWithChildren) {
+export class ErrorBoundary extends Component<Props, State> {
+  constructor(props: Props) {
     super(props);
     this.state = { hasError: false, error: null };
   }
@@ -15,30 +19,50 @@ export default class ErrorBoundary extends React.Component<React.PropsWithChildr
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, info: React.ErrorInfo) {
-    console.error('[ErrorBoundary] Uncaught render error:', error, info.componentStack);
+  componentDidCatch(error: Error, info: { componentStack: string }) {
+    // Log to console in dev; swap for Sentry/LogRocket in production
+    console.error("[ErrorBoundary] Uncaught error:", error, info.componentStack);
   }
+
+  handleReset = () => {
+    this.setState({ hasError: false, error: null });
+  };
 
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
-          <div className="w-16 h-16 bg-red-100 rounded-3xl flex items-center justify-center mb-4">
-            <span className="text-2xl">⚠️</span>
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
+          <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
+            <div className="text-5xl mb-4">⚠️</div>
+            <h1 className="text-xl font-bold text-gray-800 mb-2">Something went wrong</h1>
+            <p className="text-gray-500 text-sm mb-6">
+              The app ran into an unexpected error. Your data is safe — please
+              try refreshing or click below to recover.
+            </p>
+            {this.state.error && (
+              <pre className="text-left bg-gray-100 text-red-600 text-xs rounded-lg p-3 mb-6 overflow-auto max-h-32">
+                {this.state.error.message}
+              </pre>
+            )}
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={this.handleReset}
+                className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+              >
+                Try Again
+              </button>
+              <button
+                onClick={() => window.location.reload()}
+                className="bg-gray-100 text-gray-700 px-5 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors"
+              >
+                Reload Page
+              </button>
+            </div>
           </div>
-          <h1 className="text-xl font-bold text-slate-800 mb-2">Something went wrong</h1>
-          <p className="text-sm text-slate-500 mb-6 max-w-xs">
-            An unexpected error occurred. Please reload the app.
-          </p>
-          <button
-            onClick={() => window.location.reload()}
-            className="bg-accent text-white font-bold py-4 px-8 rounded-2xl active:scale-95 transition-all shadow-lg shadow-accent/20"
-          >
-            Reload App
-          </button>
         </div>
       );
     }
+
     return this.props.children;
   }
 }

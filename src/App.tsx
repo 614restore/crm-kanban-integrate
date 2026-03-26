@@ -1,140 +1,126 @@
-import { BrowserRouter, HashRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { useEffect } from 'react';
-import { Capacitor } from '@capacitor/core';
-import { SplashScreen } from '@capacitor/splash-screen';
-import Layout from './components/Layout';
-import ErrorBoundary from './components/ErrorBoundary';
-import Dashboard from './pages/Dashboard';
-import Pipeline from './pages/Pipeline';
-import ContactDetail from './pages/ContactDetail';
-import CalendarPage from './pages/Calendar';
-import FieldTools from './pages/FieldTools';
-import More from './pages/More';
-import Team from './pages/Team';
-import Reports from './pages/Reports';
-import CompanyProfile from './pages/CompanyProfile';
-import WorkOrders from './pages/WorkOrders';
-import Estimates from './pages/Estimates';
-import CrewSchedule from './pages/CrewSchedule';
-import MaterialOrders from './pages/MaterialOrders';
-import WorkOrderDetail from './pages/WorkOrderDetail';
-import EstimateDetail from './pages/EstimateDetail';
-import EstimateSigner from './pages/EstimateSigner';
-import Documents from './pages/Documents';
-import PhotoChecklist from './pages/PhotoChecklist';
-import Settings from './pages/Settings';
-import HelpSupport from './pages/HelpSupport';
-import Notifications from './pages/Notifications';
-import Login from './pages/Login';
-import ResetPassword from './pages/ResetPassword';
-import AcceptInvite from './pages/AcceptInvite';
-import DocumentManager from './pages/DocumentManager';
-import DocumentSigner from './pages/DocumentSigner';
-import DocumentViewer from './pages/DocumentViewer';
-import ReportBuilder from './pages/ReportBuilder';
-import RetailEstimator from './pages/RetailEstimator';
-import SmartInspection from './pages/SmartInspection';
-import PitchGauge from './pages/PitchGauge';
-import { AuthProvider, useAuth } from './context/AuthContext';
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { ThemeProvider } from "@/components/theme-provider";
+import { useServiceWorker } from "@/lib/serviceWorker";
+import { useEffect } from "react";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import Index from "./pages/Index";
+import Photos from "./pages/Photos";
+import NotFound from "./pages/NotFound";
+import UpdatePassword from "./pages/UpdatePassword";
+import TermsOfService from "./pages/TermsOfService";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import EULA from "./pages/EULA";
+import SignDocument from "./pages/SignDocument";
+import SignEstimate from "./pages/SignEstimate";
+import SignChangeOrder from "./pages/SignChangeOrder";
+import SignDocTemplate from "./pages/SignDocTemplate";
+import { supabase } from '@/lib/supabase';
 
-function AppRoutes() {
-  const { session, loading, profile, isRecoverySession } = useAuth();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5,
+      refetchOnWindowFocus: true,
+      retry: 1,
+    },
+  },
+});
 
-  // Hide the native splash screen once auth has finished initialising.
-  // autoHide is false in capacitor.config.ts so the splash stays up until
-  // the JS is actually ready — preventing the blank white flash on slow
-  // simulator / device cold starts.
+
+// Get base path from environment (set by Vite)
+const basename = import.meta.env.BASE_URL || "/";
+
+// PWA Update notification component
+const PWAUpdateNotification = () => {
+  const { updateAvailable, activateUpdate, isOffline } = useServiceWorker();
+
   useEffect(() => {
-    if (!loading) {
-      SplashScreen.hide({ fadeOutDuration: 300 }).catch(() => {
-        // Web/browser — SplashScreen plugin not available, ignore.
-      });
-    }
-  }, [loading]);
+    // updateAvailable is handled by the banner below
+  }, [updateAvailable]);
 
-  if (loading) {
+  if (updateAvailable) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center bg-slate-50 p-6 text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-accent border-t-transparent mb-4"></div>
-        <p className="text-slate-500 text-sm font-medium animate-pulse">Initializing application...</p>
-        <button 
-          onClick={() => window.location.reload()}
-          className="mt-8 text-slate-400 text-xs font-bold uppercase tracking-widest hover:text-slate-600 transition-colors"
+      <div className="fixed top-0 left-0 right-0 bg-blue-600 text-white p-3 z-50 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium">
+            App update available!
+          </span>
+          <span className="text-xs opacity-90">
+            New features and improvements ready
+          </span>
+        </div>
+        <button
+          onClick={activateUpdate}
+          className="bg-white text-blue-600 px-3 py-1 rounded text-sm font-medium hover:bg-blue-50 transition-colors"
         >
-          Taking too long? Tap to reload
+          Update Now
         </button>
       </div>
     );
   }
 
-  // Show change-password screen for temp-password users or Supabase recovery links
-  const mustChangePassword = session && (
-    (profile as any)?.must_change_password === true || isRecoverySession
-  );
+  if (isOffline) {
+    return (
+      <div className="fixed top-0 left-0 right-0 bg-orange-600 text-white p-2 z-50 text-center">
+        <span className="text-sm">
+          📱 Offline mode - Changes will sync when reconnected
+        </span>
+      </div>
+    );
+  }
+
+  return null;
+};
+const App = () => {
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible') {
+        const { error } = await supabase.auth.getSession();
+        if (error) {
+          await supabase.auth.signOut();
+        } else {
+          queryClient.invalidateQueries();
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
 
   return (
-    <Routes>
-      <Route path="/accept-invite" element={<AcceptInvite />} />
-      {!session ? (
-        <>
-          <Route path="/login" element={<Login />} />
-          <Route path="*" element={<Navigate to="/login" replace />} />
-        </>
-      ) : mustChangePassword ? (
-        <>
-          <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="*" element={<Navigate to="/reset-password" replace />} />
-        </>
-      ) : (
-        <Route element={<Layout />}>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/contacts" element={<Pipeline />} />
-          <Route path="/contacts/:id" element={<ContactDetail />} />
 
-          {/* Contact sub-routes */}
-          <Route path="/contacts/:id/documents" element={<DocumentManager />} />
-          <Route path="/contacts/:id/documents/:docType" element={<DocumentSigner />} />
-          <Route path="/documents/view/:documentId" element={<DocumentViewer />} />
-          <Route path="/contacts/:id/report" element={<ReportBuilder />} />
-          <Route path="/contacts/:id/estimate" element={<RetailEstimator />} />
-          <Route path="/contacts/:id/inspection" element={<SmartInspection />} />
-
-          <Route path="/calendar" element={<CalendarPage />} />
-          <Route path="/tools" element={<FieldTools />} />
-          <Route path="/more" element={<More />} />
-          <Route path="/team" element={<Team />} />
-          <Route path="/reports" element={<Reports />} />
-          <Route path="/company" element={<CompanyProfile />} />
-          <Route path="/work-orders" element={<WorkOrders />} />
-          <Route path="/estimates-list" element={<Estimates />} />
-          <Route path="/crew-schedule" element={<CrewSchedule />} />
-          <Route path="/material-orders" element={<MaterialOrders />} />
-          <Route path="/work-orders/:id" element={<WorkOrderDetail />} />
-          <Route path="/estimates/:id" element={<EstimateDetail />} />
-          <Route path="/estimates/:id/sign" element={<EstimateSigner />} />
-          <Route path="/documents" element={<Documents />} />
-          <Route path="/photo-checklist" element={<PhotoChecklist />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/help" element={<HelpSupport />} />
-          <Route path="/notifications" element={<Notifications />} />
-          <Route path="/pitch-gauge" element={<PitchGauge />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Route>
-      )}
-    </Routes>
+  <ErrorBoundary>
+    <ThemeProvider defaultTheme="light">
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <PWAUpdateNotification />
+          <Toaster />
+          <Sonner />
+          <BrowserRouter basename={basename}>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/photos" element={<Photos />} />
+              <Route path="/reset-password" element={<UpdatePassword />} />
+              <Route path="/terms" element={<TermsOfService />} />
+              <Route path="/privacy" element={<PrivacyPolicy />} />
+              <Route path="/eula" element={<EULA />} />
+              <Route path="/sign" element={<SignDocument />} />
+              <Route path="/sign-estimate" element={<SignEstimate />} />
+              <Route path="/sign-change-order" element={<SignChangeOrder />} />
+              <Route path="/sign-doc" element={<SignDocTemplate />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
+  </ErrorBoundary>
   );
-}
+};
 
-export default function App() {
-  const Router = Capacitor.isNativePlatform() ? HashRouter : BrowserRouter;
 
-  return (
-    <ErrorBoundary>
-      <AuthProvider>
-        <Router>
-          <AppRoutes />
-        </Router>
-      </AuthProvider>
-    </ErrorBoundary>
-  );
-}
+export default App;
