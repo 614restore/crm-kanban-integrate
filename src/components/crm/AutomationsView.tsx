@@ -5,6 +5,7 @@ import { db } from '@/lib/database';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/authContext';
 import { toast } from 'sonner';
+import { StormAlertAutomation } from './StormAlertAutomation';
 import { getStaleLeadThreshold, setStaleLeadThreshold, DEFAULT_STALE_HOURS } from '@/lib/staleLeadDetection';
 import {
   Dialog,
@@ -548,6 +549,11 @@ export default function AutomationsView() {
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Storm Alert Automation */}
+      <div className="mb-6">
+        <StormAlertAutomation contacts={state.contacts} />
       </div>
 
       {/* Automations List */}

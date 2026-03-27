@@ -9,3 +9,8 @@ coverage/
 .claude/
 .islstudio/
 .vibecheck/
+.windsurf/
+/workflows/
+summary.section-label*
+public/crm-user-tier-comparison.html
+supabase/.temp/

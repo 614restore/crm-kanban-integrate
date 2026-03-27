@@ -210,7 +210,7 @@ export default function TeamView() {
       const inviteUrl = `${window.location.origin}/?invite=${token}&company=${effectiveCompanyId}`;
       const displayCompany = companyName || state.currentUser?.name || 'TrussCTR';
       const displayRole = inviteRole.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-      const emailRes = await fetch(`${window.location.origin}/api/send-email`, {
+      const emailRes = await fetch(`${window.location.origin}/api/send`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -40,13 +40,13 @@ export async function sendEmail(payload: SendEmailPayload, timeoutMs: number = 1
 
   let response: Response;
   try {
-    response = await fetch(`${baseUrl}/api/send-email`, {
+    response = await fetch(`${baseUrl}/api/send`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${accessToken}`,
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ type: 'email', ...payload }),
       signal: controller.signal,
     });
   } catch (error) {

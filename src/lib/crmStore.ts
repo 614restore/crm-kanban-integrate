@@ -544,13 +544,18 @@ export function crmReducer(state: CRMState, action: CRMAction): CRMState {
     case 'SET_COMPANY_GOALS':
       return { ...state, companyGoals: action.payload };
     
-    case 'INITIALIZE_DATA':
+    case 'INITIALIZE_DATA': {
+      const newBoards = action.payload.boards;
+      const currentBoardStillValid = newBoards.some((b) => b.id === state.selectedBoardId);
+      const selectedBoardId = currentBoardStillValid
+        ? state.selectedBoardId
+        : (newBoards[0]?.id ?? state.selectedBoardId);
       return {
         ...state,
         contacts: action.payload.contacts,
         appointments: action.payload.appointments,
         invoices: action.payload.invoices,
-        boards: action.payload.boards,
+        boards: newBoards,
         leadSources: action.payload.leadSources,
         automations: action.payload.automations,
         teamMembers: action.payload.teamMembers,
@@ -559,9 +564,11 @@ export function crmReducer(state: CRMState, action: CRMAction): CRMState {
         estimates: action.payload.estimates,
         projects: action.payload.projects,
         workOrders: action.payload.workOrders,
+        selectedBoardId,
         isInitialized: true,
         isLoading: false,
       };
+    }
     
     default:
       return state;

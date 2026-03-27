@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
-import { supabase, isDemoMode } from '@/lib/supabase';
+import { supabase, supabaseUrl, isDemoMode } from '@/lib/supabase';
 import { setupNewUser } from '@/lib/setupCompany';
 import type { Session, User } from '@supabase/supabase-js';
 import { logAuthState } from '@/lib/authDebug';
@@ -38,16 +38,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isRecoverySession, setIsRecoverySession] = useState(false);
 
   // Shared promise ref — ensures only ONE profile fetch runs at a time no matter
   // how many callers race (getSession + onAuthStateChange on hard reload).
   const profileFetchPromise = useRef<Promise<Profile | null> | null>(null);
 
-  const [isPasswordReset, setIsPasswordReset] = useState(() => {
-    try {
-      return sessionStorage.getItem('pending_password_reset') === 'true';
-    } catch (_) { return false; }
-  });
+  // True when signed in via a Supabase recovery link OR a temp password
+  const isPasswordReset = isRecoverySession || profile?.must_change_password === true;
 
   // ── Raw profile fetch (no dedup, no retry) ────────────────────────────
   const fetchProfile = async (userId: string): Promise<Profile | null> => {
@@ -151,7 +149,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         recoveryEventFired = true;
         setSession(session);
         setUser(session?.user ?? null);
-        setIsPasswordReset(true);
+        setIsRecoverySession(true);
         setLoading(false);
         try { sessionStorage.removeItem('pending_password_reset'); } catch { /* ignore */ }
         return;
@@ -178,6 +176,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         pendingReset = false;
       }
       if (recoveryEventFired || pendingReset) return;
+
+      // If a user is signing in, ensure loading stays true while the profile
+      // fetches. Without this, a prior SIGNED_OUT (loading=false) + SIGNED_IN
+      // sequence briefly renders CRMApp before the profile arrives.
+      if (session?.user) setLoading(true);
 
       setSession(session);
       setUser(session?.user ?? null);
@@ -366,13 +369,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // ── resetPassword ─────────────────────────────────────────────────────
+  // Calls the temp-password-reset edge function which generates a temporary
+  // password, emails it to the user, and sets must_change_password = true.
+  // No redirect links are involved, so it works from any device or email client.
   const resetPassword = async (email: string) => {
     try {
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
       const res = await fetch(`${supabaseUrl}/functions/v1/temp-password-reset`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'apikey': anonKey },
+        headers: { 'Content-Type': 'application/json', 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY },
         body: JSON.stringify({ email }),
       });
       if (!res.ok) {
