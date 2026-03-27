@@ -41,6 +41,10 @@ import {
   PenLine,
   Users,
   CheckCircle,
+  Phone,
+  Zap,
+  StickyNote,
+  CalendarPlus,
 } from 'lucide-react';
 import { getNextStep, setPendingContactTab, type NextStep } from '@/lib/nextStepActions';
 import { fireAutomationEvent } from '@/lib/automationEngine';
@@ -158,6 +162,7 @@ export default function PipelineBoard() {
   const [showAllBoards, setShowAllBoards] = useState(false);
   const [showCombinedSales, setShowCombinedSales] = useState(false);
   const [showPriorityPanel, setShowPriorityPanel] = useState(false);
+  const [quickMenuContactId, setQuickMenuContactId] = useState<string | null>(null);
 
   const userRole = (state.currentUser?.role || profile?.role || 'owner') as any;
   const canCreate = canCreateBoard(userRole);
@@ -583,12 +588,47 @@ export default function PipelineBoard() {
                                 </div>
                                 {contact.projectType && <p className="text-xs text-gray-400 mt-0.5 truncate ml-4">{contact.projectType}</p>}
                               </div>
-                              {assignee && <img src={assignee.avatar} alt={assignee.name} className="w-6 h-6 rounded-full object-cover flex-shrink-0" title={assignee.name} />}
+                              <div className="flex items-center gap-1 flex-shrink-0">
+                                {assignee && <img src={assignee.avatar} alt={assignee.name} className="w-6 h-6 rounded-full object-cover" title={assignee.name} />}
+                                <div className="relative" onClick={(e) => e.stopPropagation()}>
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); setQuickMenuContactId(quickMenuContactId === contact.id ? null : contact.id); }}
+                                    className="p-0.5 rounded hover:bg-gray-100 transition-colors"
+                                    title="Quick Actions"
+                                  >
+                                    <Zap size={11} className="text-amber-400" />
+                                  </button>
+                                  {quickMenuContactId === contact.id && (
+                                    <>
+                                      <div className="fixed inset-0 z-40" onClick={() => setQuickMenuContactId(null)} />
+                                      <div className="absolute right-0 top-6 z-50 bg-white rounded-lg shadow-lg border border-gray-200 py-1 w-48">
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); setPendingContactTab('overview'); dispatch({ type: 'SELECT_CONTACT', payload: contact.id }); setQuickMenuContactId(null); }}
+                                          className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
+                                        >
+                                          <StickyNote size={12} className="text-blue-500" />Add Note
+                                        </button>
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); dispatch({ type: 'SET_PENDING_APPOINTMENT_CONTACT', payload: contact.id }); dispatch({ type: 'SET_VIEW', payload: 'calendar' }); setQuickMenuContactId(null); }}
+                                          className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
+                                        >
+                                          <CalendarPlus size={12} className="text-green-500" />Create Calendar Event
+                                        </button>
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
                             </div>
                             <div className="mt-2 space-y-1 ml-1">
                               <div className="flex items-center gap-1.5 text-xs text-gray-500">
                                 <MapPin size={10} /><span className="truncate">{contact.city}, {contact.state}</span>
                               </div>
+                              {contact.phone1 && (
+                                <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                                  <Phone size={10} /><span>{contact.phone1}</span>
+                                </div>
+                              )}
                               {contact.projectValue ? (
                                 <div className="flex items-center gap-1.5 text-xs text-green-600 font-medium">
                                   <DollarSign size={10} /><span>{formatCurrency(contact.projectValue)}</span>
@@ -688,10 +728,41 @@ export default function PipelineBoard() {
                                 <div className="flex items-start justify-between gap-2">
                                   <div className="min-w-0 flex-1">
                                     <p className="font-medium text-gray-900 text-sm truncate">{getContactFullName(contact)}</p>
-                                    {contact.projectValue ? <p className="text-xs font-semibold text-green-600">{formatCurrency(contact.projectValue)}</p> : null}
                                     {contact.address && <p className="text-xs text-gray-500 flex items-center gap-1 mt-1 truncate"><MapPin size={10} />{contact.address}</p>}
+                                    {contact.phone1 && <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5"><Phone size={10} />{contact.phone1}</p>}
+                                    {contact.projectValue ? <p className="text-xs font-semibold text-green-600 mt-0.5">{formatCurrency(contact.projectValue)}</p> : null}
                                   </div>
-                                  {stageAlert && <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 ${stageAlert.className}`}>{stageAlert.label}</span>}
+                                  <div className="flex items-start gap-1 flex-shrink-0">
+                                    {stageAlert && <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${stageAlert.className}`}>{stageAlert.label}</span>}
+                                    <div className="relative" onClick={(e) => e.stopPropagation()}>
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); setQuickMenuContactId(quickMenuContactId === contact.id ? null : contact.id); }}
+                                        className="p-0.5 rounded hover:bg-gray-100 transition-colors"
+                                        title="Quick Actions"
+                                      >
+                                        <Zap size={11} className="text-amber-400" />
+                                      </button>
+                                      {quickMenuContactId === contact.id && (
+                                        <>
+                                          <div className="fixed inset-0 z-40" onClick={() => setQuickMenuContactId(null)} />
+                                          <div className="absolute right-0 top-6 z-50 bg-white rounded-lg shadow-lg border border-gray-200 py-1 w-48">
+                                            <button
+                                              onClick={(e) => { e.stopPropagation(); setPendingContactTab('overview'); dispatch({ type: 'SELECT_CONTACT', payload: contact.id }); setQuickMenuContactId(null); }}
+                                              className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
+                                            >
+                                              <StickyNote size={12} className="text-blue-500" />Add Note
+                                            </button>
+                                            <button
+                                              onClick={(e) => { e.stopPropagation(); dispatch({ type: 'SET_PENDING_APPOINTMENT_CONTACT', payload: contact.id }); dispatch({ type: 'SET_VIEW', payload: 'calendar' }); setQuickMenuContactId(null); }}
+                                              className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
+                                            >
+                                              <CalendarPlus size={12} className="text-green-500" />Create Calendar Event
+                                            </button>
+                                          </div>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
                                 </div>
                                 {contact.inspectionCompleted && (
                                   <div className="mt-1.5">
@@ -784,12 +855,47 @@ export default function PipelineBoard() {
                               </div>
                               {contact.projectType && <p className="text-sm text-gray-500 mt-1 truncate">{contact.projectType}</p>}
                             </div>
-                            {assignee && <img src={assignee.avatar} alt={assignee.name} className="w-7 h-7 rounded-full object-cover flex-shrink-0" title={assignee.name} />}
+                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                              {assignee && <img src={assignee.avatar} alt={assignee.name} className="w-7 h-7 rounded-full object-cover" title={assignee.name} />}
+                              <div className="relative" onClick={(e) => e.stopPropagation()}>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setQuickMenuContactId(quickMenuContactId === contact.id ? null : contact.id); }}
+                                  className="p-1 rounded-md hover:bg-gray-100 transition-colors"
+                                  title="Quick Actions"
+                                >
+                                  <Zap size={13} className="text-amber-400" />
+                                </button>
+                                {quickMenuContactId === contact.id && (
+                                  <>
+                                    <div className="fixed inset-0 z-40" onClick={() => setQuickMenuContactId(null)} />
+                                    <div className="absolute right-0 top-7 z-50 bg-white rounded-lg shadow-lg border border-gray-200 py-1 w-48">
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); setPendingContactTab('overview'); dispatch({ type: 'SELECT_CONTACT', payload: contact.id }); setQuickMenuContactId(null); }}
+                                        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
+                                      >
+                                        <StickyNote size={12} className="text-blue-500" />Add Note
+                                      </button>
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); dispatch({ type: 'SET_PENDING_APPOINTMENT_CONTACT', payload: contact.id }); dispatch({ type: 'SET_VIEW', payload: 'calendar' }); setQuickMenuContactId(null); }}
+                                        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
+                                      >
+                                        <CalendarPlus size={12} className="text-green-500" />Create Calendar Event
+                                      </button>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            </div>
                           </div>
                           <div className="mt-3 space-y-1.5">
                             <div className="flex items-center gap-2 text-xs text-gray-500">
                               <MapPin size={12} /><span className="truncate">{contact.city}, {contact.state}</span>
                             </div>
+                            {contact.phone1 && (
+                              <div className="flex items-center gap-2 text-xs text-gray-500">
+                                <Phone size={12} /><span>{contact.phone1}</span>
+                              </div>
+                            )}
                             {contact.projectValue && (
                               <div className="flex items-center gap-2 text-xs text-green-600 font-medium">
                                 <DollarSign size={12} /><span>{formatCurrency(contact.projectValue)}</span>
