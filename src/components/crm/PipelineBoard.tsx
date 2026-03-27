@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import OwnerPriorityBoard from './OwnerPriorityBoard';
 import {
   Contact,
+  Appointment,
   KanbanBoard,
   KanbanColumn,
   CustomerStatus,
@@ -41,6 +42,11 @@ import {
   PenLine,
   Users,
   CheckCircle,
+  Phone,
+  Zap,
+  StickyNote,
+  CalendarPlus,
+  Clock,
 } from 'lucide-react';
 import { getNextStep, setPendingContactTab, type NextStep } from '@/lib/nextStepActions';
 import { fireAutomationEvent } from '@/lib/automationEngine';
@@ -144,6 +150,63 @@ function normalizePipelineStatus(rawStatus: string | undefined | null): Customer
   return (aliases[status] ?? (status as CustomerStatus));
 }
 
+
+// Returns the next upcoming scheduled appointment for a contact, or null.
+function getNextAppointment(appointments: Appointment[], contactId: string): Appointment | null {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const upcoming = appointments.filter((apt) => {
+    if (apt.contactId !== contactId || apt.status !== 'scheduled') return false;
+    const raw = apt.date?.trim();
+    if (!raw) return false;
+    const d = /^\d{4}-\d{2}-\d{2}$/.test(raw)
+      ? new Date(`${raw}T${apt.time?.trim() || '00:00'}`)
+      : new Date(raw);
+    return !isNaN(d.getTime()) && d >= today;
+  });
+  if (!upcoming.length) return null;
+  return upcoming.sort((a, b) => {
+    const da = new Date(`${a.date}T${a.time || '00:00'}`);
+    const db2 = new Date(`${b.date}T${b.time || '00:00'}`);
+    return da.getTime() - db2.getTime();
+  })[0];
+}
+
+function formatApptDateTime(apt: Appointment): string {
+  const raw = apt.date?.trim();
+  if (!raw) return '';
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(raw)
+    ? new Date(`${raw}T${apt.time?.trim() || '00:00'}`)
+    : new Date(raw);
+  if (isNaN(d.getTime())) return '';
+  const today = new Date(); today.setHours(0,0,0,0);
+  const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+  const dayLabel =
+    d.getTime() === today.getTime() ? 'Today' :
+    d.getTime() === tomorrow.getTime() ? 'Tomorrow' :
+    d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const timeLabel = apt.time
+    ? new Date(`1970-01-01T${apt.time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+    : '';
+  return timeLabel ? `${dayLabel} · ${timeLabel}` : dayLabel;
+}
+
+
+// Opens the device's native navigation / maps app for a contact's address.
+// On iOS we use the Apple Maps URL scheme; on everything else (Android, desktop)
+// we use the Google Maps URL which triggers an app-chooser on mobile.
+function openNavigation(e: React.MouseEvent, contact: Contact) {
+  e.stopPropagation();
+  const parts = [contact.address, contact.city, contact.state, contact.zip].filter(Boolean);
+  if (!parts.length) return;
+  const query = encodeURIComponent(parts.join(', '));
+  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const url = isIOS
+    ? `maps://maps.apple.com/?q=${query}`
+    : `https://maps.google.com/?q=${query}`;
+  window.open(url, '_blank', 'noopener');
+}
+
 export default function PipelineBoard() {
   const { state, dispatch } = useCRM();
   const { profile } = useAuth();
@@ -158,6 +221,7 @@ export default function PipelineBoard() {
   const [showAllBoards, setShowAllBoards] = useState(false);
   const [showCombinedSales, setShowCombinedSales] = useState(false);
   const [showPriorityPanel, setShowPriorityPanel] = useState(false);
+  const [quickMenuContactId, setQuickMenuContactId] = useState<string | null>(null);
 
   const userRole = (state.currentUser?.role || profile?.role || 'owner') as any;
   const canCreate = canCreateBoard(userRole);
@@ -583,12 +647,62 @@ export default function PipelineBoard() {
                                 </div>
                                 {contact.projectType && <p className="text-xs text-gray-400 mt-0.5 truncate ml-4">{contact.projectType}</p>}
                               </div>
-                              {assignee && <img src={assignee.avatar} alt={assignee.name} className="w-6 h-6 rounded-full object-cover flex-shrink-0" title={assignee.name} />}
+                              <div className="flex items-center gap-1 flex-shrink-0">
+                                {assignee && <img src={assignee.avatar} alt={assignee.name} className="w-6 h-6 rounded-full object-cover" title={assignee.name} />}
+                                <div className="relative" onClick={(e) => e.stopPropagation()}>
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); setQuickMenuContactId(quickMenuContactId === contact.id ? null : contact.id); }}
+                                    className="p-0.5 rounded hover:bg-gray-100 transition-colors"
+                                    title="Quick Actions"
+                                  >
+                                    <Zap size={11} className="text-amber-400" />
+                                  </button>
+                                  {quickMenuContactId === contact.id && (
+                                    <>
+                                      <div className="fixed inset-0 z-40" onClick={() => setQuickMenuContactId(null)} />
+                                      <div className="absolute right-0 top-6 z-50 bg-white rounded-lg shadow-lg border border-gray-200 py-1 w-48">
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); setPendingContactTab('overview'); dispatch({ type: 'SELECT_CONTACT', payload: contact.id }); setQuickMenuContactId(null); }}
+                                          className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
+                                        >
+                                          <StickyNote size={12} className="text-blue-500" />Add Note
+                                        </button>
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); dispatch({ type: 'SET_PENDING_APPOINTMENT_CONTACT', payload: contact.id }); dispatch({ type: 'SET_VIEW', payload: 'calendar' }); setQuickMenuContactId(null); }}
+                                          className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
+                                        >
+                                          <CalendarPlus size={12} className="text-green-500" />Create Calendar Event
+                                        </button>
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
                             </div>
                             <div className="mt-2 space-y-1 ml-1">
-                              <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                                <MapPin size={10} /><span className="truncate">{contact.city}, {contact.state}</span>
+                              <div
+                                className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-blue-600 cursor-pointer transition-colors group/addr"
+                                onClick={(e) => openNavigation(e, contact)}
+                                title="Open in Maps"
+                              >
+                                <MapPin size={10} className="group-hover/addr:text-blue-500 transition-colors flex-shrink-0" />
+                                <span className="truncate underline-offset-2 group-hover/addr:underline">{contact.city}, {contact.state}</span>
                               </div>
+                              {contact.phone1 && (
+                                <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                                  <Phone size={10} /><span>{contact.phone1}</span>
+                                </div>
+                              )}
+                              {(() => {
+                                const nextAppt = getNextAppointment(state.appointments, contact.id);
+                                if (!nextAppt) return null;
+                                return (
+                                  <div className="flex items-center gap-1.5 text-xs text-indigo-600 font-medium">
+                                    <Clock size={10} className="flex-shrink-0" />
+                                    <span className="truncate">{formatApptDateTime(nextAppt)}</span>
+                                  </div>
+                                );
+                              })()}
                               {contact.projectValue ? (
                                 <div className="flex items-center gap-1.5 text-xs text-green-600 font-medium">
                                   <DollarSign size={10} /><span>{formatCurrency(contact.projectValue)}</span>
@@ -688,10 +802,55 @@ export default function PipelineBoard() {
                                 <div className="flex items-start justify-between gap-2">
                                   <div className="min-w-0 flex-1">
                                     <p className="font-medium text-gray-900 text-sm truncate">{getContactFullName(contact)}</p>
-                                    {contact.projectValue ? <p className="text-xs font-semibold text-green-600">{formatCurrency(contact.projectValue)}</p> : null}
-                                    {contact.address && <p className="text-xs text-gray-500 flex items-center gap-1 mt-1 truncate"><MapPin size={10} />{contact.address}</p>}
+                                    {contact.address && (
+                                      <p
+                                        className="text-xs text-gray-500 hover:text-blue-600 flex items-center gap-1 mt-1 truncate cursor-pointer transition-colors group/addr"
+                                        onClick={(e) => openNavigation(e, contact)}
+                                        title="Open in Maps"
+                                      >
+                                        <MapPin size={10} className="group-hover/addr:text-blue-500 transition-colors flex-shrink-0" />
+                                        <span className="underline-offset-2 group-hover/addr:underline truncate">{contact.address}</span>
+                                      </p>
+                                    )}
+                                    {contact.phone1 && <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5"><Phone size={10} />{contact.phone1}</p>}
+                                    {(() => {
+                                      const nextAppt = getNextAppointment(state.appointments, contact.id);
+                                      if (!nextAppt) return null;
+                                      return <p className="text-xs text-indigo-600 font-medium flex items-center gap-1 mt-0.5"><Clock size={10} className="flex-shrink-0" />{formatApptDateTime(nextAppt)}</p>;
+                                    })()}
+                                    {contact.projectValue ? <p className="text-xs font-semibold text-green-600 mt-0.5">{formatCurrency(contact.projectValue)}</p> : null}
                                   </div>
-                                  {stageAlert && <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 ${stageAlert.className}`}>{stageAlert.label}</span>}
+                                  <div className="flex items-start gap-1 flex-shrink-0">
+                                    {stageAlert && <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${stageAlert.className}`}>{stageAlert.label}</span>}
+                                    <div className="relative" onClick={(e) => e.stopPropagation()}>
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); setQuickMenuContactId(quickMenuContactId === contact.id ? null : contact.id); }}
+                                        className="p-0.5 rounded hover:bg-gray-100 transition-colors"
+                                        title="Quick Actions"
+                                      >
+                                        <Zap size={11} className="text-amber-400" />
+                                      </button>
+                                      {quickMenuContactId === contact.id && (
+                                        <>
+                                          <div className="fixed inset-0 z-40" onClick={() => setQuickMenuContactId(null)} />
+                                          <div className="absolute right-0 top-6 z-50 bg-white rounded-lg shadow-lg border border-gray-200 py-1 w-48">
+                                            <button
+                                              onClick={(e) => { e.stopPropagation(); setPendingContactTab('overview'); dispatch({ type: 'SELECT_CONTACT', payload: contact.id }); setQuickMenuContactId(null); }}
+                                              className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
+                                            >
+                                              <StickyNote size={12} className="text-blue-500" />Add Note
+                                            </button>
+                                            <button
+                                              onClick={(e) => { e.stopPropagation(); dispatch({ type: 'SET_PENDING_APPOINTMENT_CONTACT', payload: contact.id }); dispatch({ type: 'SET_VIEW', payload: 'calendar' }); setQuickMenuContactId(null); }}
+                                              className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
+                                            >
+                                              <CalendarPlus size={12} className="text-green-500" />Create Calendar Event
+                                            </button>
+                                          </div>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
                                 </div>
                                 {contact.inspectionCompleted && (
                                   <div className="mt-1.5">
@@ -784,12 +943,62 @@ export default function PipelineBoard() {
                               </div>
                               {contact.projectType && <p className="text-sm text-gray-500 mt-1 truncate">{contact.projectType}</p>}
                             </div>
-                            {assignee && <img src={assignee.avatar} alt={assignee.name} className="w-7 h-7 rounded-full object-cover flex-shrink-0" title={assignee.name} />}
+                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                              {assignee && <img src={assignee.avatar} alt={assignee.name} className="w-7 h-7 rounded-full object-cover" title={assignee.name} />}
+                              <div className="relative" onClick={(e) => e.stopPropagation()}>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setQuickMenuContactId(quickMenuContactId === contact.id ? null : contact.id); }}
+                                  className="p-1 rounded-md hover:bg-gray-100 transition-colors"
+                                  title="Quick Actions"
+                                >
+                                  <Zap size={13} className="text-amber-400" />
+                                </button>
+                                {quickMenuContactId === contact.id && (
+                                  <>
+                                    <div className="fixed inset-0 z-40" onClick={() => setQuickMenuContactId(null)} />
+                                    <div className="absolute right-0 top-7 z-50 bg-white rounded-lg shadow-lg border border-gray-200 py-1 w-48">
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); setPendingContactTab('overview'); dispatch({ type: 'SELECT_CONTACT', payload: contact.id }); setQuickMenuContactId(null); }}
+                                        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
+                                      >
+                                        <StickyNote size={12} className="text-blue-500" />Add Note
+                                      </button>
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); dispatch({ type: 'SET_PENDING_APPOINTMENT_CONTACT', payload: contact.id }); dispatch({ type: 'SET_VIEW', payload: 'calendar' }); setQuickMenuContactId(null); }}
+                                        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
+                                      >
+                                        <CalendarPlus size={12} className="text-green-500" />Create Calendar Event
+                                      </button>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            </div>
                           </div>
                           <div className="mt-3 space-y-1.5">
-                            <div className="flex items-center gap-2 text-xs text-gray-500">
-                              <MapPin size={12} /><span className="truncate">{contact.city}, {contact.state}</span>
+                            <div
+                              className="flex items-center gap-2 text-xs text-gray-500 hover:text-blue-600 cursor-pointer transition-colors group/addr"
+                              onClick={(e) => openNavigation(e, contact)}
+                              title="Open in Maps"
+                            >
+                              <MapPin size={12} className="group-hover/addr:text-blue-500 transition-colors flex-shrink-0" />
+                              <span className="truncate underline-offset-2 group-hover/addr:underline">{contact.city}, {contact.state}</span>
                             </div>
+                            {contact.phone1 && (
+                              <div className="flex items-center gap-2 text-xs text-gray-500">
+                                <Phone size={12} /><span>{contact.phone1}</span>
+                              </div>
+                            )}
+                            {(() => {
+                              const nextAppt = getNextAppointment(state.appointments, contact.id);
+                              if (!nextAppt) return null;
+                              return (
+                                <div className="flex items-center gap-2 text-xs text-indigo-600 font-medium">
+                                  <Clock size={12} className="flex-shrink-0" />
+                                  <span className="truncate">{formatApptDateTime(nextAppt)}</span>
+                                </div>
+                              );
+                            })()}
                             {contact.projectValue && (
                               <div className="flex items-center gap-2 text-xs text-green-600 font-medium">
                                 <DollarSign size={12} /><span>{formatCurrency(contact.projectValue)}</span>
