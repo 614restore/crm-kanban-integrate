@@ -191,6 +191,22 @@ function formatApptDateTime(apt: Appointment): string {
   return timeLabel ? `${dayLabel} · ${timeLabel}` : dayLabel;
 }
 
+
+// Opens the device's native navigation / maps app for a contact's address.
+// On iOS we use the Apple Maps URL scheme; on everything else (Android, desktop)
+// we use the Google Maps URL which triggers an app-chooser on mobile.
+function openNavigation(e: React.MouseEvent, contact: Contact) {
+  e.stopPropagation();
+  const parts = [contact.address, contact.city, contact.state, contact.zip].filter(Boolean);
+  if (!parts.length) return;
+  const query = encodeURIComponent(parts.join(', '));
+  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const url = isIOS
+    ? `maps://maps.apple.com/?q=${query}`
+    : `https://maps.google.com/?q=${query}`;
+  window.open(url, '_blank', 'noopener');
+}
+
 export default function PipelineBoard() {
   const { state, dispatch } = useCRM();
   const { profile } = useAuth();
@@ -664,8 +680,13 @@ export default function PipelineBoard() {
                               </div>
                             </div>
                             <div className="mt-2 space-y-1 ml-1">
-                              <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                                <MapPin size={10} /><span className="truncate">{contact.city}, {contact.state}</span>
+                              <div
+                                className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-blue-600 cursor-pointer transition-colors group/addr"
+                                onClick={(e) => openNavigation(e, contact)}
+                                title="Open in Maps"
+                              >
+                                <MapPin size={10} className="group-hover/addr:text-blue-500 transition-colors flex-shrink-0" />
+                                <span className="truncate underline-offset-2 group-hover/addr:underline">{contact.city}, {contact.state}</span>
                               </div>
                               {contact.phone1 && (
                                 <div className="flex items-center gap-1.5 text-xs text-gray-500">
@@ -781,7 +802,16 @@ export default function PipelineBoard() {
                                 <div className="flex items-start justify-between gap-2">
                                   <div className="min-w-0 flex-1">
                                     <p className="font-medium text-gray-900 text-sm truncate">{getContactFullName(contact)}</p>
-                                    {contact.address && <p className="text-xs text-gray-500 flex items-center gap-1 mt-1 truncate"><MapPin size={10} />{contact.address}</p>}
+                                    {contact.address && (
+                                      <p
+                                        className="text-xs text-gray-500 hover:text-blue-600 flex items-center gap-1 mt-1 truncate cursor-pointer transition-colors group/addr"
+                                        onClick={(e) => openNavigation(e, contact)}
+                                        title="Open in Maps"
+                                      >
+                                        <MapPin size={10} className="group-hover/addr:text-blue-500 transition-colors flex-shrink-0" />
+                                        <span className="underline-offset-2 group-hover/addr:underline truncate">{contact.address}</span>
+                                      </p>
+                                    )}
                                     {contact.phone1 && <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5"><Phone size={10} />{contact.phone1}</p>}
                                     {(() => {
                                       const nextAppt = getNextAppointment(state.appointments, contact.id);
@@ -946,8 +976,13 @@ export default function PipelineBoard() {
                             </div>
                           </div>
                           <div className="mt-3 space-y-1.5">
-                            <div className="flex items-center gap-2 text-xs text-gray-500">
-                              <MapPin size={12} /><span className="truncate">{contact.city}, {contact.state}</span>
+                            <div
+                              className="flex items-center gap-2 text-xs text-gray-500 hover:text-blue-600 cursor-pointer transition-colors group/addr"
+                              onClick={(e) => openNavigation(e, contact)}
+                              title="Open in Maps"
+                            >
+                              <MapPin size={12} className="group-hover/addr:text-blue-500 transition-colors flex-shrink-0" />
+                              <span className="truncate underline-offset-2 group-hover/addr:underline">{contact.city}, {contact.state}</span>
                             </div>
                             {contact.phone1 && (
                               <div className="flex items-center gap-2 text-xs text-gray-500">
