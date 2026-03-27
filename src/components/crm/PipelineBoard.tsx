@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import OwnerPriorityBoard from './OwnerPriorityBoard';
 import {
   Contact,
+  Appointment,
   KanbanBoard,
   KanbanColumn,
   CustomerStatus,
@@ -45,6 +46,7 @@ import {
   Zap,
   StickyNote,
   CalendarPlus,
+  Clock,
 } from 'lucide-react';
 import { getNextStep, setPendingContactTab, type NextStep } from '@/lib/nextStepActions';
 import { fireAutomationEvent } from '@/lib/automationEngine';
@@ -146,6 +148,47 @@ function normalizePipelineStatus(rawStatus: string | undefined | null): Customer
   };
 
   return (aliases[status] ?? (status as CustomerStatus));
+}
+
+
+// Returns the next upcoming scheduled appointment for a contact, or null.
+function getNextAppointment(appointments: Appointment[], contactId: string): Appointment | null {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const upcoming = appointments.filter((apt) => {
+    if (apt.contactId !== contactId || apt.status !== 'scheduled') return false;
+    const raw = apt.date?.trim();
+    if (!raw) return false;
+    const d = /^\d{4}-\d{2}-\d{2}$/.test(raw)
+      ? new Date(`${raw}T${apt.time?.trim() || '00:00'}`)
+      : new Date(raw);
+    return !isNaN(d.getTime()) && d >= today;
+  });
+  if (!upcoming.length) return null;
+  return upcoming.sort((a, b) => {
+    const da = new Date(`${a.date}T${a.time || '00:00'}`);
+    const db2 = new Date(`${b.date}T${b.time || '00:00'}`);
+    return da.getTime() - db2.getTime();
+  })[0];
+}
+
+function formatApptDateTime(apt: Appointment): string {
+  const raw = apt.date?.trim();
+  if (!raw) return '';
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(raw)
+    ? new Date(`${raw}T${apt.time?.trim() || '00:00'}`)
+    : new Date(raw);
+  if (isNaN(d.getTime())) return '';
+  const today = new Date(); today.setHours(0,0,0,0);
+  const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+  const dayLabel =
+    d.getTime() === today.getTime() ? 'Today' :
+    d.getTime() === tomorrow.getTime() ? 'Tomorrow' :
+    d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const timeLabel = apt.time
+    ? new Date(`1970-01-01T${apt.time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+    : '';
+  return timeLabel ? `${dayLabel} · ${timeLabel}` : dayLabel;
 }
 
 export default function PipelineBoard() {
@@ -629,6 +672,16 @@ export default function PipelineBoard() {
                                   <Phone size={10} /><span>{contact.phone1}</span>
                                 </div>
                               )}
+                              {(() => {
+                                const nextAppt = getNextAppointment(state.appointments, contact.id);
+                                if (!nextAppt) return null;
+                                return (
+                                  <div className="flex items-center gap-1.5 text-xs text-indigo-600 font-medium">
+                                    <Clock size={10} className="flex-shrink-0" />
+                                    <span className="truncate">{formatApptDateTime(nextAppt)}</span>
+                                  </div>
+                                );
+                              })()}
                               {contact.projectValue ? (
                                 <div className="flex items-center gap-1.5 text-xs text-green-600 font-medium">
                                   <DollarSign size={10} /><span>{formatCurrency(contact.projectValue)}</span>
@@ -730,6 +783,11 @@ export default function PipelineBoard() {
                                     <p className="font-medium text-gray-900 text-sm truncate">{getContactFullName(contact)}</p>
                                     {contact.address && <p className="text-xs text-gray-500 flex items-center gap-1 mt-1 truncate"><MapPin size={10} />{contact.address}</p>}
                                     {contact.phone1 && <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5"><Phone size={10} />{contact.phone1}</p>}
+                                    {(() => {
+                                      const nextAppt = getNextAppointment(state.appointments, contact.id);
+                                      if (!nextAppt) return null;
+                                      return <p className="text-xs text-indigo-600 font-medium flex items-center gap-1 mt-0.5"><Clock size={10} className="flex-shrink-0" />{formatApptDateTime(nextAppt)}</p>;
+                                    })()}
                                     {contact.projectValue ? <p className="text-xs font-semibold text-green-600 mt-0.5">{formatCurrency(contact.projectValue)}</p> : null}
                                   </div>
                                   <div className="flex items-start gap-1 flex-shrink-0">
@@ -896,6 +954,16 @@ export default function PipelineBoard() {
                                 <Phone size={12} /><span>{contact.phone1}</span>
                               </div>
                             )}
+                            {(() => {
+                              const nextAppt = getNextAppointment(state.appointments, contact.id);
+                              if (!nextAppt) return null;
+                              return (
+                                <div className="flex items-center gap-2 text-xs text-indigo-600 font-medium">
+                                  <Clock size={12} className="flex-shrink-0" />
+                                  <span className="truncate">{formatApptDateTime(nextAppt)}</span>
+                                </div>
+                              );
+                            })()}
                             {contact.projectValue && (
                               <div className="flex items-center gap-2 text-xs text-green-600 font-medium">
                                 <DollarSign size={12} /><span>{formatCurrency(contact.projectValue)}</span>
