@@ -189,6 +189,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Share the same promise with getSession below — only one fetch runs
         const profileData = await loadProfileOnce(session.user.id, session.user.email || '');
         setProfile(profileData);
+        if (profileData?.must_change_password) setIsPasswordReset(true);
         
         // Clean up auth URL parameters after successful sign-in
         try {
@@ -220,6 +221,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (session?.user) {
         const profileData = await loadProfileOnce(session.user.id, session.user.email || '');
         setProfile(profileData);
+        if (profileData?.must_change_password) setIsPasswordReset(true);
       }
 
       setLoading(false);

@@ -37,12 +37,17 @@ export default function UpdatePassword() {
 
         setLoading(true);
         try {
-            // Use the edge function so the admin API sets the password —
-            // supabase.auth.updateUser() is blocked by "Secure password change"
-            // unless you're in a PASSWORD_RECOVERY session (temp-password logins aren't).
             const { data: { session } } = await supabase.auth.getSession();
-            if (!session?.access_token) throw new Error('No active session. Please sign in again.');
 
+            if (!session?.access_token) {
+                setError('No active session. Please log in again.');
+                setLoading(false);
+                return;
+            }
+
+            // Use confirm-password-change edge function — works for both the
+            // temp-password flow (must_change_password flag) and Supabase
+            // recovery links. Also clears must_change_password in the profile.
             const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
             const res = await fetch(`${supabaseUrl}/functions/v1/confirm-password-change`, {
                 method: 'POST',
@@ -53,13 +58,17 @@ export default function UpdatePassword() {
                 },
                 body: JSON.stringify({ password }),
             });
+
             if (!res.ok) {
                 const data = await res.json().catch(() => ({}));
-                throw new Error(data?.error || 'Failed to update password.');
+                setError(data?.error || 'Failed to update password. Please try again.');
+            } else {
+                setSuccess('Password updated successfully! Redirecting...');
+                setTimeout(() => {
+                    try { sessionStorage.removeItem('pending_password_reset'); } catch (e) { console.warn('[UpdatePassword] sessionStorage cleanup failed:', e); }
+                    window.location.href = window.location.origin + (import.meta.env.BASE_URL || '/');
+                }, 2000);
             }
-
-            setSuccess('Password updated! Taking you to the app…');
-            setTimeout(() => { window.location.reload(); }, 1500);
         } catch (err: any) {
             setError(err.message || 'Failed to update password. Please try again.');
         } finally {

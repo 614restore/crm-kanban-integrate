@@ -129,6 +129,21 @@ function getStageAlert(contact: Contact): { label: string; className: string } |
   return null;
 }
 
+function normalizePipelineStatus(rawStatus: string | undefined | null): CustomerStatus | undefined {
+  if (!rawStatus) return undefined;
+  const status = rawStatus.trim().toLowerCase();
+  const aliases: Record<string, CustomerStatus> = {
+    new_lead: 'lead',
+    appointment_set: 'appt_set',
+    inspection_scheduled: 'appt_set',
+    inspection_complete: 'inspection_completed',
+    signed_won: 'signed',
+    paid: 'completed',
+  };
+
+  return (aliases[status] ?? (status as CustomerStatus));
+}
+
 export default function PipelineBoard() {
   const { state, dispatch } = useCRM();
   const { profile } = useAuth();
@@ -153,7 +168,7 @@ export default function PipelineBoard() {
   const canViewUnified = (['owner', 'admin', 'manager', 'sales_manager'] as string[]).includes(userRole);
 
   const getColumnContacts = (column: KanbanColumn): Contact[] => {
-    return state.contacts.filter((c) => c.status === column.status);
+    return state.contacts.filter((c) => normalizePipelineStatus(c.status) === column.status);
   };
 
   // Unified pipeline: only show stages that have at least one contact OR are part of the
