@@ -3316,78 +3316,87 @@ const DocumentTemplates: React.FC = () => {
           filteredTemplates.map(template => {
             const category = templateCategories.find(c => c.id === template.category);
             return (
-              <Card key={template.id} className="hover:shadow-lg transition-shadow">
-                <CardContent className="p-4">
-                  <div className="space-y-3">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h3 className="font-semibold">{template.name}</h3>
+              <Card key={template.id} className="hover:shadow-lg transition-shadow flex flex-col">
+                <CardContent className="p-4 flex flex-col h-full">
+                  <div className="space-y-3 flex flex-col h-full">
+                    {/* Title row */}
+                    <div className="flex items-start gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 mb-1 min-w-0">
+                          <h3 className="font-semibold text-sm truncate">{template.name}</h3>
                           {template.isDefault && (
-                            <Badge variant="secondary" className="text-xs">Default</Badge>
+                            <Badge variant="secondary" className="text-[10px] shrink-0">Default</Badge>
                           )}
                         </div>
-                        <p className="text-sm text-gray-600">{template.description}</p>
+                        <p className="text-xs text-gray-500 line-clamp-2">{template.description}</p>
                       </div>
                       <Button
                         variant="ghost"
                         size="sm"
+                        className="shrink-0 h-7 w-7 p-0"
+                        title={template.favorite ? 'Remove from favorites' : 'Add to favorites'}
                         onClick={() => toggleFavorite(template.id)}
                       >
                         {template.favorite ? (
                           <Star className="w-4 h-4 text-yellow-500 fill-current" />
                         ) : (
-                          <StarOff className="w-4 h-4" />
+                          <StarOff className="w-4 h-4 text-gray-400" />
                         )}
                       </Button>
                     </div>
 
-                    <div className="flex items-center justify-between">
-                      <Badge className={category?.color}>
+                    {/* Category + usage */}
+                    <div className="flex items-center justify-between gap-2 min-w-0">
+                      <Badge className={`${category?.color} shrink-0 text-[10px]`}>
                         <div className="flex items-center gap-1">
                           {category?.icon}
-                          {category?.label}
+                          <span className="truncate max-w-[90px]">{category?.label}</span>
                         </div>
                       </Badge>
-                      <span className="text-xs text-gray-500">
-                        Used {template.usageCount} times
+                      <span className="text-[10px] text-gray-400 whitespace-nowrap">
+                        Used {template.usageCount}×
                       </span>
                     </div>
 
+                    {/* Tags */}
                     <div className="flex flex-wrap gap-1">
                       {template.tags.slice(0, 3).map(tag => (
-                        <Badge key={tag} variant="outline" className="text-xs">
+                        <Badge key={tag} variant="outline" className="text-[10px] px-1.5 py-0">
                           {tag}
                         </Badge>
                       ))}
                       {template.tags.length > 3 && (
-                        <Badge variant="outline" className="text-xs">
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">
                           +{template.tags.length - 3}
                         </Badge>
                       )}
                     </div>
 
-                    <div className="flex items-center justify-between text-xs text-gray-500">
+                    {/* Modified + type */}
+                    <div className="flex items-center justify-between text-[10px] text-gray-400">
                       <span>Modified {new Date(template.lastModified).toLocaleDateString()}</span>
                       <span className="capitalize">{template.fileType}</span>
                     </div>
 
-                    <div className="flex gap-2">
-                      <Button 
-                        size="sm" 
-                        variant="outline" 
-                        className="flex-1"
+                    {/* Action buttons — all icon-only so they never overflow */}
+                    <div className="flex items-center gap-1 mt-auto pt-1 border-t border-gray-100">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 h-8 text-xs"
+                        title="Preview template"
                         onClick={() => {
                           setSelectedTemplate(template);
                           setPreviewMode(true);
                         }}
                       >
-                        <Eye className="w-4 h-4 mr-1" />
+                        <Eye className="w-3.5 h-3.5 mr-1" />
                         Preview
                       </Button>
                       <Button
                         size="sm"
                         variant="outline"
+                        className="h-8 w-8 p-0"
                         title="Edit template"
                         onClick={() => openEditTemplate(template)}
                       >
@@ -3396,21 +3405,22 @@ const DocumentTemplates: React.FC = () => {
                       <Button
                         size="sm"
                         variant="outline"
+                        className="h-8 w-8 p-0"
                         title="Duplicate template"
                         onClick={() => duplicateTemplate(template)}
                       >
-                        <Copy className="w-4 h-4" />
+                        <Copy className="w-3.5 h-3.5" />
                       </Button>
                       {/* Move to folder button */}
                       <div className="relative">
                         <Button
                           size="sm"
                           variant="outline"
+                          className={`h-8 w-8 p-0 ${templateFolderMap[template.id] ? 'text-blue-600 border-blue-300 bg-blue-50' : ''}`}
                           title={templateFolderMap[template.id] ? `In folder: ${templateFolderMap[template.id]}` : 'Move to folder'}
                           onClick={() => setMovingTemplateId(movingTemplateId === template.id ? null : template.id)}
-                          className={templateFolderMap[template.id] ? 'text-blue-600 border-blue-300 bg-blue-50' : ''}
                         >
-                          <FolderPlus className="w-4 h-4" />
+                          <FolderPlus className="w-3.5 h-3.5" />
                         </Button>
                         {movingTemplateId === template.id && (
                           <div className="absolute bottom-full mb-1 right-0 z-20 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[160px]">
@@ -3447,14 +3457,21 @@ const DocumentTemplates: React.FC = () => {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="text-red-500 hover:bg-red-50 hover:border-red-300"
+                          className="h-8 w-8 p-0 text-red-500 hover:bg-red-50 hover:border-red-300"
+                          title="Delete template"
                           onClick={() => deleteTemplate(template)}
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       )}
-                      <Button size="sm" onClick={() => downloadTemplate(template)} title="Download as HTML">
-                        <Download className="w-4 h-4" />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 w-8 p-0"
+                        title="Download as HTML"
+                        onClick={() => downloadTemplate(template)}
+                      >
+                        <Download className="w-3.5 h-3.5" />
                       </Button>
                     </div>
                   </div>
@@ -3679,7 +3696,14 @@ const DocumentTemplates: React.FC = () => {
         <Dialog open={showCreateTemplate} onOpenChange={(open) => {
           if (!open) { setShowCreateTemplate(false); setEditingTemplate(null); }
         }}>
-          <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+          <DialogContent
+            className="max-w-4xl max-h-[90vh] flex flex-col overflow-hidden"
+            onInteractOutside={(e) => {
+              // Prevent accidental closes when the user clicks just outside the dialog
+              // while editing a textarea (common when scrolling with a trackpad).
+              e.preventDefault();
+            }}
+          >
             <DialogHeader>
               <DialogTitle>{editingTemplate ? `Edit "${editingTemplate.name}"` : 'Create New Template'}</DialogTitle>
             </DialogHeader>

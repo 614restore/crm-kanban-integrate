@@ -59,6 +59,16 @@ const INTEGRATION_CONFIGS: Record<string, Array<{
       ],
     },
   ],
+  roofr: [
+    {
+      field: 'apiKey',
+      label: 'API Key',
+      type: 'password',
+      required: true,
+      placeholder: 'rk_live_...',
+      help: 'Find your API key in the Roofr dashboard under Settings → API. Visit dev.roofr.com for documentation.',
+    },
+  ],
   openweather: [
     { field: 'apiKey', label: 'API Key', type: 'password', required: true, placeholder: 'Your OpenWeather API key', help: 'Get your free API key at openweathermap.org/api' },
   ],
