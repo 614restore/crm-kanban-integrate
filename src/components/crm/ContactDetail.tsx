@@ -34,6 +34,7 @@ import ContactTemplateModal from './ContactTemplateModal';
 import ChangeOrderModal, { ChangeOrder } from './ChangeOrderModal';
 import HailTracePanel from './HailTracePanel';
 import EagleViewPanel from './EagleViewPanel';
+import RoofrPanel from './RoofrPanel';
 import InsuranceTrackingView from './InsuranceTrackingView';
 import SupplementTrackingView from './SupplementTrackingView';
 import { PipelineStageTracker } from './PipelineStageTracker';
@@ -1632,17 +1633,31 @@ export default function ContactDetail() {
 
         {activeTab === 'documents' && (
           <div className="space-y-4">
-            <EagleViewPanel
-              address={contact.address || ''}
-              city={contact.city || ''}
-              state={contact.state || ''}
-              zip={contact.zip || ''}
-              companyId={effectiveCompanyId || ''}
-              contactId={contact.id}
-              contactName={getContactFullName(contact)}
-              userId={profile?.id}
-              onDocumentSaved={(doc) => setContactDocuments(prev => [doc, ...prev])}
-            />
+            {/* ── Aerial Measurement Reports ── */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              <EagleViewPanel
+                address={contact.address || ''}
+                city={contact.city || ''}
+                state={contact.state || ''}
+                zip={contact.zip || ''}
+                companyId={effectiveCompanyId || ''}
+                contactId={contact.id}
+                contactName={getContactFullName(contact)}
+                userId={profile?.id}
+                onDocumentSaved={(doc) => setContactDocuments(prev => [doc, ...prev])}
+              />
+              <RoofrPanel
+                address={contact.address || ''}
+                city={contact.city || ''}
+                state={contact.state || ''}
+                zip={contact.zip || ''}
+                companyId={effectiveCompanyId || ''}
+                contactId={contact.id}
+                contactName={getContactFullName(contact)}
+                userId={profile?.id}
+                onDocumentSaved={(doc) => setContactDocuments(prev => [doc, ...prev])}
+              />
+            </div>
 
             {/* ── Signed Documents ── */}
             <div className="bg-white rounded-xl border border-gray-200">
