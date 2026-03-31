@@ -1,7 +1,7 @@
 // Reports & Analytics Dashboard for Contractors
 // Comprehensive business intelligence and performance metrics
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   BarChart,
   Bar,
@@ -48,6 +48,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useCRM, useFinancialStats } from '@/lib/crmStore';
 import { formatCurrency, getContactFullName } from '@/lib/crmData';
 import { printDataAsPDF } from '@/lib/exportUtils';
+import { db } from '@/lib/database';
+import { useAuth } from '@/lib/authContext';
 
 interface RevenueData {
   month: string;
@@ -92,10 +94,31 @@ const ReportsAnalytics: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedRep, setSelectedRep] = useState<string>('all');
-  
+  const [realExpenses, setRealExpenses] = useState<Array<{ date: string; amount: number }>>([]);
+
   const { toast } = useToast();
   const { state } = useCRM();
   const financialStats = useFinancialStats();
+  const { profile } = useAuth();
+
+  // Load real expense data from the database
+  useEffect(() => {
+    const loadExpenses = async () => {
+      const companyId = profile?.company_id || state.companyId;
+      if (!companyId) return;
+      try {
+        const expenses = await db.getExpenses(companyId);
+        setRealExpenses(
+          expenses
+            .filter(e => e.status === 'approved' || e.status === 'paid')
+            .map(e => ({ date: e.date || e.submitted_at, amount: e.amount }))
+        );
+      } catch {
+        // silently fall back to no expense data
+      }
+    };
+    loadExpenses();
+  }, [profile?.company_id, state.companyId]);
 
   // Build revenue data from real invoices grouped by month
   const revenueData: RevenueData[] = useMemo(() => {
@@ -133,18 +156,24 @@ const ReportsAnalytics: React.FC = () => {
         if (months[key]) months[key].revenue += c.finalPaymentAmount;
       }
     });
-    // Estimate expenses as 65% of revenue (industry avg) when we don't have real expense data
+    // Sum real approved/paid expenses by month
+    realExpenses.forEach((expense) => {
+      const d = new Date(expense.date);
+      if (isNaN(d.getTime()) || d < cutoff) return;
+      const key = d.toLocaleString('default', { month: 'short', year: selectedPeriod === 'ytd' || monthCount <= 3 ? undefined : '2-digit' });
+      if (months[key]) months[key].expenses += expense.amount;
+    });
+
     return Object.entries(months).map(([month, data]) => {
-      const estimatedExpenses = Math.round(data.revenue * 0.65);
       return {
         month,
         revenue: data.revenue,
-        expenses: estimatedExpenses,
-        profit: data.revenue - estimatedExpenses,
+        expenses: Math.round(data.expenses),
+        profit: Math.round(data.revenue - data.expenses),
         projects: data.projects.size,
       };
     });
-  }, [state.invoices, state.contacts, selectedPeriod]);
+  }, [state.invoices, state.contacts, selectedPeriod, realExpenses]);
 
   // Build project data from real projects or contacts in project stages
   const projectData: ProjectData[] = useMemo(() => {
