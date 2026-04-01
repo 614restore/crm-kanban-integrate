@@ -48,14 +48,6 @@ import { useToast } from '@/hooks/use-toast';
 import { useCRM, useFinancialStats } from '@/lib/crmStore';
 import { formatCurrency, getContactFullName } from '@/lib/crmData';
 import { printDataAsPDF } from '@/lib/exportUtils';
-<<<<<<< HEAD
-import { useAuth } from '@/lib/authContext';
-import { isSoldStatus, isLostStatus } from '@/lib/statusDefinitions';
-import { SOLD_STATUSES, LOST_STATUSES, COMPLETED_PROJECT_STATUSES, isDealWon, isDealLost } from '@/types/statusConstants';
-=======
-import { db } from '@/lib/database';
-import { useAuth } from '@/lib/authContext';
->>>>>>> 0f128f711d5e12e5d6be49ea8b1d4b930247a733
 
 interface RevenueData {
   month: string;
@@ -152,44 +144,6 @@ const ReportsAnalytics: React.FC = () => {
         const d = new Date(inv.createdAt || inv.dueDate || '');
         if (isNaN(d.getTime()) || d < cutoff) return;
         const key = d.toLocaleString('default', { month: 'short', year: selectedPeriod === 'ytd' || monthCount <= 3 ? undefined : '2-digit' });
-<<<<<<< HEAD
-        if (months[key]) {
-          if (inv.status === 'paid') months[key].revenue += inv.amount;
-          if (inv.contactId) months[key].projects.add(inv.contactId);
-        }
-      });
-    // Sum deposits & final payments from contacts by completed month
-    // CRITICAL FIX: Filter by company_id to prevent cross-tenant data leakage
-    state.contacts
-      .filter(c => c.company_id === profile?.company_id)
-      .forEach((c) => {
-        // FIXED: Use standardized status check instead of hardcoded 'completed'
-        if (isSoldStatus(c.status) && c.finalPaymentPaid && c.finalPaymentAmount) {
-          const d = new Date(c.updatedAt);
-          if (isNaN(d.getTime()) || d < cutoff) return;
-          const key = d.toLocaleString('default', { month: 'short', year: selectedPeriod === 'ytd' || monthCount <= 3 ? undefined : '2-digit' });
-          if (months[key]) months[key].revenue += c.finalPaymentAmount;
-        }
-      });
-    // IMPROVED: Calculate actual expenses from work orders when available, fall back to 65% industry average
-    return Object.entries(months).map(([month, data]) => {
-      // TODO: Calculate actual expenses from work_orders table (materials + labor + subcontractors)
-      // For now, use industry standard 65% of revenue as placeholder
-      const estimatedExpenses = Math.round(data.revenue * 0.65);
-=======
-        if (months[key]) months[key].revenue += c.finalPaymentAmount;
-      }
-    });
-    // Sum real approved/paid expenses by month
-    realExpenses.forEach((expense) => {
-      const d = new Date(expense.date);
-      if (isNaN(d.getTime()) || d < cutoff) return;
-      const key = d.toLocaleString('default', { month: 'short', year: selectedPeriod === 'ytd' || monthCount <= 3 ? undefined : '2-digit' });
-      if (months[key]) months[key].expenses += expense.amount;
-    });
-
-    return Object.entries(months).map(([month, data]) => {
->>>>>>> 0f128f711d5e12e5d6be49ea8b1d4b930247a733
       return {
         month,
         revenue: data.revenue,
@@ -198,11 +152,6 @@ const ReportsAnalytics: React.FC = () => {
         projects: data.projects.size,
       };
     });
-<<<<<<< HEAD
-  }, [state.invoices, state.contacts, selectedPeriod, profile?.company_id]);
-=======
-  }, [state.invoices, state.contacts, selectedPeriod, realExpenses]);
->>>>>>> 0f128f711d5e12e5d6be49ea8b1d4b930247a733
 
   // Build project data from real projects or contacts in project stages
   const projectData: ProjectData[] = useMemo(() => {

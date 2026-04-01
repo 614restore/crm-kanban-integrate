@@ -1,5 +1,4 @@
 import React, { useReducer, useEffect, useCallback, useRef, Suspense, lazy, useState } from 'react';
-import { toast } from 'sonner';
 import { CRMContext, crmReducer, CRMState, ViewType } from '@/lib/crmStore';
 import { AuthProvider, useAuth } from '@/lib/authContext';
 import { PermissionProvider } from '@/lib/permissions/PermissionProvider';
@@ -57,6 +56,26 @@ const SupplementTrackingView = lazy(() => import('./crm/SupplementTrackingView')
 const CrewScheduleView = lazy(() => import('./crm/CrewScheduleView'));
 const EquipmentView = lazy(() => import('./crm/EquipmentView'));
 const CommissionPayrollView = lazy(() => import('./crm/CommissionPayrollView'));
+
+// --- LocalStorage data cache (stale-while-revalidate) ---
+const DATA_CACHE_KEY = 'crm_app_data_v1';
+const DATA_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
+function readDataCache(companyId: string): Record<string, unknown> | null {
+  try {
+    const raw = localStorage.getItem(DATA_CACHE_KEY);
+    if (!raw) return null;
+    const { v, cid, ts, data } = JSON.parse(raw);
+    if (v !== 1 || cid !== companyId || Date.now() - ts > DATA_CACHE_TTL) return null;
+    return data as Record<string, unknown>;
+  } catch { return null; }
+}
+
+function writeDataCache(companyId: string, data: unknown): void {
+  try {
+    localStorage.setItem(DATA_CACHE_KEY, JSON.stringify({ v: 1, cid: companyId, ts: Date.now(), data }));
+  } catch { /* quota exceeded or private browsing — silently skip */ }
+}
 
 // Initial CRM state (completely empty)
 const getInitialView = (): ViewType => {
@@ -190,15 +209,37 @@ function ViewLoadingFallback() {
 // Loading Screen
 function LoadingScreen() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center">
-      <div className="text-center">
-        <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-          <Building2 size={32} className="text-white" />
-        </div>
-        <h1 className="text-2xl font-bold text-white mb-2">TrussCTR</h1>
-        <div className="flex items-center justify-center gap-2 text-slate-400">
-          <Loader2 className="animate-spin" size={20} />
-          <span>Loading your data...</span>
+    <div className="min-h-screen bg-black flex items-center justify-center relative overflow-hidden">
+      {/* Spotlight effect */}
+      <div className="absolute inset-0 pointer-events-none" style={{
+        background: 'radial-gradient(ellipse 60% 50% at 50% 0%, rgba(212,170,80,0.18) 0%, transparent 70%)'
+      }} />
+      {/* Dark vignette */}
+      <div className="absolute inset-0 pointer-events-none" style={{
+        background: 'radial-gradient(ellipse 90% 90% at 50% 50%, transparent 40%, rgba(0,0,0,0.7) 100%)'
+      }} />
+
+      <div className="relative text-center flex flex-col items-center">
+        {/* Shield logo */}
+        <img
+          src="/trussctr-logo-shield.png"
+          alt="TrussCTR Logo"
+          className="w-56 h-56 object-contain mb-6 drop-shadow-2xl"
+          style={{ filter: 'drop-shadow(0 0 32px rgba(212,170,80,0.35))' }}
+        />
+
+        {/* Title */}
+        <h1 className="text-3xl font-extrabold text-white tracking-wide mb-1"
+            style={{ textShadow: '0 2px 16px rgba(0,0,0,0.8)' }}>
+          TrussCTR Web&nbsp;
+          <span className="text-yellow-400">•</span>
+          &nbsp;v1.0
+        </h1>
+
+        {/* Loader */}
+        <div className="flex items-center justify-center gap-2 mt-4 text-slate-400">
+          <Loader2 className="animate-spin" size={18} />
+          <span className="text-sm tracking-wider uppercase">Loading your data...</span>
         </div>
       </div>
     </div>
@@ -384,18 +425,18 @@ function TrialBanner({ companyId }: { companyId: string | null }) {
   if (showUrgency) {
     return (
       <div className="flex items-center justify-between gap-3 bg-yellow-50 border-b border-yellow-200 px-4 py-2 text-sm text-yellow-800">
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
           <Zap className="w-4 h-4 flex-shrink-0" />
           <span>
             Your free trial ends in <strong>{daysLeft} day{daysLeft !== 1 ? 's' : ''}</strong>.{' '}
-            Use code <strong className="font-mono">{LAUNCH_PROMO_CODE}</strong> at checkout for <strong>50% off 3 months</strong> (monthly plans only).
+            Use code at checkout for <strong>50% off 3 months</strong> (monthly plans only).
           </span>
           <button
             onClick={handleCopy}
             className="flex-shrink-0 flex items-center gap-1 bg-yellow-200 hover:bg-yellow-300 border border-yellow-400 rounded px-2 py-0.5 text-xs font-mono font-bold transition-colors"
             title="Copy promo code"
           >
-            {copied ? 'Copied!' : LAUNCH_PROMO_CODE}
+            {copied ? '✓ Copied!' : LAUNCH_PROMO_CODE}
           </button>
         </div>
         <button
@@ -421,8 +462,10 @@ function CRMApp() {
     try { localStorage.setItem('crm_current_view', state.currentView); } catch (e) { console.warn('[AppLayout] localStorage write failed (private browsing?):', e); }
   }, [state.currentView]);
   const realtimeFailedRef = useRef(false);
+  const realtimeChannelRef = useRef<any>(null);
   const isReloadingRef = useRef(false);
   const queuedReloadRef = useRef(false);
+  const lastHiddenAtRef = useRef<number>(0);
 
   // Race a DB fetch against a per-query timeout; resolves to fallback on timeout instead of
   // blocking the whole Promise.all. Prevents a single slow Supabase query from stalling the UI.
@@ -433,17 +476,24 @@ function CRMApp() {
   const loadData = useCallback(async (options?: { silent?: boolean }) => {
     const silent = options?.silent ?? false;
     if (!profile?.company_id) {
-      // If auth is still loading, don't mark as done — wait for profile to arrive
-      if (!authLoading && !silent) {
-        dispatch({ type: 'SET_LOADING', payload: false });
-      }
+      // profile.company_id not yet available — keep the loading screen up.
+      // The LoadingScreen is now also shown while !profile?.company_id, so we
+      // don't need to dispatch SET_LOADING: false here. Dispatching it too early
+      // caused a blank-contacts flash before the profile arrived.
       return;
     }
 
-    if (!silent) {
+    dispatch({ type: 'SET_COMPANY_ID', payload: profile.company_id });
+
+    // Serve cached data immediately so the UI isn't blank while fresh data loads.
+    // On the first-ever load (no cache) we show the loading screen as before.
+    const cached = !silent ? readDataCache(profile.company_id) : null;
+    if (cached) {
+      dispatch({ type: 'INITIALIZE_DATA', payload: cached as any });
+      // Don't show the loading screen — continue fetching fresh data silently.
+    } else if (!silent) {
       dispatch({ type: 'SET_LOADING', payload: true });
     }
-    dispatch({ type: 'SET_COMPANY_ID', payload: profile.company_id });
 
     try {
       // Load all data in parallel (including company to pre-warm cache for Sidebar)
@@ -532,9 +582,15 @@ function CRMApp() {
       const invoices = dbInvoices.map(inv => dbInvoiceToAppInvoice(inv, enrichedContacts));
 
       // Convert DB boards to app boards (with columns)
-      const boards: KanbanBoard[] = dbBoards.length > 0 
+      // Each getKanbanBoardWithColumns call is individually capped at 6 s so a slow
+      // Supabase cold-start on a board column query can't stall the whole loadData.
+      const boards: KanbanBoard[] = dbBoards.length > 0
         ? await Promise.all(dbBoards.map(async (board) => {
-            const result = await db.getKanbanBoardWithColumns(board.id);
+            const result = await withFetchTimeout(
+              db.getKanbanBoardWithColumns(board.id),
+              null,
+              6000
+            );
             return {
               id: board.id,
               name: board.name,
@@ -572,6 +628,8 @@ function CRMApp() {
         action: auto.action_type,
         isActive: auto.is_active,
         createdBy: auto.created_by || '',
+        messageBody: (auto as any).message_body || undefined,
+        triggerDelayHours: (auto as any).trigger_delay_hours || undefined,
       }));
 
       // Convert DB team members to app team members
@@ -730,29 +788,30 @@ function CRMApp() {
         updatedAt: mo.updated_at,
       }));
 
-      dispatch({
-        type: 'INITIALIZE_DATA',
-        payload: {
-          contacts: enrichedContacts,
-          appointments,
-          invoices,
-          boards,
-          leadSources,
-          automations,
-          teamMembers,
-          suppliers,
-          materialOrders,
-          estimates,
-          projects,
-          workOrders,
-          documentTemplates: [],
-          companyGoals: [],
-        },
-      });
+      const freshPayload = {
+        contacts: enrichedContacts,
+        appointments,
+        invoices,
+        boards,
+        leadSources,
+        automations,
+        teamMembers,
+        suppliers,
+        materialOrders,
+        estimates,
+        projects,
+        workOrders,
+        documentTemplates: [],
+        companyGoals: [],
+      };
+
+      dispatch({ type: 'INITIALIZE_DATA', payload: freshPayload });
+
+      // Persist to localStorage so next refresh shows data instantly
+      writeDataCache(profile.company_id, freshPayload);
 
     } catch (error) {
       console.error('Error loading CRM data:', error);
-      toast.error('Failed to load your data. Please refresh to try again.');
       // Show empty state on error
       dispatch({
         type: 'INITIALIZE_DATA',
@@ -850,15 +909,24 @@ function CRMApp() {
         if ((status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') && !realtimeFailedRef.current) {
           realtimeFailedRef.current = true;
           console.warn('Realtime unavailable; continuing with periodic reload fallback.', { status, error });
-          // Keep fallback silent in-app; avoid noisy warning notifications for known websocket issues.
+          // Remove the channel entirely to stop Supabase from retrying the WebSocket connection.
+          if (realtimeChannelRef.current) {
+            db.unsubscribe(realtimeChannelRef.current);
+            realtimeChannelRef.current = null;
+          }
         } else if (status === 'SUBSCRIBED') {
           realtimeFailedRef.current = false;
         }
       },
     });
 
+    realtimeChannelRef.current = channel;
+
     return () => {
-      db.unsubscribe(channel);
+      if (realtimeChannelRef.current) {
+        db.unsubscribe(realtimeChannelRef.current);
+        realtimeChannelRef.current = null;
+      }
     };
   }, [profile?.company_id, loadData, requestSoftReload]);
 
@@ -875,22 +943,55 @@ function CRMApp() {
     return () => window.clearInterval(poller);
   }, [profile?.company_id, requestSoftReload]);
 
-  // Load data on mount
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+// Load data whenever company_id becomes available (fires on mount AND when profile arrives late)
+useEffect(() => {
+  if (authLoading || !profile?.company_id) return;
+  loadData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [profile?.company_id, authLoading]);
 
-  // Re-load data when tab becomes visible (fixes stale/blank state after idle)
+  // Track idle time and reload data when the tab regains focus.
+  // Only reload after the tab has been hidden for >5 min so that brief
+  // context switches (e.g. copy-pasting an address, checking a text) never
+  // interrupt an active editing session (template editor, note, form, etc.).
+  // After >30 min dormant, also re-validate the auth session before refreshing.
   useEffect(() => {
     if (!profile?.company_id) return;
-    const handleVisible = () => {
-      if (document.visibilityState === 'visible') {
-        requestSoftReload();
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        lastHiddenAtRef.current = Date.now();
+      } else if (document.visibilityState === 'visible') {
+        const idleMs = lastHiddenAtRef.current ? Date.now() - lastHiddenAtRef.current : 0;
+        // Skip reload for brief tab switches — anything under 5 minutes is noise
+        if (idleMs < 5 * 60 * 1000) return;
+
+        if (idleMs > 30 * 60 * 1000) {
+          // Dormant >30 min — re-validate session first, then reload
+          supabase.auth.getSession().then(({ data: { session } }) => {
+            if (session) requestSoftReload();
+            // No session → onAuthStateChange listener handles sign-out automatically
+          });
+        } else {
+          // Dormant 5–30 min — refresh data but skip session re-check
+          requestSoftReload();
+        }
       }
     };
-    document.addEventListener('visibilitychange', handleVisible);
-    return () => document.removeEventListener('visibilitychange', handleVisible);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, [profile?.company_id, requestSoftReload]);
+
+  // Keep the Supabase auth token alive during long page sessions.
+  // Supabase auto-refreshes tokens, but this ensures we catch silent expiry.
+  useEffect(() => {
+    const interval = window.setInterval(async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session && profile?.company_id) {
+        await supabase.auth.signOut();
+      }
+    }, 10 * 60 * 1000); // every 10 minutes
+    return () => window.clearInterval(interval);
+  }, [profile?.company_id]);
 
   // Fail-safe: avoid getting stuck on the loading screen if initial data calls stall
   useEffect(() => {
@@ -958,7 +1059,6 @@ function CRMApp() {
     }
   }, [profile]);
 
-<<<<<<< HEAD
   // Automatic stale lead detection system
   useEffect(() => {
     if (!profile?.company_id || !state.isInitialized) return;
@@ -1011,9 +1111,6 @@ function CRMApp() {
   // 2. Auth finished but profile.company_id hasn't arrived yet (prevents blank-contacts flash).
   //    The 12s auth timeout in authContext is the outer safety net.
   if ((state.isLoading && !state.isInitialized) || (!profile?.company_id && !state.isInitialized)) {
-=======
-  if (state.isLoading && !state.isInitialized) {
->>>>>>> 0f128f711d5e12e5d6be49ea8b1d4b930247a733
     return <LoadingScreen />;
   }
 
@@ -1107,12 +1204,12 @@ function AuthGate() {
     return <LoadingScreen />;
   }
 
-  if (isPasswordReset) {
-    return <UpdatePassword />;
-  }
-
   if (!session) {
     return <AuthPage />;
+  }
+
+  if (isPasswordReset) {
+    return <UpdatePassword />;
   }
 
   return <CRMApp />;
