@@ -179,13 +179,14 @@ export default function QuickAddModal() {
         }
       }
 
-      // Move company resolution into try block for proper error handling
-      const effectiveCompanyId = profile?.company_id || state.companyId;
-      
-      const finalCompanyId = effectiveCompanyId || await resolveCompanyId();
+      // Use company_id from auth profile (preferred) or CRM state (populated by AppLayout).
+      // Both are set before the user can interact, so either should be available.
+      const finalCompanyId = profile?.company_id || state.companyId;
 
       if (!finalCompanyId) {
-        throw new Error('Unable to determine company context. Please ensure you are properly logged in and try again.');
+        // Profile loaded but company_id is genuinely absent — don't hang for 30 s.
+        // Show a clear message so the user can refresh rather than waiting.
+        throw new Error('Your account is still loading. Please wait a moment and try again, or refresh the page.');
       }
 
       // If user has a company, save to database with increased timeout

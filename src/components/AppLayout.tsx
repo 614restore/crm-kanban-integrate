@@ -1058,6 +1058,14 @@ useEffect(() => {
     });
   }, [profile?.company_id]);
 
+  // Set company_id immediately when profile arrives so QuickAddModal / other
+  // components that check state.companyId don't race with loadData.
+  useEffect(() => {
+    if (profile?.company_id) {
+      dispatch({ type: 'SET_COMPANY_ID', payload: profile.company_id });
+    }
+  }, [profile?.company_id]);
+
   // Set current user from profile
   useEffect(() => {
     if (profile) {
