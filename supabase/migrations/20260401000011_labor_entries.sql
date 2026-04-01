@@ -25,18 +25,34 @@ create index idx_clock_out_time on labor_entries(clock_out_time);
 alter table labor_entries enable row level security;
 
 -- Create policies
-create policy "Select all" on labor_entries
+create policy "labor_entries_select" on labor_entries
     for select
-    using (true);
+    using (exists (
+        select 1 from profiles
+        where profiles.id = auth.uid()
+          and profiles.company_id = labor_entries.company_id
+    ));
 
-create policy "Insert all" on labor_entries
+create policy "labor_entries_insert" on labor_entries
     for insert
-    with check (true);
-    
-create policy "Update all" on labor_entries
-    for update
-    using (true);
+    with check (exists (
+        select 1 from profiles
+        where profiles.id = auth.uid()
+          and profiles.company_id = labor_entries.company_id
+    ));
 
-create policy "Delete all" on labor_entries
+create policy "labor_entries_update" on labor_entries
+    for update
+    using (exists (
+        select 1 from profiles
+        where profiles.id = auth.uid()
+          and profiles.company_id = labor_entries.company_id
+    ));
+
+create policy "labor_entries_delete" on labor_entries
     for delete
-    using (true);
+    using (exists (
+        select 1 from profiles
+        where profiles.id = auth.uid()
+          and profiles.company_id = labor_entries.company_id
+    ));

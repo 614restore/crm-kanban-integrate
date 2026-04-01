@@ -25,16 +25,32 @@ ALTER TABLE weather_history ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY select_weather_history ON weather_history
     FOR SELECT
-    USING (auth.uid() = company_id);
+    USING (EXISTS (
+        SELECT 1 FROM profiles
+        WHERE profiles.id = auth.uid()
+          AND profiles.company_id = weather_history.company_id
+    ));
 
 CREATE POLICY insert_weather_history ON weather_history
     FOR INSERT
-    WITH CHECK (auth.uid() = company_id);
+    WITH CHECK (EXISTS (
+        SELECT 1 FROM profiles
+        WHERE profiles.id = auth.uid()
+          AND profiles.company_id = weather_history.company_id
+    ));
 
 CREATE POLICY update_weather_history ON weather_history
     FOR UPDATE
-    USING (auth.uid() = company_id);
+    USING (EXISTS (
+        SELECT 1 FROM profiles
+        WHERE profiles.id = auth.uid()
+          AND profiles.company_id = weather_history.company_id
+    ));
 
 CREATE POLICY delete_weather_history ON weather_history
     FOR DELETE
-    USING (auth.uid() = company_id);
+    USING (EXISTS (
+        SELECT 1 FROM profiles
+        WHERE profiles.id = auth.uid()
+          AND profiles.company_id = weather_history.company_id
+    ));
