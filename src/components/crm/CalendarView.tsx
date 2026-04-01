@@ -36,6 +36,14 @@ const appointmentTypeColors: Record<string, string> = {
   final_walkthrough: 'bg-teal-100 text-teal-800 border-teal-200',
 };
 
+// CRITICAL: Status-based colors override type colors for visual feedback
+const appointmentStatusColors: Record<string, string> = {
+  completed: 'bg-green-100 text-green-800 border-green-500',
+  cancelled: 'bg-gray-100 text-gray-500 border-gray-300',
+  rescheduled: 'bg-yellow-100 text-yellow-800 border-yellow-400',
+  missed: 'bg-red-100 text-red-800 border-red-500', // Past time but still 'scheduled'
+};
+
 const appointmentTypeLabels: Record<string, string> = {
   inspection: 'Inspection',
   estimate: 'Estimate',
@@ -43,6 +51,37 @@ const appointmentTypeLabels: Record<string, string> = {
   installation: 'Installation',
   final_walkthrough: 'Final Walkthrough',
 };
+
+// Helper: Check if appointment is missed (past time but still scheduled)
+function isAppointmentMissed(apt: Appointment): boolean {
+  if (apt.status !== 'scheduled') return false;
+  
+  const now = new Date();
+  const aptDateTime = new Date(`${apt.date}T${apt.time}`);
+  return aptDateTime < now;
+}
+
+// Helper: Get color class based on status (overrides type color)
+function getAppointmentColorClass(apt: Appointment): string {
+  // Priority 1: Check if missed
+  if (isAppointmentMissed(apt)) {
+    return appointmentStatusColors.missed;
+  }
+  
+  // Priority 2: Status-based colors
+  if (apt.status === 'completed') {
+    return appointmentStatusColors.completed;
+  }
+  if (apt.status === 'cancelled') {
+    return appointmentStatusColors.cancelled;
+  }
+  if (apt.status === 'rescheduled') {
+    return appointmentStatusColors.rescheduled;
+  }
+  
+  // Priority 3: Type-based colors (default)
+  return appointmentTypeColors[apt.type] || 'bg-gray-100 text-gray-700 border-gray-200';
+}
 
 export default function CalendarView() {
   const { state, dispatch } = useCRM();
@@ -391,9 +430,10 @@ export default function CalendarView() {
                         </div>
                         <div className="mt-1 space-y-0.5">
                           {dayApts.slice(0, 3).map((apt) => {
-                            const colorCls = appointmentTypeColors[apt.type] || 'bg-gray-100 text-gray-700 border-gray-200';
+                            const colorCls = getAppointmentColorClass(apt);
+                            const isMissed = isAppointmentMissed(apt);
                             return (
-                              <div key={apt.id} className={`text-[10px] leading-tight px-1 py-0.5 rounded truncate border ${colorCls} ${!apt.assignedTo ? 'border-dashed border-amber-400' : ''}`} title={`${formatTime(apt.time)} - ${apt.title} (${apt.contactName})`}>
+                              <div key={apt.id} className={`text-[10px] leading-tight px-1 py-0.5 rounded truncate border ${colorCls} ${!apt.assignedTo ? 'border-dashed border-amber-400' : ''} ${isMissed ? 'font-semibold' : ''}`} title={`${formatTime(apt.time)} - ${apt.title} (${apt.contactName})${isMissed ? ' - MISSED' : apt.status === 'completed' ? ' - COMPLETED' : ''}`}>
                                 {formatTime(apt.time).replace(' ', '')} {apt.title}
                               </div>
                             );
