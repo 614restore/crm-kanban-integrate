@@ -11,6 +11,7 @@ import {
   Check,
   ChevronDown,
   Loader2,
+  Tag,
 } from 'lucide-react';
 
 // Price IDs come from Vite env vars (set in Vercel dashboard for live, .env.local for dev)
@@ -29,9 +30,9 @@ const PLANS = [
   {
     key: 'starter' as const,
     name: 'Starter',
-    price: 29,
-    annualPrice: 24.17,
-    annualTotal: 290,
+    price: 59,
+    annualPrice: 49.17,
+    annualTotal: 590,
     userLimit: 2,
     features: ['Up to 2 users','Unlimited contacts','Core CRM features','Pipeline board','Invoicing','Email support'],
     icon: <Zap className="w-5 h-5 text-blue-500" />,
@@ -40,9 +41,9 @@ const PLANS = [
   {
     key: 'pro' as const,
     name: 'Pro',
-    price: 59,
-    annualPrice: 49.17,
-    annualTotal: 590,
+    price: 119,
+    annualPrice: 99.17,
+    annualTotal: 1190,
     userLimit: 5,
     features: ['Up to 5 users','Unlimited contacts','Full pipeline visibility','Insurance claim tracking','Supplement tracking','Team reporting'],
     icon: <Star className="w-5 h-5 text-indigo-500" />,
@@ -52,9 +53,9 @@ const PLANS = [
   {
     key: 'business' as const,
     name: 'Business',
-    price: 99,
-    annualPrice: 82.50,
-    annualTotal: 990,
+    price: 229,
+    annualPrice: 190.83,
+    annualTotal: 2290,
     userLimit: 10,
     features: ['Up to 10 users','Unlimited contacts','AI assistant','Advanced analytics','Material order templates','Priority support'],
     icon: <Shield className="w-5 h-5 text-emerald-500" />,
@@ -62,10 +63,10 @@ const PLANS = [
   },
   {
     key: 'enterprise' as const,
-    name: 'Enterprise',
-    price: 179,
-    annualPrice: 149.17,
-    annualTotal: 1790,
+    name: 'Scale',
+    price: 399,
+    annualPrice: 332.50,
+    annualTotal: 3990,
     userLimit: Infinity,
     features: ['Unlimited users','Unlimited contacts','All features included','Custom onboarding','Dedicated support','QuickBooks sync'],
     icon: <Users className="w-5 h-5 text-purple-500" />,
@@ -95,8 +96,15 @@ function trialDaysRemaining(trialEndsAt?: string): number | null {
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
 }
 
-// Resolves the correct URL for a public asset regardless of Vite base path
-const chartSrc = `${import.meta.env.BASE_URL}crm-user-tier-comparison.html`.replace('//', '/');
+// Resolve to an absolute app-root path so iframe loading is stable across web + mobile shells.
+function buildChartSrc(): string {
+  const rawBase = import.meta.env.BASE_URL || '/';
+  const withLeadingSlash = rawBase.startsWith('/') ? rawBase : `/${rawBase}`;
+  const normalizedBase = withLeadingSlash.replace(/\/{2,}/g, '/').replace(/\/?$/, '/');
+  return `${normalizedBase}crm-user-tier-comparison.html`;
+}
+
+const chartSrc = buildChartSrc();
 
 export default function SubscriptionView() {
   const { state } = useCRM();
@@ -146,12 +154,13 @@ export default function SubscriptionView() {
     if (API_BASE && session?.access_token) {
       setPortalLoading(true);
       try {
-        const res = await fetch(`${API_BASE}/api/stripe-portal`, {
+        const res = await fetch(`${API_BASE}/api/stripe`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${session.access_token}`,
           },
+          body: JSON.stringify({ action: 'portal' }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed to open billing portal');
@@ -180,10 +189,10 @@ export default function SubscriptionView() {
     if (API_BASE && priceId) {
       setLoadingPlan(planKey);
       try {
-        const res = await fetch(`${API_BASE}/api/stripe-checkout`, {
+        const res = await fetch(`${API_BASE}/api/stripe`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ priceId, planId: planKey }),
+          body: JSON.stringify({ action: 'checkout', priceId, planId: planKey }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed to start checkout');
@@ -274,6 +283,12 @@ export default function SubscriptionView() {
       {/* Pricing grid */}
       <div>
         <h4 className="text-base font-semibold text-gray-900 mb-4">Available Plans</h4>
+        {status === 'trialing' && (
+          <div className="flex items-center gap-2 mb-4 px-4 py-2.5 bg-indigo-50 border border-indigo-200 rounded-lg text-sm text-indigo-800">
+            <Tag className="w-4 h-4 shrink-0" />
+            Use code <strong className="font-mono">LAUNCH50</strong> at checkout — 50% off your first 3 months on any monthly plan.
+          </div>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           {PLANS.map((p) => (
             <div
