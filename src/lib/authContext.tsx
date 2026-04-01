@@ -162,6 +162,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      // USER_UPDATED fires when the admin API changes a user's password/email.
+      // Only refresh session — do NOT re-fetch the profile. A concurrent
+      // clearPasswordReset() call already cleared must_change_password in memory
+      // and a profile re-fetch here could see the stale DB value and revert it.
+      if (event === 'USER_UPDATED') {
+        setSession(session);
+        setUser(session?.user ?? null);
+        return;
+      }
+
       if (event === 'SIGNED_OUT') {
         setSession(null);
         setUser(null);
