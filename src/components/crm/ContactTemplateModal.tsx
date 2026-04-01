@@ -129,6 +129,8 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [taxRate, setTaxRate] = useState('0');
   const [depositAmount, setDepositAmount] = useState('');
+  const initCompanyProfileRef = useRef<DbCompany | null>(null);
+  const initProfileRef = useRef(profile);
 
   // Load company profile
   useEffect(() => {
@@ -138,11 +140,24 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
       .catch(() => {});
   }, [profile?.company_id]);
 
+  useEffect(() => {
+    if (companyProfile) {
+      initCompanyProfileRef.current = companyProfile;
+    }
+  }, [companyProfile]);
+
+  useEffect(() => {
+    initProfileRef.current = profile;
+  }, [profile]);
+
   const isAgreement = selected?.templateType === 'customer-service-agreement';
 
   // Initialize line items and field values when template is selected
   useEffect(() => {
     if (!selected) return;
+    const initialCompany = initCompanyProfileRef.current ?? companyProfile;
+    const initialProfile = initProfileRef.current ?? profile;
+
     if (selected.templateType === 'customer-service-agreement') {
       const lineDefaults = (selected as any).lineItemDefaults as LineItemDefault[] | undefined;
       if (lineDefaults && lineDefaults.length > 0) {
@@ -157,7 +172,7 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
 
     // Seed field values: start from buildContactOverrides auto-fills so TERMS_CONTENT,
     // CONTRACT_DATE, CONTRACT_NUMBER etc. are pre-populated even if not in fields[].
-    const autoBase = buildContactOverrides(contact, companyProfile, profile);
+    const autoBase = buildContactOverrides(contact, initialCompany, initialProfile);
     const defaults: Record<string, string> = {};
 
     // Pick useful auto-fill defaults into fieldValues so the user can override them
@@ -172,7 +187,7 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
     });
 
     setFieldValues(defaults);
-  }, [selected, contact, companyProfile, profile]);
+  }, [selected?.id, contact.id]);
 
   // Computed totals
   const subtotal = useMemo(() => lineItems.reduce((sum, item) => sum + calcItemTotal(item), 0), [lineItems]);

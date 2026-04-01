@@ -368,7 +368,8 @@ export default function EstimatesView() {
 
       // Signing link (sign_token now available after markEstimateSent)
       const signToken = updated.sign_token;
-      const signUrl = signToken ? `https://crm-kanban-integrate.vercel.app/sign-estimate/${signToken}` : null;
+      const appOrigin = typeof window !== 'undefined' ? window.location.origin : '';
+      const signUrl = signToken && appOrigin ? `${appOrigin}/sign-estimate/${signToken}` : null;
 
       // 3-day right to cancel dates (3 business days from today)
       const sentDate = new Date();
