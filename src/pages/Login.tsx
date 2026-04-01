@@ -59,7 +59,7 @@ export default function Login() {
       const timeout = window.setTimeout(() => controller.abort(), 12000);
       const res = await fetch(`${supabaseUrl}/functions/v1/temp-password-reset`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'apikey': anonKey },
+        headers: { 'Content-Type': 'application/json', 'apikey': anonKey, 'Authorization': `Bearer ${anonKey}` },
         body: JSON.stringify({ email }),
         signal: controller.signal,
       });

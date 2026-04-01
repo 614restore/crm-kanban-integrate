@@ -380,7 +380,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const timeout = window.setTimeout(() => controller.abort(), 12000);
       const res = await fetch(`${supabaseUrl}/functions/v1/temp-password-reset`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY },
+        headers: { 'Content-Type': 'application/json', 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY, 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
         body: JSON.stringify({ email }),
         signal: controller.signal,
       });
