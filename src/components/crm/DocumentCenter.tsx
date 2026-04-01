@@ -52,6 +52,11 @@ export default function DocumentCenter() {
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const contactsRef = useRef(state.contacts);
+
+  useEffect(() => {
+    contactsRef.current = state.contacts;
+  }, [state.contacts]);
 
   useEffect(() => {
     const loadCompanyDocuments = async () => {
@@ -62,7 +67,7 @@ export default function DocumentCenter() {
 
       const docs = await db.getDocuments(state.companyId);
       const mapped: DocumentItem[] = await Promise.all(docs.map(async (doc) => {
-        const linkedContact = state.contacts.find((contact) => contact.id === doc.contact_id);
+        const linkedContact = contactsRef.current.find((contact) => contact.id === doc.contact_id);
         const type = (doc.type || 'other') as DocCategory;
         const url = doc.url
           ? (isHttpUrl(doc.url) && !isSupabaseStorageUrl(doc.url)
@@ -88,7 +93,7 @@ export default function DocumentCenter() {
     };
 
     loadCompanyDocuments();
-  }, [state.companyId, state.contacts]);
+  }, [state.companyId]);
 
   const inferCategory = (file: File): DocCategory => {
     const fileName = file.name.toLowerCase();
