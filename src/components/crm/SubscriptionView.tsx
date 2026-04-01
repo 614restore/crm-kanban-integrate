@@ -30,9 +30,9 @@ const PLANS = [
   {
     key: 'starter' as const,
     name: 'Starter',
-    price: 59,
-    annualPrice: 49.17,
-    annualTotal: 590,
+    price: 29,
+    annualPrice: 24.17,
+    annualTotal: 290,
     userLimit: 2,
     features: ['Up to 2 users','Unlimited contacts','Core CRM features','Pipeline board','Invoicing','Email support'],
     icon: <Zap className="w-5 h-5 text-blue-500" />,
@@ -41,9 +41,9 @@ const PLANS = [
   {
     key: 'pro' as const,
     name: 'Pro',
-    price: 119,
-    annualPrice: 99.17,
-    annualTotal: 1190,
+    price: 59,
+    annualPrice: 49.17,
+    annualTotal: 590,
     userLimit: 5,
     features: ['Up to 5 users','Unlimited contacts','Full pipeline visibility','Insurance claim tracking','Supplement tracking','Team reporting'],
     icon: <Star className="w-5 h-5 text-indigo-500" />,
@@ -53,9 +53,9 @@ const PLANS = [
   {
     key: 'business' as const,
     name: 'Business',
-    price: 229,
-    annualPrice: 190.83,
-    annualTotal: 2290,
+    price: 99,
+    annualPrice: 82.50,
+    annualTotal: 990,
     userLimit: 10,
     features: ['Up to 10 users','Unlimited contacts','AI assistant','Advanced analytics','Material order templates','Priority support'],
     icon: <Shield className="w-5 h-5 text-emerald-500" />,
@@ -63,10 +63,10 @@ const PLANS = [
   },
   {
     key: 'enterprise' as const,
-    name: 'Scale',
-    price: 399,
-    annualPrice: 332.50,
-    annualTotal: 3990,
+    name: 'Enterprise',
+    price: 179,
+    annualPrice: 149.17,
+    annualTotal: 1790,
     userLimit: Infinity,
     features: ['Unlimited users','Unlimited contacts','All features included','Custom onboarding','Dedicated support','QuickBooks sync'],
     icon: <Users className="w-5 h-5 text-purple-500" />,
@@ -96,15 +96,8 @@ function trialDaysRemaining(trialEndsAt?: string): number | null {
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
 }
 
-// Resolve to an absolute app-root path so iframe loading is stable across web + mobile shells.
-function buildChartSrc(): string {
-  const rawBase = import.meta.env.BASE_URL || '/';
-  const withLeadingSlash = rawBase.startsWith('/') ? rawBase : `/${rawBase}`;
-  const normalizedBase = withLeadingSlash.replace(/\/{2,}/g, '/').replace(/\/?$/, '/');
-  return `${normalizedBase}crm-user-tier-comparison.html`;
-}
-
-const chartSrc = buildChartSrc();
+// Resolves the correct URL for a public asset regardless of Vite base path
+const chartSrc = `${import.meta.env.BASE_URL}crm-user-tier-comparison.html`.replace('//', '/');
 
 export default function SubscriptionView() {
   const { state } = useCRM();
@@ -154,13 +147,12 @@ export default function SubscriptionView() {
     if (API_BASE && session?.access_token) {
       setPortalLoading(true);
       try {
-        const res = await fetch(`${API_BASE}/api/stripe`, {
+        const res = await fetch(`${API_BASE}/api/stripe-portal`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${session.access_token}`,
           },
-          body: JSON.stringify({ action: 'portal' }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed to open billing portal');
@@ -189,10 +181,10 @@ export default function SubscriptionView() {
     if (API_BASE && priceId) {
       setLoadingPlan(planKey);
       try {
-        const res = await fetch(`${API_BASE}/api/stripe`, {
+        const res = await fetch(`${API_BASE}/api/stripe-checkout`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'checkout', priceId, planId: planKey }),
+          body: JSON.stringify({ priceId, planId: planKey }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed to start checkout');
