@@ -1421,7 +1421,7 @@ export default function SettingsView() {
     { id: 'ai-assistant', label: 'AI Assistant', icon: <Zap size={18} /> },
     { id: 'notifications', label: 'Notifications', icon: <Bell size={18} /> },
     { id: 'security', label: 'Security', icon: <Shield size={18} /> },
-    { id: 'billing', label: 'My Plan', icon: <CreditCard size={18} /> },
+    { id: 'billing', label: 'Subscription Plan', icon: <CreditCard size={18} /> },
     { id: 'customer-billing', label: 'Customer Billing', icon: <Receipt size={18} /> },
     { id: 'api', label: 'API Access', icon: <Key size={18} /> },
     { id: 'document-templates', label: 'Document Templates', icon: <FilePlus size={18} /> },
@@ -2451,11 +2451,11 @@ export default function SettingsView() {
           </div>
         )}
 
-        {/* MY PLAN TAB — app subscription only, deep-linked from paywall via tab: 'billing' */}
+        {/* SUBSCRIPTION PLAN TAB — app subscription only, deep-linked from paywall via tab: 'billing' */}
         {activeTab === 'billing' && (
           <div className="max-w-3xl space-y-6">
             <div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">My Plan</h3>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Subscription Plan</h3>
               <p className="text-sm text-gray-500">Manage your TrussCTR subscription and plan details.</p>
             </div>
             <SubscriptionView />

@@ -95,8 +95,15 @@ function trialDaysRemaining(trialEndsAt?: string): number | null {
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
 }
 
-// Resolves the correct URL for a public asset regardless of Vite base path
-const chartSrc = `${import.meta.env.BASE_URL}crm-user-tier-comparison.html`.replace('//', '/');
+// Resolve to an absolute app-root path so iframe loading is stable across web + mobile shells.
+function buildChartSrc(): string {
+  const rawBase = import.meta.env.BASE_URL || '/';
+  const withLeadingSlash = rawBase.startsWith('/') ? rawBase : `/${rawBase}`;
+  const normalizedBase = withLeadingSlash.replace(/\/{2,}/g, '/').replace(/\/?$/, '/');
+  return `${normalizedBase}crm-user-tier-comparison.html`;
+}
+
+const chartSrc = buildChartSrc();
 
 export default function SubscriptionView() {
   const { state } = useCRM();

@@ -5,6 +5,7 @@ import { db } from '@/lib/database';
 import { MaterialOrder, MaterialOrderItem } from '@/lib/crmData';
 import { exportMaterialOrdersToExcel } from '@/lib/exportUtils';
 import { uploadDocument, getDocumentSignedUrl } from '@/lib/storage';
+import { VendorInvoiceMatching } from './VendorInvoiceMatching';
 import {
   Package,
   Plus,
@@ -750,6 +751,13 @@ export default function MaterialOrdersView() {
                 <div className="mt-4 pt-4 border-t border-gray-100">
                   <p className="text-xs text-gray-500 mb-1">Notes</p>
                   <p className="text-sm text-gray-700">{order.notes}</p>
+                </div>
+              )}
+
+              {/* Vendor Invoice Matching */}
+              {(order.status === 'delivered' || order.status === 'confirmed') && (
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <VendorInvoiceMatching materialOrder={order} />
                 </div>
               )}
 

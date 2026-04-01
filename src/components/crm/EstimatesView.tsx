@@ -18,6 +18,7 @@ import {
   Save,
   Send,
   Eye,
+  EyeOff,
   Check,
   XCircle,
   Calendar,
@@ -65,6 +66,7 @@ export default function EstimatesView() {
   const [showSignatureModal, setShowSignatureModal] = useState<Estimate | null>(null);
   const [signerName, setSignerName] = useState('');
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
 
   // Form state
   const [selectedContactId, setSelectedContactId] = useState('');
@@ -176,7 +178,7 @@ export default function EstimatesView() {
   const addItem = () => {
     setItems([
       ...items,
-      { id: crypto.randomUUID(), description: '', quantity: 1, unit: 'ea', unitPrice: 0, total: 0 }
+      { id: crypto.randomUUID(), description: '', quantity: 1, unit: 'ea', unitPrice: 0, total: 0, hidePrice: false }
     ]);
   };
 
@@ -227,7 +229,7 @@ export default function EstimatesView() {
     setEstimateNumber('');
     setValidityDate('');
     setItems([
-      { id: crypto.randomUUID(), description: '', quantity: 1, unit: 'ea', unitPrice: 0, total: 0 }
+      { id: crypto.randomUUID(), description: '', quantity: 1, unit: 'ea', unitPrice: 0, total: 0, hidePrice: false }
     ]);
     setNotes('');
     setTerms('');
@@ -301,11 +303,14 @@ export default function EstimatesView() {
       if (!estimate) { toast.error('Estimate not found'); return; }
 
       const contact = state.contacts.find((c) => c.id === estimate.contactId);
+
+      // Mark as sent first — this generates the sign_token
+      const updated = await db.markEstimateSent(estimateId);
+      if (!updated) { toast.error('Failed to mark estimate as sent'); return; }
+      dispatch({ type: 'UPDATE_ESTIMATE', payload: mapDbEstimateToApp(updated) });
+
       if (!contact?.email) {
-        // Still mark as sent even without email
-        const updated = await db.markEstimateSent(estimateId);
-        if (updated && contact) {
-          dispatch({ type: 'UPDATE_ESTIMATE', payload: mapDbEstimateToApp(updated) });
+        if (contact) {
           db.updateContact(contact.id, { status: 'estimate_sent', status_changed_at: new Date().toISOString() }).catch(() => {});
           dispatch({ type: 'UPDATE_CONTACT', payload: { ...contact, status: 'estimate_sent', updatedAt: new Date().toISOString() } });
           if (profile?.company_id) {
@@ -316,22 +321,27 @@ export default function EstimatesView() {
               newStatus: 'estimate_sent',
             }).catch(() => {});
           }
-          toast.success('Estimate marked as sent (no email on file for this customer)');
         }
+        toast.success('Estimate marked as sent (no email on file for this customer)');
         return;
       }
 
       const companyProfile = await db.getCompany(profile?.company_id || '').catch(() => null);
-      const fromEmail = (companyProfile as any)?.from_email || undefined;
 
-      // Build estimate items HTML
+      // Build estimate items HTML (unit price hidden for items with hidePrice: true)
       const itemsHtml = (estimate.items || []).map((item: EstimateItem) =>
-        `<tr style="border-bottom:1px solid #e5e7eb">
-          <td style="padding:8px 12px">${item.description}</td>
-          <td style="padding:8px 12px;text-align:center">${item.quantity} ${item.unit || ''}</td>
-          <td style="padding:8px 12px;text-align:right">$${Number(item.unitPrice).toFixed(2)}</td>
-          <td style="padding:8px 12px;text-align:right;font-weight:600">$${Number(item.total).toFixed(2)}</td>
-        </tr>`
+        item.hidePrice
+          ? `<tr style="border-bottom:1px solid #e5e7eb">
+              <td style="padding:8px 12px">${item.description}</td>
+              <td style="padding:8px 12px;text-align:center">${item.quantity} ${item.unit || ''}</td>
+              <td style="padding:8px 12px;text-align:right;color:#9ca3af" colspan="2">Included</td>
+            </tr>`
+          : `<tr style="border-bottom:1px solid #e5e7eb">
+              <td style="padding:8px 12px">${item.description}</td>
+              <td style="padding:8px 12px;text-align:center">${item.quantity} ${item.unit || ''}</td>
+              <td style="padding:8px 12px;text-align:right">$${Number(item.unitPrice).toFixed(2)}</td>
+              <td style="padding:8px 12px;text-align:right;font-weight:600">$${Number(item.total).toFixed(2)}</td>
+            </tr>`
       ).join('');
 
       const companyName = companyProfile?.name || 'Your Company';
@@ -343,6 +353,21 @@ export default function EstimatesView() {
       const companyZip = companyProfile?.zip || '';
       const customerName = `${contact.firstName} ${contact.lastName}`;
       const customerAddress = `${contact.address}, ${contact.city}, ${contact.state} ${contact.zip}`;
+
+      // Signing link (sign_token now available after markEstimateSent)
+      const signToken = updated.sign_token;
+      const signUrl = signToken ? `https://crm-kanban-integrate.vercel.app/sign-estimate/${signToken}` : null;
+
+      // 3-day right to cancel dates (3 business days from today)
+      const sentDate = new Date();
+      const cancelDeadline = new Date(sentDate);
+      let bizDays = 0;
+      while (bizDays < 3) {
+        cancelDeadline.setDate(cancelDeadline.getDate() + 1);
+        const dow = cancelDeadline.getDay();
+        if (dow !== 0 && dow !== 6) bizDays++;
+      }
+      const fmtD = (d: Date) => d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
       await sendEmail({
         to: contact.email,
@@ -358,7 +383,7 @@ export default function EstimatesView() {
               <h3 style="color:#1e40af;margin-top:0">Estimate ${estimate.estimateNumber}</h3>
               <p>Hi ${contact.firstName},</p>
               <p>Thank you for the opportunity to provide you with an estimate. Please find the details below.</p>
-              
+
               <div style="background:white;padding:16px;border-radius:8px;margin:16px 0;border:1px solid #e5e7eb">
                 <div style="font-size:12px;color:#6b7280;text-transform:uppercase;font-weight:600;margin-bottom:8px">Prepared For</div>
                 <div style="font-weight:600;color:#111">${customerName}</div>
@@ -368,7 +393,7 @@ export default function EstimatesView() {
 
               <h3 style="margin-bottom:4px;color:#111">${estimate.title}</h3>
               <p style="color:#6b7280;font-size:14px;margin-top:4px">Valid until ${estimate.validUntil ? new Date(estimate.validUntil).toLocaleDateString() : 'further notice'}</p>
-              
+
               <table style="width:100%;border-collapse:collapse;margin:16px 0;background:white;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb">
                 <thead style="background:#f3f4f6">
                   <tr>
@@ -386,10 +411,38 @@ export default function EstimatesView() {
                   </tr>
                 </tfoot>
               </table>
-              
+
               ${estimate.notes ? `<div style="background:white;padding:16px;border-radius:8px;margin:16px 0;border:1px solid #e5e7eb"><strong style="color:#111">Notes:</strong><p style="margin:8px 0 0 0;color:#374151">${estimate.notes}</p></div>` : ''}
               ${estimate.terms ? `<div style="background:#fef3c7;padding:16px;border-radius:8px;margin:16px 0;border:1px solid #fbbf24"><strong style="color:#92400e">Terms & Conditions:</strong><p style="margin:8px 0 0 0;color:#78350f;font-size:13px">${estimate.terms}</p></div>` : ''}
-              
+
+              ${signUrl ? `
+              <div style="text-align:center;margin:24px 0">
+                <a href="${signUrl}" style="display:inline-block;background:#1e40af;color:white;padding:14px 32px;border-radius:8px;font-weight:600;font-size:15px;text-decoration:none">
+                  ✍️ Review &amp; Sign Estimate
+                </a>
+                <p style="font-size:12px;color:#9ca3af;margin:8px 0 0 0">Or paste this link in your browser: ${signUrl}</p>
+              </div>` : ''}
+
+              <div style="background:#fffbeb;border:1px solid #fbbf24;border-radius:8px;padding:16px;margin:16px 0">
+                <strong style="color:#92400e;display:block;margin-bottom:8px;font-size:14px">⚠️ 3-Day Right to Cancel</strong>
+                <p style="color:#78350f;font-size:13px;margin:0 0 12px 0">
+                  You have the right to cancel this agreement within three (3) business days from the date of signing, without penalty or obligation.
+                </p>
+                <table style="width:100%;font-size:13px;border-collapse:collapse">
+                  <tr>
+                    <td style="color:#92400e;font-weight:600;padding:4px 8px 4px 0;width:50%">Date of Transaction:</td>
+                    <td style="color:#78350f">${fmtD(sentDate)}</td>
+                  </tr>
+                  <tr>
+                    <td style="color:#92400e;font-weight:600;padding:4px 8px 4px 0">Cancellation Deadline:</td>
+                    <td style="color:#78350f;font-weight:700">${fmtD(cancelDeadline)}</td>
+                  </tr>
+                </table>
+                <p style="color:#92400e;font-size:11px;margin:10px 0 0 0">
+                  Per FTC regulations (16 CFR Part 429). To cancel, notify ${companyName} in writing before the deadline above.
+                </p>
+              </div>
+
               <p style="margin-top:24px">If you have any questions or would like to discuss this estimate, please don't hesitate to contact us.</p>
               <p style="margin-bottom:0">Thank you,<br/><strong>${companyName}</strong></p>
             </div>
@@ -401,44 +454,38 @@ export default function EstimatesView() {
           </div>`,
       });
 
-      const updated = await db.markEstimateSent(estimateId);
-      if (updated) {
-        dispatch({ type: 'UPDATE_ESTIMATE', payload: mapDbEstimateToApp(updated) });
-        // Sync contact status + projectValue in local state immediately
-        const c = state.contacts.find(x => x.id === updated.contact_id);
-        if (c) {
-          // Persist status advance to DB so board reflects it immediately
-          db.updateContact(c.id, {
+      // Sync contact status
+      const c = state.contacts.find(x => x.id === updated.contact_id);
+      if (c) {
+        db.updateContact(c.id, {
+          status: 'estimate_sent',
+          status_changed_at: new Date().toISOString(),
+        }).catch((err) => console.error('Failed to persist estimate_sent status:', err));
+        dispatch({
+          type: 'UPDATE_CONTACT',
+          payload: {
+            ...c,
             status: 'estimate_sent',
-            status_changed_at: new Date().toISOString(),
-          }).catch((err) => console.error('Failed to persist estimate_sent status:', err));
-          dispatch({
-            type: 'UPDATE_CONTACT',
-            payload: {
-              ...c,
-              status: 'estimate_sent',
-              projectValue: Math.max(Number(c.projectValue || 0), Number(updated.total || 0)),
-              updatedAt: new Date().toISOString(),
-            },
-          });
-          // Fire automation rules for estimate sent + stage advancement
-          if (profile?.company_id) {
-            fireAutomationEvent('estimate_sent', profile.company_id, {
-              contactId: c.id,
-              contactName: `${c.firstName} ${c.lastName}`.trim(),
-              contactEmail: c.email,
-              amount: Number(updated.total || 0),
-              oldStatus: c.status,
-              newStatus: 'estimate_sent',
-            }).catch(() => {});
-            fireAutomationEvent('contact_status_changed', profile.company_id, {
-              contactId: c.id,
-              contactName: `${c.firstName} ${c.lastName}`.trim(),
-              contactEmail: c.email,
-              oldStatus: c.status,
-              newStatus: 'estimate_sent',
-            }).catch(() => {});
-          }
+            projectValue: Math.max(Number(c.projectValue || 0), Number(updated.total || 0)),
+            updatedAt: new Date().toISOString(),
+          },
+        });
+        if (profile?.company_id) {
+          fireAutomationEvent('estimate_sent', profile.company_id, {
+            contactId: c.id,
+            contactName: `${c.firstName} ${c.lastName}`.trim(),
+            contactEmail: c.email,
+            amount: Number(updated.total || 0),
+            oldStatus: c.status,
+            newStatus: 'estimate_sent',
+          }).catch(() => {});
+          fireAutomationEvent('contact_status_changed', profile.company_id, {
+            contactId: c.id,
+            contactName: `${c.firstName} ${c.lastName}`.trim(),
+            contactEmail: c.email,
+            oldStatus: c.status,
+            newStatus: 'estimate_sent',
+          }).catch(() => {});
         }
       }
       toast.success(`Estimate emailed to ${contact.email}`);
@@ -1125,8 +1172,9 @@ export default function EstimatesView() {
 
                 <div className="space-y-3">
                   {items.map((item, index) => (
-                    <div key={item.id} className="border border-gray-200 rounded-lg p-4">
-                      <div className="grid grid-cols-12 gap-3 mb-2">
+                    <div key={item.id} className={`border rounded-lg p-4 ${item.hidePrice ? 'border-amber-200 bg-amber-50/40' : 'border-gray-200'}`}>
+                      {/* Row 1: description, qty, unit type, price */}
+                      <div className="grid grid-cols-12 gap-2 mb-2">
                         <div className="col-span-5">
                           <input
                             type="text"
@@ -1147,19 +1195,31 @@ export default function EstimatesView() {
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                           />
                         </div>
-                        <div className="col-span-1">
-                          <input
-                            type="text"
-                            placeholder="Unit"
+                        <div className="col-span-2">
+                          <select
                             value={item.unit}
                             onChange={(e) => updateItem(index, 'unit', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          />
+                            className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                          >
+                            <option value="ea">ea (each)</option>
+                            <option value="sq">sq (square)</option>
+                            <option value="roll">roll</option>
+                            <option value="lf">lf (linear ft)</option>
+                            <option value="sf">sf (sq ft)</option>
+                            <option value="box">box</option>
+                            <option value="pcs">pcs</option>
+                            <option value="lbs">lbs</option>
+                            <option value="hr">hr</option>
+                            <option value="day">day</option>
+                            <option value="ft">ft</option>
+                            <option value="yd">yd</option>
+                            <option value="lot">lot</option>
+                          </select>
                         </div>
-                        <div className="col-span-2">
+                        <div className="col-span-3">
                           <input
                             type="number"
-                            placeholder="Price"
+                            placeholder="Unit Price"
                             min="0"
                             step="0.01"
                             value={item.unitPrice || ''}
@@ -1167,16 +1227,31 @@ export default function EstimatesView() {
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                           />
                         </div>
-                        <div className="col-span-2 flex items-center gap-2">
-                          <span className="text-sm font-medium text-gray-900">
+                      </div>
+                      {/* Row 2: hide price toggle + total + delete */}
+                      <div className="flex items-center justify-between">
+                        <button
+                          type="button"
+                          onClick={() => updateItem(index, 'hidePrice', !item.hidePrice)}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                            item.hidePrice
+                              ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                              : 'text-gray-500 hover:bg-gray-100'
+                          }`}
+                        >
+                          {item.hidePrice ? <EyeOff size={13} /> : <Eye size={13} />}
+                          {item.hidePrice ? 'Price hidden from customer' : 'Hide price from customer'}
+                        </button>
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-semibold text-gray-900">
                             {formatCurrency(item.total)}
                           </span>
                           {items.length > 1 && (
                             <button
                               onClick={() => removeItem(index)}
-                              className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
+                              className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors"
                             >
-                              <Trash2 size={16} />
+                              <Trash2 size={15} />
                             </button>
                           )}
                         </div>
@@ -1245,21 +1320,161 @@ export default function EstimatesView() {
             </div>
 
             {/* Modal Footer */}
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
+            <div className="flex items-center justify-between p-6 border-t border-gray-200">
               <button
-                onClick={handleCloseModal}
-                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                onClick={() => setShowPreviewModal(true)}
+                className="flex items-center gap-2 px-4 py-2 text-gray-600 border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors text-sm"
               >
-                Cancel
+                <Eye size={16} />
+                Preview Customer View
               </button>
-              <button
-                onClick={handleSave}
-                disabled={isSaving}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Save size={18} />
-                {isSaving ? 'Saving...' : 'Save Estimate'}
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleCloseModal}
+                  className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={isSaving}
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Save size={18} />
+                  {isSaving ? 'Saving...' : 'Save Estimate'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Customer Preview Modal */}
+      {showPreviewModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4">
+          <div className="bg-gray-50 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-gray-200 rounded-t-xl sticky top-0 z-10">
+              <div>
+                <h2 className="text-base font-bold text-gray-900">Customer Preview</h2>
+                <p className="text-xs text-gray-500 mt-0.5">This is what your customer will see</p>
+              </div>
+              <button onClick={() => setShowPreviewModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={20} />
               </button>
+            </div>
+            <div className="p-6 space-y-5">
+              {/* Estimate Header */}
+              <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
+                <h3 className="text-xl font-bold text-gray-900">{title || 'Untitled Estimate'}</h3>
+                <p className="text-sm text-gray-500 mt-1">Estimate #{estimateNumber}</p>
+                {validityDate && (
+                  <p className="text-xs text-gray-400 mt-2">
+                    Valid until <span className="text-gray-600 font-medium">{new Date(validityDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                  </p>
+                )}
+              </div>
+
+              {/* Line Items */}
+              {items.length > 0 && (
+                <div className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm">
+                  <div className="px-5 py-3 border-b border-gray-100">
+                    <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Line Items</h4>
+                  </div>
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Description</th>
+                        <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Qty</th>
+                        <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Unit Price</th>
+                        <th className="text-right px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {items.map((item, i) => (
+                        <tr key={i}>
+                          <td className="px-5 py-3 text-gray-700">{item.description || '—'}</td>
+                          <td className="px-4 py-3 text-right text-gray-500">{item.quantity} {item.unit}</td>
+                          {item.hidePrice ? (
+                            <td className="px-4 py-3 text-right text-gray-400 italic" colSpan={2}>Included</td>
+                          ) : (
+                            <>
+                              <td className="px-4 py-3 text-right text-gray-500">{formatCurrency(item.unitPrice)}</td>
+                              <td className="px-5 py-3 text-right font-medium text-gray-800">{formatCurrency(item.total)}</td>
+                            </>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="border-t border-gray-100 px-5 py-4 space-y-1.5 text-sm">
+                    <div className="flex justify-between text-gray-500">
+                      <span>Subtotal</span>
+                      <span>{formatCurrency(calculateTotals().subtotal)}</span>
+                    </div>
+                    {taxRate > 0 && (
+                      <div className="flex justify-between text-gray-500">
+                        <span>Tax ({taxRate}%)</span>
+                        <span>{formatCurrency(calculateTotals().tax)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-base font-bold text-gray-900 pt-2 border-t border-gray-100">
+                      <span>Total</span>
+                      <span>{formatCurrency(calculateTotals().total)}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Terms / Notes */}
+              {(terms || notes) && (
+                <div className="bg-white rounded-xl border border-gray-100 p-5 space-y-4 text-sm text-gray-600 shadow-sm">
+                  {terms && (
+                    <div>
+                      <h4 className="font-semibold text-gray-700 mb-1">Terms & Conditions</h4>
+                      <p className="whitespace-pre-wrap">{terms}</p>
+                    </div>
+                  )}
+                  {notes && (
+                    <div>
+                      <h4 className="font-semibold text-gray-700 mb-1">Notes</h4>
+                      <p className="whitespace-pre-wrap">{notes}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 3-Day Right to Cancel */}
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm">
+                <h4 className="font-bold text-amber-900 mb-2">3-Day Right to Cancel</h4>
+                <p className="text-amber-800 mb-3">
+                  You have the right to cancel this agreement within three (3) business days from the date of signing,
+                  without penalty or obligation. Cancellation deadline and transaction date will be auto-filled when the estimate is sent.
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-white rounded-lg p-3 border border-amber-100">
+                    <span className="text-xs text-amber-600 uppercase font-semibold block mb-1">Date of Transaction</span>
+                    <span className="font-medium text-gray-700">[Date estimate is sent]</span>
+                  </div>
+                  <div className="bg-white rounded-lg p-3 border border-amber-100">
+                    <span className="text-xs text-amber-600 uppercase font-semibold block mb-1">Cancellation Deadline</span>
+                    <span className="font-bold text-gray-700">[3 business days later]</span>
+                  </div>
+                </div>
+                <p className="text-xs text-amber-700 mt-3">
+                  Per FTC regulations (16 CFR Part 429) — dates will be auto-filled when emailed to customer.
+                </p>
+              </div>
+
+              {/* Signature area preview */}
+              <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
+                <h4 className="text-base font-semibold text-gray-800 mb-4">Sign to Accept</h4>
+                <div className="space-y-3">
+                  <div className="h-9 bg-gray-100 rounded-lg w-full" />
+                  <div className="h-28 bg-gray-100 rounded-lg border-2 border-dashed border-gray-200 flex items-center justify-center text-gray-400 text-xs">Signature pad</div>
+                  <div className="h-9 bg-blue-600/10 rounded-lg w-full" />
+                </div>
+                <p className="text-xs text-center text-gray-400 mt-3">By signing, customer accepts this estimate and its terms.</p>
+              </div>
             </div>
           </div>
         </div>

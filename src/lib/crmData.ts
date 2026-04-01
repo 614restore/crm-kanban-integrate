@@ -372,6 +372,7 @@ export interface EstimateItem {
   unit: string;
   unitPrice: number;
   total: number;
+  hidePrice?: boolean;
 }
 
 export interface Project {
@@ -555,7 +556,8 @@ export const defaultBoards: KanbanBoard[] = [
       { id: 'ret-8',  title: 'In Progress',                  status: 'build_phase',   color: '#06b6d4', order: 8 },
       { id: 'ret-9',  title: 'Punch List',                   status: 'cleanup',       color: '#f97316', order: 9 },
       { id: 'ret-10', title: 'Completed',                    status: 'completed',     color: '#10b981', order: 10 },
-      { id: 'ret-11', title: 'Lost',                         status: 'lost',          color: '#ef4444', order: 11 },
+      { id: 'ret-12', title: 'Retail (Cash Job)',            status: 'retail',        color: '#a855f7', order: 11 },
+      { id: 'ret-11', title: 'Lost',                         status: 'lost',          color: '#ef4444', order: 12 },
     ],
   },
   {

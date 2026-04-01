@@ -9,6 +9,8 @@ interface EstimateItem {
   quantity: number;
   unit_price: number;
   total: number;
+  hide_price?: boolean;
+  unit?: string;
 }
 
 interface Estimate {
@@ -26,6 +28,7 @@ interface Estimate {
   signed_by?: string;
   accepted_at?: string;
   valid_until?: string;
+  sent_at?: string;
   companies?: {
     name: string;
     from_email?: string;
@@ -110,6 +113,21 @@ export default function SignEstimate() {
 
   const fmt = (n: number) =>
     new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+
+  // Compute 3-day right-to-cancel dates
+  const txDate = estimate?.sent_at ? new Date(estimate.sent_at) : new Date();
+  const cancelDeadline = (() => {
+    const d = new Date(txDate);
+    let bizDays = 0;
+    while (bizDays < 3) {
+      d.setDate(d.getDate() + 1);
+      const dow = d.getDay();
+      if (dow !== 0 && dow !== 6) bizDays++;
+    }
+    return d;
+  })();
+  const fmtDate = (d: Date) =>
+    d.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 
   if (loading) {
     return (
@@ -238,9 +256,19 @@ export default function SignEstimate() {
                 {estimate.items.map((item, i) => (
                   <tr key={i}>
                     <td className="px-6 py-3 text-gray-700">{item.description}</td>
-                    <td className="px-4 py-3 text-right text-gray-500">{item.quantity}</td>
-                    <td className="px-4 py-3 text-right text-gray-500">{fmt(item.unit_price)}</td>
-                    <td className="px-6 py-3 text-right font-medium text-gray-800">{fmt(item.total)}</td>
+                    <td className="px-4 py-3 text-right text-gray-500">
+                      {item.quantity}{item.unit ? ` ${item.unit}` : ""}
+                    </td>
+                    {item.hide_price ? (
+                      <td className="px-6 py-3 text-right text-gray-400 italic" colSpan={2}>
+                        Included
+                      </td>
+                    ) : (
+                      <>
+                        <td className="px-4 py-3 text-right text-gray-500">{fmt(item.unit_price)}</td>
+                        <td className="px-6 py-3 text-right font-medium text-gray-800">{fmt(item.total)}</td>
+                      </>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -281,6 +309,34 @@ export default function SignEstimate() {
             )}
           </div>
         )}
+
+        {/* 3-Day Right to Cancel */}
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-sm">
+          <h3 className="font-bold text-amber-900 text-base mb-2">⚠️ 3-Day Right to Cancel</h3>
+          <p className="text-amber-800 mb-4">
+            You have the right to cancel this agreement within three (3) business days from the
+            date of this transaction, without penalty or obligation. To cancel, you must notify{" "}
+            <span className="font-semibold">{company?.name || "the contractor"}</span> in writing
+            before the deadline below.
+          </p>
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <div className="bg-white rounded-lg p-3 border border-amber-100">
+              <span className="text-xs text-amber-700 font-semibold uppercase tracking-wide block mb-1">
+                Date of Transaction
+              </span>
+              <span className="font-medium text-gray-800 text-sm">{fmtDate(txDate)}</span>
+            </div>
+            <div className="bg-white rounded-lg p-3 border border-amber-200">
+              <span className="text-xs text-amber-700 font-semibold uppercase tracking-wide block mb-1">
+                Cancellation Deadline
+              </span>
+              <span className="font-bold text-gray-900 text-sm">{fmtDate(cancelDeadline)}</span>
+            </div>
+          </div>
+          <p className="text-xs text-amber-700">
+            Per FTC regulations (16 CFR Part 429). If you cancel, no cancellation fee may be charged.
+          </p>
+        </div>
 
         {/* Signature Form */}
         <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-5">

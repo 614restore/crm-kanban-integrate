@@ -1,5 +1,27 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { consumePendingContactTab } from '@/lib/nextStepActions';
+
+// ── Schedule-data helpers ──────────────────────────────────────────────────
+// The mobile app serialises milestone data into the notes field using the
+// format: [TRUSSCTR_SCHEDULE]{json}\n\nplain notes
+// The web app should strip that prefix before displaying or editing notes,
+// and restore it when saving so mobile data is not lost.
+const TRUSSCTR_SCHEDULE_PREFIX = '[TRUSSCTR_SCHEDULE]';
+
+function stripSchedulePrefix(notes: string | null | undefined): string {
+  if (!notes) return '';
+  if (!notes.startsWith(TRUSSCTR_SCHEDULE_PREFIX)) return notes;
+  const brk = notes.indexOf('\n\n');
+  return brk === -1 ? '' : notes.slice(brk + 2);
+}
+
+function rebuildWithSchedulePrefix(original: string | null | undefined, newPlainNotes: string): string {
+  if (!original?.startsWith(TRUSSCTR_SCHEDULE_PREFIX)) return newPlainNotes;
+  const brk = original.indexOf('\n\n');
+  const prefix = brk === -1 ? original : original.slice(0, brk);
+  return `${prefix}\n\n${newPlainNotes.trim()}`;
+}
+// ──────────────────────────────────────────────────────────────────────────
 import { useCRM, useCurrentContact } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
@@ -66,6 +88,7 @@ import {
   Tag,
   Loader2,
   Eye,
+  EyeOff,
   Package,
   ClipboardList,
   Truck,
@@ -234,7 +257,7 @@ export default function ContactDetail() {
   const mentionTargets = useMemo(() => getMentionTargets(state.teamMembers), [state.teamMembers]);
   const effectiveCompanyId = profile?.company_id || state.companyId || null;
   const contactId = contact?.id;
-  const contactNotes = contact?.notes ?? '';
+  const contactNotes = stripSchedulePrefix(contact?.notes);
 
   useEffect(() => {
     if (!contactId) return;
@@ -688,11 +711,13 @@ export default function ContactDetail() {
 
   const handleSaveQuickNote = async () => {
     const trimmed = quickNote.trim();
+    // Preserve any [TRUSSCTR_SCHEDULE] prefix that the mobile app wrote
+    const fullNotes = rebuildWithSchedulePrefix(contact.notes, trimmed);
 
     setIsSavingQuickNote(true);
     try {
       if (profile?.company_id) {
-        const updated = await db.updateContact(contact.id, { notes: trimmed || null });
+        const updated = await db.updateContact(contact.id, { notes: fullNotes || null });
         if (!updated) {
           toast.error('Failed to save note');
           return;
@@ -703,7 +728,7 @@ export default function ContactDetail() {
         type: 'UPDATE_CONTACT',
         payload: {
           ...contact,
-          notes: trimmed || undefined,
+          notes: fullNotes || undefined,
           updatedAt: new Date().toISOString(),
         },
       });
@@ -1322,9 +1347,9 @@ export default function ContactDetail() {
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Notes</h3>
                 {isEditing ? (
                   <textarea
-                    value={currentData.notes || ''}
+                    value={stripSchedulePrefix(currentData.notes) || ''}
                     onChange={(e) =>
-                      setEditedContact({ ...currentData, notes: e.target.value })
+                      setEditedContact({ ...currentData, notes: rebuildWithSchedulePrefix(contact.notes, e.target.value) })
                     }
                     rows={4}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none resize-none"
@@ -1332,7 +1357,7 @@ export default function ContactDetail() {
                 ) : (
                   <div className="space-y-3">
                     <p className="text-gray-700 whitespace-pre-wrap">
-                      {contact.notes || 'No notes added yet.'}
+                      {stripSchedulePrefix(contact.notes) || 'No notes added yet.'}
                     </p>
                     <textarea
                       value={quickNote}
@@ -1911,25 +1936,43 @@ export default function ContactDetail() {
                   <div className="flex items-center justify-between mb-2">
                     <label className="text-sm font-medium text-gray-700">Line Items</label>
                     <button
-                      onClick={() => setNewEstItems(prev => [...prev, {id: crypto.randomUUID(), description: '', quantity: 1, unit: 'ea', unitPrice: 0, total: 0}])}
+                      onClick={() => setNewEstItems(prev => [...prev, {id: crypto.randomUUID(), description: '', quantity: 1, unit: 'ea', unitPrice: 0, total: 0, hidePrice: false}])}
                       className="text-xs text-blue-600 hover:underline"
                     >+ Add Row</button>
                   </div>
                   <div className="space-y-2">
                     <div className="grid grid-cols-12 gap-2 text-xs font-medium text-gray-500 px-2">
-                      <span className="col-span-5">Description</span>
+                      <span className="col-span-4">Description</span>
                       <span className="col-span-2 text-center">Qty</span>
                       <span className="col-span-2">Unit</span>
                       <span className="col-span-2 text-right">Price</span>
-                      <span className="col-span-1" />
+                      <span className="col-span-2 text-right">Hide $</span>
                     </div>
                     {newEstItems.map((item, idx) => (
-                      <div key={item.id} className="grid grid-cols-12 gap-2 items-center">
-                        <input value={item.description} onChange={e => { const n=[...newEstItems]; n[idx]={...n[idx],description:e.target.value}; setNewEstItems(n); }} placeholder="Description" className="col-span-5 px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                      <div key={item.id} className={`grid grid-cols-12 gap-2 items-center rounded px-1 py-0.5 ${item.hidePrice ? 'bg-amber-50' : ''}`}>
+                        <input value={item.description} onChange={e => { const n=[...newEstItems]; n[idx]={...n[idx],description:e.target.value}; setNewEstItems(n); }} placeholder="Description" className="col-span-4 px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
                         <input type="number" value={item.quantity} onChange={e => { const q=Number(e.target.value); const n=[...newEstItems]; n[idx]={...n[idx],quantity:q,total:q*n[idx].unitPrice}; setNewEstItems(n); }} className="col-span-2 px-2 py-1.5 border border-gray-200 rounded text-sm text-center focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                        <input value={item.unit} onChange={e => { const n=[...newEstItems]; n[idx]={...n[idx],unit:e.target.value}; setNewEstItems(n); }} className="col-span-2 px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                        <select value={item.unit} onChange={e => { const n=[...newEstItems]; n[idx]={...n[idx],unit:e.target.value}; setNewEstItems(n); }} className="col-span-2 px-1 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white">
+                          <option value="ea">ea</option>
+                          <option value="sq">sq</option>
+                          <option value="roll">roll</option>
+                          <option value="lf">lf</option>
+                          <option value="sf">sf</option>
+                          <option value="box">box</option>
+                          <option value="pcs">pcs</option>
+                          <option value="lbs">lbs</option>
+                          <option value="hr">hr</option>
+                          <option value="day">day</option>
+                          <option value="ft">ft</option>
+                          <option value="lot">lot</option>
+                        </select>
                         <input type="number" value={item.unitPrice} onChange={e => { const p=Number(e.target.value); const n=[...newEstItems]; n[idx]={...n[idx],unitPrice:p,total:n[idx].quantity*p}; setNewEstItems(n); }} className="col-span-2 px-2 py-1.5 border border-gray-200 rounded text-sm text-right focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                        <button onClick={() => newEstItems.length > 1 && setNewEstItems(prev => prev.filter((_,i)=>i!==idx))} className="col-span-1 flex justify-center text-red-400 hover:text-red-600"><X size={14} /></button>
+                        <div className="col-span-2 flex items-center justify-end gap-1">
+                          <button type="button" onClick={() => { const n=[...newEstItems]; n[idx]={...n[idx],hidePrice:!n[idx].hidePrice}; setNewEstItems(n); }} title={item.hidePrice ? 'Price hidden from customer' : 'Show price to customer'} className={`p-1 rounded transition-colors ${item.hidePrice ? 'text-amber-600 bg-amber-100' : 'text-gray-400 hover:text-gray-600'}`}>
+                            {item.hidePrice ? <EyeOff size={13} /> : <Eye size={13} />}
+                          </button>
+                          <button onClick={() => newEstItems.length > 1 && setNewEstItems(prev => prev.filter((_,i)=>i!==idx))} className="text-red-400 hover:text-red-600 p-1"><X size={13} /></button>
+                        </div>
                       </div>
                     ))}
                   </div>

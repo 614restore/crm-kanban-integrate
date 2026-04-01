@@ -1,35 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Capture recovery token from query string (PKCE flow) or hash (implicit flow)
-// BEFORE Supabase processes it, so we can show the reset form immediately
-if (typeof window !== 'undefined') {
-  try {
-    const params = new URLSearchParams(window.location.search);
-    const hash = window.location.hash;
-    // PKCE flow: ?code=...&type=recovery  OR  Supabase adds type to the redirect_to
-    // Implicit flow: #access_token=...&type=recovery
-    if (params.get('type') === 'recovery' || hash.includes('type=recovery')) {
-      sessionStorage.setItem('pending_password_reset', 'true');
-    }
-    
-    // Clear any stale auth fragments that might cause hangs
-    if (params.has('code') || params.has('access_token') || hash.includes('access_token')) {
-      // Set a flag to clean URL after auth completes
-      sessionStorage.setItem('auth_url_cleanup_pending', 'true');
-      
-      // Auto-cleanup after 10 seconds if auth doesn't complete
-      setTimeout(() => {
-        try {
-          if (sessionStorage.getItem('auth_url_cleanup_pending') === 'true') {
-            sessionStorage.removeItem('auth_url_cleanup_pending');
-            const cleanUrl = window.location.origin + window.location.pathname;
-            window.history.replaceState({}, '', cleanUrl);
-          }
-        } catch { /* ignore */ }
-      }, 10000);
-    }
-  } catch (e) { console.warn('[supabase] Could not parse recovery URL params:', e); }
-}
 
 // Environment variable configuration - REQUIRED FOR SECURITY
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -65,7 +35,7 @@ const supabase = createClient(
       detectSessionInUrl: true,
       storage: typeof window !== 'undefined' ? window.localStorage : undefined,
       storageKey: 'sb-auth-token',
-      flowType: 'pkce',
+      flowType: 'implicit',
     },
     global: {
       headers: {

@@ -62,6 +62,63 @@ const NEXT_STEP_ICONS: Record<string, React.ElementType> = {
 };
 
 
+// ── Unified sales pipeline ────────────────────────────────────────────────────
+// Defines the single logical stage order used in the "Unified Sales" view.
+// 'shared' = both retail & insurance, 'retail' = retail only, 'insurance' = insurance only.
+const UNIFIED_SALES_STAGES: Array<{
+  status: CustomerStatus;
+  title: string;
+  color: string;
+  stageType: 'shared' | 'retail' | 'insurance';
+}> = [
+  { status: 'prospect',             title: 'New Lead',                  color: '#94a3b8', stageType: 'shared'    },
+  { status: 'lead',                 title: 'Contacted / Qualifying',    color: '#6366f1', stageType: 'shared'    },
+  { status: 'appt_set',            title: 'Appointment Set',           color: '#8b5cf6', stageType: 'shared'    },
+  { status: 'claim_filed',         title: 'Claim Filed',               color: '#0ea5e9', stageType: 'insurance' },
+  { status: 'adjuster_scheduled',  title: 'Adjuster Scheduled',        color: '#06b6d4', stageType: 'insurance' },
+  { status: 'inspection_completed',title: 'Inspected',                 color: '#0891b2', stageType: 'insurance' },
+  { status: 'supplement_filed',    title: 'Supplement Filed',          color: '#0e7490', stageType: 'insurance' },
+  { status: 'estimating',          title: 'Estimating',                color: '#f59e0b', stageType: 'shared'    },
+  { status: 'estimate_sent',       title: 'Estimate Sent',             color: '#f97316', stageType: 'shared'    },
+  { status: 'contingency',         title: 'Follow-up / Negotiation',   color: '#a855f7', stageType: 'retail'    },
+  { status: 'approved',            title: 'Approved / Final Scope',    color: '#14b8a6', stageType: 'insurance' },
+  { status: 'signed',              title: 'Signed / Won',              color: '#22c55e', stageType: 'shared'    },
+  { status: 'ordering_material',   title: 'Ordering Material',         color: '#10b981', stageType: 'shared'    },
+  { status: 'in_progress',         title: 'Scheduled',                 color: '#3b82f6', stageType: 'shared'    },
+  { status: 'build_phase',         title: 'In Progress',               color: '#2563eb', stageType: 'shared'    },
+  { status: 'cleanup',             title: 'Punch List / Cleanup',      color: '#f97316', stageType: 'shared'    },
+  { status: 'retail',              title: 'Retail (Cash Job)',          color: '#9333ea', stageType: 'retail'    },
+  { status: 'invoicing',           title: 'Invoicing',                 color: '#ec4899', stageType: 'shared'    },
+  { status: 'pending_payment',     title: 'Pending Payment',           color: '#e11d48', stageType: 'shared'    },
+  { status: 'completed',           title: 'Completed',                 color: '#10b981', stageType: 'shared'    },
+  { status: 'lost',                title: 'Lost',                      color: '#ef4444', stageType: 'shared'    },
+];
+
+const STAGE_TYPE_STYLES = {
+  shared:    { column: 'bg-gray-100',   header: 'border-gray-200',   badge: 'bg-gray-200 text-gray-600',     label: 'Shared'    },
+  retail:    { column: 'bg-purple-50',  header: 'border-purple-200', badge: 'bg-purple-100 text-purple-700', label: 'Retail'    },
+  insurance: { column: 'bg-sky-50',     header: 'border-sky-200',    badge: 'bg-sky-100 text-sky-700',       label: 'Insurance' },
+};
+
+// Determine whether a contact is retail, insurance, or shared based on their data.
+function getContactPipelineType(contact: Contact): 'retail' | 'insurance' | 'shared' {
+  if (contact.isRetail) return 'retail';
+  if (contact.claimNumber || contact.insuranceCompany || contact.policyNumber) return 'insurance';
+  const INSURANCE_STATUSES = new Set(['claim_filed', 'adjuster_scheduled', 'inspection_completed', 'supplement_filed', 'approved']);
+  const RETAIL_STATUSES    = new Set(['retail', 'contingency']);
+  if (INSURANCE_STATUSES.has(contact.status)) return 'insurance';
+  if (RETAIL_STATUSES.has(contact.status))    return 'retail';
+  return 'shared';
+}
+
+const CONTACT_TYPE_CARD_STYLE = {
+  retail:    'border-l-4 border-l-purple-400 border border-purple-200',
+  insurance: 'border-l-4 border-l-sky-400 border border-sky-200',
+  shared:    'border border-gray-200',
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 function getStageAlert(contact: Contact): { label: string; className: string } | null {
   const since = contact.statusChangedAt || contact.updatedAt || contact.createdAt;
   if (!since) return null;
@@ -107,25 +164,16 @@ export default function PipelineBoard() {
   const canEdit = canEditBoard(userRole);
   const effectiveCompanyId = profile?.company_id || state.companyId || null;
 
+  // Only owners, admins, and managers can access the Unified Sales view
+  const canViewUnified = (['owner', 'admin', 'manager', 'sales_manager'] as string[]).includes(userRole);
+
   const getColumnContacts = (column: KanbanColumn): Contact[] => {
     return state.contacts.filter((c) => normalizePipelineStatus(c.status) === column.status);
   };
 
-  // Merge all sales-type boards into one deduplicated column list (by status)
-  const combinedSalesColumns: KanbanColumn[] = (() => {
-    const salesBoards = state.boards.filter((b) => b.type === 'sales');
-    const seen = new Set<string>();
-    const merged: KanbanColumn[] = [];
-    for (const board of salesBoards) {
-      for (const col of board.columns) {
-        if (!seen.has(col.status)) {
-          seen.add(col.status);
-          merged.push(col);
-        }
-      }
-    }
-    return merged;
-  })();
+  // Unified pipeline: only show stages that have at least one contact OR are part of the
+  // logical flow; filter to statuses actually present in the loaded contacts for performance.
+  const unifiedSalesColumns = UNIFIED_SALES_STAGES;
 
   const handleDragStart = (e: React.DragEvent, contact: Contact) => {
     setDraggedContact(contact);
@@ -365,7 +413,7 @@ export default function PipelineBoard() {
                 {showAllBoards ? (
                   <><LayoutGrid size={16} className="text-indigo-600" /><span className="font-semibold text-indigo-700">All Boards</span></>
                 ) : showCombinedSales ? (
-                  <><Users size={16} className="text-blue-600" /><span className="font-semibold text-blue-700">Combined Sales</span></>
+                  <><Users size={16} className="text-purple-600" /><span className="font-semibold text-purple-700">Unified Sales</span></>
                 ) : (
                   <span className="font-semibold text-gray-900">{currentBoard?.name || 'Select Board'}</span>
                 )}
@@ -398,12 +446,15 @@ export default function PipelineBoard() {
                     ))}
                   </div>
                   <div className="border-t border-gray-100 p-2">
-                    <button
-                      onClick={() => { setShowCombinedSales(true); setShowAllBoards(false); setShowBoardSelector(false); }}
-                      className={`w-full flex items-center gap-2 p-2 rounded-lg transition-colors ${showCombinedSales ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-700 hover:bg-gray-100'}`}
-                    >
-                      <Users size={16} /><span className="font-medium">Combined Sales View</span>
-                    </button>
+                    {canViewUnified && (
+                      <button
+                        onClick={() => { setShowCombinedSales(true); setShowAllBoards(false); setShowBoardSelector(false); }}
+                        className={`w-full flex items-center gap-2 p-2 rounded-lg transition-colors ${showCombinedSales ? 'bg-purple-50 text-purple-700 font-semibold' : 'text-gray-700 hover:bg-gray-100'}`}
+                      >
+                        <Users size={16} /><span className="font-medium">Unified Sales View</span>
+                        <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-600 font-semibold">Retail + Ins.</span>
+                      </button>
+                    )}
                     <button
                       onClick={() => { setShowAllBoards(true); setShowCombinedSales(false); setShowBoardSelector(false); }}
                       className={`w-full flex items-center gap-2 p-2 rounded-lg transition-colors ${showAllBoards ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-gray-700 hover:bg-gray-100'}`}
@@ -461,107 +512,129 @@ export default function PipelineBoard() {
       {/* ── Kanban Board ─────────────────────────────────────────── */}
       <div className="flex-1 overflow-x-auto p-6 bg-gray-50">
         {showCombinedSales ? (
-          <div className="flex gap-4 h-full min-w-max">
-            {combinedSalesColumns.map((column) => {
-              const contacts = getColumnContacts(column);
-              const columnValue = contacts.reduce((sum, c) => {
-                if (c.projectValue && c.projectValue > 0) return sum + c.projectValue;
-                const bestEstimate = state.estimates.filter(e => e.contactId === c.id && e.status !== 'declined').reduce((max, e) => Math.max(max, Number(e.total || 0)), 0);
-                return sum + bestEstimate;
-              }, 0);
-              return (
-                <div
-                  key={column.id}
-                  className={`w-80 flex-shrink-0 flex flex-col bg-gray-100 rounded-xl transition-colors ${dragOverColumn === column.id ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}
-                  onDragOver={(e) => handleDragOver(e, column.id)}
-                  onDragLeave={handleDragLeave}
-                  onDrop={(e) => handleDrop(e, column)}
-                >
-                  <div className="p-4 border-b border-gray-200">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: column.color }} />
-                      <h3 className="font-semibold text-gray-900">{column.title}</h3>
-                      <span className="px-2 py-0.5 bg-gray-200 rounded-full text-xs font-medium text-gray-600">{contacts.length}</span>
+          <div className="flex flex-col h-full gap-0">
+            {/* Legend */}
+            <div className="flex items-center gap-4 mb-4 px-1 flex-wrap">
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Pipeline key:</span>
+              <span className="flex items-center gap-1.5 text-xs font-medium text-gray-600">
+                <span className="w-3 h-3 rounded-sm bg-gray-200 border border-gray-300 inline-block" />Shared (Retail &amp; Insurance)
+              </span>
+              <span className="flex items-center gap-1.5 text-xs font-medium text-purple-700">
+                <span className="w-3 h-3 rounded-sm bg-purple-200 border border-purple-300 inline-block" />Retail / Cash Job
+              </span>
+              <span className="flex items-center gap-1.5 text-xs font-medium text-sky-700">
+                <span className="w-3 h-3 rounded-sm bg-sky-200 border border-sky-300 inline-block" />Insurance / Claims
+              </span>
+              <span className="ml-auto text-xs text-gray-400">Card border = contact type &nbsp;·&nbsp; Column background = stage type</span>
+            </div>
+
+            {/* Unified board columns */}
+            <div className="flex gap-4 flex-1 min-w-max">
+              {unifiedSalesColumns.map((stage) => {
+                const fakeColumn: KanbanColumn = { id: `unified-${stage.status}`, title: stage.title, status: stage.status, color: stage.color, order: 0 };
+                const contacts = getColumnContacts(fakeColumn);
+                const stageStyle = STAGE_TYPE_STYLES[stage.stageType];
+                const columnValue = contacts.reduce((sum, c) => {
+                  if (c.projectValue && c.projectValue > 0) return sum + c.projectValue;
+                  const bestEstimate = state.estimates.filter(e => e.contactId === c.id && e.status !== 'declined').reduce((max, e) => Math.max(max, Number(e.total || 0)), 0);
+                  return sum + bestEstimate;
+                }, 0);
+                return (
+                  <div
+                    key={stage.status}
+                    className={`w-72 flex-shrink-0 flex flex-col rounded-xl transition-colors ${stageStyle.column} ${dragOverColumn === fakeColumn.id ? 'ring-2 ring-blue-500' : ''}`}
+                    onDragOver={(e) => handleDragOver(e, fakeColumn.id)}
+                    onDragLeave={handleDragLeave}
+                    onDrop={(e) => handleDrop(e, fakeColumn)}
+                  >
+                    {/* Column header */}
+                    <div className={`p-3 border-b ${stageStyle.header} rounded-t-xl`}>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: stage.color }} />
+                        <h3 className="font-semibold text-gray-900 text-sm truncate flex-1">{stage.title}</h3>
+                        <span className="px-1.5 py-0.5 bg-white/70 rounded-full text-xs font-medium text-gray-600 flex-shrink-0">{contacts.length}</span>
+                      </div>
+                      <div className="flex items-center justify-between mt-1">
+                        <p className="text-xs text-gray-500">{formatCurrency(columnValue)}</p>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${stageStyle.badge}`}>{stageStyle.label}</span>
+                      </div>
                     </div>
-                    <p className="text-sm text-gray-500 mt-1">{formatCurrency(columnValue)}</p>
-                  </div>
-                  <div className="flex-1 overflow-y-auto p-2 space-y-2">
-                    {contacts.map((contact) => {
-                      const assignee = state.teamMembers.find((tm) => tm.id === contact.assignedTo);
-                      const stageAlert = getStageAlert(contact);
-                      return (
-                        <div
-                          key={contact.id}
-                          draggable
-                          onDragStart={(e) => handleDragStart(e, contact)}
-                          onClick={() => handleContactClick(contact.id)}
-                          className={`bg-white rounded-lg p-4 shadow-sm border border-gray-200 cursor-pointer hover:shadow-md transition-all group ${draggedContact?.id === contact.id ? 'opacity-50' : ''}`}
-                        >
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <GripVertical size={14} className="text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab" />
-                                <h4 className="font-medium text-gray-900 truncate">{getContactFullName(contact)}</h4>
+
+                    {/* Contact cards */}
+                    <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                      {contacts.map((contact) => {
+                        const contactType = getContactPipelineType(contact);
+                        const cardBorder = CONTACT_TYPE_CARD_STYLE[contactType];
+                        const assignee = state.teamMembers.find((tm) => tm.id === contact.assignedTo);
+                        const stageAlert = getStageAlert(contact);
+                        return (
+                          <div
+                            key={contact.id}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, contact)}
+                            onClick={() => handleContactClick(contact.id)}
+                            className={`bg-white rounded-lg p-3 shadow-sm cursor-pointer hover:shadow-md transition-all group ${cardBorder} ${draggedContact?.id === contact.id ? 'opacity-50' : ''}`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5">
+                                  <GripVertical size={12} className="text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab flex-shrink-0" />
+                                  <p className="font-medium text-gray-900 text-sm truncate">{getContactFullName(contact)}</p>
+                                </div>
+                                {contact.projectType && <p className="text-xs text-gray-400 mt-0.5 truncate ml-4">{contact.projectType}</p>}
                               </div>
-                              {contact.projectType && <p className="text-sm text-gray-500 mt-1 truncate">{contact.projectType}</p>}
+                              {assignee && <img src={assignee.avatar} alt={assignee.name} className="w-6 h-6 rounded-full object-cover flex-shrink-0" title={assignee.name} />}
                             </div>
-                            {assignee && <img src={assignee.avatar} alt={assignee.name} className="w-7 h-7 rounded-full object-cover flex-shrink-0" title={assignee.name} />}
-                          </div>
-                          <div className="mt-3 space-y-1.5">
-                            <div className="flex items-center gap-2 text-xs text-gray-500">
-                              <MapPin size={12} /><span className="truncate">{contact.city}, {contact.state}</span>
+                            <div className="mt-2 space-y-1 ml-1">
+                              <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                                <MapPin size={10} /><span className="truncate">{contact.city}, {contact.state}</span>
+                              </div>
+                              {contact.projectValue ? (
+                                <div className="flex items-center gap-1.5 text-xs text-green-600 font-medium">
+                                  <DollarSign size={10} /><span>{formatCurrency(contact.projectValue)}</span>
+                                </div>
+                              ) : null}
                             </div>
-                            {contact.projectValue && (
-                              <div className="flex items-center gap-2 text-xs text-green-600 font-medium">
-                                <DollarSign size={12} /><span>{formatCurrency(contact.projectValue)}</span>
+                            {contact.inspectionCompleted && (
+                              <div className="mt-2">
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  <CheckCircle size={9} />Inspected
+                                </span>
                               </div>
                             )}
+                            {stageAlert && (
+                              <div className="mt-1.5">
+                                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${stageAlert.className}`}>⚠ {stageAlert.label}</span>
+                              </div>
+                            )}
+                            {(() => {
+                              const ns = getNextStep(contact.status as KanbanStatus);
+                              if (!ns) return null;
+                              const Icon = NEXT_STEP_ICONS[ns.iconName] || ArrowRight;
+                              return (
+                                <button
+                                  onClick={(e) => handleNextStepClick(e, contact, ns)}
+                                  className={`mt-2 w-full flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-semibold transition-opacity hover:opacity-75 ${ns.bgColor} ${ns.textColor}`}
+                                >
+                                  <Icon size={10} className="flex-shrink-0" />
+                                  <span className="truncate">{ns.label}</span>
+                                  <ArrowRight size={10} className="ml-auto flex-shrink-0 opacity-60" />
+                                </button>
+                              );
+                            })()}
                           </div>
-                          {contact.tags.length > 0 && (
-                            <div className="mt-3 flex flex-wrap gap-1">
-                              {contact.tags.slice(0, 2).map((tag) => (
-                                <span key={tag} className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">{tag}</span>
-                              ))}
-                              {contact.tags.length > 2 && <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">+{contact.tags.length - 2}</span>}
-                            </div>
-                          )}
-                          {contact.inspectionCompleted && (
-                            <div className="mt-2">
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                <CheckCircle size={10} />Inspection Complete
-                              </span>
-                            </div>
-                          )}
-                          {stageAlert && (
-                            <div className="mt-2">
-                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${stageAlert.className}`}>⚠ {stageAlert.label} in stage</span>
-                            </div>
-                          )}
-                          {(() => {
-                            const ns = getNextStep(contact.status as KanbanStatus);
-                            if (!ns) return null;
-                            const Icon = NEXT_STEP_ICONS[ns.iconName] || ArrowRight;
-                            return (
-                              <button
-                                onClick={(e) => handleNextStepClick(e, contact, ns)}
-                                className={`mt-3 w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-opacity hover:opacity-75 ${ns.bgColor} ${ns.textColor}`}
-                              >
-                                <Icon size={12} className="flex-shrink-0" />
-                                <span className="truncate">{ns.label}</span>
-                                <ArrowRight size={12} className="ml-auto flex-shrink-0 opacity-60" />
-                              </button>
-                            );
-                          })()}
+                        );
+                      })}
+                      {contacts.length === 0 && (
+                        <div className="text-center py-6 text-gray-300">
+                          <p className="text-xs">Empty</p>
                         </div>
-                      );
-                    })}
-                    {contacts.length === 0 && (
-                      <div className="text-center py-8 text-gray-400"><p className="text-sm">No contacts</p></div>
-                    )}
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         ) : showAllBoards ? (
           <div className="flex flex-col gap-8 h-full">

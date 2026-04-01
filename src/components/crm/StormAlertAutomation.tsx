@@ -86,11 +86,12 @@ export function StormAlertAutomation({ contacts, onSendAlerts }: StormAlertProps
     setIsSending(true);
 
     try {
-      // Send SMS to affected contacts
-      const response = await fetch('/api/send-sms', {
+      // Send SMS to affected contacts via unified /api/send endpoint
+      const response = await fetch('/api/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          type: 'sms',
           contacts: affectedContacts.map(c => ({
             id: c.id,
             phone: c.phone1,
