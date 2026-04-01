@@ -1,0 +1,11 @@
+{
+  "handler": "api/stripe-checkout.mjs",
+  "runtime": "nodejs24.x",
+  "architecture": "arm64",
+  "environment": {},
+  "shouldDisableAutomaticFetchInstrumentation": false,
+  "launcherType": "Nodejs",
+  "shouldAddHelpers": true,
+  "shouldAddSourcemapSupport": false,
+  "awsLambdaHandler": ""
+}

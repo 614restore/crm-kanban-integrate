@@ -420,32 +420,51 @@ export default function CommunicationHub() {
     };
 
     if (!profile?.company_id) {
+      // No company ID - likely in demo mode or initialization
       appendCommunicationToContact(contactId, draft);
       return draft;
     }
 
-    const created = await db.createCommunication({
-      company_id: profile.company_id,
-      contact_id: contactId,
-      type: draft.type,
-      direction: draft.direction,
-      content: draft.content,
-      user_id: fallbackUserId || undefined,
-    });
+    try {
+      const created = await db.createCommunication({
+        company_id: profile.company_id,
+        contact_id: contactId,
+        type: draft.type,
+        direction: draft.direction,
+        content: draft.content,
+        user_id: fallbackUserId || undefined,
+      });
 
-    if (!created) {
-      appendCommunicationToContact(contactId, draft);
-      return draft;
+      if (!created) {
+        // DB save failed - do NOT optimistically update unless we can confirm it's a network issue
+        toast.error('Failed to save communication log. Check your connection and try again.');
+        return null;
+      }
+
+      const persisted: Communication = {
+        ...draft,
+        id: created.id,
+        timestamp: created.created_at,
+      };
+
+      appendCommunicationToContact(contactId, persisted);
+      return persisted;
+    } catch (err: any) {
+      // Only optimistically update if this is a network/timeout error
+      const isNetworkError = err?.message?.includes('network') || 
+                             err?.message?.includes('timeout') || 
+                             err?.code === 'PGRST301'; // Supabase network error
+      
+      if (isNetworkError) {
+        toast.warning('Offline - communication saved locally and will sync when online');
+        appendCommunicationToContact(contactId, draft);
+        return draft;
+      } else {
+        // Permission, validation, or other DB error - don't hide it
+        toast.error(`Failed to log communication: ${err?.message || 'Unknown error'}`);
+        return null;
+      }
     }
-
-    const persisted: Communication = {
-      ...draft,
-      id: created.id,
-      timestamp: created.created_at,
-    };
-
-    appendCommunicationToContact(contactId, persisted);
-    return persisted;
   };
 
   const handleUseTemplate = (template: typeof communicationTemplates[0]) => {

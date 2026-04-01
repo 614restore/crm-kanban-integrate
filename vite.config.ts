@@ -33,6 +33,9 @@ export default defineConfig(({ mode }) => {
           drop_debugger: mode === 'production',
         },
       },
+      rollupOptions: {
+        external: ['exceljs'], // Node package - exclude from browser bundle
+      },
     },
   };
 });

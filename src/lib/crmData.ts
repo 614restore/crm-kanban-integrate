@@ -11,6 +11,7 @@ export type CustomerStatus =
   | 'retail'
   | 'signed'
   | 'ordering_material'
+  | 'scheduled'
   | 'in_progress'
   | 'build_phase'
   | 'cleanup'

@@ -101,6 +101,12 @@ export default function DocumentCenter() {
   };
 
   const handleUploadFile = async (event: React.ChangeEvent<HTMLInputElement>, forceCategory?: DocCategory) => {
+    // CRITICAL FIX: Prevent double-click uploads
+    if (isUploading) {
+      toast.warning('Upload already in progress');
+      return;
+    }
+    
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -112,12 +118,15 @@ export default function DocumentCenter() {
     const validationError = validateDocumentFile(file, 15);
     if (validationError) {
       toast.error(validationError);
+      event.target.value = ''; // Clear input on validation error
       return;
     }
 
     setIsUploading(true);
+    let uploadedPath: string | null = null;
     
     try {
+      // Step 1: Upload file to storage
       const uploadResult = await uploadDocument(file, state.companyId);
       
       if (uploadResult.error) {
@@ -128,9 +137,11 @@ export default function DocumentCenter() {
         return;
       }
 
+      uploadedPath = uploadResult.path; // Track for rollback
       const category = forceCategory || inferCategory(file);
       const linkedContactId = contactFilter !== 'all' ? contactFilter : undefined;
 
+      // Step 2: Save metadata to database
       const created = await db.createDocument({
         company_id: state.companyId,
         contact_id: linkedContactId || undefined,
@@ -142,7 +153,13 @@ export default function DocumentCenter() {
       });
 
       if (!created) {
-        toast.error('File uploaded but failed to save document record');
+        // CRITICAL FIX: Rollback storage upload if metadata save fails
+        console.error('[DocumentCenter] Metadata save failed - rolling back storage upload');
+        if (uploadedPath) {
+          await deleteFile('projectceo-documents', uploadedPath);
+          console.log('[DocumentCenter] Successfully rolled back orphaned file');
+        }
+        toast.error('Failed to save document record. File upload was rolled back.');
         setIsUploading(false);
         event.target.value = '';
         return;

@@ -109,9 +109,9 @@ export default function AppointmentModal({
   >([]);
   const [mentionIndex, setMentionIndex] = useState(0);
 
-  // Prefill location from contact address
+  // Prefill location from contact address when contact changes
   useEffect(() => {
-    if (contactId && !location) {
+    if (contactId && !editingAppointment) {
       const contact = state.contacts.find((c) => c.id === contactId);
       if (contact?.address) {
         const addr = [contact.address, contact.city, contact.state, contact.zip]
@@ -120,7 +120,7 @@ export default function AppointmentModal({
         setLocation(addr);
       }
     }
-  }, [contactId]);
+  }, [contactId, state.contacts, editingAppointment]);
 
   // Reset form when modal opens with new data
   useEffect(() => {
@@ -141,13 +141,29 @@ export default function AppointmentModal({
         setDate(selectedDate ? selectedDate.toISOString().split('T')[0] : defaultDate);
         setTime('09:00');
         setDuration(60);
-        setContactId(preselectedContactId || '');
+        const initialContactId = preselectedContactId || '';
+        setContactId(initialContactId);
         setAssignedTo('');
-        setLocation('');
+        
+        // CRITICAL FIX: Auto-populate location when modal opens with preselected contact
+        if (initialContactId) {
+          const contact = state.contacts.find((c) => c.id === initialContactId);
+          if (contact?.address) {
+            const addr = [contact.address, contact.city, contact.state, contact.zip]
+              .filter(Boolean)
+              .join(', ');
+            setLocation(addr);
+          } else {
+            setLocation('');
+          }
+        } else {
+          setLocation('');
+        }
+        
         setNotes('');
       }
     }
-  }, [isOpen, editingAppointment, selectedDate, preselectedContactId]);
+  }, [isOpen, editingAppointment, selectedDate, preselectedContactId, state.contacts]);
 
   const handleNotesChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;

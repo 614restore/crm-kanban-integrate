@@ -1,0 +1,10 @@
+{
+    "githubPullRequests.pullRequestDescription": "Copilot",
+    "claudeCodeChat.permissions.yoloMode": true,
+    "chat.mcp.discovery.enabled": {
+        "claude-desktop": true
+    },
+    "scm.alwaysShowRepositories": true,
+    "bedrockChat.authMethod": "role",
+    "antigravityCopilot.autoConfigureCopilot": true
+}

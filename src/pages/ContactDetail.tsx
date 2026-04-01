@@ -18,6 +18,8 @@ import { getInspectionPhotoStorageMode, type InspectionPhotoStorageMode } from '
 import { getNextPipelineStageLabel, getPipelineStageLabel } from '../lib/pipelineStages';
 import { buildContactPipelineEvents, getUpcomingPipelineEvents } from '../lib/scheduleEvents';
 import { applyMention, extractMentionHandles, findActiveMentionQuery, getMentionSuggestions, getMentionTargets, parseNoteMentions, serializeNoteMentions, validateMentions } from '../lib/noteMentions';
+import { handleAutoProgression } from '../lib/progressionRules';
+import { fireAutomationEvent } from '../lib/automationEngine';
 
 const MultiShotCamera = registerPlugin<{ open: (options?: { saveMode?: InspectionPhotoStorageMode }) => Promise<{ photos: string[] }> }>('MultiShotCamera');
 
@@ -245,6 +247,24 @@ export default function ContactDetail() {
           direction: 'outbound',
         });
         fetchTimeline();
+
+        // Fire automation events and auto-progression
+        if (contact?.company_id) {
+          fireAutomationEvent('status_changed', contact.company_id, {
+            contactId: editForm.id,
+            contactName: contact.name,
+            contactEmail: contact.email,
+            oldStatus: prevStatus,
+            newStatus: nextStatus,
+          }).catch(console.error);
+
+          handleAutoProgression(
+            editForm.id,
+            nextStatus,
+            user.id,
+            user.email
+          ).catch(console.error);
+        }
       }
 
       setIsEditing(false);
