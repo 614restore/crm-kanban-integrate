@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 
 export default function UpdatePassword() {
-    const { user, loading: authLoading, updateProfile } = useAuth();
+    const { user, loading: authLoading, clearPasswordReset } = useAuth();
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -63,11 +63,10 @@ export default function UpdatePassword() {
                 const data = await res.json().catch(() => ({}));
                 setError(data?.error || 'Failed to update password. Please try again.');
             } else {
-                setSuccess('Password updated successfully! Redirecting...');
-                setTimeout(() => {
-                    try { sessionStorage.removeItem('pending_password_reset'); } catch (e) { console.warn('[UpdatePassword] sessionStorage cleanup failed:', e); }
-                    window.location.href = window.location.origin + (import.meta.env.BASE_URL || '/');
-                }, 2000);
+                setSuccess('Password updated successfully!');
+                try { sessionStorage.removeItem('pending_password_reset'); } catch (e) { console.warn('[UpdatePassword] sessionStorage cleanup failed:', e); }
+                // Clear in-memory reset state — AuthGate re-renders immediately to CRMApp
+                setTimeout(() => { clearPasswordReset(); }, 1500);
             }
         } catch (err: any) {
             setError(err.message || 'Failed to update password. Please try again.');
