@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Cloud, AlertTriangle, Send, Users, MapPin, Clock, CheckCircle, Info } from 'lucide-react';
 import { Contact } from '@/lib/crmData';
 import { toast } from 'sonner';
+import { useAuth } from '@/lib/authContext';
 
 interface WeatherAlert {
   type: string;
@@ -43,6 +44,7 @@ const URGENCY_LABEL: Record<string, string> = {
 };
 
 export function StormAlertAutomation({ contacts, onSendAlerts }: StormAlertProps) {
+  const { session } = useAuth();
   const [activeAlerts, setActiveAlerts]       = useState<WeatherAlert[]>([]);
   const [affectedZipCodes, setAffectedZipCodes] = useState<string[]>([]);
   const [zipLocations, setZipLocations]       = useState<Record<string, string>>({});
@@ -122,7 +124,10 @@ export function StormAlertAutomation({ contacts, onSendAlerts }: StormAlertProps
     try {
       const response = await fetch('/api/send', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
         body: JSON.stringify({
           type: 'sms',
           contacts: affectedContacts.map(c => ({

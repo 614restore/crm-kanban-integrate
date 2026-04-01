@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 
 export default function UpdatePassword() {
-    const { user, loading: authLoading, updateProfile } = useAuth();
+    const { user, loading: authLoading } = useAuth();
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);

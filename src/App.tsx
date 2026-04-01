@@ -109,6 +109,7 @@ const App = () => {
               <Route path="/privacy" element={<PrivacyPolicy />} />
               <Route path="/eula" element={<EULA />} />
               <Route path="/sign" element={<SignDocument />} />
+              <Route path="/sign-estimate/:token" element={<SignEstimate />} />
               <Route path="/sign-estimate" element={<SignEstimate />} />
               <Route path="/sign-change-order" element={<SignChangeOrder />} />
               <Route path="/sign-doc" element={<SignDocTemplate />} />
