@@ -189,8 +189,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Share the same promise with getSession below — only one fetch runs
         const profileData = await loadProfileOnce(session.user.id, session.user.email || '');
         setProfile(profileData);
-        if (profileData?.must_change_password) setIsPasswordReset(true);
-        
+        // isPasswordReset is derived from profile?.must_change_password — no setter needed
+
         // Clean up auth URL parameters after successful sign-in
         try {
           if (sessionStorage.getItem('auth_url_cleanup_pending') === 'true') {
@@ -221,7 +221,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (session?.user) {
         const profileData = await loadProfileOnce(session.user.id, session.user.email || '');
         setProfile(profileData);
-        if (profileData?.must_change_password) setIsPasswordReset(true);
+        // isPasswordReset is derived from profile?.must_change_password — no setter needed
       }
 
       setLoading(false);

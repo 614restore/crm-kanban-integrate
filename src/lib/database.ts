@@ -1152,6 +1152,9 @@ class DatabaseService {
     onLeadSourceChange?: (payload: any) => void;
     onBoardChange?: (payload: any) => void;
     onTeamMemberChange?: (payload: any) => void;
+    onEstimateChange?: (payload: any) => void;
+    onProjectChange?: (payload: any) => void;
+    onWorkOrderChange?: (payload: any) => void;
     onStatusChange?: (status: string, error?: Error) => void;
   }) {
     const channel = supabase.channel('all-changes');
@@ -1165,6 +1168,9 @@ class DatabaseService {
       channel.on('postgres_changes', { event: '*', schema: 'public', table: 'kanban_columns' }, callbacks.onBoardChange);
     }
     if (callbacks.onTeamMemberChange) channel.on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: `company_id=eq.${companyId}` }, callbacks.onTeamMemberChange);
+    if (callbacks.onEstimateChange) channel.on('postgres_changes', { event: '*', schema: 'public', table: 'estimates', filter: `company_id=eq.${companyId}` }, callbacks.onEstimateChange);
+    if (callbacks.onProjectChange) channel.on('postgres_changes', { event: '*', schema: 'public', table: 'projects', filter: `company_id=eq.${companyId}` }, callbacks.onProjectChange);
+    if (callbacks.onWorkOrderChange) channel.on('postgres_changes', { event: '*', schema: 'public', table: 'work_orders', filter: `company_id=eq.${companyId}` }, callbacks.onWorkOrderChange);
     return channel.subscribe((status, error) => { if (callbacks.onStatusChange) callbacks.onStatusChange(status, error || undefined); });
   }
 

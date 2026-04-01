@@ -59,6 +59,10 @@ function normalisePhone(raw) {
   return `+${digits}`;
 }
 
+// Disable Vercel's built-in body parser so we can read the raw body for
+// Twilio signature validation (HMAC-SHA1 over the raw URL-encoded payload).
+export const config = { api: { bodyParser: false } };
+
 // ---------------------------------------------------------------------------
 // Handler
 // ---------------------------------------------------------------------------
