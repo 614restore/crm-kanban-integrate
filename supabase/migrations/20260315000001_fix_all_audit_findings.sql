@@ -220,6 +220,6 @@ WHERE trial_ends_at IS NOT NULL
 COMMENT ON INDEX idx_companies_stripe_subscription_id IS 'Finding 1: Enables fast Stripe webhook lookups';
 COMMENT ON INDEX idx_companies_stripe_customer_id IS 'Finding 1: Enables fast Stripe webhook lookups';
 COMMENT ON POLICY "crew_schedules_tenant_select" ON crew_schedules IS 'Finding 4: Fixed RLS recursion';
-COMMENT ON POLICY "expense_receipts_select" ON storage.objects IS 'Finding 5: Enforces company folder isolation';
+-- Note: COMMENT ON POLICY for storage.objects omitted — Supabase restricts ownership of that relation
 COMMENT ON INDEX idx_estimates_company_id IS 'Finding 6: Performance optimization for tenant queries';
 COMMENT ON FUNCTION public.update_my_company IS 'Finding 8: Expanded to include all company fields';
