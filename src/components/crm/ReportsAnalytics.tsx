@@ -98,7 +98,6 @@ const ReportsAnalytics: React.FC = () => {
   const { state } = useCRM();
   const { profile } = useAuth();
   const financialStats = useFinancialStats();
-  const { profile } = useAuth();
 
   // Load real expense data from the database
   useEffect(() => {
