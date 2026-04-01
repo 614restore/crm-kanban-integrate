@@ -117,24 +117,30 @@ const ReportsAnalytics: React.FC = () => {
     const cutoff = new Date(now.getFullYear(), now.getMonth() - (monthCount - 1), 1);
 
     // Sum invoices by month
-    state.invoices.forEach((inv) => {
-      const d = new Date(inv.createdAt || inv.dueDate || '');
-      if (isNaN(d.getTime()) || d < cutoff) return;
-      const key = d.toLocaleString('default', { month: 'short', year: selectedPeriod === 'ytd' || monthCount <= 3 ? undefined : '2-digit' });
-      if (months[key]) {
-        if (inv.status === 'paid') months[key].revenue += inv.amount;
-        if (inv.contactId) months[key].projects.add(inv.contactId);
-      }
-    });
-    // Sum deposits & final payments from contacts by completed month
-    state.contacts.forEach((c) => {
-      if (c.status === 'completed' && c.finalPaymentPaid && c.finalPaymentAmount) {
-        const d = new Date(c.updatedAt);
+    // CRITICAL FIX: Filter by company_id to prevent cross-tenant data leakage
+    state.invoices
+      .filter(inv => inv.company_id === profile?.company_id)
+      .forEach((inv) => {
+        const d = new Date(inv.createdAt || inv.dueDate || '');
         if (isNaN(d.getTime()) || d < cutoff) return;
         const key = d.toLocaleString('default', { month: 'short', year: selectedPeriod === 'ytd' || monthCount <= 3 ? undefined : '2-digit' });
-        if (months[key]) months[key].revenue += c.finalPaymentAmount;
-      }
-    });
+        if (months[key]) {
+          if (inv.status === 'paid') months[key].revenue += inv.amount;
+          if (inv.contactId) months[key].projects.add(inv.contactId);
+        }
+      });
+    // Sum deposits & final payments from contacts by completed month
+    // CRITICAL FIX: Filter by company_id to prevent cross-tenant data leakage
+    state.contacts
+      .filter(c => c.company_id === profile?.company_id)
+      .forEach((c) => {
+        if (c.status === 'completed' && c.finalPaymentPaid && c.finalPaymentAmount) {
+          const d = new Date(c.updatedAt);
+          if (isNaN(d.getTime()) || d < cutoff) return;
+          const key = d.toLocaleString('default', { month: 'short', year: selectedPeriod === 'ytd' || monthCount <= 3 ? undefined : '2-digit' });
+          if (months[key]) months[key].revenue += c.finalPaymentAmount;
+        }
+      });
     // Estimate expenses as 65% of revenue (industry avg) when we don't have real expense data
     return Object.entries(months).map(([month, data]) => {
       const estimatedExpenses = Math.round(data.revenue * 0.65);
@@ -146,7 +152,7 @@ const ReportsAnalytics: React.FC = () => {
         projects: data.projects.size,
       };
     });
-  }, [state.invoices, state.contacts, selectedPeriod]);
+  }, [state.invoices, state.contacts, selectedPeriod, profile?.company_id]);
 
   // Build project data from real projects or contacts in project stages
   const projectData: ProjectData[] = useMemo(() => {
@@ -211,7 +217,7 @@ const ReportsAnalytics: React.FC = () => {
         revenue: data.revenue,
       }))
       .sort((a, b) => b.revenue - a.revenue);
-  }, [state.contacts]);
+  }, [state.contacts, profile?.company_id]);
 
   // Build team performance from real team members
   const teamPerformance: TeamPerformance[] = useMemo(() => {
@@ -233,8 +239,10 @@ const ReportsAnalytics: React.FC = () => {
     return state.teamMembers
       .filter((tm) => tm.isActive)
       .map((tm) => {
+        // CRITICAL FIX: Filter by company_id to prevent cross-tenant data leakage
         const repContacts = state.contacts.filter(
-          (c) => c.assignedTo === tm.userId || c.assignedTo === tm.id || c.assignedTo === tm.email
+          (c) => c.company_id === profile?.company_id && 
+                 (c.assignedTo === tm.userId || c.assignedTo === tm.id || c.assignedTo === tm.email)
         );
         const totalLeads = repContacts.length;
         const closedDeals = repContacts.filter((c) => c.status === 'completed').length;
@@ -277,7 +285,7 @@ const ReportsAnalytics: React.FC = () => {
           monthlyRevenue: Object.entries(monthlyRevenue).map(([month, rev]) => ({ month, revenue: rev })),
         };
       });
-  }, [state.teamMembers, state.contacts]);
+  }, [state.teamMembers, state.contacts, profile?.company_id]);
 
   // Calculate key metrics
   const metrics = useMemo(() => {
