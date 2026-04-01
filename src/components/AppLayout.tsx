@@ -17,6 +17,7 @@ import {
   TeamMember,
   Estimate,
 } from '@/lib/crmData';
+import { runStaleLeadDetection, detectAndNotifyUnassignedContacts } from '@/lib/staleLeadDetection';
 
 // Import core components (needed immediately)
 import Sidebar from './crm/Sidebar';
@@ -1057,6 +1058,53 @@ useEffect(() => {
       dispatch({ type: 'SET_CURRENT_USER', payload: currentUser });
     }
   }, [profile]);
+
+  // Automatic stale lead detection system
+  useEffect(() => {
+    if (!profile?.company_id || !state.isInitialized) return;
+
+    let staleLeadTimer: NodeJS.Timeout;
+    let unassignedTimer: NodeJS.Timeout;
+
+    // Run initial detection after app loads (delay to avoid blocking startup)
+    const initialDelay = setTimeout(() => {
+      console.log('[StaleLeads] Running initial stale lead detection...');
+      
+      // Run stale lead detection immediately
+      runStaleLeadDetection(profile.company_id).catch(error => {
+        console.warn('[StaleLeads] Initial stale lead detection failed:', error);
+      });
+
+      // Run unassigned contact detection
+      detectAndNotifyUnassignedContacts(profile.company_id).catch(error => {
+        console.warn('[UnassignedContacts] Initial unassigned contact detection failed:', error);
+      });
+
+      // Set up recurring intervals
+      // Stale lead detection every 4 hours
+      staleLeadTimer = setInterval(() => {
+        console.log('[StaleLeads] Running scheduled stale lead detection...');
+        runStaleLeadDetection(profile.company_id).catch(error => {
+          console.warn('[StaleLeads] Scheduled stale lead detection failed:', error);
+        });
+      }, 4 * 60 * 60 * 1000); // 4 hours
+
+      // Unassigned contact detection every 2 hours 
+      unassignedTimer = setInterval(() => {
+        console.log('[UnassignedContacts] Running scheduled unassigned contact detection...');
+        detectAndNotifyUnassignedContacts(profile.company_id).catch(error => {
+          console.warn('[UnassignedContacts] Scheduled unassigned contact detection failed:', error);
+        });
+      }, 2 * 60 * 60 * 1000); // 2 hours
+
+    }, 10000); // 10 second delay after app initialization
+
+    return () => {
+      clearTimeout(initialDelay);
+      if (staleLeadTimer) clearInterval(staleLeadTimer);
+      if (unassignedTimer) clearInterval(unassignedTimer);
+    };
+  }, [profile?.company_id, state.isInitialized]);
 
   // Keep the loading screen visible while:
   // 1. CRM data is still being fetched (isLoading, not yet initialized), OR

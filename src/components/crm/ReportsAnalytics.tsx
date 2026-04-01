@@ -50,6 +50,7 @@ import { formatCurrency, getContactFullName } from '@/lib/crmData';
 import { printDataAsPDF } from '@/lib/exportUtils';
 import { useAuth } from '@/lib/authContext';
 import { isSoldStatus, isLostStatus } from '@/lib/statusDefinitions';
+import { SOLD_STATUSES, LOST_STATUSES, COMPLETED_PROJECT_STATUSES, isDealWon, isDealLost } from '@/types/statusConstants';
 
 interface RevenueData {
   month: string;
@@ -190,9 +191,9 @@ const ReportsAnalytics: React.FC = () => {
         value: c.projectValue || 0,
         profit: Math.round((c.projectValue || 0) * 0.30),
         profitMargin: 30,
-        status: (c.status === 'completed' ? 'completed' : 'active') as ProjectData['status'],
+        status: (COMPLETED_PROJECT_STATUSES.includes(c.status) ? 'completed' : 'active') as ProjectData['status'],
         startDate: c.createdAt,
-        completionDate: c.status === 'completed' ? c.updatedAt : undefined,
+        completionDate: COMPLETED_PROJECT_STATUSES.includes(c.status) ? c.updatedAt : undefined,
         category: c.insuranceCompany ? 'Insurance' : 'Retail',
       }));
   }, [state.projects, state.contacts, profile?.company_id]);
@@ -269,7 +270,7 @@ const ReportsAnalytics: React.FC = () => {
           monthlyRevenue[d.toLocaleString('default', { month: 'short' })] = 0;
         }
         repContacts
-          .filter((c) => c.status === 'completed' && c.updatedAt)
+          .filter((c) => isDealWon(c.status) && c.updatedAt)
           .forEach((c) => {
             const d = new Date(c.updatedAt);
             const key = d.toLocaleString('default', { month: 'short' });

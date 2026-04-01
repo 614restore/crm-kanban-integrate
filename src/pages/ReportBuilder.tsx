@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { buildDocumentDisplayUrl, buildStoredDocumentUrl, fetchDocumentObjectUrl, resolveDocumentSignedUrl } from '../lib/documentAccess';
 import { uploadToAvailableBucket } from '../lib/pdfService';
+import { getCurrentUserCompanyId } from '../lib/storageUtils';
 
 type PhotoDocument = {
   id: string;
@@ -362,7 +363,8 @@ export default function ReportBuilder() {
       });
 
       const fileName = `${reportTitle.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-${Date.now()}.pdf`;
-      const uploaded = await uploadToAvailableBucket(`${id}/reports/${fileName}`, pdfBlob, 'application/pdf');
+      const companyId = await getCurrentUserCompanyId();
+      const uploaded = await uploadToAvailableBucket(`${companyId}/${id}/reports/${fileName}`, pdfBlob, 'application/pdf', companyId);
       const savedUrl = buildStoredDocumentUrl(uploaded.publicUrl, uploaded.bucket, uploaded.path);
 
       const { data: savedDocument, error: saveError } = await (supabase.from('documents') as any)

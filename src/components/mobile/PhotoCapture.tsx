@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { offlineDB } from '@/lib/offlineDB';
 import { supabase } from '@/lib/supabase';
+import { secureUpload } from '@/lib/storageUtils';
 
 interface PhotoMetadata {
   id?: string;
@@ -248,17 +249,18 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({
 
       if (isOnline) {
         try {
-          const uploadPath = `photos/${photoMetadata.id}/${photoMetadata.fileName}`;
-          const { error: uploadError } = await supabase.storage
-            .from('projectceo-photos')
-            .upload(uploadPath, blob, { contentType: blob.type, upsert: false });
-
-          if (!uploadError) {
-            const { data: publicUrlData } = supabase.storage
-              .from('projectceo-photos')
-              .getPublicUrl(uploadPath);
-            photoData = publicUrlData.publicUrl;
+          if (contactId) {
+            const uploadResult = await secureUpload(
+              'projectceo-photos', 
+              contactId, 
+              blob, 
+              photoMetadata.fileName,
+              blob.type
+            );
+            photoData = uploadResult.publicUrl;
             uploaded = true;
+          } else {
+            console.warn('⚠️ No contactId available, cannot upload securely');
           }
         } catch (uploadErr) {
           console.warn('⚠️ Supabase upload failed, saving offline:', uploadErr);

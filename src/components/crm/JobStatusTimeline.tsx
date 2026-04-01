@@ -1,5 +1,5 @@
 import React from 'react';
-import { CustomerStatus, Contact, Job } from '@/lib/crmData';
+import { CustomerStatus, Contact, Job, statusLabels } from '@/lib/crmData';
 import { 
   CheckCircle, 
   Clock, 
@@ -12,7 +12,8 @@ import {
   AlertCircle,
   Eye,
   Mail,
-  Phone
+  Phone,
+  Shield
 } from 'lucide-react';
 
 interface JobStatusTimelineProps {
@@ -30,18 +31,22 @@ const statusSteps: {
   icon: React.ComponentType<any>;
   color: string;
 }[] = [
-  { status: 'prospect', label: 'Prospect', description: 'Initial lead identified', icon: Eye, color: 'gray' },
-  { status: 'lead', label: 'Lead', description: 'Contact established', icon: Phone, color: 'blue' },
-  { status: 'appt_set', label: 'Appointment Set', description: 'Inspection scheduled', icon: Calendar, color: 'purple' },
-  { status: 'inspection_completed', label: 'Inspection Complete', description: 'Property assessment done', icon: MapPin, color: 'indigo' },
-  { status: 'estimate_sent', label: 'Estimate Sent', description: 'Quote provided to customer', icon: Mail, color: 'cyan' },
-  { status: 'contingency', label: 'Contingency', description: 'Insurance claim pending', icon: FileText, color: 'yellow' },
-  { status: 'signed', label: 'Contract Signed', description: 'Work authorized', icon: CheckCircle, color: 'green' },
-  { status: 'in_progress', label: 'Work in Progress', description: 'Project underway', icon: Wrench, color: 'orange' },
-  { status: 'build_phase', label: 'Build Phase', description: 'Construction/repairs active', icon: Package, color: 'red' },
-  { status: 'cleanup', label: 'Cleanup', description: 'Final site preparation', icon: CheckCircle, color: 'teal' },
-  { status: 'invoicing', label: 'Invoicing', description: 'Final billing prepared', icon: DollarSign, color: 'green' },
-  { status: 'completed', label: 'Completed', description: 'Project finished successfully', icon: CheckCircle, color: 'emerald' },
+  { status: 'prospect', label: statusLabels.prospect, description: 'Initial lead identified', icon: Eye, color: 'gray' },
+  { status: 'lead', label: statusLabels.lead, description: 'Contact established', icon: Phone, color: 'blue' },
+  { status: 'appt_set', label: statusLabels.appt_set, description: 'Inspection scheduled', icon: Calendar, color: 'purple' },
+  { status: 'inspection_completed', label: statusLabels.inspection_completed, description: 'Property assessment done', icon: MapPin, color: 'indigo' },
+  { status: 'estimating', label: statusLabels.estimating, description: 'Preparing quote for customer', icon: FileText, color: 'sky' },
+  { status: 'estimate_sent', label: statusLabels.estimate_sent, description: 'Quote provided to customer', icon: Mail, color: 'cyan' },
+  { status: 'contingency', label: statusLabels.contingency, description: 'Follow-up and negotiation phase', icon: AlertCircle, color: 'yellow' },
+  { status: 'approved', label: statusLabels.approved, description: 'Insurance approval received', icon: Shield, color: 'teal' },
+  { status: 'signed', label: statusLabels.signed, description: 'Work authorized by customer', icon: CheckCircle, color: 'green' },
+  { status: 'ordering_material', label: statusLabels.ordering_material, description: 'Materials being ordered', icon: Package, color: 'amber' },
+  { status: 'in_progress', label: statusLabels.in_progress, description: 'Project underway', icon: Wrench, color: 'orange' },
+  { status: 'build_phase', label: statusLabels.build_phase, description: 'Construction/repairs active', icon: Package, color: 'red' },
+  { status: 'cleanup', label: statusLabels.cleanup, description: 'Final site preparation', icon: CheckCircle, color: 'pink' },
+  { status: 'invoicing', label: statusLabels.invoicing, description: 'Final billing prepared', icon: DollarSign, color: 'rose' },
+  { status: 'pending_payment', label: statusLabels.pending_payment, description: 'Awaiting final payment', icon: DollarSign, color: 'amber' },
+  { status: 'completed', label: statusLabels.completed, description: 'Project finished successfully', icon: CheckCircle, color: 'emerald' },
 ];
 
 function normalizePipelineStatus(rawStatus: string | undefined | null): CustomerStatus | undefined {

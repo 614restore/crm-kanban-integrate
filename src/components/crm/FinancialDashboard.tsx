@@ -194,15 +194,28 @@ export default function FinancialDashboard() {
           advanceTo = 'completed';
         }
         if (advanceTo) {
-          db.updateContact(contact.id, { status: advanceTo, status_changed_at: new Date().toISOString() }).catch(() => {});
-          dispatch({ type: 'UPDATE_CONTACT_STATUS', payload: { contactId: contact.id, status: advanceTo as any } });
-          fireAutomationEvent('contact_status_changed', profile.company_id, {
+          // Use centralized status manager for consistent automation
+          const { updateContactStatus } = await import('../../lib/statusManager');
+          
+          updateContactStatus({
             contactId: contact.id,
+            newStatus: advanceTo,
+            oldStatus: contact.status,
             contactName: invoice.contactName,
             contactEmail: contact.email,
-            oldStatus: contact.status,
-            newStatus: advanceTo,
-          }).catch(() => {});
+            userId: user?.id || 'system',
+            userEmail: user?.email || 'system@trussctr.com',
+            companyId: profile.company_id,
+            source: 'payment_processing',
+            reason: `Invoice ${newStatus}: ${invoice.invoiceNumber}`,
+          }).then(result => {
+            if (result.success) {
+              dispatch({
+                type: 'UPDATE_CONTACT_STATUS',
+                payload: { contactId: contact.id, status: advanceTo as any },
+              });
+            }
+          }).catch(console.error);
         }
         // Fire event-specific automation rules
         const eventType = newStatus === 'paid' ? 'invoice_paid' : newStatus === 'sent' ? 'invoice_sent' : null;

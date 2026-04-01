@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { TeamMember, formatCurrency, roleLabels, UserRole } from '@/lib/crmData';
 import { toast } from 'sonner';
 import PermissionsEditor from '../settings/PermissionsEditor';
+import LimitedAccountManager from '@/components/LimitedAccountManager';
 import type { PermissionCategory, PermissionLevel } from '@/lib/permissions';
 import {
   Users,
@@ -27,6 +28,7 @@ import {
   DollarSign,
   Loader2,
   Settings,
+  Users2,
 } from 'lucide-react';
 
 export default function TeamView() {
@@ -43,6 +45,7 @@ export default function TeamView() {
   const [isSendingInvite, setIsSendingInvite] = useState(false);
   const [isSavingMember, setIsSavingMember] = useState(false);
   const [companyName, setCompanyName] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<'team' | 'limited'>('team');
 
   const [pendingInvites, setPendingInvites] = useState<Array<{
     id: string; email: string; role: string; created_at: string; expires_at: string; accepted: boolean;
@@ -430,44 +433,87 @@ export default function TeamView() {
             departments
           </p>
         </div>
-        {canManage && (
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => {
-                if (atSeatLimit) {
-                  toast.error(`Your ${subscriptionPlan} plan allows up to ${planLimit} user${planLimit === 1 ? '' : 's'}. Upgrade to add more team members.`);
-                  return;
-                }
-                setShowInviteModal(true);
-              }}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                atSeatLimit
-                  ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                  : 'bg-blue-600 text-white hover:bg-blue-700'
-              }`}
-              title={atSeatLimit ? `Plan limit reached (${planLimit} users). Upgrade to add more.` : 'Invite a team member'}
-            >
-              <UserPlus size={18} />
-              <span className="font-medium">
-                {atSeatLimit ? `Seat Limit Reached (${activeSeats + pendingSeats}/${planLimit})` : 'Invite Member'}
-              </span>
-            </button>
-          </div>
-        )}
+        
+        {/* Tabs */}
+        <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg">
+          <button
+            onClick={() => setActiveTab('team')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              activeTab === 'team'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <Users2 className="h-4 w-4" />
+            Full Team
+          </button>
+          <button
+            onClick={() => setActiveTab('limited')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              activeTab === 'limited'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <Users className="h-4 w-4" />
+            Limited Access
+          </button>
+        </div>
       </div>
 
-      {/* Company ID Card */}
-      {canManage && (
-        <div className="bg-gradient-to-r from-slate-900 to-slate-800 rounded-xl p-6 text-white">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-slate-400 text-sm">Company ID</p>
-              <p className="text-2xl font-mono font-bold mt-1">{companyId}</p>
-              <p className="text-slate-400 text-sm mt-2">
-                Share this ID with team members to join your organization
-              </p>
+      {/* Tab Content */}
+      {activeTab === 'limited' ? (
+        canManage ? (
+          <LimitedAccountManager 
+            companyId={state.companyId || profile?.company_id || ''} 
+            currentUserId={profile?.id || ''}
+          />
+        ) : (
+          <div className="text-center py-8 text-gray-500">
+            <Users className="h-12 w-12 mx-auto mb-3 opacity-50" />
+            <p>You don't have permission to manage limited access accounts</p>
+          </div>
+        )
+      ) : (
+        <>
+          {/* Full Team Content - existing content here */}
+          {canManage && (
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => {
+                  if (atSeatLimit) {
+                    toast.error(`Your ${subscriptionPlan} plan allows up to ${planLimit} user${planLimit === 1 ? '' : 's'}. Upgrade to add more team members.`);
+                    return;
+                  }
+                  setShowInviteModal(true);
+                }}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                  atSeatLimit
+                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                }`}
+                title={atSeatLimit ? `Plan limit reached (${planLimit} users). Upgrade to add more.` : 'Invite a team member'}
+              >
+                <UserPlus size={18} />
+                <span className="font-medium">
+                  {atSeatLimit ? `Seat Limit Reached (${activeSeats + pendingSeats}/${planLimit})` : 'Invite Member'}
+                </span>
+              </button>
             </div>
-            <button
+          )}
+
+          {/* Company ID Card */}
+          {canManage && (
+            <div className="bg-gradient-to-r from-slate-900 to-slate-800 rounded-xl p-6 text-white">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-slate-400 text-sm">Company ID</p>
+                  <p className="text-2xl font-mono font-bold mt-1">{companyId}</p>
+                  <p className="text-slate-400 text-sm mt-2">
+                    Share this ID with team members to join your organization
+                  </p>
+                </div>
+                <button
               onClick={handleCopyCompanyId}
               disabled={!state.companyId}
               className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
@@ -960,6 +1006,8 @@ export default function TeamView() {
             setSelectedMember(null);
           }}
         />
+      )}
+        </>
       )}
     </div>
   );

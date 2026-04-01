@@ -46,6 +46,9 @@ export interface DbCompany {
   subscription_ends_at?: string;
   stripe_customer_id?: string;
   stripe_subscription_id?: string;
+  // Limited permission seats tracking
+  limited_seats_total?: number;
+  limited_seats_used?: number;
   created_at: string;
   updated_at: string;
 }
@@ -1840,6 +1843,225 @@ export async function deleteTimeEntry(entryId: string): Promise<void> {
     console.error('[DB] Delete time entry error:', error);
     throw new Error(`Failed to delete time entry: ${error.message}`);
   }
+}
+
+// ===============================
+// LIMITED ROLE SYSTEM OPERATIONS
+// ===============================
+
+export interface DbCustomerAssignment {
+  id: string;
+  company_id: string;
+  user_id: string;
+  contact_id: string;
+  assigned_by?: string;
+  assigned_at: string;
+  notes?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LimitedAccountInfo {
+  id: string;
+  email: string;
+  full_name: string;
+  role: 'canvasser' | 'field_contractor';
+  is_active: boolean;
+  account_expires_at?: string;
+  status: 'active' | 'inactive' | 'expired' | 'expiring_soon';
+  assigned_customers_count: number;
+  created_at: string;
+  created_by_name?: string;
+}
+
+export async function createDirectAccount(accountData: {
+  email: string;
+  password: string;
+  first_name: string;
+  last_name?: string;
+  role: 'canvasser' | 'field_contractor';
+  company_id: string;
+  expires_at?: string;
+  created_by: string;
+}): Promise<{ success: boolean; user?: any; error?: string }> {
+  try {
+    // Check seat availability first
+    const canAssign = await checkCanAssignLimitedRole(accountData.company_id, accountData.role);
+    if (!canAssign) {
+      return { success: false, error: 'No available limited permission seats' };
+    }
+
+    // Create the user in Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      email: accountData.email,
+      password: accountData.password,
+      email_confirm: true,
+      user_metadata: {
+        first_name: accountData.first_name,
+        last_name: accountData.last_name || '',
+        created_by: accountData.created_by,
+        created_directly: true
+      }
+    });
+
+    if (authError) {
+      console.error('[DB] Create auth user error:', authError);
+      return { success: false, error: authError.message };
+    }
+
+    // Create the profile
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .insert({
+        id: authData.user.id,
+        email: accountData.email,
+        first_name: accountData.first_name,
+        last_name: accountData.last_name || '',
+        role: accountData.role,
+        company_id: accountData.company_id,
+        is_active: true,
+        is_limited_account: true,
+        created_directly: true,
+        account_expires_at: accountData.expires_at,
+        must_change_password: false
+      });
+
+    if (profileError) {
+      console.error('[DB] Create profile error:', profileError);
+      // Clean up the auth user if profile creation fails
+      await supabase.auth.admin.deleteUser(authData.user.id);
+      return { success: false, error: profileError.message };
+    }
+
+    return { success: true, user: authData.user };
+  } catch (error) {
+    console.error('[DB] Create direct account error:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
+export async function getLimitedAccounts(companyId: string): Promise<LimitedAccountInfo[]> {
+  const { data, error } = await supabase
+    .from('limited_accounts_view')
+    .select('*')
+    .eq('company_id', companyId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('[DB] Get limited accounts error:', error);
+    throw new Error(`Failed to get limited accounts: ${error.message}`);
+  }
+
+  return data || [];
+}
+
+export async function updateLimitedAccount(userId: string, updates: {
+  is_active?: boolean;
+  account_expires_at?: string;
+  role?: 'canvasser' | 'field_contractor';
+}): Promise<void> {
+  const { error } = await supabase
+    .from('profiles')
+    .update({
+      ...updates,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', userId)
+    .eq('is_limited_account', true);
+
+  if (error) {
+    console.error('[DB] Update limited account error:', error);
+    throw new Error(`Failed to update limited account: ${error.message}`);
+  }
+}
+
+export async function assignCustomerToUser(assignment: {
+  user_id: string;
+  contact_id: string;
+  company_id: string;
+  assigned_by: string;
+  notes?: string;
+}): Promise<DbCustomerAssignment> {
+  const { data, error } = await supabase
+    .from('customer_assignments')
+    .insert([assignment])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('[DB] Create customer assignment error:', error);
+    throw new Error(`Failed to assign customer: ${error.message}`);
+  }
+
+  return data;
+}
+
+export async function getCustomerAssignments(userId: string): Promise<DbCustomerAssignment[]> {
+  const { data, error } = await supabase
+    .from('customer_assignments')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('is_active', true)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('[DB] Get customer assignments error:', error);
+    throw new Error(`Failed to get customer assignments: ${error.message}`);
+  }
+
+  return data || [];
+}
+
+export async function removeCustomerAssignment(userId: string, contactId: string): Promise<void> {
+  const { error } = await supabase
+    .from('customer_assignments')
+    .update({ 
+      is_active: false, 
+      updated_at: new Date().toISOString() 
+    })
+    .eq('user_id', userId)
+    .eq('contact_id', contactId);
+
+  if (error) {
+    console.error('[DB] Remove customer assignment error:', error);
+    throw new Error(`Failed to remove customer assignment: ${error.message}`);
+  }
+}
+
+export async function getLimitedSeatUsage(companyId: string): Promise<{
+  total: number;
+  used: number;
+  available: number;
+}> {
+  const { data, error } = await supabase
+    .from('companies')
+    .select('limited_seats_total, limited_seats_used')
+    .eq('id', companyId)
+    .single();
+
+  if (error) {
+    console.error('[DB] Get limited seat usage error:', error);
+    throw new Error(`Failed to get seat usage: ${error.message}`);
+  }
+
+  const total = data?.limited_seats_total || 5;
+  const used = data?.limited_seats_used || 0;
+
+  return {
+    total,
+    used,
+    available: total - used
+  };
+}
+
+export async function checkCanAssignLimitedRole(companyId: string, role: string): Promise<boolean> {
+  if (!['canvasser', 'field_contractor'].includes(role)) {
+    return true; // Not a limited role
+  }
+
+  const usage = await getLimitedSeatUsage(companyId);
+  return usage.available > 0;
 }
 
 export const db = new DatabaseService();

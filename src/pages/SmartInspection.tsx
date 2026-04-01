@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Camera, ArrowLeft, CheckCircle2, Send } from 'lucide-react';
 import { PageTransition } from '../components/PageTransition';
 import { supabase } from '../lib/supabase';
+import { secureUpload } from '../lib/storageUtils';
 import { useAuth } from '../context/AuthContext';
 import { cn } from '../lib/utils';
 import { buildStoredDocumentUrl } from '../lib/documentAccess';
@@ -36,16 +37,13 @@ export default function SmartInspection() {
       // The accept attribute on the input below already asks iOS to convert, but this
       // guards against any edge-case where a HEIC still slips through.
       const ext = rawExt === 'heic' || rawExt === 'heif' ? 'jpg' : rawExt;
-      const filePath = `${id}/${activeElevation}_${Date.now()}.${ext}`;
+      const fileName = `${activeElevation}_${Date.now()}.${ext}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from('documents')
-        .upload(filePath, file);
-
-      if (uploadError) throw uploadError;
+      const uploadResult = await secureUpload('documents', id, file, fileName);
 
       const { data: { publicUrl } } = supabase.storage
         .from('documents')
+        .getPublicUrl(uploadResult.path);
         .getPublicUrl(filePath);
 
       await supabase.from('documents').insert({

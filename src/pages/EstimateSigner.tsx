@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { buildStoredDocumentUrl } from '../lib/documentAccess';
 import { generateAndDownloadPdf, uploadToAvailableBucket } from '../lib/pdfService';
+import { getCurrentUserCompanyId } from '../lib/storageUtils';
 import { buildDefaultQuoteMeta, parseEstimateNotes } from '../lib/estimateQuote';
 import { formatCurrency } from '../lib/utils';
 
@@ -451,8 +452,9 @@ export default function EstimateSigner() {
 
       const customerSigBlob = await (await fetch(customerSignatureDataUrl)).blob();
       const repSigBlob = await (await fetch(repSignatureDataUrl)).blob();
-      const uploadedCustomerSignature = await uploadToAvailableBucket(`${estimate.contact_id}/estimate-customer-signature-${Date.now()}.png`, customerSigBlob, 'image/png');
-      const uploadedRepSignature = await uploadToAvailableBucket(`${estimate.contact_id}/estimate-rep-signature-${Date.now()}.png`, repSigBlob, 'image/png');
+      const companyId = await getCurrentUserCompanyId();
+      const uploadedCustomerSignature = await uploadToAvailableBucket(`${companyId}/${estimate.contact_id}/estimate-customer-signature-${Date.now()}.png`, customerSigBlob, 'image/png', companyId);
+      const uploadedRepSignature = await uploadToAvailableBucket(`${companyId}/${estimate.contact_id}/estimate-rep-signature-${Date.now()}.png`, repSigBlob, 'image/png', companyId);
 
       const pdfBlob = await buildSignedEstimateBlob({
         companyName,
@@ -477,7 +479,7 @@ export default function EstimateSigner() {
         repSignatureDataUrl,
         repLabel,
       });
-      const uploadedPdf = await uploadToAvailableBucket(`${estimate.contact_id}/signed-estimate-${estimate.id}-${Date.now()}.pdf`, pdfBlob, 'application/pdf');
+      const uploadedPdf = await uploadToAvailableBucket(`${companyId}/${estimate.contact_id}/signed-estimate-${estimate.id}-${Date.now()}.pdf`, pdfBlob, 'application/pdf', companyId);
 
       const signedQuoteBaseName = `Signed Quote ${estimateNumber}`;
       const signedQuoteName = `${signedQuoteBaseName} - ${customerName || 'Customer'}`;

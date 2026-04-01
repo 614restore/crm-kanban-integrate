@@ -42,7 +42,8 @@ const DOCUMENT_UPLOAD_BUCKETS = ['documents', 'projectceo-photos'] as const;
 export async function uploadToAvailableBucket(
   storagePath: string,
   file: Blob,
-  contentType: string
+  contentType: string,
+  companyId?: string
 ) {
   let lastError: Error | null = null;
 
@@ -85,8 +86,8 @@ export async function generateAndUploadPdf(
     .from(htmlElement)
     .outputPdf('blob');
 
-  const storagePath = `${contactId}/${documentType}-${documentId}-${Date.now()}.pdf`;
-  const uploaded = await uploadToAvailableBucket(storagePath, pdfBlob, 'application/pdf');
+  const storagePath = `${companyId}/${contactId}/${documentType}-${documentId}-${Date.now()}.pdf`;
+  const uploaded = await uploadToAvailableBucket(storagePath, pdfBlob, 'application/pdf', companyId);
 
   return {
     blob: pdfBlob,

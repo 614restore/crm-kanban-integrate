@@ -310,17 +310,29 @@ export default function EstimatesView() {
       dispatch({ type: 'UPDATE_ESTIMATE', payload: mapDbEstimateToApp(updated) });
 
       if (!contact?.email) {
-        if (contact) {
-          db.updateContact(contact.id, { status: 'estimate_sent', status_changed_at: new Date().toISOString() }).catch(() => {});
-          dispatch({ type: 'UPDATE_CONTACT', payload: { ...contact, status: 'estimate_sent', updatedAt: new Date().toISOString() } });
-          if (profile?.company_id) {
-            fireAutomationEvent('estimate_sent', profile.company_id, {
-              contactId: contact.id,
-              contactName: `${contact.firstName} ${contact.lastName}`.trim(),
-              oldStatus: contact.status,
-              newStatus: 'estimate_sent',
-            }).catch(() => {});
-          }
+        if (contact && profile?.company_id) {
+          // Use centralized status manager for consistent automation
+          const { updateContactStatus } = await import('../../lib/statusManager');
+          
+          updateContactStatus({
+            contactId: contact.id,
+            newStatus: 'estimate_sent',
+            oldStatus: contact.status,
+            contactName: `${contact.firstName} ${contact.lastName}`.trim(),
+            contactEmail: contact.email || '',
+            userId: user?.id || 'system',
+            userEmail: user?.email || 'system@trussctr.com',
+            companyId: profile.company_id,
+            source: 'estimate_manual_sent',
+            reason: 'Estimate marked as sent (no email on file)',
+          }).then(result => {
+            if (result.success) {
+              dispatch({
+                type: 'UPDATE_CONTACT',
+                payload: { ...contact, status: 'estimate_sent', updatedAt: new Date().toISOString() },
+              });
+            }
+          }).catch(console.error);
         }
         toast.success('Estimate marked as sent (no email on file for this customer)');
         return;

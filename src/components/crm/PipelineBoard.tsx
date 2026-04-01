@@ -258,32 +258,41 @@ export default function PipelineBoard() {
     if (draggedContact && draggedContact.status !== column.status) {
       try {
         if (effectiveCompanyId) {
-          await db.updateContact(draggedContact.id, { status: column.status, status_changed_at: new Date().toISOString() });
-        }
-        dispatch({
-          type: 'UPDATE_CONTACT_STATUS',
-          payload: { contactId: draggedContact.id, status: column.status },
-        });
-        dispatch({
-          type: 'ADD_NOTIFICATION',
-          payload: {
-            id: `notif-${Date.now()}`,
-            type: 'success',
-            title: 'Contact Updated',
-            message: `${getContactFullName(draggedContact)} moved to ${column.title}`,
-            timestamp: new Date().toISOString(),
-            read: false,
-          },
-        });
-        // Fire automation rules for manual board moves
-        if (effectiveCompanyId) {
-          fireAutomationEvent('contact_status_changed', effectiveCompanyId, {
+          // Use centralized status manager for drag-and-drop updates
+          const { updateContactStatus } = await import('../../lib/statusManager');
+          
+          const result = await updateContactStatus({
             contactId: draggedContact.id,
+            newStatus: column.status,
+            oldStatus: draggedContact.status,
             contactName: getContactFullName(draggedContact),
             contactEmail: draggedContact.email,
-            oldStatus: draggedContact.status,
-            newStatus: column.status,
-          }).catch(() => {});
+            userId: user?.id || 'system',
+            userEmail: user?.email || 'system@trussctr.com',
+            companyId: effectiveCompanyId,
+            source: 'drag_drop',
+            reason: `Moved from ${draggedContact.status} to ${column.status}`,
+          });
+
+          if (result.success) {
+            dispatch({
+              type: 'UPDATE_CONTACT_STATUS',
+              payload: { contactId: draggedContact.id, status: column.status },
+            });
+            dispatch({
+              type: 'ADD_NOTIFICATION',
+              payload: {
+                id: `notif-${Date.now()}`,
+                type: 'success',
+                title: 'Contact Updated',
+                message: `${getContactFullName(draggedContact)} moved to ${column.title}`,
+                timestamp: new Date().toISOString(),
+                read: false,
+              },
+            });
+          } else {
+            toast.error(`Failed to move contact: ${result.error}`);
+          }
         }
       } catch (error) {
         console.error('Error updating contact status:', error);
@@ -303,21 +312,31 @@ export default function PipelineBoard() {
     e.stopPropagation();
     try {
       if (effectiveCompanyId) {
-        await db.updateContact(contact.id, { status: 'ordering_material', status_changed_at: new Date().toISOString() });
-      }
-      dispatch({
-        type: 'UPDATE_CONTACT_STATUS',
-        payload: { contactId: contact.id, status: 'ordering_material' },
-      });
-      toast.success(`${getContactFullName(contact)} acknowledged — ordering materials`);
-      if (effectiveCompanyId) {
-        fireAutomationEvent('contact_status_changed', effectiveCompanyId, {
+        // Use centralized status manager for consistent automation
+        const { updateContactStatus } = await import('../../lib/statusManager');
+        
+        const result = await updateContactStatus({
           contactId: contact.id,
+          newStatus: 'ordering_material',
+          oldStatus: contact.status,
           contactName: getContactFullName(contact),
           contactEmail: contact.email,
-          oldStatus: contact.status,
-          newStatus: 'ordering_material',
-        }).catch(() => {});
+          userId: user?.id || 'system',
+          userEmail: user?.email || 'system@trussctr.com',
+          companyId: effectiveCompanyId,
+          source: 'acknowledge_button',
+          reason: 'User acknowledged job ready for material ordering',
+        });
+
+        if (result.success) {
+          dispatch({
+            type: 'UPDATE_CONTACT_STATUS',
+            payload: { contactId: contact.id, status: 'ordering_material' },
+          });
+          toast.success(`${getContactFullName(contact)} acknowledged — ordering materials`);
+        } else {
+          toast.error(`Failed to acknowledge: ${result.error}`);
+        }
       }
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Failed to acknowledge';

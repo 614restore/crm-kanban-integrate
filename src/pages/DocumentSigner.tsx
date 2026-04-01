@@ -12,6 +12,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { handleAutoMove } from '../lib/store';
 import { generateAndDownloadPdf, uploadToAvailableBucket } from '../lib/pdfService';
+import { getCurrentUserCompanyId } from '../lib/storageUtils';
 import { jsPDF } from 'jspdf';
 import { buildStoredDocumentUrl } from '../lib/documentAccess';
 
@@ -434,21 +435,24 @@ export default function DocumentSigner() {
       const customerSignatureResponse = await fetch(customerSignatureDataUrl);
       const customerSignatureBlob = await customerSignatureResponse.blob();
       const customerSignatureFileName = `${docType}-customer-signature-${Date.now()}.png`;
-      const customerSignatureStoragePath = `${id}/${customerSignatureFileName}`;
+      const companyId = await getCurrentUserCompanyId();
+      const customerSignatureStoragePath = `${companyId}/${id}/${customerSignatureFileName}`;
       const uploadedCustomerSignature = await uploadToAvailableBucket(
         customerSignatureStoragePath,
         customerSignatureBlob,
-        'image/png'
+        'image/png',
+        companyId
       );
 
       const contractorSignatureResponse = await fetch(contractorSignatureDataUrl);
       const contractorSignatureBlob = await contractorSignatureResponse.blob();
       const contractorSignatureFileName = `${docType}-contractor-signature-${Date.now()}.png`;
-      const contractorSignatureStoragePath = `${id}/${contractorSignatureFileName}`;
+      const contractorSignatureStoragePath = `${companyId}/${id}/${contractorSignatureFileName}`;
       const uploadedContractorSignature = await uploadToAvailableBucket(
         contractorSignatureStoragePath,
         contractorSignatureBlob,
-        'image/png'
+        'image/png',
+        companyId
       );
 
       const filename = `${(doc?.title || 'document').replace(/\s+/g, '-').toLowerCase()}-${customerName.replace(/\s+/g, '-')}.pdf`;
@@ -466,8 +470,11 @@ export default function DocumentSigner() {
         contractorRoleLabel,
       });
       const generated = await uploadToAvailableBucket(
-        `${id}/${docType}-${crypto.randomUUID()}-${Date.now()}.pdf`,
+        `${companyId}/${id}/${docType}-${crypto.randomUUID()}-${Date.now()}.pdf`,
         pdfBlob,
+        'application/pdf',
+        companyId
+      );
         'application/pdf'
       );
 
