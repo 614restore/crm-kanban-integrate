@@ -18,6 +18,8 @@ import SignDocument from "./pages/SignDocument";
 import SignEstimate from "./pages/SignEstimate";
 import SignChangeOrder from "./pages/SignChangeOrder";
 import SignDocTemplate from "./pages/SignDocTemplate";
+import AcceptInvite from "./pages/AcceptInvite";
+import WorkOrders from "./pages/WorkOrders";
 import { supabase } from '@/lib/supabase';
 
 const queryClient = new QueryClient({
@@ -109,9 +111,12 @@ const App = () => {
               <Route path="/privacy" element={<PrivacyPolicy />} />
               <Route path="/eula" element={<EULA />} />
               <Route path="/sign" element={<SignDocument />} />
+              <Route path="/sign-estimate/:token" element={<SignEstimate />} />
               <Route path="/sign-estimate" element={<SignEstimate />} />
               <Route path="/sign-change-order" element={<SignChangeOrder />} />
               <Route path="/sign-doc" element={<SignDocTemplate />} />
+              <Route path="/accept-invite" element={<AcceptInvite />} />
+              <Route path="/work-orders" element={<WorkOrders />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

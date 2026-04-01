@@ -48,6 +48,7 @@
     "date-fns": "^3.3.1",
     "dexie": "^4.3.0",
     "exceljs": "^4.4.0",
+    "framer-motion": "^11.0.0",
     "html2pdf.js": "^0.14.0",
     "lucide-react": "^0.344.0",
     "nodemailer": "^8.0.4",

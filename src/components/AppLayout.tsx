@@ -904,6 +904,15 @@ function CRMApp() {
       onTeamMemberChange: () => {
         requestSoftReload();
       },
+      onEstimateChange: () => {
+        requestSoftReload();
+      },
+      onProjectChange: () => {
+        requestSoftReload();
+      },
+      onWorkOrderChange: () => {
+        requestSoftReload();
+      },
       onStatusChange: (status, error) => {
         if ((status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') && !realtimeFailedRef.current) {
           realtimeFailedRef.current = true;
@@ -1080,29 +1089,43 @@ useEffect(() => {
           </p>
           <button
             onClick={() => {
-              setSubscriptionBlocked(false);
-              dispatch({ type: 'SET_VIEW', payload: 'settings' });
-              // Navigate to billing tab after SettingsView mounts
-              window.setTimeout(() => {
-                window.dispatchEvent(
-                  new CustomEvent('crm-open-settings-tab', { detail: { tab: 'billing' } })
-                );
-              }, 50);
-              // Re-verify subscription status after a short delay to prevent long-term bypass
-              window.setTimeout(() => {
-                if (profile?.company_id) {
-                  db.getCompany(profile.company_id).then((company) => {
-                    if (!company) return;
-                    const isBlocked =
-                      company.subscription_status === 'canceled' ||
-                      company.subscription_status === 'past_due' ||
-                      (company.subscription_status === 'trialing' &&
-                        !!company.trial_ends_at &&
-                        new Date(company.trial_ends_at) < new Date());
-                    setSubscriptionBlocked(isBlocked);
-                  });
-                }
-              }, 5000);
+              // Open billing portal link in a new tab — no app access granted until
+              // subscription is confirmed. The "Refresh to continue" button below
+              // re-checks status after the user completes checkout.
+              if (profile?.company_id) {
+                db.getCompany(profile.company_id).then((company) => {
+                  const portalUrl = (company as any)?.stripe_billing_portal_url;
+                  if (portalUrl) {
+                    window.open(portalUrl, '_blank', 'noopener,noreferrer');
+                  } else {
+                    // Fallback: navigate to settings billing tab only
+                    setSubscriptionBlocked(false);
+                    dispatch({ type: 'SET_VIEW', payload: 'settings' });
+                    window.setTimeout(() => {
+                      window.dispatchEvent(
+                        new CustomEvent('crm-open-settings-tab', { detail: { tab: 'billing' } })
+                      );
+                    }, 50);
+                    // Re-verify after 1 second to close the bypass window
+                    window.setTimeout(() => {
+                      if (profile?.company_id) {
+                        db.getCompany(profile.company_id).then((c) => {
+                          if (!c) { setSubscriptionBlocked(true); return; }
+                          const blocked =
+                            c.subscription_status === 'canceled' ||
+                            c.subscription_status === 'past_due' ||
+                            (c.subscription_status === 'trialing' &&
+                              !!c.trial_ends_at &&
+                              new Date(c.trial_ends_at) < new Date());
+                          setSubscriptionBlocked(blocked);
+                        });
+                      } else {
+                        setSubscriptionBlocked(true);
+                      }
+                    }, 1000);
+                  }
+                });
+              }
             }}
             className="inline-block w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg px-6 py-3 text-sm transition-colors"
           >

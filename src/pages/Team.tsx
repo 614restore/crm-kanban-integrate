@@ -80,7 +80,7 @@ export default function Team() {
               </div>
               <p className="text-sm text-slate-500 text-center">
                 To add more members, upgrade your plan from the{' '}
-                <span className="font-bold text-accent">TrussCTR web app</span> under Settings → My Plan.
+                <span className="font-bold text-accent">TrussCTR web app</span> under Settings → Subscription Plan.
               </p>
               <button onClick={() => setShowLimitModal(false)} className="w-full bg-primary text-white font-bold py-4 rounded-2xl active:scale-95 transition-transform">
                 Got it
