@@ -14,64 +14,59 @@ export function isHttpUrl(value: string): boolean {
   return /^https?:\/\//i.test(value);
 }
 
+// Parse any Supabase storage URL (public or signed) into { bucket, path }.
+// Returns null for non-storage URLs (e.g. external links).
+export function extractStorageInfo(value: string): { bucket: string; path: string } | null {
+  if (!value || !isHttpUrl(value)) return null;
+  // public:  /storage/v1/object/public/{bucket}/{path}
+  // signed:  /storage/v1/object/sign/{bucket}/{path}
+  const m = value.match(/\/storage\/v1\/object\/(?:public|sign)\/([^/?]+)\/(.+?)(?:\?.*)?$/);
+  if (!m) return null;
+  return { bucket: m[1], path: decodeURIComponent(m[2]) };
+}
+
+// Legacy helper kept for callers that only need the path string.
 export function extractDocumentPath(value: string): string {
   if (!value) return '';
   if (!isHttpUrl(value)) return value;
+  const info = extractStorageInfo(value);
+  return info ? info.path : value;
+}
 
-  // Backward compatibility: convert previously stored public URLs to object path.
-  const marker = '/storage/v1/object/public/projectceo-documents/';
-  const idx = value.indexOf(marker);
-  if (idx === -1) return value;
-  return decodeURIComponent(value.slice(idx + marker.length).split('?')[0]);
+export function isSupabaseStorageUrl(value: string): boolean {
+  return isHttpUrl(value) && /\.supabase\.co\/storage\//.test(value);
 }
 
 export async function getDocumentSignedUrl(pathOrUrl: string, expiresInSeconds: number = 3600): Promise<string | null> {
-  const path = extractDocumentPath(pathOrUrl);
-  if (!path || (isHttpUrl(path) && !path.includes('/projectceo-documents/'))) {
-    return isHttpUrl(pathOrUrl) ? pathOrUrl : null;
-  }
+  if (!pathOrUrl) return null;
 
+  let bucket: string;
+  let path: string;
 
-  // First, check if the file exists
-  try {
-    const { data: fileData, error: listError } = await supabase.storage
-      .from('projectceo-documents')
-      .list(path.includes('/') ? path.substring(0, path.lastIndexOf('/')) : '', {
-        search: path.includes('/') ? path.substring(path.lastIndexOf('/') + 1) : path
-      });
-    
-    if (listError) {
-      console.error('[Storage] Error checking file existence:', listError);
-      console.error('[Storage] This might indicate the bucket does not exist or has wrong permissions');
-    } else if (!fileData || fileData.length === 0) {
-      console.error('[Storage] File not found in bucket at path:', path);
-      console.error('[Storage] Make sure the file was uploaded successfully and the path is correct');
+  if (isHttpUrl(pathOrUrl)) {
+    const info = extractStorageInfo(pathOrUrl);
+    if (!info) {
+      // Not a Supabase storage URL — open as-is (e.g. EagleView, external links)
+      return pathOrUrl;
     }
-  } catch (checkError) {
-    console.warn('[Storage] Could not verify file existence:', checkError);
+    bucket = info.bucket;
+    path = info.path;
+  } else {
+    // Raw relative path — default to projectceo-documents
+    bucket = 'projectceo-documents';
+    path = pathOrUrl;
   }
 
   const { data, error } = await supabase.storage
-    .from('projectceo-documents')
+    .from(bucket)
     .createSignedUrl(path, expiresInSeconds);
 
   if (error) {
-    console.error('[Storage] Signed URL creation failed!');
-    console.error('[Storage] Error details:', JSON.stringify(error, null, 2));
-    console.error('[Storage] Common causes:');
-    console.error('[Storage]   1. Bucket "projectceo-documents" does not exist');
-    console.error('[Storage]   2. Bucket policies are not configured (needs SELECT policy for authenticated users)');
-    console.error('[Storage]   3. File does not exist at the specified path');
-    console.error('[Storage]   4. User is not authenticated properly');
+    console.error(`[Storage] Signed URL creation failed for bucket "${bucket}" path "${path}":`, error.message);
     return null;
   }
 
-  if (!data?.signedUrl) {
-    console.error('[Storage] Signed URL is empty despite no error');
-    return null;
-  }
-
-  return data.signedUrl;
+  return data?.signedUrl ?? null;
 }
 
 function encodeStoragePath(path: string): string {
@@ -137,22 +132,38 @@ async function uploadViaSdk(
   file: File,
   timeoutMs = 20000
 ): Promise<{ ok: true } | { ok: false; message: string }> {
-  const timeoutPromise = new Promise<{ ok: false; message: string }>((resolve) =>
-    setTimeout(() => resolve({ ok: false, message: `SDK upload timed out after ${Math.round(timeoutMs / 1000)}s` }), timeoutMs)
-  );
+  // AbortController lets us actually cancel the underlying fetch when timed out.
+  // Without this the Supabase SDK fetch keeps running as a zombie even after the
+  // timeout resolves, consuming the remaining budget of any outer timeout.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-  const uploadPromise = supabase.storage
-    .from(bucket)
-    .upload(path, file, { upsert: false, cacheControl: '3600', contentType: file.type || undefined })
-    .then(({ error }) => {
-      if (error) {
-        console.error(`[Storage] SDK upload failed:`, error);
-        return { ok: false as const, message: error.message || 'Storage upload failed' };
-      }
-      return { ok: true as const };
-    });
+  try {
+    const { error } = await supabase.storage
+      .from(bucket)
+      .upload(path, file, {
+        upsert: false,
+        cacheControl: '3600',
+        contentType: file.type || undefined,
+        // @ts-ignore — Supabase JS v2 passes fetch options through to the underlying fetch
+        signal: controller.signal,
+      });
 
-  return Promise.race([uploadPromise, timeoutPromise]);
+    if (error) {
+      console.error(`[Storage] SDK upload failed:`, error);
+      return { ok: false, message: error.message || 'Storage upload failed' };
+    }
+    return { ok: true };
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      console.error(`[Storage] SDK upload aborted after ${Math.round(timeoutMs / 1000)}s`);
+      return { ok: false, message: `SDK upload timed out after ${Math.round(timeoutMs / 1000)}s` };
+    }
+    if (error instanceof Error) return { ok: false, message: error.message };
+    return { ok: false, message: 'Unknown SDK upload error' };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**
@@ -353,6 +364,20 @@ export async function uploadDocument(
  * @returns Error message if invalid, null if valid
  */
 export function validateImageFile(file: File, maxSizeMB: number = 5): string | null {
+  const lowerName = file.name.toLowerCase();
+
+  // Catch HEIC/HEIF early — iPhone photos are saved as HEIC by default and
+  // cannot be rendered by most desktop browsers (Chrome, Firefox, Edge).
+  // The MIME type may be 'image/heic', 'image/heif', or even '' (empty).
+  const isHeic =
+    file.type === 'image/heic' ||
+    file.type === 'image/heif' ||
+    lowerName.endsWith('.heic') ||
+    lowerName.endsWith('.heif');
+  if (isHeic) {
+    return 'iPhone HEIC photos are not supported. Please convert to JPG or PNG first (open in Photos → Export → Export as JPG).';
+  }
+
   // Check file type
   if (!file.type.startsWith('image/')) {
     return 'Please upload an image file (JPG, PNG, GIF, WebP)';

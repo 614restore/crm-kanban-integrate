@@ -8,6 +8,7 @@ import { Contact, defaultLeadSources, CustomerStatus } from '@/lib/crmData';
 import { formatPhoneNumber } from '@/lib/utils';
 import { X, User, Phone, Mail, MapPin, DollarSign, Tag, Shield, Building, Loader2, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
+import { fireAutomationEvent } from '@/lib/automationEngine';
 
 type FormStep = 'basic' | 'project' | 'insurance' | 'appointment';
 
@@ -62,11 +63,9 @@ export default function QuickAddModal() {
   };
 
   const resolveCompanyId = async (): Promise<string | null> => {
-    // Timeout wrapper to prevent indefinite hanging
-    const timeout = new Promise<string | null>((_, reject) =>
-      setTimeout(() => reject(new Error('Company resolution timed out after 10 seconds')), 10000)
-    );
-
+    // ensureUserHasCompany runs up to 6 sequential Supabase calls (check → create →
+    // update×3 → verify). 30 s gives ample room even on slow connections.
+    // withTimeout properly clears the timer on success to avoid leaks.
     const resolveLogic = async (): Promise<string | null> => {
       const currentCompanyId = profile?.company_id || state.companyId || null;
       if (currentCompanyId) return currentCompanyId;
@@ -129,12 +128,7 @@ export default function QuickAddModal() {
       return createdCompany.id;
     };
 
-    try {
-      return await Promise.race([resolveLogic(), timeout]);
-    } catch (error) {
-      console.error('Error resolving company ID:', error);
-      throw error;
-    }
+    return withTimeout(resolveLogic(), 30000, 'Company resolution');
   };
 
   const handleClose = () => {
@@ -194,7 +188,10 @@ export default function QuickAddModal() {
         throw new Error('Unable to determine company context. Please ensure you are properly logged in and try again.');
       }
 
-      // If user has a company, save to database
+      // If user has a company, save to database with increased timeout
+      // Ensure contact is always assigned - default to current user if not specified
+      const assignedTo = formData.assignedTo || profile?.id || user?.id;
+      
       const dbContact = await withTimeout(
         db.createContact({
           company_id: finalCompanyId,
@@ -209,7 +206,7 @@ export default function QuickAddModal() {
           zip: formData.zip || undefined,
           status: formData.status,
           lead_source: formData.leadSource,
-          assigned_to: formData.assignedTo || undefined,
+          assigned_to: assignedTo, // Always assign to someone
           tags: [],
           project_type: formData.projectType || undefined,
           project_value: formData.projectValue ? parseFloat(formData.projectValue) : undefined,
@@ -223,12 +220,15 @@ export default function QuickAddModal() {
           deductible: formData.deductible ? parseFloat(formData.deductible) : undefined,
           notes: formData.notes || undefined,
         }),
-        15000,
+        45000, // Increased from 15s to 45s for slow connections
         'Create contact'
       );
 
+      if (!dbContact) {
+        throw new Error('Contact was not saved. Please try again.');
+      }
 
-        const createdContact: Contact = {
+      const createdContact: Contact = {
           id: dbContact.id,
           firstName: dbContact.first_name,
           lastName: dbContact.last_name,
@@ -259,6 +259,17 @@ export default function QuickAddModal() {
         };
 
         dispatch({ type: 'ADD_CONTACT', payload: createdContact });
+
+        // Fire automation rules for new contact creation
+        if (finalCompanyId) {
+          fireAutomationEvent('new_contact_created', finalCompanyId, {
+            contactId: createdContact.id,
+            contactName: `${createdContact.firstName} ${createdContact.lastName}`.trim(),
+            contactEmail: createdContact.email,
+            assignedTo: createdContact.assignedTo,
+            newStatus: createdContact.status,
+          }).catch(() => {});
+        }
 
       // If the user wants to schedule an appointment, navigate to the calendar
       // with the new contact pre-filled in the appointment modal

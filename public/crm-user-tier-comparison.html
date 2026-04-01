@@ -3,316 +3,293 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>TrussCTR vs The Competition</title>
+  <title>TrussCTR vs The Competition — 2026</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; padding: 32px 20px 48px; }
-    header { text-align: center; margin-bottom: 28px; }
-    header h1 { font-size: 1.75rem; font-weight: 800; background: linear-gradient(135deg, #3b82f6, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 6px; }
-    header p { color: #94a3b8; font-size: 0.9rem; }
-    .badge { display: inline-block; background: #1e40af; color: #93c5fd; font-size: 0.68rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.05em; margin-left: 6px; vertical-align: middle; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0b1120; color: #e2e8f0; min-height: 100vh; padding: 32px 16px 56px; }
 
-    /* ── Pricing cards ── */
-    .pricing-section { margin-bottom: 28px; }
-    .pricing-section h2 { text-align: center; font-size: 0.85rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 14px; }
-    .pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
-    .price-card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 16px 12px; text-align: center; position: relative; }
-    .price-card.highlight { background: linear-gradient(135deg, #0f2040, #0f1d3d); border-color: #3b82f6; box-shadow: 0 0 0 2px #3b82f633; }
-    .price-card .crm-name { font-size: 0.8rem; font-weight: 700; color: #e2e8f0; margin-bottom: 10px; }
-    .price-card.highlight .crm-name { color: #60a5fa; }
-    .price-card .price-row { display: flex; flex-direction: column; gap: 4px; }
-    .price-card .plan-pill { display: flex; justify-content: space-between; align-items: center; background: #0f172a; border-radius: 6px; padding: 4px 8px; font-size: 0.72rem; }
-    .price-card.highlight .plan-pill { background: #0a1628; }
-    .plan-pill .plan-name { color: #94a3b8; }
-    .plan-pill .plan-price { font-weight: 700; color: #f87171; }
-    .price-card.highlight .plan-pill .plan-price { color: #34d399; }
-    .price-card .you-tag { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); background: #3b82f6; color: #fff; font-size: 0.62rem; font-weight: 800; padding: 2px 10px; border-radius: 999px; white-space: nowrap; text-transform: uppercase; letter-spacing: 0.05em; }
-    .price-card .savings-note { margin-top: 10px; font-size: 0.68rem; color: #34d399; font-weight: 600; }
-    .price-card .per-user-note { margin-top: 6px; font-size: 0.68rem; color: #f87171; font-weight: 600; }
-    .vs-divider { text-align: center; color: #334155; font-size: 0.75rem; font-weight: 700; margin: 4px 0; letter-spacing: 0.1em; }
+    /* Header */
+    .header { text-align: center; margin-bottom: 32px; padding: 32px 20px; background: linear-gradient(160deg, #0f1e3a 0%, #0b1120 100%); border-radius: 16px; }
+    .header h1 { font-size: clamp(1.3rem, 4vw, 1.9rem); font-weight: 900; background: linear-gradient(90deg, #93c5fd, #c4a35a); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 8px; }
+    .badge { display: inline-block; background: #1e3a5f; border: 1px solid #2d5a8e; color: #94a3b8; font-size: 0.62rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.05em; margin-left: 8px; vertical-align: middle; -webkit-text-fill-color: #94a3b8; }
+    .header p { color: #94a3b8; font-size: 0.88rem; }
 
-    /* ── Feature table ── */
-    .controls { display: flex; justify-content: center; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
-    .ctrl-btn { padding: 7px 18px; background: #1e293b; color: #94a3b8; border: 1px solid #334155; border-radius: 8px; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.15s; }
-    .ctrl-btn:hover { background: #334155; color: #e2e8f0; }
-    .section { border: 1px solid #1e293b; border-radius: 12px; margin-bottom: 10px; overflow: hidden; }
-    .section-toggle { width: 100%; background: #1e293b; border: none; color: #e2e8f0; padding: 12px 18px; font-size: 0.85rem; font-weight: 700; text-align: left; cursor: pointer; display: flex; align-items: center; justify-content: space-between; letter-spacing: 0.03em; transition: background 0.15s; }
-    .section-toggle:hover { background: #273549; }
-    .section-toggle .arrow { transition: transform 0.2s; font-size: 0.75rem; color: #64748b; }
-    .section.open .section-toggle .arrow { transform: rotate(180deg); }
-    .section-body { display: none; overflow-x: auto; }
-    .section.open .section-body { display: block; }
-    table { width: 100%; border-collapse: collapse; min-width: 780px; }
-    thead tr { background: #0f172a; }
-    thead th { padding: 10px 12px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #64748b; text-align: center; border-bottom: 1px solid #1e293b; white-space: nowrap; }
-    thead th:first-child { text-align: left; min-width: 200px; }
-    thead th.you { color: #60a5fa; background: #0f2040; }
-    tbody tr { border-bottom: 1px solid #1e293b; transition: background 0.12s; }
+    /* Pricing cards */
+    .pricing-label { text-align: center; font-size: 0.7rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 12px; }
+    .pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 28px; }
+    .card { background: #111827; border: 1px solid #1e293b; border-radius: 12px; padding: 12px; text-align: center; position: relative; }
+    .card.you { background: linear-gradient(145deg, #0f2244, #111827); border-color: #c4a35a; box-shadow: 0 0 20px #c4a35a22; }
+    .card-tag { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); background: linear-gradient(90deg, #c4a35a, #e8c87a); color: #0b1120; font-size: 0.58rem; font-weight: 900; padding: 2px 10px; border-radius: 999px; white-space: nowrap; text-transform: uppercase; letter-spacing: 0.04em; }
+    .card-name { font-size: 0.78rem; font-weight: 700; margin-bottom: 8px; color: #94a3b8; }
+    .card.you .card-name { color: #c4a35a; }
+    .plan-row { display: flex; justify-content: space-between; align-items: center; background: #0b1120; border-radius: 5px; padding: 3px 7px; margin-bottom: 3px; font-size: 0.62rem; }
+    .card.you .plan-row { background: #0a1628; }
+    .plan-label { color: #64748b; }
+    .plan-price { font-weight: 700; color: #f87171; }
+    .card.you .plan-price { color: #86efac; }
+    .card-note { margin-top: 6px; font-size: 0.6rem; font-weight: 600; }
+    .card.you .card-note { color: #86efac; }
+    .card-note { color: #f87171; }
+
+    /* Controls */
+    .controls { display: flex; justify-content: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .ctrl { padding: 6px 16px; background: #1e293b; color: #94a3b8; border: 1px solid #334155; border-radius: 8px; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+    .ctrl:hover { background: #334155; color: #e2e8f0; }
+
+    /* Sections */
+    .section { border: 1px solid #1e293b; border-radius: 12px; margin-bottom: 8px; overflow: hidden; }
+    .sec-header { width: 100%; background: #111827; border: none; color: #e2e8f0; padding: 11px 16px; font-size: 0.82rem; font-weight: 700; text-align: left; cursor: pointer; display: flex; align-items: center; justify-content: space-between; transition: background 0.15s; letter-spacing: 0.02em; }
+    .sec-header:hover { background: #1a2744; }
+    .sec-header .arrow { font-size: 0.7rem; color: #64748b; transition: transform 0.2s; }
+    .section.open .sec-header .arrow { transform: rotate(180deg); }
+    .sec-body { display: none; overflow-x: auto; }
+    .section.open .sec-body { display: block; }
+
+    /* Table */
+    table { width: 100%; border-collapse: collapse; min-width: 680px; }
+    thead tr { background: #0b1120; border-bottom: 1px solid #1e293b; }
+    thead th { padding: 9px 12px; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; text-align: center; white-space: nowrap; }
+    thead th:first-child { text-align: left; min-width: 200px; color: #475569; }
+    thead th.you-col { color: #c4a35a; background: #0f1e3a; }
+    tbody tr { border-bottom: 1px solid #1e293b; transition: background 0.1s; }
     tbody tr:last-child { border-bottom: none; }
-    tbody tr:hover { background: #1e293b66; }
-    tbody td { padding: 10px 12px; font-size: 0.82rem; text-align: center; color: #cbd5e1; vertical-align: middle; }
-    tbody td:first-child { text-align: left; font-weight: 600; color: #e2e8f0; font-size: 0.8rem; }
-    tbody td.you-col { background: #0f2040; }
-    .yes  { color: #34d399; font-weight: 700; font-size: 1rem; }
-    .no   { color: #f87171; font-size: 1rem; }
-    .part { color: #fbbf24; font-size: 0.75rem; font-weight: 600; }
-    .summary { background: linear-gradient(135deg,#1e3a5f22,#1e1b4b22); border: 1px solid #1e40af44; border-radius: 14px; padding: 24px 28px; max-width: 960px; margin: 24px auto 0; }
-    .summary h2 { color: #60a5fa; font-size: 1rem; margin-bottom: 14px; }
-    .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
-    .summary-card { background: #1e293b; border-radius: 10px; padding: 14px; }
-    .summary-card .val { color: #34d399; font-size: 1.3rem; font-weight: 800; }
-    .summary-card .desc { color: #94a3b8; font-size: 0.78rem; margin-top: 4px; }
-    footer { text-align: center; margin-top: 28px; color: #475569; font-size: 0.75rem; }
-    footer span { color: #3b82f6; }
-    @media (max-width: 600px) { header h1 { font-size: 1.3rem; } .summary { padding: 16px; } .pricing-grid { grid-template-columns: repeat(2, 1fr); } }
+    tbody tr:hover { background: #0f172a; }
+    tbody td { padding: 9px 12px; font-size: 0.78rem; text-align: center; vertical-align: middle; color: #cbd5e1; }
+    tbody td:first-child { text-align: left; font-weight: 500; color: #cbd5e1; }
+    tbody td.you-col { background: #0f1e3a; }
+
+    /* Cell values */
+    .yes  { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; background: #15803d22; border-radius: 50%; color: #4ade80; font-size: 0.82rem; font-weight: 900; }
+    .you .yes { background: #c4a35a22; color: #fbbf24; }
+    .no   { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; background: #dc262622; border-radius: 50%; color: #f87171; font-size: 0.78rem; }
+    .partial { display: inline-block; background: #1e293b; color: #fbbf24; font-size: 0.62rem; font-weight: 600; padding: 1px 6px; border-radius: 5px; white-space: nowrap; }
+
+    /* "You" badge in header */
+    .you-badge { background: #c4a35a; color: #0b1120; font-size: 0.55rem; font-weight: 900; padding: 1px 5px; border-radius: 999px; margin-left: 5px; text-transform: uppercase; }
+
+    /* Why wins */
+    .wins { background: linear-gradient(135deg, #0f2244, #0b1120); border: 1px solid #c4a35a33; border-radius: 14px; padding: 20px; margin-top: 20px; }
+    .wins h2 { color: #c4a35a; font-size: 0.9rem; font-weight: 700; margin-bottom: 12px; }
+    .wins-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 10px; }
+    .win-card { background: #111827; border: 1px solid #1e293b; border-radius: 10px; padding: 12px; }
+    .win-val { color: #c4a35a; font-size: 1.05rem; font-weight: 900; margin-bottom: 4px; }
+    .win-desc { color: #64748b; font-size: 0.7rem; line-height: 1.4; }
+
+    /* Legend / Footer */
+    .legend { display: flex; justify-content: center; gap: 20px; margin-top: 20px; flex-wrap: wrap; }
+    .legend span { font-size: 0.7rem; color: #475569; display: flex; align-items: center; gap: 5px; }
+    footer { text-align: center; margin-top: 12px; color: #334155; font-size: 0.67rem; }
+    footer em { color: #3b82f6; font-style: normal; }
   </style>
 </head>
 <body>
 
-<header>
+<div class="header">
   <h1>TrussCTR vs The Competition <span class="badge">2026</span></h1>
-  <p>Built exclusively for roofing &amp; restoration contractors &mdash; how do we stack up?</p>
-</header>
-
-<!-- ══ PRICING CARDS ══ -->
-<div class="pricing-section">
-  <h2>&#128176; Real-World Monthly Cost for a 5-Person Team</h2>
-  <div class="pricing-grid">
-
-    <!-- TrussCTR -->
-    <div class="price-card highlight">
-      <div class="you-tag">&#9733; Best Value</div>
-      <div class="crm-name">TrussCTR</div>
-      <div class="price-row">
-        <div class="plan-pill"><span class="plan-name">Starter</span><span class="plan-price">$29/mo</span></div>
-        <div class="plan-pill"><span class="plan-name">Pro</span><span class="plan-price">$59/mo</span></div>
-        <div class="plan-pill"><span class="plan-name">Business</span><span class="plan-price">$99/mo</span></div>
-        <div class="plan-pill"><span class="plan-name">Enterprise</span><span class="plan-price">$179/mo</span></div>
-      </div>
-      <div class="savings-note">Flat rate &mdash; all users included</div>
-    </div>
-
-    <!-- JobNimbus -->
-    <div class="price-card">
-      <div class="crm-name">JobNimbus</div>
-      <div class="price-row">
-        <div class="plan-pill"><span class="plan-name">Starter (1)</span><span class="plan-price">$25/mo</span></div>
-        <div class="plan-pill"><span class="plan-name">Pro (3)</span><span class="plan-price">$85/mo</span></div>
-        <div class="plan-pill"><span class="plan-name">5 users</span><span class="plan-price">~$135/mo</span></div>
-        <div class="plan-pill"><span class="plan-name">Unlimited</span><span class="plan-price">$350+/mo</span></div>
-      </div>
-      <div class="per-user-note">+$25&ndash;$35 per extra user</div>
-    </div>
-
-    <!-- AccuLynx -->
-    <div class="price-card">
-      <div class="crm-name">AccuLynx</div>
-      <div class="price-row">
-        <div class="plan-pill"><span class="plan-name">Solo (1)</span><span class="plan-price">~$89/mo</span></div>
-        <div class="plan-pill"><span class="plan-name">5 users</span><span class="plan-price">~$199/mo</span></div>
-        <div class="plan-pill"><span class="plan-name">15 users</span><span class="plan-price">~$399/mo</span></div>
-        <div class="plan-pill"><span class="plan-name">Enterprise</span><span class="plan-price">Custom</span></div>
-      </div>
-      <div class="per-user-note">+~$30 per extra user</div>
-    </div>
-
-    <!-- Roofr -->
-    <div class="price-card">
-      <div class="crm-name">Roofr</div>
-      <div class="price-row">
-        <div class="plan-pill"><span class="plan-name">Starter (1)</span><span class="plan-price">$89/mo</span></div>
-        <div class="plan-pill"><span class="plan-name">Pro (3)</span><span class="plan-price">$159/mo</span></div>
-        <div class="plan-pill"><span class="plan-name">Business (10)</span><span class="plan-price">$299/mo</span></div>
-        <div class="plan-pill"><span class="plan-name">Enterprise</span><span class="plan-price">Custom</span></div>
-      </div>
-      <div class="per-user-note">+$30&ndash;$50 per extra user</div>
-    </div>
-
-    <!-- Jobber -->
-    <div class="price-card">
-      <div class="crm-name">Jobber</div>
-      <div class="price-row">
-        <div class="plan-pill"><span class="plan-name">Core (1)</span><span class="plan-price">$49/mo</span></div>
-        <div class="plan-pill"><span class="plan-name">Connect (5)</span><span class="plan-price">$129/mo</span></div>
-        <div class="plan-pill"><span class="plan-name">Grow (unlimited)</span><span class="plan-price">$249/mo</span></div>
-        <div class="plan-pill"><span class="plan-name">Enterprise</span><span class="plan-price">Custom</span></div>
-      </div>
-      <div class="per-user-note">+$29 per extra user (Core)</div>
-    </div>
-
-    <!-- ServiceTitan -->
-    <div class="price-card">
-      <div class="crm-name">ServiceTitan</div>
-      <div class="price-row">
-        <div class="plan-pill"><span class="plan-name">Starter</span><span class="plan-price">N/A</span></div>
-        <div class="plan-pill"><span class="plan-name">Essentials</span><span class="plan-price">~$398/mo</span></div>
-        <div class="plan-pill"><span class="plan-name">The Works</span><span class="plan-price">~$598/mo</span></div>
-        <div class="plan-pill"><span class="plan-name">Enterprise</span><span class="plan-price">$1,000+/mo</span></div>
-      </div>
-      <div class="per-user-note">Min $398/mo &mdash; no starter plan</div>
-    </div>
-
-  </div>
+  <p>Built exclusively for roofing &amp; restoration contractors — how do we stack up?</p>
 </div>
-<!-- ══ END PRICING CARDS ══ -->
 
+<!-- Pricing cards -->
+<p class="pricing-label">💰 Real-World Monthly Cost — 5-Person Team</p>
+<div class="pricing-grid" id="pricing-cards"></div>
+
+<!-- Controls -->
 <div class="controls">
-  <button class="ctrl-btn" onclick="toggleAll(true)">&#9660; Expand All Features</button>
-  <button class="ctrl-btn" onclick="toggleAll(false)">&#9650; Collapse All</button>
+  <button class="ctrl" onclick="toggleAll(true)">▼ Expand All</button>
+  <button class="ctrl" onclick="toggleAll(false)">▲ Collapse All</button>
 </div>
-
-<script>
-  const Y = '<span class="yes">&#10004;</span>';
-  const N = '<span class="no">&#10008;</span>';
-  const P = (t) => `<span class="part">${t}</span>`;
-  const COLS = ['TrussCTR', 'JobNimbus', 'AccuLynx', 'Roofr', 'Jobber', 'ServiceTitan'];
-  const SECTIONS = [
-    {
-      id: 'pricing', label: '&#128176; Pricing &amp; Access', open: true,
-      rows: [
-        ['Starting Monthly Price',         '$29&ndash;$179/mo', P('$25+/user'), P('$85+/user'), P('$89+/mo'), P('$49+/user'), P('$500+/mo')],
-        ['No Per-User Fee (flat rate)',     Y, N, N, N, N, N],
-        ['Free Trial / Demo Available',    Y, Y, P('Demo only'), Y, Y, P('Demo only')],
-        ['Built for Small Roofing Teams',  Y, Y, P('Mid-large'), Y, P('General'), N],
-      ]
-    },
-    {
-      id: 'crm', label: '&#128101; CRM &amp; Contact Management', open: true,
-      rows: [
-        ['Full CRM (Contacts, Leads, Customers)',   Y, Y, Y, P('Basic'), Y, Y],
-        ['Kanban Pipeline Board',                   Y, Y, Y, P('Limited'), Y, Y],
-        ['Job Status / Lead Progression Tracking',  Y, Y, Y, P('Basic'), Y, Y],
-        ['Customer Detail Page w/ Full History',    Y, Y, Y, P('Limited'), Y, Y],
-      ]
-    },
-    {
-      id: 'insurance', label: '&#128196; Insurance &amp; Supplement Management', open: true,
-      rows: [
-        ['Insurance Claim Tracking (per customer)',  Y, P('Add-on'), Y, N, N, P('Limited')],
-        ['Supplement Tracking (linked to claims)',   Y, P('Limited'), Y, N, N, N],
-        ['Claims + Supplements Linked to Customer', Y, P('Manual'), Y, N, N, N],
-        ['Adjuster &amp; Insurance Contact Mgmt',   Y, P('Basic'), Y, N, N, N],
-      ]
-    },
-    {
-      id: 'docs', label: '&#128221; Documents &amp; Digital Signatures', open: false,
-      rows: [
-        ['Proposal Template (auto-fill)',            Y, Y, Y, Y, P('Basic'), Y],
-        ['Contract Template w/ Signature Blocks',    Y, Y, Y, Y, P('Basic'), Y],
-        ['3-Day Right to Cancel Notice (FTC)',       Y, N, P('Manual'), N, N, N],
-        ['Digital Signature Capture (on-screen)',    Y, Y, Y, Y, P('Add-on'), Y],
-        ['Per-Customer Document Editing',            Y, P('Limited'), P('Limited'), P('Limited'), N, Y],
-        ['Document Duplication &amp; Delete',        Y, P('Basic'), P('Basic'), P('Basic'), N, Y],
-        ['Document Upload (work orders, materials)', Y, Y, Y, P('Basic'), Y, Y],
-      ]
-    },
-    {
-      id: 'scheduling', label: '&#128197; Scheduling &amp; Calendar', open: false,
-      rows: [
-        ['Appointment / Inspection Scheduling', Y, Y, Y, P('Limited'), Y, Y],
-        ['Crew Schedule Management',            Y, Y, Y, N, Y, Y],
-        ['Calendar View (month/week/day)',       Y, Y, Y, P('Basic'), Y, Y],
-      ]
-    },
-    {
-      id: 'financials', label: '&#128200; Estimates, Invoices &amp; Financials', open: false,
-      rows: [
-        ['Estimate Builder',                             Y, Y, Y, Y, Y, Y],
-        ['Invoice Generation',                           Y, Y, Y, Y, Y, Y],
-        ['Financial Dashboard',                          Y, P('Basic'), Y, P('Basic'), Y, Y],
-        ['Expense Tracking',                             Y, P('Limited'), P('Limited'), N, Y, Y],
-        ['QuickBooks Integration',                       Y, Y, Y, P('Limited'), Y, Y],
-        ['Material Orders w/ Pre-Built Roof Templates',  Y, P('Basic'), Y, P('Limited'), N, P('Limited')],
-      ]
-    },
-    {
-      id: 'team', label: '&#128202; Team Management &amp; Reporting', open: false,
-      rows: [
-        ['Team Member Management + Role Permissions', Y, Y, Y, P('Basic'), Y, Y],
-        ['Individual Sales Rep Metrics',              Y, Y, Y, N, P('Basic'), Y],
-        ['Team Performance Dashboard',               Y, Y, Y, N, P('Basic'), Y],
-        ['Reports &amp; Analytics (PDF Export)',      Y, P('Limited'), Y, P('Basic'), P('Basic'), Y],
-      ]
-    },
-    {
-      id: 'comms', label: '&#128172; Communication &amp; Automation', open: false,
-      rows: [
-        ['Communication Hub (SMS, Email, Notes)', Y, Y, Y, P('Email only'), Y, Y],
-        ['Automated Follow-Up / Workflows',       Y, Y, Y, P('Limited'), Y, Y],
-        ['Google Review Request (1-click)',        Y, P('Add-on'), N, N, P('Add-on'), N],
-        ['Customer Satisfaction Survey',          Y, P('Add-on'), N, N, P('Add-on'), N],
-      ]
-    },
-    {
-      id: 'tech', label: '&#128295; Technology &amp; Integrations', open: false,
-      rows: [
-        ['AI Assistant (built-in)',           Y, P('Basic'), N, N, N, P('Beta')],
-        ['Mobile Friendly (Responsive)',      Y, Y, Y, Y, Y, Y],
-        ['Photo Capture (job site photos)',   Y, Y, Y, Y, Y, Y],
-        ['Equipment / Asset Tracking',        Y, P('Limited'), P('Limited'), N, Y, Y],
-        ['Supplier Management',               Y, P('Basic'), P('Basic'), N, P('Basic'), Y],
-        ['API Access &amp; Webhooks',         Y, P('Limited'), P('Limited'), N, P('Limited'), Y],
-        ['Multi-Company / White Label Ready', Y, N, N, N, N, P('Enterprise')],
-        ['Data Security (Row-Level)',         Y, P('Basic'), P('Basic'), P('Basic'), P('Basic'), Y],
-      ]
-    },
-  ];
-
-  function buildSections() {
-    const container = document.getElementById('sections');
-    SECTIONS.forEach(sec => {
-      const div = document.createElement('div');
-      div.className = 'section' + (sec.open ? ' open' : '');
-      div.id = 'sec-' + sec.id;
-      const headerRow = COLS.map((c, i) =>
-        i === 0
-          ? `<th class="you" style="text-align:left;">TrussCTR <span class="badge">You</span></th>`
-          : `<th>${c}</th>`
-      ).join('');
-      const bodyRows = sec.rows.map(row => {
-        const feat = row[0];
-        const cells = row.slice(1).map((val, i) =>
-          `<td${i === 0 ? ' class="you-col"' : ''}>${val}</td>`
-        ).join('');
-        return `<tr><td>${feat}</td>${cells}</tr>`;
-      }).join('');
-      div.innerHTML = `
-        <button class="section-toggle" onclick="toggle('sec-${sec.id}')">
-          <span>${sec.label}</span><span class="arrow">&#9660;</span>
-        </button>
-        <div class="section-body">
-          <table>
-            <thead><tr><th style="text-align:left;">Feature</th>${headerRow}</tr></thead>
-            <tbody>${bodyRows}</tbody>
-          </table>
-        </div>`;
-      container.appendChild(div);
-    });
-  }
-  document.addEventListener('DOMContentLoaded', buildSections);
-  function toggle(id) { document.getElementById(id).classList.toggle('open'); }
-  function toggleAll(open) {
-    document.querySelectorAll('.section').forEach(s =>
-      open ? s.classList.add('open') : s.classList.remove('open')
-    );
-  }
-</script>
 
 <div id="sections"></div>
 
-<div class="summary">
-  <h2>&#128161; Why TrussCTR Wins</h2>
-  <div class="summary-grid">
-    <div class="summary-card"><div class="val">Flat Rate</div><div class="desc">No per-user fees ever &mdash; competitors charge $25&ndash;$79 per seat</div></div>
-    <div class="summary-card"><div class="val">$29&ndash;$179</div><div class="desc">vs $398&ndash;$800+/mo for ServiceTitan at comparable team size</div></div>
-    <div class="summary-card"><div class="val">Insurance</div><div class="desc">Built-in claim &amp; supplement tracking &mdash; competitors charge add-ons or don&rsquo;t offer it</div></div>
-    <div class="summary-card"><div class="val">All Features</div><div class="desc">Every plan includes every feature &mdash; no feature-gating by tier</div></div>
-  </div>
+<!-- Why TrussCTR Wins -->
+<div class="wins">
+  <h2>💡 Why TrussCTR Wins</h2>
+  <div class="wins-grid" id="win-cards"></div>
 </div>
 
-<footer style="margin-top:28px;">
-  <p>&copy; 2026 <span>TrussCTR</span> by 614 Restore LLC &nbsp;&middot;&nbsp; Competitor data based on publicly available pricing as of March 2026. Subject to change.<br>&#10004; = Included &nbsp; &#10008; = Not available &nbsp; Partial/Add-on = Limited or requires upgrade.</p>
+<!-- Legend -->
+<div class="legend">
+  <span><span class="yes" style="display:inline-flex;">✔</span> Included</span>
+  <span><span class="no" style="display:inline-flex;">✘</span> Not available</span>
+  <span><span class="partial">Label</span> = Limited / Add-on</span>
+</div>
+<footer>
+  &copy; 2026 <em>TrussCTR</em> by 614 Restore LLC &nbsp;&middot;&nbsp;
+  Competitor pricing based on publicly available data as of March 2026. Subject to change.
 </footer>
 
+<script>
+const PRICING = [
+  { name:'TrussCTR', you:true, tag:'★ Best Value',
+    plans:[['Starter (2 users)','$59/mo'],['Pro (5 users)','$119/mo'],['Business (15)','$229/mo'],['Scaling (∞)','$399/mo']],
+    note:'Flat rate — all users included', noteGood:true },
+  { name:'JobNimbus',
+    plans:[['Starter (1)','$25/mo'],['Pro (3)','$89/mo'],['5 users','~$150/mo'],['Unlimited','$350+/mo']],
+    note:'+$25–$35 per extra user' },
+  { name:'AccuLynx',
+    plans:[['Solo (1)','~$89/mo'],['5 users','~$199/mo'],['15 users','~$399/mo'],['Enterprise','Custom']],
+    note:'+~$30 per extra user' },
+  { name:'Roofr',
+    plans:[['Starter (1)','$89/mo'],['Pro (3)','$159/mo'],['Business (10)','$299/mo'],['Enterprise','Custom']],
+    note:'+$30–$50 per extra user' },
+  { name:'Jobber',
+    plans:[['Core (1)','$49/mo'],['Connect (5)','$129/mo'],['Grow (∞)','$249/mo'],['Enterprise','Custom']],
+    note:'+$29/user (Core)' },
+  { name:'ServiceTitan',
+    plans:[['Essentials','~$500/mo'],['The Works','~$800/mo'],['Enterprise','$1,200+/mo'],['Starter','N/A']],
+    note:'Min ~$500/mo — no starter plan' },
+];
+
+const Y = '<span class="yes">✔</span>';
+const N = '<span class="no">✘</span>';
+const P = t => `<span class="partial">${t}</span>`;
+const COLS = ['TrussCTR','JobNimbus','AccuLynx','Roofr','Jobber','ServiceTitan'];
+
+const SECTIONS = [
+  { id:'pricing', label:'💰 Pricing & Access', open:true, rows:[
+    ['Starting monthly price',           '$59–$399 flat',P('$25+/user'),P('$89+/user'),P('$89+/mo'),P('$49+/user'),P('$500+/mo')],
+    ['Flat rate — no per-user fees',     Y,N,N,N,N,N],
+    ['14-day free trial',                Y,Y,P('Demo only'),Y,Y,P('Demo only')],
+    ['Built for roofing & restoration',  Y,Y,Y,Y,P('Partial'),P('Partial')],
+  ]},
+  { id:'crm', label:'🏗️ CRM & Pipeline Management', open:true, rows:[
+    ['Full CRM (contacts, leads, customers)',  Y,Y,Y,Y,Y,Y],
+    ['Kanban pipeline board',                  Y,Y,Y,P('Limited'),Y,Y],
+    ['Lead source tracking',                   Y,Y,Y,Y,P('Limited'),Y],
+    ['Full contact history (jobs, docs, comms)',Y,Y,Y,P('Limited'),Y,Y],
+    ['Stale lead detection & AI scoring',      Y,N,N,N,N,N],
+  ]},
+  { id:'insurance', label:'📋 Insurance & Claims', open:true, rows:[
+    ['Insurance claim tracking per customer',  Y,P('Add-on'),Y,N,N,P('Limited')],
+    ['Supplement tracking',                    Y,P('Limited'),Y,N,N,N],
+    ['Claims linked to contacts & jobs',       Y,P('Limited'),P('Partial'),N,N,P('Partial')],
+    ['Adjuster & insurance contact mgmt',      Y,P('Limited'),Y,N,N,P('Partial')],
+  ]},
+  { id:'projects', label:'🔨 Work Orders & Projects', open:false, rows:[
+    ['Work orders (multi-trade support)',          Y,Y,Y,P('Limited'),Y,Y],
+    ['17 job types (roofing, exterior, interior)', Y,N,P('Limited'),N,N,P('Limited')],
+    ['Change orders (AWO) built-in',               Y,N,Y,N,N,Y],
+    ['Subcontractor assignment & cost tracking',   Y,P('Limited'),P('Limited'),N,Y,Y],
+    ['Permit tracking',                            Y,N,P('Limited'),N,N,Y],
+    ['Equipment & asset tracking',                 Y,P('Limited'),P('Limited'),N,Y,Y],
+  ]},
+  { id:'docs', label:'📄 Documents & Signatures', open:false, rows:[
+    ['Estimate builder',                      Y,Y,Y,Y,Y,Y],
+    ['Digital signature capture',             Y,Y,Y,Y,P('Add-on'),Y],
+    ['Contract template w/ signature blocks', Y,Y,Y,Y,P('Limited'),Y],
+    ['3-Day FTC right-to-cancel notice',      Y,N,P('Limited'),N,N,N],
+    ['Change order template',                 Y,N,P('Limited'),N,N,Y],
+    ['Certificate of completion template',    Y,P('Limited'),P('Limited'),N,N,Y],
+    ['Per-customer document editing',         Y,P('Limited'),P('Limited'),P('Limited'),N,Y],
+  ]},
+  { id:'scheduling', label:'📅 Scheduling & Calendar', open:false, rows:[
+    ['Appointment / inspection scheduling',  Y,Y,Y,P('Limited'),Y,Y],
+    ['Crew schedule management',             Y,Y,Y,N,Y,Y],
+    ['Month / week / day calendar view',     Y,Y,Y,P('Limited'),Y,Y],
+  ]},
+  { id:'financials', label:'💵 Estimates, Invoices & Financials', open:false, rows:[
+    ['Invoice generation',                    Y,Y,Y,Y,Y,Y],
+    ['Expense tracking (13 categories)',       Y,P('Limited'),P('Limited'),N,Y,Y],
+    ['Labor vs sub cost breakdown',            Y,N,P('Limited'),N,P('Limited'),Y],
+    ['Profit margin calculations',             Y,P('Limited'),Y,N,Y,Y],
+    ['Financial dashboard & analytics',        Y,P('Limited'),Y,P('Limited'),Y,Y],
+    ['QuickBooks integration',                 Y,Y,Y,P('Limited'),Y,Y],
+    ['Material orders w/ roof templates',      Y,P('Limited'),Y,P('Limited'),N,P('Limited')],
+    ['Supplier management (8 pre-loaded)',     Y,P('Limited'),P('Limited'),N,P('Limited'),Y],
+    ['Excel / PDF export (35+ columns)',       Y,P('Limited'),P('Limited'),P('Limited'),P('Limited'),Y],
+  ]},
+  { id:'team', label:'👥 Team Management & Reporting', open:false, rows:[
+    ['Role-based permissions',        Y,Y,Y,P('Limited'),Y,Y],
+    ['Individual sales rep metrics',  Y,Y,Y,N,P('Limited'),Y],
+    ['Team performance dashboard',    Y,Y,Y,N,P('Limited'),Y],
+    ['Company goal tracking',         Y,N,N,N,N,P('Limited')],
+    ['Activity & audit logs',         Y,P('Limited'),P('Limited'),N,P('Limited'),Y],
+  ]},
+  { id:'comms', label:'💬 Communication & Automation', open:false, rows:[
+    ['Communication hub (SMS, email, notes)', Y,Y,Y,P('Email only'),Y,Y],
+    ['Automated follow-up workflows',          Y,Y,Y,P('Limited'),Y,Y],
+    ['Professional email templates (8)',       Y,Y,Y,P('Limited'),Y,Y],
+    ['Google review request (1-click)',        Y,P('Add-on'),N,N,P('Add-on'),N],
+    ['Customer satisfaction surveys',          Y,P('Add-on'),N,N,P('Add-on'),N],
+  ]},
+  { id:'tech', label:'⚡ Technology & Integrations', open:false, rows:[
+    ['Built-in AI assistant',            Y,P('Limited'),N,N,N,P('Limited')],
+    ['Mobile app / PWA (offline ready)', Y,Y,Y,Y,Y,Y],
+    ['Job-site photo capture',           Y,Y,Y,Y,Y,Y],
+    ['Offline data access',              Y,P('Limited'),N,N,P('Limited'),N],
+    ['EagleView aerial integration',     Y,Y,P('Limited'),Y,N,P('Limited')],
+    ['Row-level data security (RLS)',    Y,P('Limited'),P('Limited'),P('Limited'),P('Limited'),Y],
+    ['Multi-company / white label',      Y,N,N,N,N,P('Enterprise')],
+  ]},
+];
+
+const WIN_CARDS = [
+  { stat:'Flat Rate',    desc:'No per-user fees ever — competitors charge $25–$79 per seat' },
+  { stat:'$59–$399',     desc:'vs $500–$1,200+/mo for ServiceTitan at comparable team size' },
+  { stat:'Insurance',   desc:'Built-in claim & supplement tracking — most competitors don\'t offer this' },
+  { stat:'All Features', desc:'Every feature on every plan — no artificial feature-gating by tier' },
+];
+
+function buildPricing() {
+  const grid = document.getElementById('pricing-cards');
+  PRICING.forEach(c => {
+    const div = document.createElement('div');
+    div.className = 'card' + (c.you ? ' you' : '');
+    let html = '';
+    if (c.tag) html += `<div class="card-tag">${c.tag}</div>`;
+    html += `<div class="card-name">${c.name}</div>`;
+    c.plans.forEach(([l,p]) => { html += `<div class="plan-row"><span class="plan-label">${l}</span><span class="plan-price">${p}</span></div>`; });
+    if (c.note) html += `<div class="card-note">${c.note}</div>`;
+    div.innerHTML = html;
+    grid.appendChild(div);
+  });
+}
+
+function buildSections() {
+  const container = document.getElementById('sections');
+  SECTIONS.forEach(sec => {
+    const div = document.createElement('div');
+    div.className = 'section' + (sec.open ? ' open' : '');
+    div.id = 'sec-' + sec.id;
+    const headRow = COLS.map((c,i) => i===0
+      ? `<th class="you-col" style="text-align:left;">${c} <span class="you-badge">You</span></th>`
+      : `<th>${c}</th>`).join('');
+    const rows = sec.rows.map(r => {
+      const feat = r[0];
+      const cells = r.slice(1).map((v,i) =>
+        `<td${i===0?' class="you-col you"':''}>${v}</td>`).join('');
+      return `<tr><td>${feat}</td>${cells}</tr>`;
+    }).join('');
+    div.innerHTML = `
+      <button class="sec-header" onclick="toggle('sec-${sec.id}')">
+        <span>${sec.label}</span><span class="arrow">▼</span>
+      </button>
+      <div class="sec-body">
+        <table>
+          <thead><tr><th style="text-align:left;">Feature</th>${headRow}</tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+    container.appendChild(div);
+  });
+}
+
+function buildWins() {
+  const g = document.getElementById('win-cards');
+  WIN_CARDS.forEach(c => {
+    const d = document.createElement('div');
+    d.className = 'win-card';
+    d.innerHTML = `<div class="win-val">${c.stat}</div><div class="win-desc">${c.desc}</div>`;
+    g.appendChild(d);
+  });
+}
+
+function toggle(id) { document.getElementById(id).classList.toggle('open'); }
+function toggleAll(open) {
+  document.querySelectorAll('.section').forEach(s => open ? s.classList.add('open') : s.classList.remove('open'));
+}
+
+document.addEventListener('DOMContentLoaded', () => { buildPricing(); buildSections(); buildWins(); });
+</script>
 </body>
 </html>

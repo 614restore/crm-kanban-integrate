@@ -5,6 +5,7 @@ import StripeIntegration from './stripe';
 import QuickBooksIntegration from './quickbooks';
 import TwilioIntegration from './twilio';
 import EagleViewIntegration from './eagleview';
+import RoofrIntegration from './roofr';
 import { OpenWeatherIntegration, HailTraceIntegration } from './weather';
 
 export class IntegrationManager {
@@ -15,6 +16,23 @@ export class IntegrationManager {
 
   constructor() {
     this.initializeIntegrations();
+
+    // Auto-reload credentials from Supabase whenever auth state changes
+    // — covers sign-in, token refresh, and initial session on page load.
+    supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+        this.loadFromSupabase().catch(() => {});
+      }
+    });
+
+    // Re-hydrate credentials when the tab regains focus after dormancy.
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          this.loadFromSupabase().catch(() => {});
+        }
+      });
+    }
   }
 
   /**
@@ -143,6 +161,8 @@ export class IntegrationManager {
           return await this.testTwilio(testCredentials);
         case 'eagleview':
           return await this.testEagleView(testCredentials);
+        case 'roofr':
+          return await this.testRoofr(testCredentials);
         case 'openweather':
           return await this.testOpenWeather(testCredentials);
         case 'hailtrace':
@@ -203,6 +223,9 @@ export class IntegrationManager {
             integration.credentials.clientId,
             integration.credentials.environment ?? 'production'
           );
+          break;
+        case 'roofr':
+          connection = new RoofrIntegration(integration.credentials.apiKey);
           break;
         case 'openweather':
           connection = new OpenWeatherIntegration(integration.credentials.apiKey);
@@ -326,6 +349,49 @@ export class IntegrationManager {
       message: 'EagleView credentials saved. Reports will be ordered when requested from a contact.',
       timestamp: new Date().toISOString(),
     };
+  }
+
+  private async testRoofr(credentials: any): Promise<IntegrationTestResult> {
+    if (!credentials?.apiKey) {
+      return { success: false, message: 'API Key is required', timestamp: new Date().toISOString() };
+    }
+    try {
+      const roofr = new RoofrIntegration(credentials.apiKey);
+      return await roofr.testConnection();
+    } catch (err) {
+      return {
+        success: false,
+        message: `Roofr connection failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        timestamp: new Date().toISOString(),
+      };
+    }
+  }
+
+  /**
+   * Order a Roofr measurement report for a contact address.
+   * Exposed so contact detail pages can call it directly:
+   *   integrationManager.orderRoofrReport({ address, city, state, zip, contactId })
+   */
+  async orderRoofrReport(order: {
+    address: string;
+    city: string;
+    state: string;
+    zip: string;
+    contactId?: string;
+    reportType?: 'standard' | 'premium';
+  }) {
+    const roofr = this.activeConnections.get('roofr') as RoofrIntegration | undefined;
+    if (!roofr) throw new Error('Roofr is not connected. Configure it in Settings → Integrations.');
+    return roofr.orderReport(order);
+  }
+
+  /**
+   * List Roofr reports, optionally filtered to a single contact.
+   */
+  async listRoofrReports(contactId?: string) {
+    const roofr = this.activeConnections.get('roofr') as RoofrIntegration | undefined;
+    if (!roofr) return [];
+    return roofr.listReports(contactId);
   }
 
   private async testOpenWeather(credentials: any): Promise<IntegrationTestResult> {

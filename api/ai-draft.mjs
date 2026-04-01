@@ -23,14 +23,20 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'contactName is required' });
   }
 
-  const systemPrompt = `You are a professional assistant for a roofing/restoration contractor. 
+  // Sanitize user-supplied fields — strip newlines and cap length to prevent prompt injection
+  const safeName    = String(contactName).replace(/[\n\r]/g, ' ').slice(0, 100);
+  const safeType    = String(projectType  || 'roofing/restoration').replace(/[\n\r]/g, ' ').slice(0, 100);
+  const safeTone    = String(tone         || 'professional and helpful').replace(/[\n\r]/g, ' ').slice(0, 50);
+  const safeContext = context ? String(context).replace(/[\n\r]/g, ' ').slice(0, 500) : '';
+
+  const systemPrompt = `You are a professional assistant for a roofing/restoration contractor.
 Write concise, professional customer emails. Keep them warm but businesslike.
 Always respond with valid JSON only: { "subject": "...", "body": "..." }`;
 
-  const userPrompt = `Write a professional email to ${contactName}.
-Project type: ${projectType || 'roofing/restoration'}
-Tone: ${tone || 'professional and helpful'}
-${context ? `Context: ${context}` : ''}
+  const userPrompt = `Write a professional email to <contact_name>${safeName}</contact_name>.
+<project_type>${safeType}</project_type>
+<tone>${safeTone}</tone>
+${safeContext ? `<context>${safeContext}</context>` : ''}
 Reply ONLY with JSON: { "subject": "...", "body": "..." }`;
 
   try {

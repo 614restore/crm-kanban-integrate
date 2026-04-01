@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 110" fill="none">
+  <defs>
+    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366f1;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#4338ca;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="iconGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#e0e7ff;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Shield shape -->
+  <path d="M50 4 L92 20 L92 52 C92 75 73 94 50 104 C27 94 8 75 8 52 L8 20 Z"
+        fill="url(#shieldGrad)"
+        stroke="#4f46e5"
+        stroke-width="1.5"/>
+
+  <!-- Inner shield highlight -->
+  <path d="M50 12 L84 25 L84 52 C84 71 68 88 50 97 C32 88 16 71 16 52 L16 25 Z"
+        fill="none"
+        stroke="#818cf8"
+        stroke-width="1"
+        opacity="0.4"/>
+
+  <!-- Clipboard icon: board -->
+  <rect x="33" y="36" width="34" height="38" rx="3" fill="url(#iconGrad)" opacity="0.95"/>
+
+  <!-- Clipboard clip -->
+  <rect x="43" y="30" width="14" height="10" rx="2" fill="url(#iconGrad)"/>
+
+  <!-- Lines on clipboard -->
+  <line x1="40" y1="50" x2="60" y2="50" stroke="#6366f1" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="40" y1="58" x2="60" y2="58" stroke="#6366f1" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="40" y1="66" x2="52" y2="66" stroke="#6366f1" stroke-width="2.5" stroke-linecap="round"/>
+</svg>

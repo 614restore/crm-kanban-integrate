@@ -16,7 +16,7 @@ jobs:
         with:
           node-version: '20'
       - name: Install dependencies
-        run: npm ci
+        run: npm install --legacy-peer-deps
       - name: Run VibeCheck scan
         run: npx vibecheck-ai scan full --ci --format json
         continue-on-error: true

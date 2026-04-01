@@ -1,0 +1,42 @@
+╔══════════════════════════════════════════════════════════════╗
+║  HOW TO ADD YOUR ACTUAL TRUSSCTR LOGO (3 Easy Steps)        ║
+╚══════════════════════════════════════════════════════════════╝
+
+STEP 1: Save Your Logo
+-----------------------
+Right-click the TrussCTR shield logo image you provided and:
+- Save it to your Downloads folder
+- Or save it anywhere you can find it
+
+STEP 2: Copy to Project
+------------------------
+Option A - Drag & Drop (Easiest):
+  1. Open Finder
+  2. Navigate to: Documents/GitHub/crm-kanban-integrate/public/
+  3. Drag your logo file into this folder
+  4. Rename it to: trussctr-logo.png
+
+Option B - Terminal Command:
+  Open Terminal and run:
+  
+  cp ~/Downloads/YOUR_LOGO_FILE.png ~/Documents/GitHub/crm-kanban-integrate/public/trussctr-logo.png
+
+  (Replace YOUR_LOGO_FILE.png with your actual filename)
+
+STEP 3: Deploy
+--------------
+Open Terminal and run these commands:
+
+cd ~/Documents/GitHub/crm-kanban-integrate
+git add public/trussctr-logo.png
+git commit -m "Add actual TrussCTR shield logo"
+git push origin main
+
+Wait 2-3 minutes for Vercel to deploy, then refresh your site!
+
+╔══════════════════════════════════════════════════════════════╗
+║  YOUR SITE IS ALREADY LIVE WITH A PLACEHOLDER LOGO!         ║
+║  Visit: https://crm-kanban-integrate.vercel.app              ║
+╚══════════════════════════════════════════════════════════════╝
+
+Questions? Email: 614restorellc@gmail.com

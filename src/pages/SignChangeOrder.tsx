@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import SignaturePad from "@/components/ui/SignaturePad";
 
-const API_BASE = "https://crm-kanban-integrate.vercel.app/api/sign-change-order";
+const API_BASE = "/api/document-handler?action=sign-change-order";
 
 interface ChangeOrderItem {
   description: string;

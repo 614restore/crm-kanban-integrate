@@ -11,6 +11,7 @@ import AIConfigDialog from '@/components/AIConfigDialog';
 import { formatPhoneNumber } from '@/lib/utils';
 import AIApprovalPanel from '@/components/AIApprovalPanel';
 import SubscriptionView from '@/components/crm/SubscriptionView';
+import FeatureToggles from '@/components/crm/FeatureToggles';
 import {
   Settings,
   Building2,
@@ -32,6 +33,7 @@ import {
   MessageSquare,
   Calendar,
   FileText,
+  FilePlus,
   User,
   Upload,
   Loader2,
@@ -43,12 +45,118 @@ import {
   Target,
   DollarSign,
   Receipt,
+  ToggleLeft,
+  Eye,
+  EyeOff,
+  Send,
+  Server,
+  ChevronDown,
+  ChevronUp,
+  HelpCircle,
 } from 'lucide-react';
 import { supabase, isDemoMode } from '@/lib/supabase';
 import { ensureDefaultLeadSources } from '@/lib/setupCompany';
 import ImageCropDialog from '@/components/ui/ImageCropDialog';
+import DocumentTemplates from '@/components/crm/DocumentTemplates';
 
-type SettingsTab = 'company' | 'profile' | 'integrations' | 'ai-assistant' | 'notifications' | 'security' | 'billing' | 'customer-billing' | 'api';
+// ── SMTP provider quick-setup presets ────────────────────────────────────────
+const SMTP_PROVIDERS = [
+  {
+    id: 'gmail',
+    label: 'Gmail',
+    host: 'smtp.gmail.com',
+    port: '587',
+    secure: false,
+    badge: 'App Password required',
+    badgeColor: 'bg-yellow-50 text-yellow-700 border-yellow-200',
+    steps: [
+      { n: 1, text: 'Go to myaccount.google.com → Security' },
+      { n: 2, text: 'Enable 2-Step Verification (required before App Passwords appear)' },
+      { n: 3, text: 'Search "App Passwords" → create one, select Mail / Other' },
+      { n: 4, text: 'Copy the 16-character code — paste it in the Password field below' },
+      { n: 5, text: 'Username = your full Gmail address (e.g. you@gmail.com)' },
+    ],
+    note: 'Gmail free accounts are limited to 500 emails/day. For higher volume, use Google Workspace or a transactional provider.',
+  },
+  {
+    id: 'outlook',
+    label: 'Outlook',
+    host: 'smtp.office365.com',
+    port: '587',
+    secure: false,
+    badge: 'App Password required',
+    badgeColor: 'bg-yellow-50 text-yellow-700 border-yellow-200',
+    steps: [
+      { n: 1, text: 'Go to account.microsoft.com → Security → Advanced security options' },
+      { n: 2, text: 'Under "App passwords" click Create a new app password' },
+      { n: 3, text: 'Copy the generated password — paste it in the Password field below' },
+      { n: 4, text: 'Username = your full Microsoft email (e.g. you@outlook.com)' },
+    ],
+    note: 'Personal Outlook accounts: use smtp-mail.outlook.com instead. Microsoft 365 Business: use smtp.office365.com.',
+  },
+  {
+    id: 'yahoo',
+    label: 'Yahoo',
+    host: 'smtp.mail.yahoo.com',
+    port: '465',
+    secure: true,
+    badge: 'App Password required',
+    badgeColor: 'bg-yellow-50 text-yellow-700 border-yellow-200',
+    steps: [
+      { n: 1, text: 'Go to login.yahoo.com → Account Security' },
+      { n: 2, text: 'Click "Generate app password" → select Other app' },
+      { n: 3, text: 'Copy the generated password — paste it in the Password field below' },
+      { n: 4, text: 'Username = your full Yahoo address (e.g. you@yahoo.com)' },
+      { n: 5, text: 'Check "Use SSL/TLS" — Yahoo uses port 465 with SSL' },
+    ],
+    note: null,
+  },
+  {
+    id: 'sendgrid',
+    label: 'SendGrid',
+    host: 'smtp.sendgrid.net',
+    port: '587',
+    secure: false,
+    badge: 'API key as password',
+    badgeColor: 'bg-blue-50 text-blue-700 border-blue-200',
+    steps: [
+      { n: 1, text: 'Log into app.sendgrid.com → Settings → API Keys' },
+      { n: 2, text: 'Click Create API Key → give it "Mail Send" permission' },
+      { n: 3, text: 'Username: enter the literal word  apikey  (not your email)' },
+      { n: 4, text: 'Password: paste your SendGrid API key' },
+      { n: 5, text: 'Verify your sender address in SendGrid under Sender Authentication first' },
+    ],
+    note: 'SendGrid free tier: 100 emails/day. Upgrade for higher volume with full analytics.',
+  },
+  {
+    id: 'mailgun',
+    label: 'Mailgun',
+    host: 'smtp.mailgun.org',
+    port: '587',
+    secure: false,
+    badge: 'Domain required',
+    badgeColor: 'bg-purple-50 text-purple-700 border-purple-200',
+    steps: [
+      { n: 1, text: 'Log into app.mailgun.com → Sending → Domains' },
+      { n: 2, text: 'Select your verified domain → SMTP credentials tab' },
+      { n: 3, text: 'Copy the username (e.g. postmaster@mg.yourdomain.com) and password shown' },
+      { n: 4, text: 'Paste those into the Username and Password fields below' },
+    ],
+    note: 'You must verify a domain in Mailgun before sending. Sandbox domains are limited to authorized recipients only.',
+  },
+] as const;
+
+function detectSmtpProvider(host: string) {
+  const h = host.toLowerCase();
+  if (h.includes('gmail')) return SMTP_PROVIDERS.find(p => p.id === 'gmail') ?? null;
+  if (h.includes('office365') || h.includes('outlook')) return SMTP_PROVIDERS.find(p => p.id === 'outlook') ?? null;
+  if (h.includes('yahoo')) return SMTP_PROVIDERS.find(p => p.id === 'yahoo') ?? null;
+  if (h.includes('sendgrid')) return SMTP_PROVIDERS.find(p => p.id === 'sendgrid') ?? null;
+  if (h.includes('mailgun')) return SMTP_PROVIDERS.find(p => p.id === 'mailgun') ?? null;
+  return null;
+}
+
+type SettingsTab = 'company' | 'profile' | 'integrations' | 'ai-assistant' | 'notifications' | 'security' | 'billing' | 'customer-billing' | 'api' | 'features' | 'document-templates';
 
 interface CompanyFormData {
   name: string;
@@ -64,6 +172,11 @@ interface CompanyFormData {
   tax_id: string;
   from_email: string;
   from_name: string;
+  smtp_host: string;
+  smtp_port: string;
+  smtp_user: string;
+  smtp_pass: string;
+  smtp_secure: boolean;
 }
 
 function normalizeCompanyName(rawName?: string | null, email?: string | null): string {
@@ -97,6 +210,10 @@ export default function SettingsView() {
   const [isSavingLeadSource, setIsSavingLeadSource] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
   const [isSavingCompany, setIsSavingCompany] = useState(false);
+  const [isSavingSmtp, setIsSavingSmtp] = useState(false);
+  const [isTestingSmtp, setIsTestingSmtp] = useState(false);
+  const [showSmtpPass, setShowSmtpPass] = useState(false);
+  const [smtpGuideOpen, setSmtpGuideOpen] = useState(true);
 
   // Integration hooks
   const {
@@ -130,6 +247,11 @@ export default function SettingsView() {
     tax_id: '',
     from_email: '',
     from_name: '',
+    smtp_host: '',
+    smtp_port: '587',
+    smtp_user: '',
+    smtp_pass: '',
+    smtp_secure: false,
   });
   
   const [profileForm, setProfileForm] = useState({
@@ -204,21 +326,31 @@ export default function SettingsView() {
       const userEmail = user?.email || profile?.email || '';
       
       if (userEmail) {
-        const { setupNewUser } = await import('@/lib/setupCompany');
-        const setupSuccess = await setupNewUser(userId, userEmail);
-        
-        if (setupSuccess) {
-          // Fetch the profile again to get the new company_id
-          const retryResult = await supabase
-            .from('profiles')
-            .select('company_id')
-            .eq('id', userId)
-            .single();
-          
-          if (retryResult.data?.company_id) {
-            dispatch({ type: 'SET_COMPANY_ID', payload: retryResult.data.company_id });
-            return retryResult.data.company_id;
+        try {
+          const { setupNewUser } = await import('@/lib/setupCompany');
+          // Guard against setupNewUser hanging indefinitely (no internal timeout).
+          const setupSuccess = await Promise.race([
+            setupNewUser(userId, userEmail),
+            new Promise<boolean>((_, reject) =>
+              setTimeout(() => reject(new Error('setupNewUser timed out')), 10000)
+            ),
+          ]);
+
+          if (setupSuccess) {
+            // Fetch the profile again to get the new company_id
+            const retryResult = await supabase
+              .from('profiles')
+              .select('company_id')
+              .eq('id', userId)
+              .single();
+
+            if (retryResult.data?.company_id) {
+              dispatch({ type: 'SET_COMPANY_ID', payload: retryResult.data.company_id });
+              return retryResult.data.company_id;
+            }
           }
+        } catch (setupErr) {
+          console.warn('resolveCompanyId: setupNewUser failed or timed out:', setupErr);
         }
       }
 
@@ -272,6 +404,11 @@ export default function SettingsView() {
             tax_id: company.tax_id || '',
             from_email: company.from_email || '',
             from_name: company.from_name || '',
+            smtp_host: company.smtp_host || '',
+            smtp_port: String(company.smtp_port || 587),
+            smtp_user: company.smtp_user || '',
+            smtp_pass: company.smtp_pass || '',
+            smtp_secure: company.smtp_secure ?? false,
           });
           if (company.logo_url && !company.logo_url.startsWith('blob:')) {
             setCompanyLogo(company.logo_url);
@@ -390,6 +527,44 @@ export default function SettingsView() {
       toast.error(errorMessage);
     } finally {
       setIsSavingCompany(false);
+    }
+  };
+
+  const handleSaveSmtp = async () => {
+    const companyId = effectiveCompanyId || await resolveCompanyId();
+    if (!companyId) { toast.error('Unable to find your company.'); return; }
+    setIsSavingSmtp(true);
+    try {
+      const ok = await db.updateSmtpSettings(companyId, {
+        smtp_host: companyForm.smtp_host || undefined,
+        smtp_port: companyForm.smtp_port ? parseInt(companyForm.smtp_port, 10) : undefined,
+        smtp_user: companyForm.smtp_user || undefined,
+        smtp_pass: companyForm.smtp_pass || undefined,
+        smtp_secure: companyForm.smtp_secure,
+      });
+      if (ok) toast.success('SMTP settings saved.');
+      else toast.error('Failed to save SMTP settings.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save SMTP settings.');
+    } finally {
+      setIsSavingSmtp(false);
+    }
+  };
+
+  const handleTestSmtp = async () => {
+    setIsTestingSmtp(true);
+    try {
+      const { sendEmail } = await import('@/lib/emailApi');
+      await sendEmail({
+        to: profile?.email || user?.email || '',
+        subject: 'SMTP Test — CRM',
+        html: '<p>Your custom SMTP settings are working correctly.</p>',
+      });
+      toast.success('Test email sent! Check your inbox.');
+    } catch (err) {
+      toast.error(`Test failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setIsTestingSmtp(false);
     }
   };
 
@@ -916,9 +1091,16 @@ export default function SettingsView() {
       return;
     }
 
-    // Create preview URL and open crop dialog
+    // Read as data URL (self-contained string — no blob lifecycle/revocation
+    // issues, works identically in all browsers, loads reliably in <img> tags
+    // even inside Radix portals and CSS-animated dialogs).
     try {
-      const previewUrl = URL.createObjectURL(file);
+      const previewUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => resolve(ev.target!.result as string);
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.readAsDataURL(file);
+      });
       setImageToCrop(previewUrl);
       setPendingImageFile(file);
       setLogoCropDialogOpen(true);
@@ -926,7 +1108,7 @@ export default function SettingsView() {
       console.error('Failed to create preview:', error);
       toast.error('Failed to load image for cropping');
     }
-    
+
     e.target.value = '';
   };
 
@@ -939,29 +1121,19 @@ export default function SettingsView() {
     setIsUploadingLogo(true);
 
     try {
-      // Convert blob to file
       const croppedFile = new File([croppedBlob], pendingImageFile?.name || 'logo.jpg', {
         type: 'image/jpeg',
       });
 
-      // Show loading toast while resolving company
-      const loadingToastId = toast.loading?.('Preparing upload...') || undefined;
-      
       const companyId = effectiveCompanyId || await resolveCompanyId();
 
       if (!companyId) {
-        toast.error('Unable to find your company. Your account may need to be set up. Please sign out and sign back in.');
+        toast.error('Unable to find your company. Please sign out and sign back in.');
         setCompanyLogo(previousLogo);
-        setIsUploadingLogo(false);
         return;
       }
-      
-      // Dismiss loading toast
-      if (loadingToastId && toast.dismiss) {
-        toast.dismiss(loadingToastId);
-      }
 
-      // Precompute a local compatibility fallback before network upload.
+      // Encode a compact fallback data-URL (runs locally, no network needed).
       try {
         precomputedFallbackDataUrl = await withTimeout(
           resizeImageToDataUrl(croppedFile, 520, 0.84),
@@ -972,113 +1144,121 @@ export default function SettingsView() {
         console.warn('Logo fallback precompute failed:', precomputeError);
       }
 
-      // Save a compatibility-safe version first, then attempt storage upload as an upgrade.
-      if (precomputedFallbackDataUrl) {
-        try {
-          const baselineSave = await withTimeout(
-            saveCompanyLogoUrl(companyId, precomputedFallbackDataUrl),
-            12000,
-            'Company logo baseline save'
-          );
-          if (baselineSave?.logo_url) {
-            compatibilitySaved = true;
-            setCompanyLogo(baselineSave.logo_url);
-            setCompanyLogoUrlInput(baselineSave.logo_url);
-            window.dispatchEvent(new Event('crm-company-updated'));
-          }
-        } catch (baselineError) {
-          console.warn('Company logo baseline save failed, continuing with upload path:', baselineError);
-        }
-      }
-
+      // Prepare the optimized file for storage upload while potentially running
+      // the baseline DB save concurrently below.
       const uploadFile = await optimizeImageForUpload(croppedFile, 900, 0.84, 450 * 1024);
 
-      // Upload to Supabase if user has company
-      if (companyId) {
-        const result = await withTimeout(uploadCompanyLogo(uploadFile, companyId), 32000, 'Company logo upload');
+      // ── Run baseline DB save and storage upload IN PARALLEL ───────────────
+      // Previously these ran sequentially (12 s + 32 s + 12 s = up to 56 s).
+      // Now the user waits at most max(DB timeout, storage timeout) ≈ 15 s.
+      const baselineSavePromise = precomputedFallbackDataUrl
+        ? withTimeout(saveCompanyLogoUrl(companyId, precomputedFallbackDataUrl), 10000, 'Company logo baseline save')
+            .then((r) => {
+              if (r?.logo_url) {
+                compatibilitySaved = true;
+                setCompanyLogo(r.logo_url);
+                setCompanyLogoUrlInput(r.logo_url);
+                window.dispatchEvent(new Event('crm-company-updated'));
+              }
+              return r;
+            })
+            .catch((e) => { console.warn('Company logo baseline save failed:', e); return null; })
+        : Promise.resolve(null);
 
-        if (result.error) {
-          if (compatibilitySaved) {
-            toast.success('Logo saved using compatibility mode');
-            setIsUploadingLogo(false);
-            return;
-          }
+      const storageUploadPromise = withTimeout(
+        uploadCompanyLogo(uploadFile, companyId),
+        15000,
+        'Company logo upload'
+      ).catch((e) => ({ url: '', path: '', error: getReadableError(e) }));
 
-          try {
-            const fallbackDataUrl = precomputedFallbackDataUrl || await resizeImageToDataUrl(croppedFile, 520, 0.84);
-            const fallbackSave = await withTimeout(saveCompanyLogoUrl(companyId, fallbackDataUrl), 12000, 'Company logo fallback save');
-            if (!fallbackSave?.logo_url) throw new Error('Fallback save did not persist');
-            setCompanyLogo(fallbackSave.logo_url);
-            setCompanyLogoUrlInput(fallbackSave.logo_url);
-            window.dispatchEvent(new Event('crm-company-updated'));
-            toast.success('Logo saved using compatibility mode');
-            setIsUploadingLogo(false);
-            return;
-          } catch (fallbackError) {
-            const fallbackMessage = getReadableError(fallbackError);
-            if (isFileReadError(result.error) && isFileReadError(fallbackMessage)) {
-              toast.error(readErrorHint);
-            } else {
-              toast.error(`Upload failed: ${result.error} | fallback failed: ${fallbackMessage}`);
-            }
-            setCompanyLogo(previousLogo);
-            setIsUploadingLogo(false);
-            return;
-          }
-        } else {
-          // Persist logo URL in company profile.
-          const updatedCompany = await retryCompanyLogoSave(companyId, result.url);
-          if (!updatedCompany?.logo_url) {
-            setCompanyLogo(previousLogo);
-            toast.error('Logo uploaded, but failed to persist to company profile');
-            setIsUploadingLogo(false);
-            return;
-          }
+      // Wait for both to settle.
+      const [storageResult] = await Promise.all([storageUploadPromise, baselineSavePromise]);
 
+      // Storage succeeded → upgrade to CDN URL.
+      if (!storageResult.error) {
+        const updatedCompany = await retryCompanyLogoSave(companyId, storageResult.url);
+        if (updatedCompany?.logo_url) {
           setCompanyLogo(updatedCompany.logo_url);
           setCompanyLogoUrlInput(updatedCompany.logo_url);
           window.dispatchEvent(new Event('crm-company-updated'));
           toast.success('Logo uploaded and saved successfully');
+          return;
         }
-      } else {
-        toast.error('No company context available. Please refresh and sign in again.');
       }
+
+      // Storage failed but baseline DB save already persisted → good enough.
+      if (compatibilitySaved) {
+        toast.success('Logo saved successfully');
+        return;
+      }
+
+      // Both failed — one final attempt to save the data-URL.
+      if (precomputedFallbackDataUrl) {
+        try {
+          const finalSave = await withTimeout(
+            saveCompanyLogoUrl(companyId, precomputedFallbackDataUrl),
+            8000,
+            'Company logo final save'
+          );
+          if (finalSave?.logo_url) {
+            setCompanyLogo(finalSave.logo_url);
+            setCompanyLogoUrlInput(finalSave.logo_url);
+            window.dispatchEvent(new Event('crm-company-updated'));
+            toast.success('Logo saved successfully');
+            return;
+          }
+        } catch (finalErr) {
+          console.warn('Company logo final save failed:', finalErr);
+        }
+      }
+
+      // Everything failed.
+      const uploadErr = storageResult.error || 'Upload failed';
+      if (isFileReadError(uploadErr)) {
+        toast.error(readErrorHint);
+      } else {
+        toast.error('Failed to save logo — please try again or check your connection.');
+      }
+      setCompanyLogo(previousLogo);
+
     } catch (error) {
       console.error('Logo upload error:', error);
       const message = getReadableError(error);
 
       if (compatibilitySaved) {
-        toast.success('Logo saved using compatibility mode');
-        setIsUploadingLogo(false);
+        toast.success('Logo saved successfully');
         return;
       }
 
-      try {
-        const companyId = effectiveCompanyId || await resolveCompanyId();
-        if (companyId) {
-          const croppedFile = new File([croppedBlob], 'logo.jpg', { type: 'image/jpeg' });
-          const fallbackDataUrl = precomputedFallbackDataUrl || await withTimeout(resizeImageToDataUrl(croppedFile, 520, 0.84), 12000, 'Company logo fallback encode');
-          const fallbackSave = await withTimeout(saveCompanyLogoUrl(companyId, fallbackDataUrl), 12000, 'Company logo fallback save');
-          if (fallbackSave?.logo_url) {
-            setCompanyLogo(fallbackSave.logo_url);
-            setCompanyLogoUrlInput(fallbackSave.logo_url);
-            window.dispatchEvent(new Event('crm-company-updated'));
-            toast.success('Logo saved using compatibility mode');
-          } else {
-            throw new Error('Fallback save did not persist');
+      // Emergency fallback using pre-encoded data-URL.
+      if (precomputedFallbackDataUrl) {
+        try {
+          const cid = effectiveCompanyId || await resolveCompanyId();
+          if (cid) {
+            const emergencySave = await withTimeout(
+              saveCompanyLogoUrl(cid, precomputedFallbackDataUrl),
+              8000,
+              'Company logo emergency save'
+            );
+            if (emergencySave?.logo_url) {
+              setCompanyLogo(emergencySave.logo_url);
+              setCompanyLogoUrlInput(emergencySave.logo_url);
+              window.dispatchEvent(new Event('crm-company-updated'));
+              toast.success('Logo saved successfully');
+              return;
+            }
           }
-        } else {
-          throw new Error('No company context available');
+        } catch (emergencyErr) {
+          console.warn('Emergency save failed:', emergencyErr);
         }
-      } catch (fallbackError) {
-        const fallbackMessage = getReadableError(fallbackError);
-        if (isFileReadError(message) && isFileReadError(fallbackMessage)) {
-          toast.error(readErrorHint);
-        } else {
-          toast.error(`Failed to upload logo: ${message} | fallback failed: ${fallbackMessage}`);
-        }
-        setCompanyLogo(previousLogo);
       }
+
+      if (isFileReadError(message)) {
+        toast.error(readErrorHint);
+      } else {
+        toast.error('Failed to save logo — please try again or check your connection.');
+      }
+      setCompanyLogo(previousLogo);
     } finally {
       setIsUploadingLogo(false);
       setPendingImageFile(null);
@@ -1101,9 +1281,14 @@ export default function SettingsView() {
       return;
     }
 
-    // Create preview URL and open crop dialog
+    // Read as data URL — same rationale as handleCompanyLogoChange above.
     try {
-      const previewUrl = URL.createObjectURL(file);
+      const previewUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => resolve(ev.target!.result as string);
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.readAsDataURL(file);
+      });
       setImageToCrop(previewUrl);
       setPendingImageFile(file);
       setAvatarCropDialogOpen(true);
@@ -1111,7 +1296,7 @@ export default function SettingsView() {
       console.error('Failed to create preview:', error);
       toast.error('Failed to load image for cropping');
     }
-    
+
     e.target.value = '';
   };
 
@@ -1231,13 +1416,15 @@ export default function SettingsView() {
   const tabs = [
     { id: 'company', label: 'Company', icon: <Building2 size={18} /> },
     { id: 'profile', label: 'My Profile', icon: <User size={18} /> },
+    { id: 'features', label: 'Feature Toggles', icon: <ToggleLeft size={18} /> },
     { id: 'integrations', label: 'Integrations', icon: <Link size={18} /> },
     { id: 'ai-assistant', label: 'AI Assistant', icon: <Zap size={18} /> },
     { id: 'notifications', label: 'Notifications', icon: <Bell size={18} /> },
     { id: 'security', label: 'Security', icon: <Shield size={18} /> },
-    { id: 'billing', label: 'My Plan', icon: <CreditCard size={18} /> },
+    { id: 'billing', label: 'Subscription Plan', icon: <CreditCard size={18} /> },
     { id: 'customer-billing', label: 'Customer Billing', icon: <Receipt size={18} /> },
     { id: 'api', label: 'API Access', icon: <Key size={18} /> },
+    { id: 'document-templates', label: 'Document Templates', icon: <FilePlus size={18} /> },
   ];
 
   useEffect(() => {
@@ -1523,10 +1710,12 @@ export default function SettingsView() {
             {/* Email Sender Settings */}
             <div>
               <h3 className="text-xl font-semibold text-gray-900 mb-6">Email Sender Settings</h3>
-              <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
-                <p className="text-sm text-gray-500 mb-2">
-                  Configure the sender name and email address used when sending invoices, estimates, and other emails to your customers.
-                  Leave blank to use the system default.
+
+              {/* Display name + from address */}
+              <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4 mb-6">
+                <p className="text-sm text-gray-500">
+                  The name and address shown in the "From" field on all outgoing emails.
+                  {!companyForm.smtp_host && ' Leave blank to use the system default.'}
                 </p>
                 <div className="grid grid-cols-2 gap-6">
                   <div>
@@ -1549,7 +1738,9 @@ export default function SettingsView() {
                       className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                       placeholder="invoices@yourdomain.com"
                     />
-                    <p className="text-xs text-gray-400 mt-1">Must be a verified domain in your email service (Resend, SendGrid, etc.)</p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {companyForm.smtp_host ? 'Must match your SMTP username / sending address.' : 'Used as the display address when sending via system mail.'}
+                    </p>
                   </div>
                 </div>
                 <button
@@ -1557,18 +1748,183 @@ export default function SettingsView() {
                   disabled={isSavingCompany}
                   className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isSavingCompany ? (
-                    <>
-                      <Loader2 size={18} className="animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <Save size={18} />
-                      Save Email Settings
-                    </>
-                  )}
+                  {isSavingCompany ? <><Loader2 size={18} className="animate-spin" />Saving...</> : <><Save size={18} />Save Display Settings</>}
                 </button>
+              </div>
+
+              {/* Custom SMTP */}
+              <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
+                <div className="flex items-center gap-3">
+                  <Server size={20} className="text-gray-500" />
+                  <div>
+                    <h4 className="font-semibold text-gray-900">Custom SMTP Server</h4>
+                    <p className="text-sm text-gray-500">Send emails directly from your own address. Click your provider below to auto-fill the settings, then follow the steps shown.</p>
+                  </div>
+                </div>
+
+                {/* Quick-setup provider buttons */}
+                <div>
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Quick Setup</p>
+                  <div className="flex flex-wrap gap-2">
+                    {SMTP_PROVIDERS.map(p => {
+                      const active = companyForm.smtp_host === p.host;
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => {
+                            setCompanyForm(f => ({ ...f, smtp_host: p.host, smtp_port: p.port, smtp_secure: p.secure }));
+                            setSmtpGuideOpen(true);
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${active ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400 hover:text-blue-600'}`}
+                        >
+                          {p.label}
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => setCompanyForm(f => ({ ...f, smtp_host: '', smtp_port: '587', smtp_secure: false }))}
+                      className="px-3 py-1.5 rounded-lg text-sm font-medium border border-gray-300 text-gray-500 hover:text-gray-700 transition-colors"
+                    >
+                      Other / Clear
+                    </button>
+                  </div>
+                </div>
+
+                {/* Contextual setup guide — auto-shows when a known provider is detected */}
+                {(() => {
+                  const provider = detectSmtpProvider(companyForm.smtp_host);
+                  if (!provider) return null;
+                  return (
+                    <div className="rounded-lg border border-blue-200 bg-blue-50 overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => setSmtpGuideOpen(o => !o)}
+                        className="w-full flex items-center justify-between px-4 py-3 text-left"
+                      >
+                        <div className="flex items-center gap-2">
+                          <HelpCircle size={16} className="text-blue-600" />
+                          <span className="text-sm font-semibold text-blue-800">How to set up {provider.label} SMTP</span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${provider.badgeColor}`}>{provider.badge}</span>
+                        </div>
+                        {smtpGuideOpen ? <ChevronUp size={16} className="text-blue-600" /> : <ChevronDown size={16} className="text-blue-600" />}
+                      </button>
+                      {smtpGuideOpen && (
+                        <div className="px-4 pb-4 space-y-3">
+                          <ol className="space-y-2">
+                            {provider.steps.map(s => (
+                              <li key={s.n} className="flex gap-3 text-sm text-blue-900">
+                                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center font-bold">{s.n}</span>
+                                <span>{s.text}</span>
+                              </li>
+                            ))}
+                          </ol>
+                          {provider.note && (
+                            <p className="text-xs text-blue-700 bg-blue-100 rounded px-3 py-2 border border-blue-200">
+                              ℹ️ {provider.note}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                <div className="grid grid-cols-2 gap-5">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">SMTP Host</label>
+                    <input
+                      type="text"
+                      value={companyForm.smtp_host}
+                      onChange={(e) => {
+                        setCompanyForm({ ...companyForm, smtp_host: e.target.value });
+                        setSmtpGuideOpen(true);
+                      }}
+                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                      placeholder="smtp.gmail.com"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Port</label>
+                    <input
+                      type="number"
+                      value={companyForm.smtp_port}
+                      onChange={(e) => setCompanyForm({ ...companyForm, smtp_port: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                      placeholder="587"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                    <input
+                      type="text"
+                      value={companyForm.smtp_user}
+                      onChange={(e) => setCompanyForm({ ...companyForm, smtp_user: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                      placeholder={detectSmtpProvider(companyForm.smtp_host)?.id === 'sendgrid' ? 'apikey' : 'you@yourdomain.com'}
+                    />
+                    {detectSmtpProvider(companyForm.smtp_host)?.id === 'sendgrid' && (
+                      <p className="text-xs text-blue-600 mt-1">SendGrid username is literally the word <code className="bg-blue-50 px-1 rounded">apikey</code></p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {detectSmtpProvider(companyForm.smtp_host)?.id === 'sendgrid' ? 'API Key (as password)' : 'App Password'}
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showSmtpPass ? 'text' : 'password'}
+                        value={companyForm.smtp_pass}
+                        onChange={(e) => setCompanyForm({ ...companyForm, smtp_pass: e.target.value })}
+                        className="w-full px-4 py-2 pr-10 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                        placeholder="••••••••••••"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSmtpPass(!showSmtpPass)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      >
+                        {showSmtpPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                    {!detectSmtpProvider(companyForm.smtp_host) && (
+                      <p className="text-xs text-gray-400 mt-1">Use an App Password for Gmail/Outlook — not your account password.</p>
+                    )}
+                  </div>
+                </div>
+
+                <label className="flex items-center gap-3 cursor-pointer w-fit">
+                  <input
+                    type="checkbox"
+                    checked={companyForm.smtp_secure}
+                    onChange={(e) => setCompanyForm({ ...companyForm, smtp_secure: e.target.checked })}
+                    className="w-4 h-4 rounded border-gray-300 text-blue-600"
+                  />
+                  <span className="text-sm text-gray-700">Use SSL/TLS (port 465) — uncheck for STARTTLS (port 587)</span>
+                </label>
+
+                <div className="flex items-center gap-3 pt-1">
+                  <button
+                    onClick={handleSaveSmtp}
+                    disabled={isSavingSmtp}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isSavingSmtp ? <><Loader2 size={18} className="animate-spin" />Saving...</> : <><Save size={18} />Save SMTP Settings</>}
+                  </button>
+                  <button
+                    onClick={handleTestSmtp}
+                    disabled={isTestingSmtp || !companyForm.smtp_host}
+                    className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isTestingSmtp ? <><Loader2 size={18} className="animate-spin" />Sending...</> : <><Send size={18} />Send Test Email</>}
+                  </button>
+                </div>
+                {companyForm.smtp_host && (
+                  <p className="text-xs text-green-600 flex items-center gap-1">
+                    <Check size={13} /> Custom SMTP active — emails will be sent from your server.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -1806,6 +2162,8 @@ export default function SettingsView() {
             </div>
           </div>
         )}
+
+        {activeTab === 'features' && <FeatureToggles />}
 
         {activeTab === 'integrations' && (
           <div className="max-w-4xl space-y-8">
@@ -2093,11 +2451,11 @@ export default function SettingsView() {
           </div>
         )}
 
-        {/* MY PLAN TAB — app subscription only, deep-linked from paywall via tab: 'billing' */}
+        {/* SUBSCRIPTION PLAN TAB — app subscription only, deep-linked from paywall via tab: 'billing' */}
         {activeTab === 'billing' && (
           <div className="max-w-3xl space-y-6">
             <div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">My Plan</h3>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Subscription Plan</h3>
               <p className="text-sm text-gray-500">Manage your TrussCTR subscription and plan details.</p>
             </div>
             <SubscriptionView />
@@ -2231,6 +2589,12 @@ export default function SettingsView() {
                 </a>
               </div>
             </div>
+          </div>
+        )}
+
+        {activeTab === 'document-templates' && (
+          <div className="w-full">
+            <DocumentTemplates />
           </div>
         )}
       </div>

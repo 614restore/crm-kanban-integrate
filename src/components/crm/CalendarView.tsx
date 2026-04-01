@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { Appointment, formatDate } from '@/lib/crmData';
 import { db } from '@/lib/database';
+import { fireAutomationEvent } from '@/lib/automationEngine';
 import { getMentionTargets, validateMentions } from '@/lib/mentions';
 import { toast } from 'sonner';
 import AppointmentModal from './AppointmentModal';
@@ -197,37 +198,65 @@ export default function CalendarView() {
 
   const handleCompleteInspection = async (appointment: Appointment) => {
     if (appointment.type !== 'inspection' || appointment.status === 'completed') return;
-    const notes = '';
+    const completedAt = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const completionNote = `Completed on ${completedAt}`;
+    const updatedNotes = appointment.notes
+      ? `${appointment.notes}\n\n${completionNote}`
+      : completionNote;
     const updatedAppointment: Appointment = {
       ...appointment,
       status: 'completed',
-      notes: appointment.notes ? `${appointment.notes}\n\nCompleted: ${notes}` : `Completed: ${notes}`,
+      notes: updatedNotes,
     };
-    const updated = await db.updateAppointment(appointment.id, {
-      status: 'completed',
-      notes: updatedAppointment.notes,
-    });
-    if (!updated) {
-      toast.error('Failed to update appointment');
-      return;
-    }
-    dispatch({ type: 'UPDATE_APPOINTMENT', payload: updatedAppointment });
-
-    // Persist contact status advancement to DB
-    if (appointment.contactId) {
-      const contact = state.contacts.find((c) => c.id === appointment.contactId);
-      if (contact && contact.status === 'appt_set') {
-        const now = new Date().toISOString();
-        await db.updateContact(appointment.contactId, {
-          status: 'inspection_completed',
-          status_changed_at: now,
-          inspectionCompleted: true,
-          inspectionCompletedDate: now,
-        }).catch((err) => console.error('Failed to advance contact status:', err));
+    try {
+      const updated = await db.updateAppointment(appointment.id, {
+        status: 'completed',
+        notes: updatedNotes,
+      });
+      if (!updated) {
+        toast.error('Failed to update appointment');
+        return;
       }
-    }
+      dispatch({ type: 'UPDATE_APPOINTMENT', payload: updatedAppointment });
 
-    toast.success('Inspection marked as complete!');
+      // Persist contact status advancement to DB
+      if (appointment.contactId) {
+        const contact = state.contacts.find((c) => c.id === appointment.contactId);
+        if (contact && contact.status === 'appt_set') {
+          const now = new Date().toISOString();
+          db.updateContact(appointment.contactId, {
+            status: 'estimating',
+            status_changed_at: now,
+          }).catch((err) => console.error('Failed to advance contact status:', err));
+          dispatch({
+            type: 'UPDATE_CONTACT_STATUS',
+            payload: { contactId: appointment.contactId, status: 'inspection_completed' },
+          });
+          // Fire automations for stage advancement and appointment completion
+          if (state.companyId) {
+            fireAutomationEvent('appointment_completed', state.companyId, {
+              contactId: contact.id,
+              contactName: `${contact.firstName} ${contact.lastName}`.trim(),
+              contactEmail: contact.email,
+              oldStatus: 'appt_set',
+              newStatus: 'estimating',
+            }).catch(() => {});
+            fireAutomationEvent('contact_status_changed', state.companyId, {
+              contactId: contact.id,
+              contactName: `${contact.firstName} ${contact.lastName}`.trim(),
+              contactEmail: contact.email,
+              oldStatus: 'appt_set',
+              newStatus: 'estimating',
+            }).catch(() => {});
+          }
+        }
+      }
+
+      toast.success('Inspection marked as complete!');
+    } catch (err) {
+      console.error('Error completing inspection:', err);
+      toast.error('Failed to mark inspection complete');
+    }
   };
 
   const handleDeleteAppointment = (appointment: Appointment) => {

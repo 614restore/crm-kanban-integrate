@@ -124,12 +124,33 @@ async function executeAction(
   }
 
   if (at.includes('status')) {
-    console.log(`Automation "${automationName}": would update status — new status: ${ctx.newStatus || 'unknown'}`);
+    if (ctx.contactId && ctx.newStatus) {
+      try {
+        await db.updateContact(ctx.contactId, {
+          status: ctx.newStatus as string,
+          status_changed_at: new Date().toISOString(),
+        });
+        console.log(`Automation "${automationName}": contact ${ctx.contactId} advanced to "${ctx.newStatus}"`);
+      } catch (err) {
+        console.error(`Automation "${automationName}": failed to update contact status:`, err);
+      }
+    } else {
+      console.warn(`Automation "${automationName}": status action missing contactId or newStatus — skipping.`);
+    }
     return;
   }
 
   if (at.includes('assign')) {
-    console.log(`Automation "${automationName}": would assign team member — assignedTo: ${ctx.assignedTo || 'unknown'}`);
+    if (ctx.contactId && ctx.assignedTo) {
+      try {
+        await db.updateContact(ctx.contactId, { assigned_to: ctx.assignedTo });
+        console.log(`Automation "${automationName}": contact ${ctx.contactId} assigned to "${ctx.assignedTo}"`);
+      } catch (err) {
+        console.error(`Automation "${automationName}": failed to assign contact:`, err);
+      }
+    } else {
+      console.warn(`Automation "${automationName}": assign action missing contactId or assignedTo — skipping.`);
+    }
     return;
   }
 

@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
-import { supabase, isDemoMode } from '@/lib/supabase';
+import { supabase, supabaseUrl, isDemoMode } from '@/lib/supabase';
 import { setupNewUser } from '@/lib/setupCompany';
 import type { Session, User } from '@supabase/supabase-js';
+import { logAuthState } from '@/lib/authDebug';
 
 export interface Profile {
   id: string;
@@ -14,6 +15,7 @@ export interface Profile {
   phone?: string;
   avatar_url?: string;
   is_active?: boolean;
+  must_change_password?: boolean;
 }
 
 interface AuthContextType {
@@ -36,16 +38,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isRecoverySession, setIsRecoverySession] = useState(false);
 
   // Shared promise ref — ensures only ONE profile fetch runs at a time no matter
   // how many callers race (getSession + onAuthStateChange on hard reload).
   const profileFetchPromise = useRef<Promise<Profile | null> | null>(null);
 
-  const [isPasswordReset, setIsPasswordReset] = useState(() => {
-    try {
-      return sessionStorage.getItem('pending_password_reset') === 'true';
-    } catch (_) { return false; }
-  });
+  // True when signed in via a Supabase recovery link OR a temp password
+  const isPasswordReset = isRecoverySession || profile?.must_change_password === true;
 
   // ── Raw profile fetch (no dedup, no retry) ────────────────────────────
   const fetchProfile = async (userId: string): Promise<Profile | null> => {
@@ -114,6 +114,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
+    // Log initial auth state for debugging
+    if (import.meta.env.DEV) {
+      logAuthState();
+    }
+    
     let recoveryEventFired = false;
     let pendingReset = (() => {
       try { return sessionStorage.getItem('pending_password_reset') === 'true'; } catch { return false; }
@@ -144,7 +149,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         recoveryEventFired = true;
         setSession(session);
         setUser(session?.user ?? null);
-        setIsPasswordReset(true);
+        setIsRecoverySession(true);
         setLoading(false);
         try { sessionStorage.removeItem('pending_password_reset'); } catch { /* ignore */ }
         return;
@@ -172,6 +177,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       if (recoveryEventFired || pendingReset) return;
 
+      // If a user is signing in, ensure loading stays true while the profile
+      // fetches. Without this, a prior SIGNED_OUT (loading=false) + SIGNED_IN
+      // sequence briefly renders CRMApp before the profile arrives.
+      if (session?.user) setLoading(true);
+
       setSession(session);
       setUser(session?.user ?? null);
 
@@ -179,6 +189,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Share the same promise with getSession below — only one fetch runs
         const profileData = await loadProfileOnce(session.user.id, session.user.email || '');
         setProfile(profileData);
+        // isPasswordReset is derived from profile?.must_change_password — no setter needed
+
+        // Clean up auth URL parameters after successful sign-in
+        try {
+          if (sessionStorage.getItem('auth_url_cleanup_pending') === 'true') {
+            sessionStorage.removeItem('auth_url_cleanup_pending');
+            const cleanUrl = window.location.origin + window.location.pathname;
+            window.history.replaceState({}, '', cleanUrl);
+          }
+        } catch { /* ignore */ }
       } else {
         setProfile(null);
       }
@@ -201,6 +221,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (session?.user) {
         const profileData = await loadProfileOnce(session.user.id, session.user.email || '');
         setProfile(profileData);
+        // isPasswordReset is derived from profile?.must_change_password — no setter needed
       }
 
       setLoading(false);
@@ -219,7 +240,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const timer = window.setTimeout(() => {
       console.warn('[Auth] Loading timed out — continuing with current session state.');
       setLoading(false);
-    }, 12000);
+      // If we're still stuck, force clear any pending auth state
+      try {
+        sessionStorage.removeItem('pending_password_reset');
+        sessionStorage.removeItem('auth_url_cleanup_pending');
+      } catch { /* ignore */ }
+    }, 12000); // 12s — allows profile.company_id fetch to complete before giving up
     return () => window.clearTimeout(timer);
   }, [loading]);
 
@@ -343,12 +369,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // ── resetPassword ─────────────────────────────────────────────────────
+  // Temp-password flow only. The edge function sets a temporary password,
+  // emails it to the user, and marks must_change_password = true.
   const resetPassword = async (email: string) => {
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}${import.meta.env.BASE_URL}reset-password`,
+      if (!supabaseUrl || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
+        return { error: new Error('Missing app auth configuration.') };
+      }
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 12000);
+      const res = await fetch(`${supabaseUrl}/functions/v1/temp-password-reset`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY },
+        body: JSON.stringify({ email }),
+        signal: controller.signal,
       });
-      return { error };
+      window.clearTimeout(timeout);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        return { error: new Error(data?.error || 'Unable to send temporary password right now.') };
+      }
+
+      return { error: null };
     } catch (err) {
       return { error: err as Error };
     }

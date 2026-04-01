@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/authContext';
 import {
     Building2,
     Lock,
@@ -12,48 +13,94 @@ import {
 } from 'lucide-react';
 
 export default function UpdatePassword() {
+    const { user, profile, loading: authLoading, updateProfile } = useAuth();
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [exchanging, setExchanging] = useState(true);
+    const [sessionCheckLoading, setSessionCheckLoading] = useState(true);
+    const [sessionReady, setSessionReady] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
 
     useEffect(() => {
-        // With PKCE flow, Supabase appends ?code=... to the redirectTo URL.
-        // We need to exchange that code for a session before the user can update their password.
-        const params = new URLSearchParams(window.location.search);
-        const code = params.get('code');
+        let cancelled = false;
 
-        if (code) {
-            supabase.auth.exchangeCodeForSession(code)
-                .then(async ({ data, error }) => {
-                    if (error) {
-                        setError('Invalid or expired reset link. Please request a new one.');
-                        return;
-                    }
-                    // Verify session is actually available before showing form
-                    if (!data?.session) {
-                        // Give Supabase a moment to persist the session
-                        await new Promise(resolve => setTimeout(resolve, 500));
-                        const { data: { session } } = await supabase.auth.getSession();
-                        if (!session) {
-                            setError('Could not establish session. Please request a new reset link.');
-                        }
-                    }
-                })
-                .catch(() => setError('Invalid or expired reset link. Please request a new one.'))
-                .finally(() => setExchanging(false));
-        } else {
-            // No code — check if we already have a session (PASSWORD_RECOVERY flow)
-            supabase.auth.getSession().then(({ data: { session } }) => {
-                if (!session) {
-                    setError('No valid reset session found. Please request a new reset link.');
+        const initializeRecoverySession = async () => {
+            setSessionCheckLoading(true);
+            setError(null);
+
+            try {
+                const url = new URL(window.location.href);
+                const query = url.searchParams;
+                const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+
+                const code = query.get('code');
+                const tokenHash = query.get('token_hash') || hash.get('token_hash');
+                const recoveryType = query.get('type') || hash.get('type');
+                const accessToken = hash.get('access_token');
+                const refreshToken = hash.get('refresh_token');
+
+                if (code) {
+                    const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+                    if (exchangeError) throw exchangeError;
+                } else if (tokenHash && recoveryType === 'recovery') {
+                    const { error: verifyError } = await supabase.auth.verifyOtp({
+                        type: 'recovery',
+                        token_hash: tokenHash,
+                    });
+                    if (verifyError) throw verifyError;
+                } else if (accessToken && refreshToken) {
+                    const { error: setSessionError } = await supabase.auth.setSession({
+                        access_token: accessToken,
+                        refresh_token: refreshToken,
+                    });
+                    if (setSessionError) throw setSessionError;
                 }
-                setExchanging(false);
-            });
-        }
+
+                let { data: { session } } = await supabase.auth.getSession();
+
+                if (!session && (code || tokenHash || accessToken)) {
+                    for (let attempt = 0; attempt < 3; attempt += 1) {
+                        await new Promise((resolve) => setTimeout(resolve, 250));
+                        const current = await supabase.auth.getSession();
+                        session = current.data.session;
+                        if (session) break;
+                    }
+                }
+
+                if (!session) {
+                    if (!cancelled) {
+                        setSessionReady(false);
+                        setError('No valid reset session found. Please request a new password reset link.');
+                    }
+                    return;
+                }
+
+                if (!cancelled) {
+                    setSessionReady(true);
+                }
+
+                if (code || tokenHash || accessToken || window.location.hash.includes('access_token=')) {
+                    window.history.replaceState({}, '', window.location.pathname);
+                }
+            } catch (err: any) {
+                if (!cancelled) {
+                    setSessionReady(false);
+                    setError(err?.message || 'Unable to verify reset session. Please request a new reset link.');
+                }
+            } finally {
+                if (!cancelled) {
+                    setSessionCheckLoading(false);
+                }
+            }
+        };
+
+        initializeRecoverySession();
+
+        return () => {
+            cancelled = true;
+        };
     }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -61,36 +108,70 @@ export default function UpdatePassword() {
         setError(null);
         setSuccess(null);
 
-        if (password !== confirmPassword) {
-            setError('Passwords do not match');
+        if (!sessionReady) {
+            setError('No valid reset session found. Please request a new password reset link.');
             return;
         }
 
-        if (password.length < 6) {
-            setError('Password must be at least 6 characters');
+        if (password !== confirmPassword) {
+            setError('Passwords do not match.');
+            return;
+        }
+        if (password.length < 8) {
+            setError('Password must be at least 8 characters.');
             return;
         }
 
         setLoading(true);
-
         try {
-            const { error } = await supabase.auth.updateUser({ password });
+            const { error: updateUserError } = await supabase.auth.updateUser({ password });
+            if (updateUserError) {
+                const message = updateUserError.message?.toLowerCase() || '';
+                const requiresServerFallback =
+                    message.includes('secure password') ||
+                    message.includes('reauthentication') ||
+                    message.includes('reauth');
+                const isForcedTempPasswordFlow = profile?.must_change_password === true;
+                if (!requiresServerFallback || !isForcedTempPasswordFlow) {
+                    throw updateUserError;
+                }
 
-            if (error) {
-                setError(error.message);
-            } else {
-                setSuccess('Password updated successfully! Redirecting...');
-                setTimeout(() => {
-                    try { sessionStorage.removeItem('pending_password_reset'); } catch (e) { console.warn('[UpdatePassword] sessionStorage cleanup failed:', e); }
-                    window.location.href = window.location.origin + (import.meta.env.BASE_URL || '/');
-                }, 2000);
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session?.access_token) throw new Error('No active session. Please sign in again.');
+
+                const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+                const res = await fetch(`${supabaseUrl}/functions/v1/confirm-password-change`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${session.access_token}`,
+                        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+                    },
+                    body: JSON.stringify({ password }),
+                });
+                if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    throw new Error(data?.error || 'Failed to update password.');
+                }
             }
+
+            await updateProfile({ must_change_password: false });
+            setSuccess('Password updated! Taking you to the app…');
+            setTimeout(() => { window.location.reload(); }, 1500);
         } catch (err: any) {
-            setError('An unexpected error occurred. Please try again.');
+            setError(err.message || 'Failed to update password. Please try again.');
         } finally {
             setLoading(false);
         }
     };
+
+    if (authLoading) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-900 flex items-center justify-center p-4">
+                <Loader2 className="animate-spin text-white" size={40} />
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-900 flex items-center justify-center p-4">
@@ -103,32 +184,26 @@ export default function UpdatePassword() {
                 </div>
 
                 <div className="bg-white rounded-2xl shadow-2xl p-8">
-                    <div className="text-center mb-8">
-                        <h2 className="text-2xl font-bold text-gray-900">Update Password</h2>
-                        <p className="text-gray-500 mt-2">Enter a new secure password for your account</p>
+                    <div className="text-center mb-6">
+                        <h2 className="text-2xl font-bold text-gray-900">Set New Password</h2>
+                        <p className="text-gray-500 mt-2 text-sm">
+                            {user ? 'Choose a new password for your account.' : 'Your session is being verified…'}
+                        </p>
                     </div>
 
-                    {exchanging && (
-                        <div className="flex justify-center py-8">
-                            <Loader2 className="animate-spin text-blue-500" size={32} />
-                        </div>
-                    )}
-
-                    {!exchanging && error && (
-                        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3">
+                    {error && (
+                        <div className="mb-5 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3">
                             <AlertCircle className="text-red-500 flex-shrink-0" size={20} />
                             <p className="text-red-700 text-sm font-medium">{error}</p>
                         </div>
                     )}
 
-                    {!exchanging && success && (
-                        <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3">
+                    {success ? (
+                        <div className="p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3">
                             <CheckCircle className="text-green-500 flex-shrink-0" size={20} />
                             <p className="text-green-700 text-sm font-medium">{success}</p>
                         </div>
-                    )}
-
-                    {!exchanging && !error && !success && (
+                    ) : (
                         <form onSubmit={handleSubmit} className="space-y-5">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
@@ -140,7 +215,7 @@ export default function UpdatePassword() {
                                         value={password}
                                         onChange={(e) => setPassword(e.target.value)}
                                         className="w-full pl-10 pr-12 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                                        placeholder="••••••••"
+                                        placeholder="Min. 8 characters"
                                         required
                                     />
                                     <button
@@ -162,7 +237,7 @@ export default function UpdatePassword() {
                                         value={confirmPassword}
                                         onChange={(e) => setConfirmPassword(e.target.value)}
                                         className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                                        placeholder="••••••••"
+                                        placeholder="Re-enter new password"
                                         required
                                     />
                                 </div>
@@ -170,10 +245,16 @@ export default function UpdatePassword() {
 
                             <button
                                 type="submit"
-                                disabled={loading}
+                                disabled={loading || sessionCheckLoading || !sessionReady}
                                 className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed mt-2 shadow-sm"
                             >
-                                {loading ? <Loader2 className="animate-spin" size={20} /> : <><ArrowRight size={18} />Update Password</>}
+                                {loading ? (
+                                    <Loader2 className="animate-spin" size={20} />
+                                ) : sessionCheckLoading ? (
+                                    <><Loader2 className="animate-spin" size={18} />Verifying reset link…</>
+                                ) : (
+                                    <><ArrowRight size={18} />Set Password</>
+                                )}
                             </button>
                         </form>
                     )}

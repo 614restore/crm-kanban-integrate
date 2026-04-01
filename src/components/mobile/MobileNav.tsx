@@ -78,7 +78,7 @@ export default function MobileNav() {
     { icon: Calendar, label: 'Calendar', path: '/', view: 'calendar', color: 'text-blue-500' },
     { icon: FileText, label: 'Estimates', path: '/', view: 'estimates', color: 'text-green-500' },
     { icon: BarChart3, label: 'Projects', path: '/', view: 'projects', color: 'text-orange-500' },
-    { icon: FileText, label: 'Work Orders', path: '/', view: 'work_orders', color: 'text-purple-500' },
+    { icon: FileText, label: 'Work Orders', path: '/', view: 'work-orders', color: 'text-purple-500' },
     { icon: Upload, label: 'Documents', path: '/', view: 'documents', color: 'text-indigo-500' },
   ];
 
@@ -158,7 +158,10 @@ export default function MobileNav() {
       )}
 
       {/* Bottom navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 z-50 safe-area-pb">
+      <nav
+        className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 z-50"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      >
         <div className="flex items-center justify-around px-1 py-2">
           {primaryNavItems.map((item) => {
             const Icon = item.icon;

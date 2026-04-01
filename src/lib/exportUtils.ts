@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import {
   Invoice,
   Contact,
@@ -136,8 +136,27 @@ export function exportToQuickBooks(invoices: Invoice[]) {
     downloadCsv(csvContent, `QBO_Import_${new Date().toISOString().split('T')[0]}.csv`);
 }
 
+async function writeAndDownload(workbook: ExcelJS.Workbook, filename: string) {
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function addSheet(workbook: ExcelJS.Workbook, sheetName: string, data: Record<string, string | number>[]) {
+  if (data.length === 0) return;
+  const ws = workbook.addWorksheet(sheetName);
+  const keys = Object.keys(data[0]);
+  ws.columns = keys.map(key => ({ header: key, key, width: 18 }));
+  ws.addRows(data);
+}
+
 // Export contacts to Excel
-export function exportContactsToExcel(contacts: Contact[], filename = 'contacts.xlsx') {
+export async function exportContactsToExcel(contacts: Contact[], filename = 'contacts.xlsx') {
   const data = contacts.map(contact => ({
     'First Name': contact.firstName,
     'Last Name': contact.lastName,
@@ -159,18 +178,13 @@ export function exportContactsToExcel(contacts: Contact[], filename = 'contacts.
     'Project Value': contact.projectValue || '',
     'Created At': new Date(contact.createdAt).toLocaleDateString(),
   }));
-
-  const worksheet = XLSX.utils.json_to_sheet(data);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Contacts');
-  
-  worksheet['!cols'] = Array(Object.keys(data[0] || {}).length).fill({ wch: 15 });
-  
-  XLSX.writeFile(workbook, filename);
+  const workbook = new ExcelJS.Workbook();
+  addSheet(workbook, 'Contacts', data);
+  await writeAndDownload(workbook, filename);
 }
 
 // Export projects to Excel
-export function exportProjectsToExcel(projects: Project[], filename = 'projects.xlsx') {
+export async function exportProjectsToExcel(projects: Project[], filename = 'projects.xlsx') {
   const data = projects.map(project => ({
     'Project Number': project.projectNumber,
     'Name': project.name,
@@ -181,8 +195,8 @@ export function exportProjectsToExcel(projects: Project[], filename = 'projects.
     'End Date': project.endDate || '',
     'Estimated Budget': project.estimatedBudget || '',
     'Actual Cost': project.actualCost || '',
-    'Budget Variance': project.estimatedBudget && project.actualCost 
-      ? (project.estimatedBudget - project.actualCost).toFixed(2) 
+    'Budget Variance': project.estimatedBudget && project.actualCost
+      ? (project.estimatedBudget - project.actualCost).toFixed(2)
       : '',
     'Address': project.address || '',
     'City': project.city || '',
@@ -190,18 +204,13 @@ export function exportProjectsToExcel(projects: Project[], filename = 'projects.
     'Project Manager': project.projectManagerName || '',
     'Created At': new Date(project.createdAt).toLocaleDateString(),
   }));
-
-  const worksheet = XLSX.utils.json_to_sheet(data);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Projects');
-  
-  worksheet['!cols'] = Array(Object.keys(data[0] || {}).length).fill({ wch: 15 });
-  
-  XLSX.writeFile(workbook, filename);
+  const workbook = new ExcelJS.Workbook();
+  addSheet(workbook, 'Projects', data);
+  await writeAndDownload(workbook, filename);
 }
 
 // Export work orders to Excel
-export function exportWorkOrdersToExcel(workOrders: WorkOrder[], filename = 'work-orders.xlsx') {
+export async function exportWorkOrdersToExcel(workOrders: WorkOrder[], filename = 'work-orders.xlsx') {
   const data = workOrders.map(wo => ({
     'Work Order #': wo.workOrderNumber,
     'Title': wo.title,
@@ -209,28 +218,40 @@ export function exportWorkOrdersToExcel(workOrders: WorkOrder[], filename = 'wor
     'Project': wo.projectName || '',
     'Status': wo.status,
     'Priority': wo.priority,
+    'Job Type': wo.jobType || '',
+    'Insurance Job': wo.isInsuranceJob ? 'Yes' : 'No',
     'Scheduled Date': wo.scheduledDate || '',
-    'Assigned To': wo.assignedToNames?.join(', ') || '',
+    'Crew Type': wo.isSubcontractor ? 'Subcontractor' : 'In-House',
+    'Assigned To': wo.isSubcontractor ? wo.subcontractorCompany || '' : wo.assignedToNames?.join(', ') || '',
+    'Sub Foreman': wo.subcontractorForeman || '',
+    'Sub Pay Type': wo.subcontractorPayType || '',
+    'Sub Rate': wo.subcontractorRate || '',
     'Estimated Hours': wo.estimatedHours || '',
     'Actual Hours': wo.actualHours || '',
-    'Labor Cost': wo.laborCost,
+    'Labor Cost': wo.isSubcontractor ? 0 : wo.laborCost,
+    'Subcontractor Cost': wo.subcontractorCost || 0,
     'Material Cost': wo.materialCost,
     'Total Cost': wo.totalCost,
+    'Squares/Units': wo.squares || '',
+    'Pitch': wo.pitch || '',
+    'Layers': wo.layers || '',
+    'Decking': wo.deckingType || '',
+    'Product Brand': wo.shingleBrand || '',
+    'Product Line': wo.shingleLine || '',
+    'Product Color': wo.shingleColor || '',
+    'Change Orders': wo.changeOrders?.length || 0,
+    'AWO Total': wo.changeOrders?.reduce((sum, co) => sum + co.amount, 0) || 0,
     'City': wo.city || '',
     'State': wo.state || '',
+    'Signed By': wo.signedBy || '',
   }));
-
-  const worksheet = XLSX.utils.json_to_sheet(data);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Work Orders');
-  
-  worksheet['!cols'] = Array(Object.keys(data[0] || {}).length).fill({ wch: 15 });
-  
-  XLSX.writeFile(workbook, filename);
+  const workbook = new ExcelJS.Workbook();
+  addSheet(workbook, 'Work Orders', data);
+  await writeAndDownload(workbook, filename);
 }
 
 // Export material orders to Excel
-export function exportMaterialOrdersToExcel(orders: MaterialOrder[], filename = 'material-orders.xlsx') {
+export async function exportMaterialOrdersToExcel(orders: MaterialOrder[], filename = 'material-orders.xlsx') {
   const data = orders.map(order => ({
     'Order Number': order.orderNumber,
     'Supplier': order.supplierName,
@@ -241,18 +262,13 @@ export function exportMaterialOrdersToExcel(orders: MaterialOrder[], filename = 
     'Actual Delivery': order.actualDeliveryDate || '',
     'Total Amount': order.totalAmount,
   }));
-
-  const worksheet = XLSX.utils.json_to_sheet(data);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Material Orders');
-  
-  worksheet['!cols'] = Array(Object.keys(data[0] || {}).length).fill({ wch: 15 });
-  
-  XLSX.writeFile(workbook, filename);
+  const workbook = new ExcelJS.Workbook();
+  addSheet(workbook, 'Material Orders', data);
+  await writeAndDownload(workbook, filename);
 }
 
 // Export estimates to Excel
-export function exportEstimatesToExcel(estimates: Estimate[], filename = 'estimates.xlsx') {
+export async function exportEstimatesToExcel(estimates: Estimate[], filename = 'estimates.xlsx') {
   const data = estimates.map(estimate => ({
     'Estimate Number': estimate.estimateNumber,
     'Customer': estimate.customerName,
@@ -264,18 +280,13 @@ export function exportEstimatesToExcel(estimates: Estimate[], filename = 'estima
     'Created Date': new Date(estimate.createdDate).toLocaleDateString(),
     'Sent At': estimate.sentAt ? new Date(estimate.sentAt).toLocaleDateString() : '',
   }));
-
-  const worksheet = XLSX.utils.json_to_sheet(data);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Estimates');
-  
-  worksheet['!cols'] = Array(Object.keys(data[0] || {}).length).fill({ wch: 15 });
-  
-  XLSX.writeFile(workbook, filename);
+  const workbook = new ExcelJS.Workbook();
+  addSheet(workbook, 'Estimates', data);
+  await writeAndDownload(workbook, filename);
 }
 
 // Export suppliers to Excel
-export function exportSuppliersToExcel(suppliers: Supplier[], filename = 'suppliers.xlsx') {
+export async function exportSuppliersToExcel(suppliers: Supplier[], filename = 'suppliers.xlsx') {
   const data = suppliers.map(supplier => ({
     'Supplier Name': supplier.name,
     'Contact Name': supplier.contactName || '',
@@ -285,18 +296,13 @@ export function exportSuppliersToExcel(suppliers: Supplier[], filename = 'suppli
     'State': supplier.state || '',
     'Category': supplier.category || '',
   }));
-
-  const worksheet = XLSX.utils.json_to_sheet(data);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Suppliers');
-  
-  worksheet['!cols'] = Array(Object.keys(data[0] || {}).length).fill({ wch: 15 });
-  
-  XLSX.writeFile(workbook, filename);
+  const workbook = new ExcelJS.Workbook();
+  addSheet(workbook, 'Suppliers', data);
+  await writeAndDownload(workbook, filename);
 }
 
 // Export ALL data to Excel (multiple sheets)
-export function exportAllData(
+export async function exportAllData(
   contacts: Contact[],
   projects: Project[],
   workOrders: WorkOrder[],
@@ -307,113 +313,52 @@ export function exportAllData(
   appointments: Appointment[],
   filename = 'crm-all-data.xlsx'
 ) {
-  const workbook = XLSX.utils.book_new();
+  const workbook = new ExcelJS.Workbook();
 
-  // Contacts sheet
-  if (contacts.length > 0) {
-    const contactData = contacts.map(c => ({
-      'First Name': c.firstName,
-      'Last Name': c.lastName,
-      'Email': c.email,
-      'Phone': c.phone1,
-      'City': c.city,
-      'State': c.state,
-      'Status': c.status,
-      'Project Type': c.projectType || '',
-      'Project Value': c.projectValue || '',
-      'Created': new Date(c.createdAt).toLocaleDateString(),
-    }));
-    const ws1 = XLSX.utils.json_to_sheet(contactData);
-    XLSX.utils.book_append_sheet(workbook, ws1, 'Contacts');
-  }
+  addSheet(workbook, 'Contacts', contacts.map(c => ({
+    'First Name': c.firstName, 'Last Name': c.lastName, 'Email': c.email,
+    'Phone': c.phone1, 'City': c.city, 'State': c.state, 'Status': c.status,
+    'Project Type': c.projectType || '', 'Project Value': c.projectValue || '',
+    'Created': new Date(c.createdAt).toLocaleDateString(),
+  })));
 
-  // Projects sheet
-  if (projects.length > 0) {
-    const projectData = projects.map(p => ({
-      'Project #': p.projectNumber,
-      'Name': p.name,
-      'Customer': p.contactName,
-      'Status': p.status,
-      'Budget': p.estimatedBudget || '',
-      'Actual Cost': p.actualCost || '',
-    }));
-    const ws2 = XLSX.utils.json_to_sheet(projectData);
-    XLSX.utils.book_append_sheet(workbook, ws2, 'Projects');
-  }
+  addSheet(workbook, 'Projects', projects.map(p => ({
+    'Project #': p.projectNumber, 'Name': p.name, 'Customer': p.contactName,
+    'Status': p.status, 'Budget': p.estimatedBudget || '', 'Actual Cost': p.actualCost || '',
+  })));
 
-  // Work Orders sheet
-  if (workOrders.length > 0) {
-    const woData = workOrders.map(wo => ({
-      'WO #': wo.workOrderNumber,
-      'Title': wo.title,
-      'Customer': wo.contactName,
-      'Status': wo.status,
-      'Total': wo.totalCost,
-    }));
-    const ws3 = XLSX.utils.json_to_sheet(woData);
-    XLSX.utils.book_append_sheet(workbook, ws3, 'Work Orders');
-  }
+  addSheet(workbook, 'Work Orders', workOrders.map(wo => ({
+    'WO #': wo.workOrderNumber, 'Title': wo.title, 'Customer': wo.contactName,
+    'Job Type': wo.jobType || '', 'Insurance': wo.isInsuranceJob ? 'Yes' : 'No',
+    'Status': wo.status, 'Crew': wo.isSubcontractor ? 'Sub' : 'In-House',
+    'Labor/Sub Cost': wo.isSubcontractor ? (wo.subcontractorCost || 0) : wo.laborCost,
+    'Material Cost': wo.materialCost, 'Total': wo.totalCost,
+    'AWOs': wo.changeOrders?.length || 0,
+  })));
 
-  // Material Orders
-  if (materialOrders.length > 0) {
-    const moData = materialOrders.map(mo => ({
-      'Order #': mo.orderNumber,
-      'Supplier': mo.supplierName,
-      'Status': mo.status,
-      'Amount': mo.totalAmount,
-    }));
-    const ws4 = XLSX.utils.json_to_sheet(moData);
-    XLSX.utils.book_append_sheet(workbook, ws4, 'Material Orders');
-  }
+  addSheet(workbook, 'Material Orders', materialOrders.map(mo => ({
+    'Order #': mo.orderNumber, 'Supplier': mo.supplierName,
+    'Status': mo.status, 'Amount': mo.totalAmount,
+  })));
 
-  // Estimates
-  if (estimates.length > 0) {
-    const estData = estimates.map(e => ({
-      'Estimate #': e.estimateNumber,
-      'Customer': e.customerName,
-      'Status': e.status,
-      'Total': e.total,
-    }));
-    const ws5 = XLSX.utils.json_to_sheet(estData);
-    XLSX.utils.book_append_sheet(workbook, ws5, 'Estimates');
-  }
+  addSheet(workbook, 'Estimates', estimates.map(e => ({
+    'Estimate #': e.estimateNumber, 'Customer': e.customerName,
+    'Status': e.status, 'Total': e.total,
+  })));
 
-  // Suppliers
-  if (suppliers.length > 0) {
-    const suppData = suppliers.map(s => ({
-      'Name': s.name,
-      'Contact': s.contactName || '',
-      'Phone': s.phone || '',
-    }));
-    const ws6 = XLSX.utils.json_to_sheet(suppData);
-    XLSX.utils.book_append_sheet(workbook, ws6, 'Suppliers');
-  }
+  addSheet(workbook, 'Suppliers', suppliers.map(s => ({
+    'Name': s.name, 'Contact': s.contactName || '', 'Phone': s.phone || '',
+  })));
 
-  // Invoices
-  if (invoices.length > 0) {
-    const invData = invoices.map(i => ({
-      'Customer': i.contactName,
-      'Amount': i.amount,
-      'Status': i.status,
-      'Due Date': i.dueDate || '',
-    }));
-    const ws7 = XLSX.utils.json_to_sheet(invData);
-    XLSX.utils.book_append_sheet(workbook, ws7, 'Invoices');
-  }
+  addSheet(workbook, 'Invoices', invoices.map(i => ({
+    'Customer': i.contactName, 'Amount': i.amount, 'Status': i.status, 'Due Date': i.dueDate || '',
+  })));
 
-  // Appointments
-  if (appointments.length > 0) {
-    const apptData = appointments.map(a => ({
-      'Customer': a.contactName,
-      'Title': a.title,
-      'Date': a.date,
-      'Status': a.status,
-    }));
-    const ws8 = XLSX.utils.json_to_sheet(apptData);
-    XLSX.utils.book_append_sheet(workbook, ws8, 'Appointments');
-  }
+  addSheet(workbook, 'Appointments', appointments.map(a => ({
+    'Customer': a.contactName, 'Title': a.title, 'Date': a.date, 'Status': a.status,
+  })));
 
-  XLSX.writeFile(workbook, filename);
+  await writeAndDownload(workbook, filename);
 }
 
 /**
@@ -534,54 +479,31 @@ export function printDataAsPDF(
 }
 
 // Export financial data only
-export function exportFinancialData(
+export async function exportFinancialData(
   invoices: Invoice[],
   estimates: Estimate[],
   projects: Project[],
   filename = 'crm-financial-data.xlsx'
 ) {
-  const workbook = XLSX.utils.book_new();
+  const workbook = new ExcelJS.Workbook();
 
-  // Invoices
-  if (invoices.length > 0) {
-    const invData = invoices.map(i => ({
-      'Customer': i.contactName,
-      'Amount': i.amount,
-      'Status': i.status,
-      'Due Date': i.dueDate || '',
-      'Created': new Date(i.createdAt).toLocaleDateString(),
-      'Paid': i.paidAt ? new Date(i.paidAt).toLocaleDateString() : '',
-    }));
-    const ws1 = XLSX.utils.json_to_sheet(invData);
-    XLSX.utils.book_append_sheet(workbook, ws1, 'Invoices');
-  }
+  addSheet(workbook, 'Invoices', invoices.map(i => ({
+    'Customer': i.contactName, 'Amount': i.amount, 'Status': i.status,
+    'Due Date': i.dueDate || '', 'Created': new Date(i.createdAt).toLocaleDateString(),
+    'Paid': i.paidAt ? new Date(i.paidAt).toLocaleDateString() : '',
+  })));
 
-  // Estimates
-  if (estimates.length > 0) {
-    const estData = estimates.map(e => ({
-      'Estimate #': e.estimateNumber,
-      'Customer': e.customerName,
-      'Status': e.status,
-      'Total': e.total,
-      'Created': new Date(e.createdDate).toLocaleDateString(),
-    }));
-    const ws2 = XLSX.utils.json_to_sheet(estData);
-    XLSX.utils.book_append_sheet(workbook, ws2, 'Estimates');
-  }
+  addSheet(workbook, 'Estimates', estimates.map(e => ({
+    'Estimate #': e.estimateNumber, 'Customer': e.customerName,
+    'Status': e.status, 'Total': e.total,
+    'Created': new Date(e.createdDate).toLocaleDateString(),
+  })));
 
-  // Project Budgets
-  if (projects.length > 0) {
-    const projData = projects.map(p => ({
-      'Project #': p.projectNumber,
-      'Name': p.name,
-      'Estimated Budget': p.estimatedBudget || 0,
-      'Actual Cost': p.actualCost || 0,
-      'Variance': (p.estimatedBudget || 0) - (p.actualCost || 0),
-      'Status': p.status,
-    }));
-    const ws3 = XLSX.utils.json_to_sheet(projData);
-    XLSX.utils.book_append_sheet(workbook, ws3, 'Project Budgets');
-  }
+  addSheet(workbook, 'Project Budgets', projects.map(p => ({
+    'Project #': p.projectNumber, 'Name': p.name,
+    'Estimated Budget': p.estimatedBudget || 0, 'Actual Cost': p.actualCost || 0,
+    'Variance': (p.estimatedBudget || 0) - (p.actualCost || 0), 'Status': p.status,
+  })));
 
-  XLSX.writeFile(workbook, filename);
+  await writeAndDownload(workbook, filename);
 }

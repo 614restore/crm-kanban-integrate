@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { formatDate, getContactFullName } from '@/lib/crmData';
 import { db } from '@/lib/database';
-import { uploadDocument, validateDocumentFile, formatFileSize, getDocumentSignedUrl, isHttpUrl } from '@/lib/storage';
+import { uploadDocument, validateDocumentFile, formatFileSize, getDocumentSignedUrl, isHttpUrl, isSupabaseStorageUrl } from '@/lib/storage';
 import { toast } from 'sonner';
 import {
   FileText,
@@ -52,6 +52,11 @@ export default function DocumentCenter() {
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const contactsRef = useRef(state.contacts);
+
+  useEffect(() => {
+    contactsRef.current = state.contacts;
+  }, [state.contacts]);
 
   useEffect(() => {
     const loadCompanyDocuments = async () => {
@@ -62,10 +67,10 @@ export default function DocumentCenter() {
 
       const docs = await db.getDocuments(state.companyId);
       const mapped: DocumentItem[] = await Promise.all(docs.map(async (doc) => {
-        const linkedContact = state.contacts.find((contact) => contact.id === doc.contact_id);
+        const linkedContact = contactsRef.current.find((contact) => contact.id === doc.contact_id);
         const type = (doc.type || 'other') as DocCategory;
         const url = doc.url
-          ? (isHttpUrl(doc.url) && !doc.url.includes('/projectceo-documents/')
+          ? (isHttpUrl(doc.url) && !isSupabaseStorageUrl(doc.url)
               ? doc.url
               : (await getDocumentSignedUrl(doc.url)) || undefined)
           : undefined;
@@ -88,7 +93,7 @@ export default function DocumentCenter() {
     };
 
     loadCompanyDocuments();
-  }, [state.companyId, state.contacts]);
+  }, [state.companyId]);
 
   const inferCategory = (file: File): DocCategory => {
     const fileName = file.name.toLowerCase();
@@ -149,7 +154,7 @@ export default function DocumentCenter() {
       }
 
       const signedUrl = created.url
-        ? (isHttpUrl(created.url) && !created.url.includes('/projectceo-documents/')
+        ? (isHttpUrl(created.url) && !isSupabaseStorageUrl(created.url)
             ? created.url
             : (await getDocumentSignedUrl(created.url)) || undefined)
         : undefined;
@@ -274,8 +279,8 @@ export default function DocumentCenter() {
       return url;
     }
     
-    // If it's an external HTTP URL (not from our storage), return it directly
-    if (isHttpUrl(url) && !url.includes('/projectceo-documents/')) return url;
+    // If it's an external HTTP URL (not Supabase storage), return it directly
+    if (isHttpUrl(url) && !isSupabaseStorageUrl(url)) return url;
     
     const signedUrl = await getDocumentSignedUrl(url);
     

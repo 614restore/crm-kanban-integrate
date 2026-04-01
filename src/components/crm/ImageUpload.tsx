@@ -42,7 +42,6 @@ export default function ImageUpload({ label, currentUrl, uploadFn, onUploaded, a
     <div className="flex items-center gap-4">
       <div className="w-20 h-20 bg-gray-100 rounded overflow-hidden flex items-center justify-center">
         {preview ? (
-          // eslint-disable-next-line @next/next/no-img-element
           <img src={preview} alt={label || 'preview'} className="w-full h-full object-cover" />
         ) : (
           <div className="text-gray-400 text-sm">No image</div>

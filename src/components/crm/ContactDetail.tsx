@@ -1,8 +1,32 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { consumePendingContactTab } from '@/lib/nextStepActions';
+
+// ── Schedule-data helpers ──────────────────────────────────────────────────
+// The mobile app serialises milestone data into the notes field using the
+// format: [TRUSSCTR_SCHEDULE]{json}\n\nplain notes
+// The web app should strip that prefix before displaying or editing notes,
+// and restore it when saving so mobile data is not lost.
+const TRUSSCTR_SCHEDULE_PREFIX = '[TRUSSCTR_SCHEDULE]';
+
+function stripSchedulePrefix(notes: string | null | undefined): string {
+  if (!notes) return '';
+  if (!notes.startsWith(TRUSSCTR_SCHEDULE_PREFIX)) return notes;
+  const brk = notes.indexOf('\n\n');
+  return brk === -1 ? '' : notes.slice(brk + 2);
+}
+
+function rebuildWithSchedulePrefix(original: string | null | undefined, newPlainNotes: string): string {
+  if (!original?.startsWith(TRUSSCTR_SCHEDULE_PREFIX)) return newPlainNotes;
+  const brk = original.indexOf('\n\n');
+  const prefix = brk === -1 ? original : original.slice(0, brk);
+  return `${prefix}\n\n${newPlainNotes.trim()}`;
+}
+// ──────────────────────────────────────────────────────────────────────────
 import { useCRM, useCurrentContact } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
 import { supabase } from '@/lib/supabase';
+import { sendEmail } from '@/lib/emailApi';
 import { formatPhoneNumber } from '@/lib/utils';
 import JobStatusTimeline from './JobStatusTimeline';
 import CustomerSurvey from './CustomerSurvey';
@@ -11,8 +35,10 @@ import ContactTemplateModal from './ContactTemplateModal';
 import ChangeOrderModal, { ChangeOrder } from './ChangeOrderModal';
 import HailTracePanel from './HailTracePanel';
 import EagleViewPanel from './EagleViewPanel';
+import RoofrPanel from './RoofrPanel';
 import InsuranceTrackingView from './InsuranceTrackingView';
 import SupplementTrackingView from './SupplementTrackingView';
+import { PipelineStageTracker } from './PipelineStageTracker';
 import {
   applyMention,
   findActiveMentionQuery,
@@ -20,7 +46,7 @@ import {
   getMentionTargets,
   validateMentions,
 } from '@/lib/mentions';
-import { uploadDocument, validateDocumentFile, formatFileSize, getDocumentSignedUrl, isHttpUrl } from '@/lib/storage';
+import { uploadDocument, validateDocumentFile, formatFileSize, getDocumentSignedUrl, isHttpUrl, isSupabaseStorageUrl } from '@/lib/storage';
 import { toast } from 'sonner';
 import {
   Contact,
@@ -64,14 +90,126 @@ import {
   Tag,
   Loader2,
   Eye,
+  EyeOff,
   Package,
   ClipboardList,
   Truck,
   Activity,
   Star,
+  Zap,
+  CloudLightning,
+  Wind,
+  RefreshCw,
 } from 'lucide-react';
 
 type TabType = 'overview' | 'timeline' | 'documents' | 'financial' | 'projects' | 'jobStatus' | 'survey' | 'insurance';
+
+interface SignedDoc {
+  id: string;
+  docType: 'estimate' | 'work_order' | 'change_order';
+  label: string;
+  title: string;
+  signedBy: string;
+  signedAt: string;
+  amount?: number;
+  viewUrl?: string;
+}
+
+// Communication templates for quick responses
+const communicationTemplates = [
+  {
+    id: 'initial-contact',
+    title: 'Initial Contact',
+    type: 'email',
+    subject: 'Your Storm Damage Assessment Request',
+    content: `Hi {{CUSTOMER_NAME}},
+
+Thank you for reaching out about storm damage assessment. We understand how stressful property damage can be, and we're here to help.
+
+Our next available inspection slot is {{INSPECTION_DATE}}. During this comprehensive assessment, we will:
+
+- Thoroughly inspect all affected areas
+- Document damage with detailed photos  
+- Provide a detailed estimate for insurance
+- Coordinate directly with your insurance adjuster
+
+Please confirm this appointment time works for you. We look forward to helping restore your property.
+
+Best regards,
+{{AGENT_NAME}}`
+  },
+  {
+    id: 'insurance-claim',
+    title: 'Insurance Claim Update',
+    type: 'email',
+    subject: 'Insurance Claim Status Update - Claim #{{CLAIM_NUMBER}}',
+    content: `Hi {{CUSTOMER_NAME}},
+
+I wanted to update you on the progress of your insurance claim (#{{CLAIM_NUMBER}}).
+
+Current Status: {{STATUS}}
+Next Steps: {{NEXT_STEPS}}
+
+We're working closely with {{ADJUSTER_NAME}} to ensure your claim is processed quickly and fairly. 
+
+If you have any questions, please don't hesitate to reach out.
+
+Best regards,
+{{AGENT_NAME}}`
+  },
+  {
+    id: 'estimate-ready',
+    title: 'Estimate Ready for Review',
+    type: 'email',
+    subject: 'Your Storm Damage Estimate is Ready',
+    content: `Hi {{CUSTOMER_NAME}},
+
+Great news! We've completed our assessment and your storm damage estimate is ready for review.
+
+Total Estimate: {{ESTIMATE_AMOUNT}}
+Insurance Deductible: {{DEDUCTIBLE}}
+
+The estimate has been sent to your insurance adjuster and is attached for your records. We recommend reviewing it carefully and let us know if you have any questions.
+
+Next steps:
+1. Review the estimate
+2. Insurance approval process (typically 3-5 business days)
+3. Schedule work commencement
+
+Thank you for choosing us for your restoration needs.
+
+Best regards,
+{{AGENT_NAME}}`
+  },
+  {
+    id: 'work-scheduled',
+    title: 'Work Scheduled',
+    type: 'sms',
+    subject: '',
+    content: `Hi {{CUSTOMER_NAME}}! Your roof work is scheduled to begin {{START_DATE}}. Our crew will arrive by {{START_TIME}}. Please ensure clear driveway access. Any questions? Call {{PHONE}}.`
+  },
+  {
+    id: 'work-complete',
+    title: 'Work Completion',
+    type: 'email',
+    subject: 'Your Roofing Project is Complete!',
+    content: `Hi {{CUSTOMER_NAME}},
+
+Excellent news! We've successfully completed your roofing project.
+
+Project Summary:
+- Start Date: {{START_DATE}}
+- Completion Date: {{COMPLETION_DATE}}
+- Work Performed: {{WORK_DESCRIPTION}}
+
+Your warranty information and final photos are attached. We'll handle the final insurance paperwork and coordinate payment.
+
+Thank you for choosing us. We're here if you need anything!
+
+Best regards,
+{{AGENT_NAME}}`
+  }
+];
 
 export default function ContactDetail() {
   const { state, dispatch } = useCRM();
@@ -89,6 +227,17 @@ export default function ContactDetail() {
   const [mentionSuggestions, setMentionSuggestions] = useState<ReturnType<typeof getMentionTargets>>([]);
   const [isUploadingDocument, setIsUploadingDocument] = useState(false);
   const [contactDocuments, setContactDocuments] = useState<Document[]>([]);
+  const [weatherAlerts, setWeatherAlerts] = useState<{
+    alerts: Array<{
+      type: string; severity: string; urgency: string; certainty: string;
+      headline: string; instruction: string | null; areaDesc: string;
+      onset: string; expires: string;
+    }>;
+    hasActiveStorm: boolean;
+    location?: string;
+  } | null>(null);
+  const [weatherLoading, setWeatherLoading] = useState(false);
+  const [signedDocs, setSignedDocs] = useState<SignedDoc[]>([]);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   
   // Project-related data
@@ -101,12 +250,15 @@ export default function ContactDetail() {
   const [editingProjectInDetail, setEditingProjectInDetail] = useState<any>(null);
   const [showEstimateModal, setShowEstimateModal] = useState(false);
   const [viewingEstimate, setViewingEstimate] = useState<any>(null);
+  const [editingEstimate, setEditingEstimate] = useState<any>(null);
   const [showWorkOrderModal, setShowWorkOrderModal] = useState(false);
   const [contactChangeOrders, setContactChangeOrders] = useState<ChangeOrder[]>([]);
   const [showChangeOrderModal, setShowChangeOrderModal] = useState(false);
   const [viewingChangeOrder, setViewingChangeOrder] = useState<ChangeOrder | null>(null);
   const [showSurveyModal, setShowSurveyModal] = useState(false);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [templateMessage, setTemplateMessage] = useState('');
   
   const [showNewEstimateModal, setShowNewEstimateModal] = useState(false);
   const [newEstTitle, setNewEstTitle] = useState('');
@@ -114,18 +266,105 @@ export default function ContactDetail() {
   const [newEstNotes, setNewEstNotes] = useState('');
   const [newEstTax, setNewEstTax] = useState(0);
   const [isSavingEstimate, setIsSavingEstimate] = useState(false);
+  const [isSharingEstimateId, setIsSharingEstimateId] = useState<string | null>(null);
   const [showTemplateForEstimate, setShowTemplateForEstimate] = useState(false);
   const noteInputRef = useRef<HTMLInputElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
 
   const mentionTargets = useMemo(() => getMentionTargets(state.teamMembers), [state.teamMembers]);
+  const effectiveCompanyId = profile?.company_id || state.companyId || null;
   const contactId = contact?.id;
-  const contactNotes = contact?.notes ?? '';
+  const contactNotes = stripSchedulePrefix(contact?.notes);
+
+  const isEstimateLocked = (estimate: any) => {
+    const status = String(estimate?.status || '').toLowerCase();
+    return status === 'sent' || status === 'viewed' || status === 'accepted';
+  };
+
+  const openEstimateEditor = (estimate: any) => {
+    if (isEstimateLocked(estimate)) {
+      toast.error('This estimate has already been shared. Use a change order for any further changes.');
+      return;
+    }
+    setViewingEstimate(null);
+    setEditingEstimate(estimate);
+    setShowEstimateModal(true);
+  };
+
+  const handleShareEstimate = async (estimate: any) => {
+    if (!contact || !profile?.company_id) {
+      toast.error('Missing contact or company information.');
+      return;
+    }
+    if (!contact.email) {
+      toast.error('This contact does not have an email address on file.');
+      return;
+    }
+    if (isEstimateLocked(estimate)) {
+      toast.error('This estimate has already been shared and can no longer be edited.');
+      return;
+    }
+
+    setIsSharingEstimateId(estimate.id);
+    try {
+      const token = crypto.randomUUID();
+      const updated = await db.updateEstimate(estimate.id, {
+        status: 'sent',
+        sent_at: new Date().toISOString(),
+        sign_token: token,
+      });
+
+      if (!updated) {
+        throw new Error('Failed to update estimate status');
+      }
+
+      const appUrl = (import.meta.env.VITE_APP_URL as string | undefined)?.trim() || window.location.origin;
+      const signUrl = `${appUrl}/sign?estimateId=${encodeURIComponent(updated.id)}&token=${encodeURIComponent(token)}`;
+      const company = await db.getCompany(profile.company_id).catch(() => null);
+      const companyName = company?.name || 'Your contractor';
+      const customerName = getContactFullName(contact);
+      const estimateNumber = updated.estimate_number || estimate.estimateNumber || estimate.estimate_number || `EST-${String(updated.id).slice(0, 8).toUpperCase()}`;
+
+      await sendEmail({
+        to: contact.email,
+        subject: `Estimate ${estimateNumber} from ${companyName}`,
+        html: `
+          <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
+            <h2 style="color:#2563eb;margin:0 0 16px;">Estimate Ready for Review</h2>
+            <p>Hi ${customerName},</p>
+            <p>${companyName} has shared <strong>${updated.title || `Estimate ${estimateNumber}`}</strong> for your review.</p>
+            <p><strong>Total:</strong> ${formatCurrency(Number(updated.total || 0))}</p>
+            <p style="margin:24px 0;">
+              <a href="${signUrl}" style="display:inline-block;background:#2563eb;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;">
+                Review &amp; Sign Estimate
+              </a>
+            </p>
+            <p style="font-size:12px;color:#6b7280;">If the button does not work, copy and paste this link into your browser:<br>${signUrl}</p>
+          </div>`,
+      });
+
+      const refreshed = await db.getEstimatesByContact(contact.id);
+      setContactEstimates(refreshed);
+      setViewingEstimate((prev: any) => prev?.id === updated.id ? updated : prev);
+      toast.success('Estimate shared. Editing is now locked; use a change order for future revisions.');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to share estimate');
+    } finally {
+      setIsSharingEstimateId(null);
+    }
+  };
 
   useEffect(() => {
     if (!contactId) return;
     setQuickNote(contactNotes);
   }, [contactId, contactNotes]);
+
+  // When opening a contact from a "Next Step" pill, jump straight to the requested tab
+  useEffect(() => {
+    if (!contactId) return;
+    const tab = consumePendingContactTab();
+    if (tab) setActiveTab(tab as TabType);
+  }, [contactId]);
 
   // Load contact projects, estimates, work orders, and material orders
   useEffect(() => {
@@ -162,27 +401,31 @@ export default function ContactDetail() {
     loadContactRelatedData();
   }, [contactId, profile?.company_id, state.projects, state.estimates, state.workOrders, state.materialOrders]);
 
-  // Load contact documents with signed URLs
+  // Load contact documents and signed docs in parallel
   useEffect(() => {
     const loadContactDocuments = async () => {
       if (!contactId) {
         setContactDocuments([]);
+        setSignedDocs([]);
         return;
       }
 
-      const docs = await db.getDocumentsByContact(contactId);
+      const [docs, signedEstimates, signedWorkOrders, signedChangeOrders] = await Promise.all([
+        db.getDocumentsByContact(contactId, profile?.company_id || state.companyId || ''),
+        db.getSignedEstimatesByContact(contactId),
+        db.getSignedWorkOrdersByContact(contactId),
+        db.getSignedChangeOrdersByContact(contactId),
+      ]);
 
       const docsWithSignedUrls = await Promise.all(
         docs.map(async (doc) => {
-          // Store the path in the URL field, signed URLs will be created on-demand when opening
           const url = doc.url;
-
           return {
             id: doc.id,
             contactId: doc.contact_id || '',
             name: doc.name,
             type: doc.type as 'contract' | 'estimate' | 'invoice' | 'photo' | 'insurance' | 'other',
-            url,  // Store path, not signed URL - we'll create signed URLs on-demand
+            url,
             uploadedAt: doc.created_at,
             uploadedBy: doc.uploaded_by || 'Team member',
             size: doc.size || 'Unknown',
@@ -191,10 +434,78 @@ export default function ContactDetail() {
       );
 
       setContactDocuments(docsWithSignedUrls);
+
+      const origin = window.location.origin;
+      const normalized: SignedDoc[] = [
+        ...signedEstimates.map(est => ({
+          id: est.id,
+          docType: 'estimate' as const,
+          label: est.estimate_number,
+          title: est.title,
+          signedBy: est.signed_by || 'Customer',
+          signedAt: est.accepted_at || est.updated_at,
+          amount: est.total,
+          viewUrl: est.sign_token
+            ? `${origin}/sign?estimateId=${est.id}&token=${est.sign_token}`
+            : undefined,
+        })),
+        ...signedWorkOrders.map(wo => ({
+          id: wo.id,
+          docType: 'work_order' as const,
+          label: wo.work_order_number,
+          title: wo.title,
+          signedBy: wo.signed_by || 'Customer',
+          signedAt: wo.completed_at || wo.updated_at,
+          amount: wo.total_cost,
+          viewUrl: undefined,
+        })),
+        ...signedChangeOrders.map((co: any) => ({
+          id: co.id,
+          docType: 'change_order' as const,
+          label: co.change_order_number,
+          title: co.title,
+          signedBy: co.signed_by_name || 'Customer',
+          signedAt: co.signed_at || co.created_at,
+          amount: co.total,
+          viewUrl: co.sign_token
+            ? `${origin}/sign-change-order/${co.sign_token}`
+            : undefined,
+        })),
+      ];
+
+      normalized.sort(
+        (a, b) => new Date(b.signedAt).getTime() - new Date(a.signedAt).getTime()
+      );
+      setSignedDocs(normalized);
     };
 
     loadContactDocuments();
   }, [contactId]);
+
+  // NOAA weather alerts for this contact's zip code
+  const fetchWeatherAlerts = async (zip: string) => {
+    if (!zip || zip.trim().length < 5) return;
+    setWeatherLoading(true);
+    try {
+      const res = await fetch('/api/eagleview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'weather', zipCode: zip.trim() }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setWeatherAlerts(data);
+      }
+    } catch {
+      // silently fail — no weather is fine
+    } finally {
+      setWeatherLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (contact?.zip) fetchWeatherAlerts(contact.zip);
+  }, [contact?.zip]);
 
   const handleUploadDocument = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -302,25 +613,17 @@ export default function ContactDetail() {
 
 
     try {
-      // If it's already a full HTTP URL, open it directly
-      if (isHttpUrl(url) && !url.includes('/projectceo-documents/')) {
+      // Non-Supabase URLs (EagleView reports, external links) — open directly
+      if (isHttpUrl(url) && !isSupabaseStorageUrl(url)) {
         window.open(url, '_blank', 'noopener,noreferrer');
         return;
       }
 
-      // If it's a storage path or Supabase URL, try to get/refresh the signed URL
+      // Supabase storage URLs (any bucket) — always create a signed URL
       const signedUrl = await getDocumentSignedUrl(url, 3600);
-      
+
       if (!signedUrl) {
-        console.error('[ContactDetail] Failed to create signed URL');
-        console.error('[ContactDetail] This usually means:');
-        console.error('[ContactDetail]   1. The projectceo-documents bucket does not exist');
-        console.error('[ContactDetail]   2. Storage policies are not configured');
-        console.error('[ContactDetail]   3. The file was deleted or path is incorrect');
-        toast.error(
-          'Unable to open document. Check console for details or verify Supabase bucket setup.',
-          { duration: 5000 }
-        );
+        toast.error('Unable to open document. The file may have been deleted or storage access is not configured.', { duration: 5000 });
         return;
       }
 
@@ -340,7 +643,6 @@ export default function ContactDetail() {
   }
 
   const assignee = state.teamMembers.find((tm) => tm.id === contact.assignedTo);
-  const effectiveCompanyId = profile?.company_id || state.companyId || null;
 
   const syncMentionSuggestions = (text: string, caret: number) => {
     const active = findActiveMentionQuery(text, caret);
@@ -529,11 +831,13 @@ export default function ContactDetail() {
 
   const handleSaveQuickNote = async () => {
     const trimmed = quickNote.trim();
+    // Preserve any [TRUSSCTR_SCHEDULE] prefix that the mobile app wrote
+    const fullNotes = rebuildWithSchedulePrefix(contact.notes, trimmed);
 
     setIsSavingQuickNote(true);
     try {
       if (profile?.company_id) {
-        const updated = await db.updateContact(contact.id, { notes: trimmed || null });
+        const updated = await db.updateContact(contact.id, { notes: fullNotes || null });
         if (!updated) {
           toast.error('Failed to save note');
           return;
@@ -544,7 +848,7 @@ export default function ContactDetail() {
         type: 'UPDATE_CONTACT',
         payload: {
           ...contact,
-          notes: trimmed || undefined,
+          notes: fullNotes || undefined,
           updatedAt: new Date().toISOString(),
         },
       });
@@ -583,6 +887,35 @@ export default function ContactDetail() {
 
   const handleScheduleAppointment = () => {
     setShowAppointmentModal(true);
+  };
+
+  const handleUseTemplate = (template: typeof communicationTemplates[0]) => {
+    // Replace template variables with actual data
+    let content = template.content;
+    const replacements = {
+      '{{CUSTOMER_NAME}}': getContactFullName(contact),
+      '{{AGENT_NAME}}': state.currentUser?.name || 'Your Agent',
+      '{{PHONE}}': state.currentUser?.phone || '(555) 123-4567',
+      '{{CLAIM_NUMBER}}': contact.claimNumber || '[CLAIM_NUMBER]',
+      '{{ADJUSTER_NAME}}': contact.adjusterName || '[ADJUSTER_NAME]',
+      '{{DEDUCTIBLE}}': contact.deductible ? `$${contact.deductible}` : '[DEDUCTIBLE]',
+      '{{INSPECTION_DATE}}': '[INSPECTION_DATE]',
+      '{{ESTIMATE_AMOUNT}}': contact.projectValue ? `$${contact.projectValue.toLocaleString()}` : '[ESTIMATE_AMOUNT]',
+      '{{START_DATE}}': '[START_DATE]',
+      '{{START_TIME}}': '[START_TIME]',
+      '{{COMPLETION_DATE}}': '[COMPLETION_DATE]',
+      '{{WORK_DESCRIPTION}}': '[WORK_DESCRIPTION]',
+      '{{STATUS}}': '[STATUS]',
+      '{{NEXT_STEPS}}': '[NEXT_STEPS]',
+    };
+
+    Object.entries(replacements).forEach(([placeholder, value]) => {
+      content = content.replace(new RegExp(placeholder, 'g'), value);
+    });
+
+    setTemplateMessage(content);
+    setShowTemplates(false);
+    toast.success(`Template "${template.title}" loaded — review and send`);
   };
 
   const handleReassignContact = async (newAssigneeId: string) => {
@@ -1134,9 +1467,9 @@ export default function ContactDetail() {
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Notes</h3>
                 {isEditing ? (
                   <textarea
-                    value={currentData.notes || ''}
+                    value={stripSchedulePrefix(currentData.notes) || ''}
                     onChange={(e) =>
-                      setEditedContact({ ...currentData, notes: e.target.value })
+                      setEditedContact({ ...currentData, notes: rebuildWithSchedulePrefix(contact.notes, e.target.value) })
                     }
                     rows={4}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none resize-none"
@@ -1144,7 +1477,7 @@ export default function ContactDetail() {
                 ) : (
                   <div className="space-y-3">
                     <p className="text-gray-700 whitespace-pre-wrap">
-                      {contact.notes || 'No notes added yet.'}
+                      {stripSchedulePrefix(contact.notes) || 'No notes added yet.'}
                     </p>
                     <textarea
                       value={quickNote}
@@ -1170,6 +1503,13 @@ export default function ContactDetail() {
 
             {/* Sidebar */}
             <div className="space-y-6">
+              {/* Pipeline Stage Tracker */}
+              <PipelineStageTracker
+                currentStatus={contact.status}
+                statusChangedAt={contact.statusChangedAt}
+                inspectionCompleted={contact.inspectionCompleted}
+              />
+
               {/* Project Pricing Card */}
               <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl p-6 text-white">
                 <h3 className="text-lg font-semibold mb-4">Project Pricing</h3>
@@ -1258,6 +1598,80 @@ export default function ContactDetail() {
                 </div>
               </div>
 
+              {/* NOAA Storm Alerts */}
+              {contact?.zip && (
+                <div className={`rounded-xl border p-4 ${
+                  weatherAlerts?.hasActiveStorm
+                    ? 'bg-red-50 border-red-300'
+                    : 'bg-white border-gray-200'
+                }`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <CloudLightning size={16} className={weatherAlerts?.hasActiveStorm ? 'text-red-600' : 'text-gray-500'} />
+                      <h3 className={`text-sm font-semibold ${weatherAlerts?.hasActiveStorm ? 'text-red-700' : 'text-gray-700'}`}>
+                        NOAA Storm Alerts
+                      </h3>
+                    </div>
+                    <button
+                      onClick={() => fetchWeatherAlerts(contact.zip || '')}
+                      disabled={weatherLoading}
+                      className="text-gray-400 hover:text-gray-600 transition-colors"
+                      title="Refresh alerts"
+                    >
+                      <RefreshCw size={13} className={weatherLoading ? 'animate-spin' : ''} />
+                    </button>
+                  </div>
+
+                  {weatherLoading && !weatherAlerts && (
+                    <p className="text-xs text-gray-400 flex items-center gap-1">
+                      <Loader2 size={12} className="animate-spin" /> Checking alerts…
+                    </p>
+                  )}
+
+                  {weatherAlerts && !weatherAlerts.hasActiveStorm && (
+                    <div className="flex items-center gap-2 text-xs text-green-700">
+                      <CheckCircle size={13} className="text-green-500" />
+                      <span>No active storm alerts</span>
+                      {weatherAlerts.location && (
+                        <span className="text-gray-400">· {weatherAlerts.location}</span>
+                      )}
+                    </div>
+                  )}
+
+                  {weatherAlerts?.hasActiveStorm && weatherAlerts.alerts.map((alert, i) => (
+                    <div key={i} className="mb-2 last:mb-0 bg-white/80 rounded-lg p-3 border border-red-200">
+                      <div className="flex items-start gap-2">
+                        <Wind size={13} className="text-red-500 mt-0.5 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-red-700 truncate">{alert.type}</p>
+                          <p className="text-xs text-gray-600 mt-0.5 line-clamp-2">{alert.headline}</p>
+                          {alert.instruction && (
+                            <p className="text-xs text-gray-500 mt-1 line-clamp-2 italic">{alert.instruction}</p>
+                          )}
+                          <div className="flex gap-2 mt-1 text-[10px] text-gray-400">
+                            <span className={`font-medium ${alert.severity === 'Extreme' || alert.severity === 'Severe' ? 'text-red-500' : 'text-orange-500'}`}>
+                              {alert.severity}
+                            </span>
+                            {alert.urgency && <span>· {alert.urgency}</span>}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  {!weatherLoading && !weatherAlerts && (
+                    <button
+                      onClick={() => fetchWeatherAlerts(contact.zip || '')}
+                      className="text-xs text-blue-600 hover:underline"
+                    >
+                      Check alerts for {contact.zip}
+                    </button>
+                  )}
+
+                  <p className="text-[10px] text-gray-300 mt-2">NOAA National Weather Service</p>
+                </div>
+              )}
+
               {/* Quick Actions */}
               <div className="bg-white rounded-xl border border-gray-200 p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
@@ -1273,6 +1687,10 @@ export default function ContactDetail() {
                   <button onClick={handleQuickSms} className="w-full flex items-center gap-3 px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors text-left">
                     <MessageSquare size={18} className="text-blue-600" />
                     <span className="font-medium text-gray-700">Send SMS</span>
+                  </button>
+                  <button onClick={() => setShowTemplates(true)} className="w-full flex items-center gap-3 px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors text-left">
+                    <FileText size={18} className="text-blue-600" />
+                    <span className="font-medium text-gray-700">Use Template</span>
                   </button>
                   <button onClick={handleScheduleAppointment} className="w-full flex items-center gap-3 px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors text-left">
                     <Calendar size={18} className="text-blue-600" />
@@ -1408,107 +1826,187 @@ export default function ContactDetail() {
 
         {activeTab === 'documents' && (
           <div className="space-y-4">
-            <EagleViewPanel
-              address={contact.address || ''}
-              city={contact.city || ''}
-              state={contact.state || ''}
-              zip={contact.zip || ''}
-              companyId={effectiveCompanyId || ''}
-              contactId={contact.id}
-              contactName={getContactFullName(contact)}
-              userId={profile?.id}
-              onDocumentSaved={(doc) => setContactDocuments(prev => [doc, ...prev])}
-            />
-          <div className="bg-white rounded-xl border border-gray-200">
-            <input
-              ref={documentInputRef}
-              type="file"
-              className="hidden"
-              onChange={handleUploadDocument}
-              disabled={isUploadingDocument}
-            />
-            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">Documents</h3>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowTemplateModal(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                >
-                  <FileText size={18} />
-                  Use Template
-                </button>
-                <button 
-                  onClick={() => documentInputRef.current?.click()} 
-                  disabled={isUploadingDocument}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isUploadingDocument ? <Loader2 size={18} className="animate-spin" /> : <Upload size={18} />}
-                  {isUploadingDocument ? 'Uploading...' : 'Upload Document'}
-                </button>
+            {/* ── Aerial Measurement Reports ── */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              <EagleViewPanel
+                address={contact.address || ''}
+                city={contact.city || ''}
+                state={contact.state || ''}
+                zip={contact.zip || ''}
+                companyId={effectiveCompanyId || ''}
+                contactId={contact.id}
+                contactName={getContactFullName(contact)}
+                userId={profile?.id}
+                onDocumentSaved={(doc) => setContactDocuments(prev => [doc, ...prev])}
+              />
+              <RoofrPanel
+                address={contact.address || ''}
+                city={contact.city || ''}
+                state={contact.state || ''}
+                zip={contact.zip || ''}
+                companyId={effectiveCompanyId || ''}
+                contactId={contact.id}
+                contactName={getContactFullName(contact)}
+                userId={profile?.id}
+                onDocumentSaved={(doc) => setContactDocuments(prev => [doc, ...prev])}
+              />
+            </div>
+
+            {/* ── Signed Documents ── */}
+            <div className="bg-white rounded-xl border border-gray-200">
+              <div className="p-5 border-b border-gray-200 flex items-center gap-3">
+                <CheckCircle size={20} className="text-green-600" />
+                <h3 className="text-lg font-semibold text-gray-900">Signed Documents</h3>
+                {signedDocs.length > 0 && (
+                  <span className="ml-auto bg-green-100 text-green-700 text-xs font-semibold px-2.5 py-0.5 rounded-full">
+                    {signedDocs.length}
+                  </span>
+                )}
+              </div>
+              <div className="divide-y divide-gray-100">
+                {signedDocs.map((doc) => (
+                  <div key={`${doc.docType}-${doc.id}`} className="p-4 flex items-center justify-between hover:bg-gray-50">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <CheckCircle size={20} className="text-green-600" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                            doc.docType === 'estimate'
+                              ? 'bg-blue-100 text-blue-700'
+                              : doc.docType === 'work_order'
+                              ? 'bg-purple-100 text-purple-700'
+                              : 'bg-orange-100 text-orange-700'
+                          }`}>
+                            {doc.docType === 'estimate'
+                              ? 'Estimate'
+                              : doc.docType === 'work_order'
+                              ? 'Work Order'
+                              : 'Change Order'}
+                          </span>
+                          <span className="text-xs text-gray-400">{doc.label}</span>
+                        </div>
+                        <p className="font-medium text-gray-900">{doc.title}</p>
+                        <p className="text-sm text-gray-500">
+                          Signed by {doc.signedBy} · {formatDate(doc.signedAt)}
+                          {doc.amount != null && ` · ${formatCurrency(doc.amount)}`}
+                        </p>
+                      </div>
+                    </div>
+                    {doc.viewUrl && (
+                      <a
+                        href={doc.viewUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
+                        title="View signed document"
+                      >
+                        <ExternalLink size={18} className="text-gray-500" />
+                      </a>
+                    )}
+                  </div>
+                ))}
+                {signedDocs.length === 0 && (
+                  <div className="p-8 text-center text-gray-400">
+                    <CheckCircle size={28} className="mx-auto mb-2 opacity-30" />
+                    <p className="text-sm">No signed documents yet</p>
+                  </div>
+                )}
               </div>
             </div>
-            <div className="divide-y divide-gray-100">
-              {contactDocuments.map((doc) => (
-                <div key={doc.id} className="p-4 flex items-center justify-between hover:bg-gray-50">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                      <FileText size={20} className="text-gray-500" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900">{doc.name}</p>
-                      <p className="text-sm text-gray-500">
-                        {doc.size} • Uploaded {formatDate(doc.uploadedAt)} by {doc.uploadedBy}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button 
-                      onClick={() => handleOpenDocument(doc.url, doc.name)} 
-                      className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                      title="View document"
-                    >
-                      <Eye size={18} className="text-gray-500" />
-                    </button>
-                    <button 
-                      onClick={() => handleOpenDocument(doc.url, doc.name)} 
-                      className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                      title="Download document"
-                    >
-                      <Download size={18} className="text-gray-500" />
-                    </button>
-                    <button 
-                      onClick={() => handleDeleteDocument(doc.id)} 
-                      className="p-2 hover:bg-red-100 rounded-lg transition-colors"
-                      title="Delete document"
-                    >
-                      <Trash2 size={18} className="text-red-500" />
-                    </button>
-                  </div>
+
+            {/* ── Uploaded Files ── */}
+            <div className="bg-white rounded-xl border border-gray-200">
+              <input
+                ref={documentInputRef}
+                type="file"
+                className="hidden"
+                onChange={handleUploadDocument}
+                disabled={isUploadingDocument}
+              />
+              <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">Uploaded Files</h3>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowTemplateModal(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                  >
+                    <FileText size={18} />
+                    Use Template
+                  </button>
+                  <button
+                    onClick={() => documentInputRef.current?.click()}
+                    disabled={isUploadingDocument}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isUploadingDocument ? <Loader2 size={18} className="animate-spin" /> : <Upload size={18} />}
+                    {isUploadingDocument ? 'Uploading...' : 'Upload Document'}
+                  </button>
                 </div>
-              ))}
-              {contactDocuments.length === 0 && (
-                <div className="p-12 text-center text-gray-500">
-                  <FileText size={32} className="mx-auto mb-2 opacity-50" />
-                  <p>No documents yet</p>
-                  <div className="flex items-center justify-center gap-3 mt-4">
-                    <button
-                      onClick={() => setShowTemplateModal(true)}
-                      className="text-green-600 hover:text-green-700 text-sm font-medium"
-                    >
-                      Use a template
-                    </button>
-                    <span className="text-gray-300">|</span>
-                    <button 
-                      onClick={() => documentInputRef.current?.click()}
-                      className="text-blue-600 hover:text-blue-700 text-sm font-medium"
-                    >
-                      Upload a file
-                    </button>
+              </div>
+              <div className="divide-y divide-gray-100">
+                {contactDocuments.map((doc) => (
+                  <div key={doc.id} className="p-4 flex items-center justify-between hover:bg-gray-50">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                        <FileText size={20} className="text-gray-500" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">{doc.name}</p>
+                        <p className="text-sm text-gray-500">
+                          {doc.size} • Uploaded {formatDate(doc.uploadedAt)} by {doc.uploadedBy}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleOpenDocument(doc.url, doc.name)}
+                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                        title="View document"
+                      >
+                        <Eye size={18} className="text-gray-500" />
+                      </button>
+                      <button
+                        onClick={() => handleOpenDocument(doc.url, doc.name)}
+                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                        title="Download document"
+                      >
+                        <Download size={18} className="text-gray-500" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteDocument(doc.id)}
+                        className="p-2 hover:bg-red-100 rounded-lg transition-colors"
+                        title="Delete document"
+                      >
+                        <Trash2 size={18} className="text-red-500" />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
+                ))}
+                {contactDocuments.length === 0 && (
+                  <div className="p-12 text-center text-gray-500">
+                    <FileText size={32} className="mx-auto mb-2 opacity-50" />
+                    <p>No uploaded files yet</p>
+                    <div className="flex items-center justify-center gap-3 mt-4">
+                      <button
+                        onClick={() => setShowTemplateModal(true)}
+                        className="text-green-600 hover:text-green-700 text-sm font-medium"
+                      >
+                        Use a template
+                      </button>
+                      <span className="text-gray-300">|</span>
+                      <button
+                        onClick={() => documentInputRef.current?.click()}
+                        className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+                      >
+                        Upload a file
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
           </div>
         )}
 
@@ -1646,25 +2144,43 @@ export default function ContactDetail() {
                   <div className="flex items-center justify-between mb-2">
                     <label className="text-sm font-medium text-gray-700">Line Items</label>
                     <button
-                      onClick={() => setNewEstItems(prev => [...prev, {id: crypto.randomUUID(), description: '', quantity: 1, unit: 'ea', unitPrice: 0, total: 0}])}
+                      onClick={() => setNewEstItems(prev => [...prev, {id: crypto.randomUUID(), description: '', quantity: 1, unit: 'ea', unitPrice: 0, total: 0, hidePrice: false}])}
                       className="text-xs text-blue-600 hover:underline"
                     >+ Add Row</button>
                   </div>
                   <div className="space-y-2">
                     <div className="grid grid-cols-12 gap-2 text-xs font-medium text-gray-500 px-2">
-                      <span className="col-span-5">Description</span>
+                      <span className="col-span-4">Description</span>
                       <span className="col-span-2 text-center">Qty</span>
                       <span className="col-span-2">Unit</span>
                       <span className="col-span-2 text-right">Price</span>
-                      <span className="col-span-1" />
+                      <span className="col-span-2 text-right">Hide $</span>
                     </div>
                     {newEstItems.map((item, idx) => (
-                      <div key={item.id} className="grid grid-cols-12 gap-2 items-center">
-                        <input value={item.description} onChange={e => { const n=[...newEstItems]; n[idx]={...n[idx],description:e.target.value}; setNewEstItems(n); }} placeholder="Description" className="col-span-5 px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                      <div key={item.id} className={`grid grid-cols-12 gap-2 items-center rounded px-1 py-0.5 ${item.hidePrice ? 'bg-amber-50' : ''}`}>
+                        <input value={item.description} onChange={e => { const n=[...newEstItems]; n[idx]={...n[idx],description:e.target.value}; setNewEstItems(n); }} placeholder="Description" className="col-span-4 px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
                         <input type="number" value={item.quantity} onChange={e => { const q=Number(e.target.value); const n=[...newEstItems]; n[idx]={...n[idx],quantity:q,total:q*n[idx].unitPrice}; setNewEstItems(n); }} className="col-span-2 px-2 py-1.5 border border-gray-200 rounded text-sm text-center focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                        <input value={item.unit} onChange={e => { const n=[...newEstItems]; n[idx]={...n[idx],unit:e.target.value}; setNewEstItems(n); }} className="col-span-2 px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                        <select value={item.unit} onChange={e => { const n=[...newEstItems]; n[idx]={...n[idx],unit:e.target.value}; setNewEstItems(n); }} className="col-span-2 px-1 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white">
+                          <option value="ea">ea</option>
+                          <option value="sq">sq</option>
+                          <option value="roll">roll</option>
+                          <option value="lf">lf</option>
+                          <option value="sf">sf</option>
+                          <option value="box">box</option>
+                          <option value="pcs">pcs</option>
+                          <option value="lbs">lbs</option>
+                          <option value="hr">hr</option>
+                          <option value="day">day</option>
+                          <option value="ft">ft</option>
+                          <option value="lot">lot</option>
+                        </select>
                         <input type="number" value={item.unitPrice} onChange={e => { const p=Number(e.target.value); const n=[...newEstItems]; n[idx]={...n[idx],unitPrice:p,total:n[idx].quantity*p}; setNewEstItems(n); }} className="col-span-2 px-2 py-1.5 border border-gray-200 rounded text-sm text-right focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                        <button onClick={() => newEstItems.length > 1 && setNewEstItems(prev => prev.filter((_,i)=>i!==idx))} className="col-span-1 flex justify-center text-red-400 hover:text-red-600"><X size={14} /></button>
+                        <div className="col-span-2 flex items-center justify-end gap-1">
+                          <button type="button" onClick={() => { const n=[...newEstItems]; n[idx]={...n[idx],hidePrice:!n[idx].hidePrice}; setNewEstItems(n); }} title={item.hidePrice ? 'Price hidden from customer' : 'Show price to customer'} className={`p-1 rounded transition-colors ${item.hidePrice ? 'text-amber-600 bg-amber-100' : 'text-gray-400 hover:text-gray-600'}`}>
+                            {item.hidePrice ? <EyeOff size={13} /> : <Eye size={13} />}
+                          </button>
+                          <button onClick={() => newEstItems.length > 1 && setNewEstItems(prev => prev.filter((_,i)=>i!==idx))} className="text-red-400 hover:text-red-600 p-1"><X size={13} /></button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1880,7 +2396,7 @@ export default function ContactDetail() {
                   Estimates ({contactEstimates.length})
                 </h3>
                 <button
-                  onClick={() => setShowEstimateModal(true)}
+                  onClick={() => { setEditingEstimate(null); setShowEstimateModal(true); }}
                   className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
                 >
                   <Plus size={18} />
@@ -1923,6 +2439,25 @@ export default function ContactDetail() {
                           >
                             <Eye size={16} />
                           </button>
+                          {!isEstimateLocked(estimate) && (
+                            <>
+                              <button
+                                onClick={() => openEstimateEditor(estimate)}
+                                className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                title="Edit estimate"
+                              >
+                                <Edit2 size={16} />
+                              </button>
+                              <button
+                                onClick={() => handleShareEstimate(estimate)}
+                                disabled={isSharingEstimateId === estimate.id}
+                                className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors disabled:opacity-50"
+                                title="Share estimate"
+                              >
+                                {isSharingEstimateId === estimate.id ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                              </button>
+                            </>
+                          )}
                         </div>
                       </div>
                       
@@ -1946,7 +2481,7 @@ export default function ContactDetail() {
                   <FileText size={32} className="mx-auto mb-2 text-gray-400" />
                   <p className="text-gray-500">No estimates yet</p>
                   <button
-                    onClick={() => setShowEstimateModal(true)}
+                    onClick={() => { setEditingEstimate(null); setShowEstimateModal(true); }}
                     className="mt-4 text-green-600 hover:text-green-700 font-medium"
                   >
                     Create your first estimate
@@ -2239,7 +2774,7 @@ export default function ContactDetail() {
               }))}
               onStatusChange={handleStatusChange}
               onScheduleInspection={() => setShowAppointmentModal(true)}
-              onSendEstimate={() => setShowEstimateModal(true)}
+              onSendEstimate={() => { setEditingEstimate(null); setShowEstimateModal(true); }}
             />
           </div>
         )}
@@ -2300,6 +2835,118 @@ export default function ContactDetail() {
           </div>
         )}
       </div>
+
+      {/* Template Selection Modal */}
+      {showTemplates && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900">Communication Templates</h3>
+                  <p className="text-gray-500 mt-1">For {getContactFullName(contact)}</p>
+                </div>
+                <button
+                  onClick={() => setShowTemplates(false)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X size={20} className="text-gray-500" />
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-6 max-h-[calc(90vh-120px)] overflow-y-auto">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {communicationTemplates.map((template) => (
+                  <div key={template.id} className="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        {template.type === 'email' ? (
+                          <Mail size={20} className="text-blue-600" />
+                        ) : (
+                          <MessageSquare size={20} className="text-green-600" />
+                        )}
+                        <h4 className="font-medium text-gray-900">{template.title}</h4>
+                      </div>
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${
+                        template.type === 'email' 
+                          ? 'bg-blue-100 text-blue-800' 
+                          : 'bg-green-100 text-green-800'
+                      }`}>
+                        {template.type.toUpperCase()}
+                      </span>
+                    </div>
+                    
+                    {template.subject && (
+                      <p className="text-sm font-medium text-gray-700 mb-2">
+                        Subject: {template.subject}
+                      </p>
+                    )}
+                    
+                    <p className="text-sm text-gray-600 mb-4 line-clamp-3">
+                      {template.content.substring(0, 150)}...
+                    </p>
+                    
+                    <button
+                      onClick={() => handleUseTemplate(template)}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      <Zap size={16} />
+                      Use Template
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Template Message Preview/Edit Modal */}
+      {templateMessage && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Review & Send Message</h3>
+              <button onClick={() => setTemplateMessage('')} className="p-2 hover:bg-gray-100 rounded-lg">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">To</label>
+                <p className="text-gray-900">{getContactFullName(contact)} ({contact.email || contact.phone1})</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
+                <textarea
+                  value={templateMessage}
+                  onChange={(e) => setTemplateMessage(e.target.value)}
+                  rows={12}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none resize-none"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 p-6 pt-0">
+              <button onClick={() => setTemplateMessage('')} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (!templateMessage.trim()) return;
+                  await persistCommunication(contact.id, templateMessage.trim(), 'email');
+                  setTemplateMessage('');
+                  toast.success('Message saved to timeline');
+                }}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                <Send size={16} />
+                Save to Timeline
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Survey Modal */}
       {showSurveyModal && (
@@ -2674,9 +3321,33 @@ export default function ContactDetail() {
               )}
             </div>
             <div className="p-6 border-t border-gray-200 bg-gray-50 rounded-b-xl">
-              <button onClick={() => setViewingEstimate(null)} className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-white transition-colors text-sm">
-                Close
-              </button>
+              <div className="flex flex-wrap gap-3">
+                {!isEstimateLocked(viewingEstimate) && (
+                  <>
+                    <button
+                      onClick={() => openEstimateEditor(viewingEstimate)}
+                      className="px-4 py-2 text-blue-700 border border-blue-300 rounded-lg hover:bg-white transition-colors text-sm"
+                    >
+                      Edit Estimate
+                    </button>
+                    <button
+                      onClick={() => handleShareEstimate(viewingEstimate)}
+                      disabled={isSharingEstimateId === viewingEstimate.id}
+                      className="px-4 py-2 text-purple-700 border border-purple-300 rounded-lg hover:bg-white transition-colors text-sm disabled:opacity-50"
+                    >
+                      {isSharingEstimateId === viewingEstimate.id ? 'Sharing…' : 'Share Estimate'}
+                    </button>
+                  </>
+                )}
+                {isEstimateLocked(viewingEstimate) && (
+                  <div className="px-4 py-2 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg">
+                    This estimate has already been shared. Further revisions should be handled with a change order.
+                  </div>
+                )}
+                <button onClick={() => setViewingEstimate(null)} className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-white transition-colors text-sm">
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -2861,9 +3532,12 @@ export default function ContactDetail() {
           <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-gray-900">Create Estimate</h2>
+                <h2 className="text-xl font-semibold text-gray-900">{editingEstimate ? 'Edit Estimate' : 'Create Estimate'}</h2>
                 <button
-                  onClick={() => setShowEstimateModal(false)}
+                  onClick={() => {
+                    setShowEstimateModal(false);
+                    setEditingEstimate(null);
+                  }}
                   className="text-gray-400 hover:text-gray-600"
                 >
                   <X size={24} />
@@ -2888,34 +3562,37 @@ export default function ContactDetail() {
                 const estimateData = {
                   company_id: profile.company_id,
                   contact_id: contactId,
-                  estimate_number: `EST-${Date.now()}`,
+                  estimate_number: editingEstimate?.estimate_number || editingEstimate?.estimateNumber || `EST-${Date.now()}`,
                   title: formData.get('title') as string,
                   description: (formData.get('description') as string) || undefined,
-                  status: 'draft',
+                  status: editingEstimate?.status || 'draft',
                   subtotal: amount,
                   tax: tax,
                   total: total,
                   valid_until: (formData.get('valid_until') as string) || undefined,
                   terms: (formData.get('terms') as string) || undefined,
                   notes: (formData.get('notes') as string) || undefined,
-                  created_by: profile.id || undefined,
+                  created_by: editingEstimate?.created_by || profile.id || undefined,
                 };
 
-                let newEstimate = null;
+                let savedEstimate = null;
                 try {
-                  newEstimate = await db.createEstimate(estimateData);
+                  savedEstimate = editingEstimate
+                    ? await db.updateEstimate(editingEstimate.id, estimateData)
+                    : await db.createEstimate(estimateData);
                 } catch (err: any) {
-                  toast.error(`Failed to create estimate: ${err.message || 'Unknown error'}`);
+                  toast.error(`Failed to ${editingEstimate ? 'update' : 'create'} estimate: ${err.message || 'Unknown error'}`);
                   return;
                 }
-                if (newEstimate) {
-                  toast.success('Estimate created successfully');
+                if (savedEstimate) {
+                  toast.success(`Estimate ${editingEstimate ? 'updated' : 'created'} successfully`);
                   setShowEstimateModal(false);
+                  setEditingEstimate(null);
                   // Reload data
                   const estimates = await db.getEstimatesByContact(contactId!);
                   setContactEstimates(estimates);
                 } else {
-                  toast.error('Failed to create estimate');
+                  toast.error(`Failed to ${editingEstimate ? 'update' : 'create'} estimate`);
                 }
               }}
               className="p-6 space-y-4"
@@ -2928,6 +3605,7 @@ export default function ContactDetail() {
                   type="text"
                   name="title"
                   required
+                  defaultValue={editingEstimate?.title || ''}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                   placeholder="Enter estimate title"
                 />
@@ -2940,6 +3618,7 @@ export default function ContactDetail() {
                 <textarea
                   name="description"
                   rows={3}
+                  defaultValue={editingEstimate?.description || ''}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                   placeholder="Estimate description"
                 />
@@ -2956,6 +3635,7 @@ export default function ContactDetail() {
                     required
                     step="0.01"
                     min="0"
+                    defaultValue={editingEstimate ? Number(editingEstimate.subtotal || editingEstimate.amount || 0) : undefined}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                     placeholder="0.00"
                   />
@@ -2971,7 +3651,9 @@ export default function ContactDetail() {
                     step="0.01"
                     min="0"
                     max="100"
-                    defaultValue="0"
+                    defaultValue={editingEstimate && Number(editingEstimate.subtotal || editingEstimate.amount || 0) > 0
+                      ? (((Number(editingEstimate.tax || 0) / Number(editingEstimate.subtotal || editingEstimate.amount || 0)) * 100).toFixed(2))
+                      : '0'}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                     placeholder="0.00"
                   />
@@ -2985,6 +3667,7 @@ export default function ContactDetail() {
                 <input
                   type="date"
                   name="valid_until"
+                  defaultValue={editingEstimate?.valid_until || editingEstimate?.validUntil || editingEstimate?.validity_date || ''}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 />
               </div>
@@ -2996,6 +3679,7 @@ export default function ContactDetail() {
                 <textarea
                   name="terms"
                   rows={2}
+                  defaultValue={editingEstimate?.terms || editingEstimate?.terms_and_conditions || ''}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                   placeholder="Payment terms, conditions, etc."
                 />
@@ -3008,6 +3692,7 @@ export default function ContactDetail() {
                 <textarea
                   name="notes"
                   rows={2}
+                  defaultValue={editingEstimate?.notes || ''}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                   placeholder="Internal notes"
                 />
@@ -3016,7 +3701,10 @@ export default function ContactDetail() {
               <div className="flex gap-3 pt-4 border-t border-gray-200">
                 <button
                   type="button"
-                  onClick={() => setShowEstimateModal(false)}
+                  onClick={() => {
+                    setShowEstimateModal(false);
+                    setEditingEstimate(null);
+                  }}
                   className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                 >
                   Cancel
@@ -3025,7 +3713,7 @@ export default function ContactDetail() {
                   type="submit"
                   className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
                 >
-                  Create Estimate
+                  {editingEstimate ? 'Save Changes' : 'Create Estimate'}
                 </button>
               </div>
             </form>
@@ -3080,15 +3768,22 @@ export default function ContactDetail() {
                   updated_at: new Date().toISOString(),
                 };
 
-                const newWorkOrder = await db.createWorkOrder(workOrderData);
-                if (newWorkOrder) {
-                  toast.success('Work order created successfully');
-                  setShowWorkOrderModal(false);
-                  // Reload data
-                  const workOrders = await db.getWorkOrdersByContact(contactId!);
-                  setContactWorkOrders(workOrders);
-                } else {
-                  toast.error('Failed to create work order');
+                try {
+                  const newWorkOrder = await db.createWorkOrder(workOrderData);
+                  if (newWorkOrder) {
+                    toast.success('Work order created successfully');
+                    setShowWorkOrderModal(false);
+                    // Reload data
+                    if (contactId) {
+                      const workOrders = await db.getWorkOrdersByContact(contactId);
+                      setContactWorkOrders(workOrders);
+                    }
+                  } else {
+                    toast.error('Failed to create work order');
+                  }
+                } catch (err) {
+                  console.error('Error creating work order:', err);
+                  toast.error(err instanceof Error ? err.message : 'Failed to create work order');
                 }
               }}
               className="p-6 space-y-4"

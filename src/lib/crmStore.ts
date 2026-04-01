@@ -44,7 +44,8 @@ export type ViewType =
   | 'supplement-tracking'
   | 'crew-schedule'
   | 'equipment'
-  | 'commission-payroll';
+  | 'commission-payroll'
+  | 'sales-analytics';
 
 export interface CRMState {
   // Current user
@@ -292,11 +293,9 @@ export function crmReducer(state: CRMState, action: CRMAction): CRMState {
       const newAppt = action.payload;
       let contactsAfterAdd = state.contacts;
 
-      // When an inspection is scheduled, update the contact's inspection fields and status
       if (newAppt.type === 'inspection') {
         contactsAfterAdd = state.contacts.map((contact) => {
           if (contact.id === newAppt.contactId) {
-            // Only advance status if the contact is still prospect/lead
             const shouldAdvanceStatus =
               contact.status === 'prospect' || contact.status === 'lead';
             return {
@@ -319,14 +318,12 @@ export function crmReducer(state: CRMState, action: CRMAction): CRMState {
     }
     
     case 'UPDATE_APPOINTMENT': {
-      // Handle inspection completion automation
       const updatedAppointment = action.payload;
       const isInspection = updatedAppointment.type === 'inspection';
       const isCompleted = updatedAppointment.status === 'completed';
       
       let updatedContacts = state.contacts;
       
-      // Auto-move customer when inspection is completed
       if (isInspection && isCompleted) {
         updatedContacts = state.contacts.map((contact) => {
           if (contact.id === updatedAppointment.contactId && contact.status === 'appt_set') {
@@ -516,13 +513,49 @@ export function crmReducer(state: CRMState, action: CRMAction): CRMState {
     case 'SET_WORK_ORDERS':
       return { ...state, workOrders: action.payload };
     
-    case 'INITIALIZE_DATA':
+    case 'ADD_DOCUMENT_TEMPLATE':
+      return { ...state, documentTemplates: [...state.documentTemplates, action.payload] };
+    
+    case 'UPDATE_DOCUMENT_TEMPLATE':
+      return {
+        ...state,
+        documentTemplates: state.documentTemplates.map((dt) =>
+          dt.id === action.payload.id ? action.payload : dt
+        ),
+      };
+    
+    case 'DELETE_DOCUMENT_TEMPLATE':
+      return { ...state, documentTemplates: state.documentTemplates.filter((dt) => dt.id !== action.payload) };
+    
+    case 'SET_DOCUMENT_TEMPLATES':
+      return { ...state, documentTemplates: action.payload };
+
+    case 'ADD_COMPANY_GOAL':
+      return { ...state, companyGoals: [...state.companyGoals, action.payload] };
+
+    case 'UPDATE_COMPANY_GOAL':
+      return {
+        ...state,
+        companyGoals: state.companyGoals.map((g) =>
+          g.id === action.payload.id ? action.payload : g
+        ),
+      };
+
+    case 'SET_COMPANY_GOALS':
+      return { ...state, companyGoals: action.payload };
+    
+    case 'INITIALIZE_DATA': {
+      const newBoards = action.payload.boards;
+      const currentBoardStillValid = newBoards.some((b) => b.id === state.selectedBoardId);
+      const selectedBoardId = currentBoardStillValid
+        ? state.selectedBoardId
+        : (newBoards[0]?.id ?? state.selectedBoardId);
       return {
         ...state,
         contacts: action.payload.contacts,
         appointments: action.payload.appointments,
         invoices: action.payload.invoices,
-        boards: action.payload.boards,
+        boards: newBoards,
         leadSources: action.payload.leadSources,
         automations: action.payload.automations,
         teamMembers: action.payload.teamMembers,
@@ -531,9 +564,11 @@ export function crmReducer(state: CRMState, action: CRMAction): CRMState {
         estimates: action.payload.estimates,
         projects: action.payload.projects,
         workOrders: action.payload.workOrders,
+        selectedBoardId,
         isInitialized: true,
         isLoading: false,
       };
+    }
     
     default:
       return state;
@@ -555,7 +590,6 @@ export function useCRM() {
   return context;
 }
 
-// Helper hooks
 export function useCurrentContact() {
   const { state } = useCRM();
   if (!state.selectedContactId) return null;
@@ -566,7 +600,6 @@ export function useFilteredContacts() {
   const { state } = useCRM();
   let filtered = [...state.contacts];
   
-  // Search filter
   if (state.searchQuery) {
     const query = state.searchQuery.toLowerCase();
     filtered = filtered.filter(
@@ -579,12 +612,10 @@ export function useFilteredContacts() {
     );
   }
   
-  // Status filter
   if (state.filterStatus !== 'all') {
     filtered = filtered.filter((c) => c.status === state.filterStatus);
   }
   
-  // Assignee filter
   if (state.filterAssignee !== 'all') {
     filtered = filtered.filter((c) => c.assignedTo === state.filterAssignee);
   }
@@ -615,10 +646,9 @@ function parseAppointmentDate(appointment: Appointment): Date {
   const raw = appointment.date?.trim();
   if (!raw) return new Date(NaN);
 
-  // Date-only values should count for the whole local day.
   if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-    const [year, month, day] = raw.split('-').map(Number);
-    return new Date(year, month - 1, day, 23, 59, 59, 999);
+    const time = appointment.time?.trim() || '00:00';
+    return new Date(`${raw}T${time}`);
   }
 
   return new Date(raw);
@@ -681,48 +711,101 @@ export function useFinancialStats() {
   const { state } = useCRM();
 
   const stats = {
-    // Revenue
+    // ── Revenue ──────────────────────────────────────────────────────────────
+    /** Collected payments from contact-level deposit + final payment fields */
+    contactRevenue: 0,
+    /** Collected payments from paid invoices (may overlap with contactRevenue if
+     *  both tracks are used for the same deal — see totalRevenue note below) */
+    invoiceRevenue: 0,
+    /**
+     * Combined revenue.  To avoid double-counting when a contact has both
+     * finalPaymentPaid=true AND a paid invoice, we only add invoice revenue for
+     * invoices whose contactId does NOT already have a fully-paid final payment.
+     */
     totalRevenue: 0,
-    pendingPayments: 0,
+
+    // ── Deposits & payments ───────────────────────────────────────────────────
     depositsCollected: 0,
-    outstandingInvoices: 0,
+    pendingPayments: 0,
+
+    // ── Invoices ─────────────────────────────────────────────────────────────
     paidInvoices: 0,
+    outstandingInvoices: 0,
     overdueInvoices: 0,
-    // Estimates (signed quotes)
+
+    // ── Estimates ────────────────────────────────────────────────────────────
     acceptedEstimatesTotal: 0,
     pendingEstimatesTotal: 0,
-    // Material orders
+
+    // ── Costs ────────────────────────────────────────────────────────────────
     deliveredMaterialCost: 0,
     pendingMaterialCost: 0,
-    // Project / work-order costs
     totalSubcontractorCost: 0,
     totalLaborCost: 0,
+
+    // ── Pipeline ─────────────────────────────────────────────────────────────
+    /** Number of active leads (not won/lost/closed) */
+    leadsGenerated: 0,
+    /** Total project value of won/completed deals */
+    dealsClosed: 0,
+    /** Number of won/completed deals */
+    dealsClosedCount: 0,
+    /** Total project value of lost deals */
+    lostSalesValue: 0,
+    /** Number of lost deals */
+    lostDealsCount: 0,
   };
 
-  // ── Contacts: deposits & final payments ──────────────────────────────────
+  // Build a set of contact IDs that already have a fully-paid final payment so
+  // we can skip their invoices and prevent double-counting.
+  const contactsWithPaidFinalPayment = new Set<string>();
+
   state.contacts.forEach((c) => {
+    // Deposits
     if (c.depositPaid && c.depositAmount) {
       stats.depositsCollected += c.depositAmount;
+      stats.contactRevenue += c.depositAmount;
     }
+
+    // Final payments — deduct deposit to avoid counting it twice (deposit was
+    // already added above; here we add only the remaining balance).
     if (c.finalPaymentPaid && c.finalPaymentAmount) {
-      // Final payment is revenue; deposit was a partial payment toward this
-      // so we only count the remaining balance to avoid double-adding the deposit
       const depositAlreadyCounted = c.depositPaid ? (c.depositAmount || 0) : 0;
-      stats.totalRevenue += c.finalPaymentAmount - depositAlreadyCounted;
+      const balance = c.finalPaymentAmount - depositAlreadyCounted;
+      stats.contactRevenue += balance;
+      contactsWithPaidFinalPayment.add(c.id);
     }
+
+    // Pending final payment (not yet collected)
     if (!c.finalPaymentPaid && c.finalPaymentAmount) {
       stats.pendingPayments += c.finalPaymentAmount;
     }
+
+    // Pipeline / sales metrics
+    const closedStatuses = ['won', 'completed', 'paid'];
+    const lostStatuses = ['lost'];
+    const activeStatuses = ['won', 'lost', 'closed', 'completed', 'paid'];
+
+    if (closedStatuses.includes(c.status)) {
+      stats.dealsClosed += c.projectValue || 0;
+      stats.dealsClosedCount += 1;
+    } else if (lostStatuses.includes(c.status)) {
+      stats.lostSalesValue += c.projectValue || 0;
+      stats.lostDealsCount += 1;
+    } else if (!activeStatuses.includes(c.status)) {
+      stats.leadsGenerated += 1;
+    }
   });
 
-  // Add deposits to total revenue (they are confirmed received cash)
-  stats.totalRevenue += stats.depositsCollected;
-
-  // ── Invoices ─────────────────────────────────────────────────────────────
+  // Invoices — skip invoices for contacts whose final payment is already tracked
+  // at the contact level to prevent double-counting.
   state.invoices.forEach((inv) => {
     if (inv.status === 'paid') {
       stats.paidInvoices += inv.amount;
-      stats.totalRevenue += inv.amount;
+      // Only add to revenue if this contact's payment isn't already in contactRevenue
+      if (!contactsWithPaidFinalPayment.has((inv as any).contactId || '')) {
+        stats.invoiceRevenue += inv.amount;
+      }
     } else if (inv.status === 'overdue') {
       stats.overdueInvoices += inv.amount;
     } else if (inv.status === 'sent') {
@@ -730,7 +813,8 @@ export function useFinancialStats() {
     }
   });
 
-  // ── Estimates ────────────────────────────────────────────────────────────
+  stats.totalRevenue = stats.contactRevenue + stats.invoiceRevenue;
+
   state.estimates.forEach((est) => {
     if (est.status === 'accepted') {
       stats.acceptedEstimatesTotal += est.total;
@@ -739,7 +823,6 @@ export function useFinancialStats() {
     }
   });
 
-  // ── Material Orders ───────────────────────────────────────────────────────
   state.materialOrders.forEach((order) => {
     if (order.status === 'cancelled') return;
     if (order.status === 'delivered') {
@@ -749,21 +832,21 @@ export function useFinancialStats() {
     }
   });
 
-  // ── Projects (subcontractor costs) ────────────────────────────────────────
   state.projects.forEach((p) => {
     stats.totalSubcontractorCost += (p.actualSubcontractorCost || 0);
   });
 
-  // ── Work Orders (labor costs) ─────────────────────────────────────────────
   state.workOrders.forEach((wo) => {
-    stats.totalLaborCost += (wo.laborCost || 0);
+    if (wo.isSubcontractor) {
+      stats.totalSubcontractorCost += (wo.subcontractorCost || 0);
+    } else {
+      stats.totalLaborCost += (wo.laborCost || 0);
+    }
   });
 
   return stats;
 }
 
-
-// Permission helpers
 export function canCreateBoard(role: UserRole): boolean {
   return ['owner', 'admin', 'sales_manager', 'production_manager'].includes(role);
 }
@@ -798,7 +881,6 @@ const roleHierarchy: Record<UserRole, number> = {
   sales_rep: 4,
   field_tech: 3,
   subcontractor: 2,
-  // Legacy roles
   manager: 8,
   sales: 4,
   production: 8,
@@ -808,9 +890,7 @@ const roleHierarchy: Record<UserRole, number> = {
 
 export function canAssignRole(actorRole: UserRole, targetRole: UserRole): boolean {
   if (actorRole === 'owner') return true;
-  // Admin can assign any role except owner
   if (actorRole === 'admin') return targetRole !== 'owner';
-  // Managers can assign roles below them
   if (actorRole === 'sales_manager' || actorRole === 'production_manager' || actorRole === 'manager') {
     return roleHierarchy[targetRole] < roleHierarchy[actorRole];
   }
@@ -818,7 +898,6 @@ export function canAssignRole(actorRole: UserRole, targetRole: UserRole): boolea
 }
 
 export function getAssignableRoles(actorRole: UserRole): UserRole[] {
-  // All active roles (excluding legacy)
   const activeRoles: UserRole[] = [
     'owner',
     'admin',
@@ -835,9 +914,7 @@ export function getAssignableRoles(actorRole: UserRole): UserRole[] {
 
 export function canModifyMember(actorRole: UserRole, memberRole: UserRole): boolean {
   if (actorRole === 'owner') return true;
-  // Admin can modify anyone except owner
   if (actorRole === 'admin') return memberRole !== 'owner';
-  // Managers can modify users below them in hierarchy
   if (actorRole === 'sales_manager' || actorRole === 'production_manager' || actorRole === 'manager') {
     return roleHierarchy[memberRole] < roleHierarchy[actorRole];
   }

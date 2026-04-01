@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useCRM, useFinancialStats } from '@/lib/crmStore';
 import { db, DbCompany } from '@/lib/database';
 import { sendEmail } from '@/lib/emailApi';
+import { fireAutomationEvent } from '@/lib/automationEngine';
 import { exportToExcel, printDataAsPDF } from '@/lib/exportUtils';
 import { useAuth } from '@/lib/authContext';
 import { toast } from 'sonner';
@@ -29,6 +30,8 @@ import {
   Send,
   Eye,
   Printer,
+  Users,
+  XCircle,
 } from 'lucide-react';
 
 type InvoiceFilter = 'all' | 'draft' | 'sent' | 'paid' | 'overdue';
@@ -179,6 +182,42 @@ export default function FinancialDashboard() {
         paidAt: newStatus === 'paid' ? new Date().toISOString() : invoice.paidAt,
       },
     });
+
+    // Auto-advance contact through the pipeline when invoice milestones are hit
+    if (invoice.contactId && profile?.company_id) {
+      const contact = state.contacts.find((c) => c.id === invoice.contactId);
+      if (contact) {
+        let advanceTo: string | null = null;
+        if (newStatus === 'sent' && contact.status === 'invoicing') {
+          advanceTo = 'pending_payment';
+        } else if (newStatus === 'paid' && (contact.status === 'pending_payment' || contact.status === 'invoicing')) {
+          advanceTo = 'completed';
+        }
+        if (advanceTo) {
+          db.updateContact(contact.id, { status: advanceTo, status_changed_at: new Date().toISOString() }).catch(() => {});
+          dispatch({ type: 'UPDATE_CONTACT_STATUS', payload: { contactId: contact.id, status: advanceTo as any } });
+          fireAutomationEvent('contact_status_changed', profile.company_id, {
+            contactId: contact.id,
+            contactName: invoice.contactName,
+            contactEmail: contact.email,
+            oldStatus: contact.status,
+            newStatus: advanceTo,
+          }).catch(() => {});
+        }
+        // Fire event-specific automation rules
+        const eventType = newStatus === 'paid' ? 'invoice_paid' : newStatus === 'sent' ? 'invoice_sent' : null;
+        if (eventType) {
+          fireAutomationEvent(eventType, profile.company_id, {
+            contactId: contact.id,
+            contactName: invoice.contactName,
+            contactEmail: contact.email,
+            invoiceNumber: invoice.invoiceNumber,
+            amount: invoice.amount,
+          }).catch(() => {});
+        }
+      }
+    }
+
     toast.success(`Invoice marked as ${newStatus}`);
   };
 
@@ -366,6 +405,61 @@ export default function FinancialDashboard() {
         </div>
       </div>
 
+      {/* Sales Performance Row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+              <Users size={16} className="text-blue-600" />
+            </div>
+            <span className="text-sm font-medium text-gray-600">Active Leads</span>
+          </div>
+          <p className="text-2xl font-bold text-gray-900">{financialStats.leadsGenerated}</p>
+          <p className="text-xs text-gray-400 mt-0.5">in pipeline</p>
+        </div>
+
+        <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+              <CheckCircle size={16} className="text-green-600" />
+            </div>
+            <span className="text-sm font-medium text-gray-600">Deals Closed</span>
+          </div>
+          <p className="text-2xl font-bold text-gray-900">{financialStats.dealsClosedCount}</p>
+          <p className="text-xs text-gray-400 mt-0.5">{formatCurrency(financialStats.dealsClosed)} value</p>
+        </div>
+
+        <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center">
+              <XCircle size={16} className="text-red-500" />
+            </div>
+            <span className="text-sm font-medium text-gray-600">Lost Sales</span>
+          </div>
+          <p className="text-2xl font-bold text-gray-900">{financialStats.lostDealsCount}</p>
+          <p className="text-xs text-gray-400 mt-0.5">{formatCurrency(financialStats.lostSalesValue)} lost</p>
+        </div>
+
+        <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+              <TrendingUp size={16} className="text-purple-600" />
+            </div>
+            <span className="text-sm font-medium text-gray-600">Close Rate</span>
+          </div>
+          {(() => {
+            const total = financialStats.dealsClosedCount + financialStats.lostDealsCount;
+            const rate = total > 0 ? ((financialStats.dealsClosedCount / total) * 100).toFixed(1) : '—';
+            return (
+              <>
+                <p className="text-2xl font-bold text-gray-900">{rate}{rate !== '—' ? '%' : ''}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{total} total decisions</p>
+              </>
+            );
+          })()}
+        </div>
+      </div>
+
       {/* Estimates Summary */}
       {(financialStats.acceptedEstimatesTotal > 0 || financialStats.pendingEstimatesTotal > 0) && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -436,9 +530,12 @@ export default function FinancialDashboard() {
           .filter((o) => o.status !== 'cancelled' && (o.contactId ? activeContactIds.has(o.contactId) : true))
           .reduce((sum, o) => sum + o.total, 0);
         const subCost = state.projects
-          .reduce((sum, p) => sum + (p.actualSubcontractorCost || 0), 0);
+          .reduce((sum, p) => sum + (p.actualSubcontractorCost || 0), 0) +
+          state.workOrders
+            .filter((wo) => wo.status === 'completed' || wo.status === 'in_progress' || wo.status === 'ready_to_invoice')
+            .reduce((sum, wo) => sum + (wo.subcontractorCost || 0), 0);
         const laborCost = state.workOrders
-          .filter((wo) => wo.status === 'completed' || wo.status === 'in_progress')
+          .filter((wo) => (wo.status === 'completed' || wo.status === 'in_progress' || wo.status === 'ready_to_invoice') && !wo.isSubcontractor)
           .reduce((sum, wo) => sum + (wo.laborCost || 0), 0);
         const totalCosts = materialCost + subCost + laborCost;
         const margin = financialStats.totalRevenue > 0
@@ -456,10 +553,10 @@ export default function FinancialDashboard() {
               <div className="p-4 bg-orange-50 rounded-xl">
                 <p className="text-sm text-orange-600 font-medium">Sub-Contractor Costs</p>
                 <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(subCost)}</p>
-                <p className="text-xs text-gray-500 mt-1">Electrical, plumbing, HVAC subs</p>
+                <p className="text-xs text-gray-500 mt-1">All subcontractor labor costs</p>
               </div>
               <div className="p-4 bg-purple-50 rounded-xl">
-                <p className="text-sm text-purple-600 font-medium">Payroll / Labor</p>
+                <p className="text-sm text-purple-600 font-medium">In-House Labor</p>
                 <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(laborCost)}</p>
                 <p className="text-xs text-gray-500 mt-1">Crew wages, overtime, benefits</p>
               </div>

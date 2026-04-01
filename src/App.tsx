@@ -17,8 +17,21 @@ import EULA from "./pages/EULA";
 import SignDocument from "./pages/SignDocument";
 import SignEstimate from "./pages/SignEstimate";
 import SignChangeOrder from "./pages/SignChangeOrder";
+import SignDocTemplate from "./pages/SignDocTemplate";
+import AcceptInvite from "./pages/AcceptInvite";
+import WorkOrders from "./pages/WorkOrders";
+import { supabase } from '@/lib/supabase';
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5,
+      refetchOnWindowFocus: true,
+      retry: 1,
+    },
+  },
+});
+
 
 // Get base path from environment (set by Vite)
 const basename = import.meta.env.BASE_URL || "/";
@@ -64,8 +77,24 @@ const PWAUpdateNotification = () => {
 
   return null;
 };
+const App = () => {
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible') {
+        const { error } = await supabase.auth.getSession();
+        if (error) {
+          await supabase.auth.signOut();
+        } else {
+          queryClient.invalidateQueries();
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
 
-const App = () => (
+  return (
+
   <ErrorBoundary>
     <ThemeProvider defaultTheme="light">
       <QueryClientProvider client={queryClient}>
@@ -82,8 +111,12 @@ const App = () => (
               <Route path="/privacy" element={<PrivacyPolicy />} />
               <Route path="/eula" element={<EULA />} />
               <Route path="/sign" element={<SignDocument />} />
+              <Route path="/sign-estimate/:token" element={<SignEstimate />} />
               <Route path="/sign-estimate" element={<SignEstimate />} />
               <Route path="/sign-change-order" element={<SignChangeOrder />} />
+              <Route path="/sign-doc" element={<SignDocTemplate />} />
+              <Route path="/accept-invite" element={<AcceptInvite />} />
+              <Route path="/work-orders" element={<WorkOrders />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
@@ -91,6 +124,8 @@ const App = () => (
       </QueryClientProvider>
     </ThemeProvider>
   </ErrorBoundary>
-);
+  );
+};
+
 
 export default App;

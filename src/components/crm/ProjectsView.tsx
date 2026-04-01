@@ -4,6 +4,7 @@ import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
 import { Project } from '@/lib/crmData';
 import { exportProjectsToExcel } from '@/lib/exportUtils';
+import { JobCostingCard } from './JobCostingCard';
 import {
   FolderKanban,
   Plus,
@@ -659,25 +660,21 @@ export default function ProjectsView() {
                 </div>
               ) : null}
 
-              {/* Budget Progress */}
+              {/* Job Costing Card */}
               {project.estimatedBudget > 0 && (
                 <div className="mt-4">
-                  <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
-                    <span>Budget Used</span>
-                    <span>{((project.actualCost / project.estimatedBudget) * 100).toFixed(0)}%</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className={`h-2 rounded-full ${
-                        project.actualCost > project.estimatedBudget
-                          ? 'bg-red-500'
-                          : project.actualCost > project.estimatedBudget * 0.9
-                          ? 'bg-orange-500'
-                          : 'bg-green-500'
-                      }`}
-                      style={{ width: `${Math.min((project.actualCost / project.estimatedBudget) * 100, 100)}%` }}
-                    />
-                  </div>
+                  <JobCostingCard
+                    projectId={project.id}
+                    estimatedBudget={project.estimatedBudget}
+                    materialCostGoal={project.materialCostGoal}
+                    subcontractorCostGoal={project.subcontractorCostGoal}
+                    salesRepPayGoal={project.salesRepPayGoal}
+                    otherExpensesGoal={project.otherExpensesGoal}
+                    actualMaterialCost={project.actualMaterialCost}
+                    actualSubcontractorCost={project.actualSubcontractorCost}
+                    actualSalesRepPay={project.actualSalesRepPay}
+                    actualOtherExpenses={project.actualOtherExpenses}
+                  />
                 </div>
               )}
 

@@ -13,6 +13,7 @@ import {
   AlertCircle,
   Info,
   AlertTriangle,
+  RefreshCw,
 } from 'lucide-react';
 import { statusLabels, CustomerStatus } from '@/lib/crmData';
 
@@ -22,6 +23,13 @@ export default function TopBar() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [dbNotifications, setDbNotifications] = useState<DbNotification[]>([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    window.dispatchEvent(new CustomEvent('crm-force-refresh'));
+    setTimeout(() => setIsRefreshing(false), 1000);
+  };
 
   useEffect(() => {
     if (!state.companyId) return;
@@ -138,6 +146,16 @@ export default function TopBar() {
 
       {/* Right: Actions */}
       <div className="flex items-center gap-3">
+        {/* Refresh Button */}
+        <button
+          onClick={handleRefresh}
+          disabled={isRefreshing}
+          className="p-2 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50"
+          title="Refresh data"
+        >
+          <RefreshCw size={20} className={`text-gray-600 ${isRefreshing ? 'animate-spin' : ''}`} />
+        </button>
+
         {/* Filters */}
         <div className="relative">
           <button

@@ -1,218 +1,474 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TrussCTR vs Competitors – Feature Comparison</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f9fafb; color: #111; padding: 24px; }
-    h1 { text-align: center; font-size: 1.6rem; margin-bottom: 6px; color: #1e3a5f; }
-    p.sub { text-align: center; font-size: 0.85rem; color: #6b7280; margin-bottom: 20px; }
-    .controls { display: flex; justify-content: center; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
-    .btn { padding: 9px 22px; background: #2563eb; color: #fff; border: none; border-radius: 6px; font-size: 0.9rem; cursor: pointer; }
-    .btn.secondary { background: #e2e8f0; color: #374151; }
-    .btn:hover { opacity: 0.88; }
-    @media print { .controls { display: none; } body { padding: 0; background: #fff; } .section { page-break-inside: avoid; } details { open: true; } }
-
-    .section { border: 1px solid #e2e8f0; border-radius: 10px; margin-bottom: 12px; overflow: hidden; }
-    details > summary { list-style: none; }
-    details > summary::-webkit-details-marker { display: none; }
-    .section-header {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 14px 18px; background: #1e3a5f; color: #fff; cursor: pointer;
-      user-select: none;
-    }
-    .section-header:hover { background: #16305a; }
-    .section-title { font-size: 0.95rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
-    .section-arrow { transition: transform 0.2s; font-size: 0.9rem; }
-    details[open] .section-arrow { transform: rotate(180deg); }
-    .section-body { overflow-x: auto; }
-
-    table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
-    thead th { background: #2563eb; color: #fff; padding: 9px 8px; text-align: center; }
-    thead th:first-child { text-align: left; min-width: 210px; padding-left: 18px; }
-    thead th.truss { background: #1d4ed8; }
-    tbody tr:nth-child(even) { background: #f1f5f9; }
-    tbody tr:hover { background: #dbeafe; }
-    td { padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: center; }
-    td:first-child { text-align: left; font-weight: 500; color: #374151; padding-left: 18px; }
-    td.truss { background: #eff6ff; font-weight: 600; }
-    .yes { color: #16a34a; font-size: 1rem; }
-    .no  { color: #dc2626; font-size: 1rem; }
-    .par { color: #d97706; font-size: 0.74rem; font-weight: 600; }
-    .price { font-weight: 600; }
-    .legend { text-align: center; font-size: 0.72rem; color: #6b7280; padding: 14px; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TrussCTR vs Competitors - Feature Comparison</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 40px 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 36px;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            font-size: 18px;
+            opacity: 0.9;
+        }
+        
+        .promo-banner {
+            background: #10b981;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            font-weight: 600;
+            font-size: 18px;
+        }
+        
+        .promo-banner .code {
+            background: rgba(255,255,255,0.2);
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            margin: 0 8px;
+        }
+        
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .comparison-table thead {
+            background: #f8fafc;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        
+        .comparison-table th {
+            padding: 20px 15px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid #e2e8f0;
+            font-size: 14px;
+        }
+        
+        .comparison-table th:first-child {
+            width: 30%;
+        }
+        
+        .comparison-table th.trussctr {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .comparison-table td {
+            padding: 16px 15px;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 14px;
+        }
+        
+        .comparison-table tr:hover {
+            background: #f8fafc;
+        }
+        
+        .category-header {
+            background: #1e293b;
+            color: white;
+            font-weight: 700;
+            font-size: 16px;
+            padding: 16px 15px !important;
+        }
+        
+        .check {
+            color: #10b981;
+            font-weight: 700;
+            font-size: 18px;
+        }
+        
+        .cross {
+            color: #ef4444;
+            font-weight: 700;
+            font-size: 18px;
+        }
+        
+        .coming-soon {
+            color: #f59e0b;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .highlight {
+            background: #fef3c7;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+        
+        .footer {
+            padding: 40px;
+            text-align: center;
+            background: #f8fafc;
+            border-top: 1px solid #e2e8f0;
+        }
+        
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 16px 40px;
+            border-radius: 10px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 18px;
+            margin-top: 20px;
+            transition: transform 0.2s;
+        }
+        
+        .cta-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+        
+        @media (max-width: 768px) {
+            .comparison-table {
+                font-size: 12px;
+            }
+            
+            .comparison-table th,
+            .comparison-table td {
+                padding: 10px 8px;
+            }
+            
+            .header h1 {
+                font-size: 24px;
+            }
+        }
+    </style>
 </head>
 <body>
-  <h1>TrussCTR — Roofing CRM Feature Comparison</h1>
-  <p class="sub">614 Restore LLC · March 2026 · All competitor data based on publicly available information</p>
-
-  <div class="controls">
-    <button class="btn secondary" onclick="toggleAll(true)">▼ Expand All</button>
-    <button class="btn secondary" onclick="toggleAll(false)">▲ Collapse All</button>
-    <button class="btn" onclick="window.print()">🖨 Print / Save as PDF</button>
-  </div>
-
-  <div id="accordion"></div>
-
-  <p class="legend">
-    ✔ = Full support &nbsp;|&nbsp; <span style="color:#d97706">Partial</span> = Partial / limited &nbsp;|&nbsp; ✘ = Not available &nbsp;|&nbsp;
-    Competitor data based on publicly available information as of March 2026. Pricing subject to change.
-  </p>
-
-  <script>
-    const COLS = ['TrussCTR','AccuLynx','JobNimbus','Roofr','Leap CRM','ServiceTitan','Salesforce','HubSpot'];
-    const Y = '<span class="yes">✔</span>';
-    const N = '<span class="no">✘</span>';
-    const P = (t) => `<span class="par">${t}</span>`;
-
-    const sections = [
-      {
-        title: '💰 Pricing',
-        open: true,
-        rows: [
-          ['Monthly Price', '<span class="price">$29 – $179/mo</span>', P('~$250+'), P('~$149+'), P('~$149+'), P('~$79+/user'), P('~$150+/mo'), P('~$25+/user'), 'Free / $45+'],
-          ['Annual Price (per mo)', '<span class="price">$24.17 – $149.17/mo</span>', P('~$208+'), P('~$124+'), P('~$124+'), P('~$66+/user'), P('~$125+/mo'), P('~$20+/user'), 'Free / $38+'],
-          ['Starter Tier', '<span class="price">$29/mo · 2 users · Unlimited contacts</span>', N, P('Limited'), N, P('Limited'), N, N, 'Free (limited)'],
-          ['Pro Tier', '<span class="price">$59/mo · 5 users · Unlimited contacts</span>', P('Entry plan'), P('Entry plan'), P('Entry plan'), P('Entry plan'), N, N, P('Starter $45+')],
-          ['Business Tier', '<span class="price">$99/mo · 10 users · Unlimited contacts</span>', P('Mid plan'), P('Mid plan'), P('Mid plan'), P('Mid plan'), P('Mid plan'), P('~$75+/user'), P('~$45+/user')],
-          ['Enterprise Tier', '<span class="price">$179/mo · Unlimited users &amp; contacts</span>', P('Custom'), P('Custom'), P('Custom'), P('Custom'), P('Custom'), P('Custom'), P('Custom')],
-          ['Roofing-Specific Pricing', Y, Y, Y, Y, Y, P('Partial'), N, N],
-          ['Free Trial Available', Y, P('Demo only'), P('Demo only'), Y, P('Demo only'), P('Demo only'), Y, Y],
-        ]
-      },
-      {
-        title: '🏠 Core CRM',
-        rows: [
-          ['Contact Management', Y, Y, Y, Y, Y, Y, Y, Y],
-          ['Kanban Pipeline Board', Y, Y, Y, P('Partial'), Y, P('Partial'), Y, Y],
-          ['Calendar / Scheduling', Y, Y, Y, Y, Y, Y, Y, Y],
-          ['Communication Hub (SMS/Email/Calls)', Y, Y, Y, P('Email only'), Y, Y, Y, Y],
-          ['Team Management', Y, Y, Y, Y, Y, Y, Y, Y],
-          ['Reports &amp; Analytics (Individual &amp; Team)', Y, Y, Y, P('Basic'), Y, Y, Y, Y],
-          ['Sales Metrics Tracking', Y, P('Partial'), P('Partial'), N, P('Partial'), Y, Y, Y],
-        ]
-      },
-      {
-        title: '🔨 Roofing-Specific Features',
-        rows: [
-          ['Insurance Claim Tracking (per customer)', Y, Y, P('Partial'), N, Y, Y, N, N],
-          ['Supplement Tracking (linked to claims)', Y, Y, N, N, P('Partial'), P('Partial'), N, N],
-          ['Work Orders', Y, Y, Y, P('Basic'), Y, Y, P('Add-on'), N],
-          ['Material Orders (w/ roofing templates)', Y, Y, P('Partial'), N, P('Partial'), P('Partial'), N, N],
-          ['Job / Project Tracking', Y, Y, Y, Y, Y, Y, Y, P('Partial')],
-          ['Job Status Progression (Lead → Complete)', Y, Y, Y, P('Basic'), Y, Y, P('Custom'), P('Custom')],
-          ['HailTrace / Storm Tracking Integration', Y, Y, P('3rd-party'), Y, P('3rd-party'), P('3rd-party'), N, N],
-        ]
-      },
-      {
-        title: '📄 Documents &amp; Contracts',
-        rows: [
-          ['Document Center', Y, Y, Y, P('Partial'), Y, Y, P('Add-on'), P('Add-on')],
-          ['Proposal Template (auto-fill)', Y, Y, Y, Y, Y, Y, P('Custom'), P('Custom')],
-          ['Contract Template (auto-fill)', Y, Y, Y, Y, Y, Y, P('Custom'), P('Custom')],
-          ['3-Day Right to Cancel Document', Y, Y, N, N, P('Partial'), P('Partial'), N, N],
-          ['Digital Signature (e-Sign)', Y, Y, Y, Y, Y, Y, P('Add-on'), P('Add-on')],
-          ['Per-Customer Template Editing', Y, P('Limited'), P('Limited'), N, P('Limited'), P('Limited'), Y, Y],
-          ['Auto-Fill Company &amp; Customer Info', Y, Y, Y, Y, Y, Y, Y, Y],
-          ['Document Duplication &amp; Delete', Y, P('Partial'), P('Partial'), N, P('Partial'), P('Partial'), Y, Y],
-          ['File Upload (work orders, materials, etc.)', Y, Y, Y, P('Partial'), Y, Y, Y, Y],
-        ]
-      },
-      {
-        title: '💵 Financials',
-        rows: [
-          ['Estimates / Invoicing', Y, Y, Y, Y, Y, Y, P('Add-on'), P('Add-on')],
-          ['Expense Tracking', Y, Y, P('Partial'), N, P('Partial'), Y, P('Add-on'), P('Add-on')],
-          ['Financial Dashboard', Y, Y, Y, P('Basic'), Y, Y, Y, Y],
-          ['Supplier Management', Y, Y, P('Partial'), N, P('Partial'), P('Partial'), Y, P('Partial')],
-          ['QuickBooks Integration', Y, Y, Y, P('Partial'), Y, Y, P('Add-on'), P('Add-on')],
-          ['PDF Export for Reports', Y, P('Partial'), P('Partial'), N, P('Partial'), Y, Y, Y],
-        ]
-      },
-      {
-        title: '🤖 AI &amp; Automation',
-        rows: [
-          ['AI Assistant (built-in)', Y, N, N, N, N, N, P('Einstein (add-on)'), P('Breeze (add-on)')],
-          ['Workflow Automations', Y, Y, Y, P('Basic'), Y, Y, Y, Y],
-          ['Google Review Automation', Y, P('3rd-party'), P('3rd-party'), N, P('3rd-party'), P('3rd-party'), P('3rd-party'), P('3rd-party')],
-          ['Customer Survey (built-in)', Y, P('3rd-party'), P('3rd-party'), N, P('3rd-party'), P('3rd-party'), P('3rd-party'), P('3rd-party')],
-        ]
-      },
-      {
-        title: '📈 Sales Tracking',
-        rows: [
-          ['Sales Metrics (Individual)', Y, P('Partial'), P('Partial'), N, P('Partial'), Y, Y, Y],
-          ['Sales Metrics (Team / Company-Wide)', Y, P('Partial'), P('Partial'), N, P('Partial'), Y, Y, Y],
-          ['Lead Source Tracking', Y, Y, Y, P('Basic'), Y, Y, Y, Y],
-          ['Win / Loss Reporting', Y, Y, P('Partial'), N, P('Partial'), Y, Y, Y],
-          ['Sales Pipeline Value (by stage)', Y, Y, Y, P('Basic'), Y, Y, Y, Y],
-          ['Closed Revenue Tracking', Y, Y, Y, P('Basic'), Y, Y, Y, Y],
-          ['Rep Performance Leaderboard', Y, P('Partial'), N, N, N, Y, P('Custom'), P('Custom')],
-          ['PDF Export of Sales Reports', Y, P('Partial'), P('Partial'), N, P('Partial'), Y, Y, Y],
-          ['Sales Activity Tracking (calls, visits, etc.)', Y, Y, Y, P('Basic'), Y, Y, Y, Y],
-        ]
-      },
-      {
-        title: '⚙️ Setup &amp; Support',
-        rows: [
-          ['Built for Roofing Contractors', Y, Y, Y, Y, Y, Y, N, N],
-          ['Multi-Company / Team Isolation', Y, Y, Y, P('Partial'), Y, Y, Y, Y],
-          ['Role-Based Permissions (RLS)', Y, Y, Y, P('Basic'), Y, Y, Y, Y],
-          ['Mobile-Friendly (PWA/Responsive)', Y, Y, Y, Y, Y, Y, Y, Y],
-          ['Subscription Management (built-in)', Y, N, N, N, N, P('Partial'), P('Add-on'), P('Add-on')],
-          ['API Access', Y, P('Limited'), Y, P('Limited'), P('Limited'), Y, Y, Y],
-          ['Webhook Support', Y, N, P('Limited'), N, N, Y, Y, Y],
-          ['EULA / Terms / Privacy Built-In', Y, Y, Y, Y, Y, Y, Y, Y],
-          ['Phone Number Formatting (consistent)', Y, P('Partial'), P('Partial'), P('Partial'), P('Partial'), Y, Y, Y],
-        ]
-      },
-    ];
-
-    function renderCell(val) {
-      if (val === Y || val === N) return val;
-      if (typeof val === 'string') return val;
-      return val;
-    }
-
-    const container = document.getElementById('accordion');
-    sections.forEach((sec, i) => {
-      const detailsEl = document.createElement('details');
-      detailsEl.className = 'section';
-      if (sec.open) detailsEl.open = true;
-
-      const headerHTML = `
-        <summary>
-          <div class="section-header">
-            <span class="section-title">${sec.title}</span>
-            <span class="section-arrow">▼</span>
-          </div>
-        </summary>`;
-
-      const colHeaders = COLS.map((c,idx) => `<th${idx===0?' class="truss"':''}>${c}</th>`).join('');
-      let rowsHTML = sec.rows.map(row => {
-        const feature = row[0];
-        const cells = row.slice(1).map((v,idx) => `<td${idx===0?' class="truss"':''}>${renderCell(v)}</td>`).join('');
-        return `<tr><td>${feature}</td>${cells}</tr>`;
-      }).join('');
-
-      const bodyHTML = `
-        <div class="section-body">
-          <table>
-            <thead><tr><th>Feature</th>${colHeaders}</tr></thead>
-            <tbody>${rowsHTML}</tbody>
-          </table>
-        </div>`;
-
-      detailsEl.innerHTML = headerHTML + bodyHTML;
-      container.appendChild(detailsEl);
-    });
-
-    function toggleAll(open) {
-      document.querySelectorAll('details').forEach(d => d.open = open);
-    }
-  </script>
+    <div class="container">
+        <div class="header">
+            <h1>🏆 TrussCTR vs. The Competition</h1>
+            <p>See why contractors choose TrussCTR for their business</p>
+        </div>
+        
+        <div class="promo-banner">
+            🎉 Launch Special: Get <span class="code">LAUNCH50</span> for 50% off your first 3 months!
+        </div>
+        
+        <table class="comparison-table">
+            <thead>
+                <tr>
+                    <th>Feature</th>
+                    <th class="trussctr">TrussCTR</th>
+                    <th>JobNimbus</th>
+                    <th>AccuLynx</th>
+                    <th>Service Titan</th>
+                    <th>Jobber</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- PRICING -->
+                <tr>
+                    <td colspan="6" class="category-header">💰 Pricing & Value</td>
+                </tr>
+                <tr>
+                    <td>Starting Price</td>
+                    <td><span class="highlight">$59/month</span></td>
+                    <td>$25/user</td>
+                    <td>$99/month</td>
+                    <td>$190/month</td>
+                    <td>$49/month</td>
+                </tr>
+                <tr>
+                    <td>Free Trial</td>
+                    <td><span class="check">✓</span> 14 days</td>
+                    <td><span class="check">✓</span> 14 days</td>
+                    <td><span class="check">✓</span> 14 days</td>
+                    <td><span class="cross">✗</span> Demo only</td>
+                    <td><span class="check">✓</span> 14 days</td>
+                </tr>
+                <tr>
+                    <td>Launch Promo</td>
+                    <td><span class="highlight">50% off 3 months</span></td>
+                    <td><span class="cross">✗</span></td>
+                    <td><span class="cross">✗</span></td>
+                    <td><span class="cross">✗</span></td>
+                    <td><span class="cross">✗</span></td>
+                </tr>
+                
+                <!-- CORE CRM -->
+                <tr>
+                    <td colspan="6" class="category-header">📊 Core CRM Features</td>
+                </tr>
+                <tr>
+                    <td>Contact Management</td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                </tr>
+                <tr>
+                    <td>Custom Kanban Boards</td>
+                    <td><span class="check">✓</span> Unlimited</td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                </tr>
+                <tr>
+                    <td>Calendar & Scheduling</td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                </tr>
+                <tr>
+                    <td>Document Storage</td>
+                    <td><span class="highlight">Unlimited</span></td>
+                    <td>Limited</td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                </tr>
+                <tr>
+                    <td>Mobile App</td>
+                    <td><span class="coming-soon">Q3 2026</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                </tr>
+                
+                <!-- ROOFING SPECIFIC -->
+                <tr>
+                    <td colspan="6" class="category-header">🏠 Roofing-Specific Features</td>
+                </tr>
+                <tr>
+                    <td>Insurance Claim Tracking</td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="cross">✗</span></td>
+                    <td><span class="cross">✗</span></td>
+                </tr>
+                <tr>
+                    <td>Supplement Tracking</td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="cross">✗</span></td>
+                    <td><span class="cross">✗</span></td>
+                </tr>
+                <tr>
+                    <td>EagleView Integration</td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="cross">✗</span></td>
+                    <td><span class="cross">✗</span></td>
+                </tr>
+                <tr>
+                    <td>Hail Tracking</td>
+                    <td><span class="highlight">✓ Unique!</span></td>
+                    <td><span class="cross">✗</span></td>
+                    <td><span class="cross">✗</span></td>
+                    <td><span class="cross">✗</span></td>
+                    <td><span class="cross">✗</span></td>
+                </tr>
+                <tr>
+                    <td>Material Orders</td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="cross">✗</span></td>
+                </tr>
+                <tr>
+                    <td>Crew Scheduling</td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                </tr>
+                <tr>
+                    <td>Equipment Tracking</td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="cross">✗</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="cross">✗</span></td>
+                </tr>
+                
+                <!-- FINANCIAL -->
+                <tr>
+                    <td colspan="6" class="category-header">💵 Financial Management</td>
+                </tr>
+                <tr>
+                    <td>Estimates & Proposals</td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                </tr>
+                <tr>
+                    <td>Invoicing</td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                </tr>
+                <tr>
+                    <td>Payment Processing</td>
+                    <td><span class="check">✓</span> Stripe</td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                </tr>
+                <tr>
+                    <td>QuickBooks Sync</td>
+                    <td><span class="coming-soon">Q2 2026</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                </tr>
+                <tr>
+                    <td>Commission Tracking</td>
+                    <td><span class="highlight">✓ Built-in</span></td>
+                    <td><span class="cross">✗</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="cross">✗</span></td>
+                </tr>
+                <tr>
+                    <td>Expense Tracking</td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                </tr>
+                
+                <!-- AI & AUTOMATION -->
+                <tr>
+                    <td colspan="6" class="category-header">🤖 AI & Automation</td>
+                </tr>
+                <tr>
+                    <td>AI Assistant</td>
+                    <td><span class="highlight">Multi-provider</span><br><small>(OpenAI, Claude, Gemini)</small></td>
+                    <td><span class="cross">✗</span></td>
+                    <td><span class="cross">✗</span></td>
+                    <td>Basic</td>
+                    <td><span class="cross">✗</span></td>
+                </tr>
+                <tr>
+                    <td>Workflow Automations</td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                </tr>
+                <tr>
+                    <td>Email Templates</td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                </tr>
+                <tr>
+                    <td>E-Signatures</td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                </tr>
+                
+                <!-- SUPPORT -->
+                <tr>
+                    <td colspan="6" class="category-header">🆘 Support & Training</td>
+                </tr>
+                <tr>
+                    <td>Email Support</td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                </tr>
+                <tr>
+                    <td>Phone Support</td>
+                    <td>Business+ tier</td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                </tr>
+                <tr>
+                    <td>Knowledge Base</td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                </tr>
+                <tr>
+                    <td>Video Tutorials</td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                    <td><span class="check">✓</span></td>
+                </tr>
+            </tbody>
+        </table>
+        
+        <div class="footer">
+            <h2 style="margin-bottom: 10px;">Ready to Transform Your Business?</h2>
+            <p style="color: #64748b; margin-bottom: 20px;">Join hundreds of contractors who trust TrussCTR</p>
+            <a href="https://app.trussctr.com/signup" class="cta-button">Start Your Free 14-Day Trial</a>
+            <p style="margin-top: 20px; font-size: 14px; color: #94a3b8;">
+                No credit card required • Cancel anytime • Use code <strong>LAUNCH50</strong> for 50% off
+            </p>
+        </div>
+    </div>
 </body>
 </html>

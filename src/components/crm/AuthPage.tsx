@@ -33,6 +33,7 @@ export default function AuthPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [inviteToken, setInviteToken] = useState<string | null>(null);
   const [inviteCompanyId, setInviteCompanyId] = useState<string | null>(null);
+  const [inviteCompanyName, setInviteCompanyName] = useState<string | null>(null);
 
   // Check for invite parameters in URL
   useEffect(() => {
@@ -45,35 +46,37 @@ export default function AuthPage() {
       setInviteCompanyId(companyId);
       setMode('signup');
 
-      // Fetch invite details
+      // Fetch invite details + company name in one query
       supabase
         .from('invitations')
-        .select('email, role, accepted, expires_at')
+        .select('email, role, accepted, expires_at, companies(name)')
         .eq('token', token)
         .eq('company_id', companyId)
         .single()
         .then(({ data, error }) => {
           if (error || !data) {
-            setError('Invalid invite link');
+            setError('Invalid invite link. Please ask your team admin to resend the invitation.');
             return;
           }
 
           // Check if already accepted
           if (data.accepted) {
-            setError('This invitation has already been used');
+            setError('This invitation has already been used. Please sign in or contact your team admin.');
             return;
           }
 
           // Check if expired
           const expiresAt = new Date(data.expires_at);
           if (expiresAt < new Date()) {
-            setError('This invitation has expired. Please request a new one.');
+            setError('This invitation has expired. Please ask your team admin to send a new one.');
             return;
           }
 
-          // Valid invitation
+          // Valid invitation — pre-fill and show context
           setEmail(data.email);
           setRole(data.role as UserRole);
+          const cn = (data as any).companies?.name;
+          if (cn) setInviteCompanyName(cn);
         });
     }
   }, []);
@@ -180,7 +183,7 @@ export default function AuthPage() {
         if (error) {
           setError(error.message || 'Failed to send reset email. Please try again.');
         } else {
-          setSuccess('Password reset email sent! Check your inbox.');
+          setSuccess('Temporary password sent! Check your inbox and sign in with it — you\'ll be prompted to set a new password right away.');
         }
       }
     } catch (err) {
@@ -191,41 +194,50 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-900 flex">
+    <div className="min-h-screen relative flex">
+      {/* Background with Logo Watermark */}
+      <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-900">
+        {/* Large Semi-Transparent Logo Watermark */}
+        <div 
+          className="absolute inset-0 bg-center bg-no-repeat opacity-[0.08]"
+          style={{
+            backgroundImage: 'url(/trussctr-logo-shield.png)',
+            backgroundSize: '60%',
+          }}
+        ></div>
+      </div>
+
       {/* Left Panel - Branding */}
-      <div className="hidden lg:flex lg:w-1/2 flex-col justify-between p-12">
+      <div className="hidden lg:flex lg:w-1/2 flex-col justify-between p-12 relative z-10">
         <div>
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
-              <Building2 size={28} className="text-white" />
-            </div>
+            <img src="/trussctr-logo-shield.png" alt="TrussCTR Logo" className="w-20 h-20 object-contain drop-shadow-2xl" />
             <div>
-              <span className="text-2xl font-bold text-white">TrussCTR</span>
-              <p className="text-blue-200 text-sm italic">Restoration Management Simplified</p>
+              <span className="text-2xl font-bold text-white drop-shadow-lg">TrussCTR</span>
+              <p className="text-blue-200 text-sm italic drop-shadow-md">A CRM you can Truss</p>
             </div>
           </div>
         </div>
 
         <div className="space-y-8">
           <h1 className="text-5xl font-bold text-white leading-tight">
-            The #1 CRM for
+            Built for
             <br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">
-              Roofing Contractors
+              Restoration Contractors
             </span>
           </h1>
           <p className="text-xl text-slate-300 max-w-md">
-            Track customers from first contact to final payment. Manage insurance claims, schedule
-            jobs, and grow your business.
+            Streamline your entire workflow—from lead capture to final payment. Manage projects, track insurance claims, and scale your business with confidence.
           </p>
 
           <div className="space-y-4">
             {[
-              'Complete customer lifecycle tracking',
-              'Insurance claim management',
-              'Customizable Kanban boards',
-              'Team collaboration & permissions',
-              'QuickBooks & mobile app integration',
+              'End-to-end project management',
+              'Insurance & supplement tracking',
+              'Real-time team collaboration',
+              'Automated workflows & reminders',
+              'Mobile-ready for field teams',
             ].map((feature, index) => (
               <div key={index} className="flex items-center gap-3">
                 <CheckCircle className="text-green-400" size={20} />
@@ -236,22 +248,20 @@ export default function AuthPage() {
         </div>
 
         <p className="text-slate-500 text-sm">
-          Trusted by 500+ roofing companies across the nation
+          Trusted by restoration professionals nationwide
         </p>
       </div>
 
       {/* Right Panel - Auth Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8">
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 relative z-10">
         <div className="w-full max-w-md">
           {/* Mobile Logo */}
           <div className="lg:hidden flex flex-col items-center justify-center mb-8">
             <div className="flex items-center gap-3 mb-1">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
-                <Building2 size={24} className="text-white" />
-              </div>
-              <span className="text-xl font-bold text-white">TrussCTR</span>
+              <img src="/trussctr-logo-shield.png" alt="TrussCTR Logo" className="w-16 h-16 object-contain drop-shadow-2xl" />
+              <span className="text-xl font-bold text-white drop-shadow-lg">TrussCTR</span>
             </div>
-            <p className="text-blue-200 text-sm italic">Restoration Management Simplified</p>
+            <p className="text-blue-200 text-sm italic drop-shadow-md">A CRM you can Truss</p>
           </div>
 
           <div className="bg-white rounded-2xl shadow-2xl p-8">
@@ -310,11 +320,20 @@ export default function AuthPage() {
 
             {inviteToken && mode === 'signup' && (
               <div className="mb-6 p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <Mail className="text-indigo-500 flex-shrink-0" size={20} />
-                  <p className="text-indigo-800 font-medium text-sm">
-                    You've been invited to join a team! Complete signup to accept.
-                  </p>
+                <div className="flex items-start gap-3">
+                  <Mail className="text-indigo-500 flex-shrink-0 mt-0.5" size={20} />
+                  <div>
+                    <p className="text-indigo-800 font-semibold text-sm mb-0.5">
+                      You've been invited!
+                    </p>
+                    <p className="text-indigo-700 text-sm">
+                      {inviteCompanyName
+                        ? <>Join <strong>{inviteCompanyName}</strong> as a <strong>{roleLabels[role] || role}</strong>.</>
+                        : <>You're joining as a <strong>{roleLabels[role] || role}</strong>.</>
+                      }
+                      {' '}Create your account below to accept.
+                    </p>
+                  </div>
                 </div>
               </div>
             )}

@@ -171,14 +171,33 @@ export default function InvoiceModal() {
             ${notes ? `<p style="margin-top:16px;color:#64748b">${notes}</p>` : ''}
             <p style="margin-top:24px;color:#64748b;font-size:13px">Please reply to this email or call us if you have any questions.</p>
           </div>`,
-        }).catch(() => {});
+        }).catch((emailErr: unknown) => {
+          console.error('[InvoiceModal] Email delivery failed:', emailErr);
+          toast.warning('Invoice saved, but email delivery failed.');
+        });
       } else if (status === 'sent' && !selectedContact?.email) {
         toast.warning('Invoice saved — no email on file for this customer');
+      }
+
+      // Auto-advance contact to invoicing stage when their first invoice is created
+      const invoiceContact = state.contacts.find((c) => c.id === selectedContactId);
+      const invoicingPrecursorStatuses = ['signed', 'in_progress', 'build_phase', 'cleanup'];
+      if (invoiceContact && invoicingPrecursorStatuses.includes(invoiceContact.status)) {
+        db.updateContact(invoiceContact.id, { status: 'invoicing', status_changed_at: new Date().toISOString() }).catch(() => {});
+        dispatch({ type: 'UPDATE_CONTACT_STATUS', payload: { contactId: invoiceContact.id, status: 'invoicing' } });
+        fireAutomationEvent('contact_status_changed', effectiveCompanyId, {
+          contactId: invoiceContact.id,
+          contactName: newInvoice.contactName,
+          contactEmail: invoiceContact.email,
+          oldStatus: invoiceContact.status,
+          newStatus: 'invoicing',
+        }).catch(() => {});
       }
 
       fireAutomationEvent('invoice_created', effectiveCompanyId, {
         contactId: selectedContactId,
         contactName: newInvoice.contactName,
+        contactEmail: invoiceContact?.email,
         amount: newInvoice.amount,
       }).catch(() => {});
 

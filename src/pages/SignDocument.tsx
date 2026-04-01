@@ -51,7 +51,7 @@ export default function SignDocument() {
       }
 
       const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/estimates?id=eq.${encodeURIComponent(estimateId)}&select=id,estimate_number,title,total,status,sign_token,contact_id`,
+        `${SUPABASE_URL}/rest/v1/estimates?id=eq.${encodeURIComponent(estimateId)}&select=id,estimate_number,title,total,status,contact_id`,
         {
           headers: {
             apikey: SUPABASE_ANON_KEY,
@@ -77,10 +77,8 @@ export default function SignDocument() {
         throw new Error(`This estimate cannot be signed (status: ${est.status}).`);
       }
 
-      // Validate token if one is stored
-      if (est.sign_token && token !== est.sign_token) {
-        throw new Error('This signing link is invalid or has expired.');
-      }
+      // Token is validated server-side in document-handler.mjs when the customer signs.
+      // We do NOT fetch or compare sign_token client-side — that would expose it in the network response.
 
       setEstimate(est);
       setPageState('ready');

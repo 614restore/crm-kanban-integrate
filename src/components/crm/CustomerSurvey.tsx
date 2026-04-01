@@ -15,13 +15,16 @@ import {
   Heart
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/lib/supabase';
+import { db } from '@/lib/database';
+import { useAuth } from '@/lib/authContext';
 
 interface CustomerSurveyProps {
   contact: Contact;
   companyGoogleUrl?: string;
   onSurveyComplete?: (surveyData: SurveyResponse) => void;
   onClose?: () => void;
-  autoTrigger?: boolean; // For automatic triggering after completion certificate
+  autoTrigger?: boolean;
 }
 
 interface SurveyResponse {
@@ -40,11 +43,12 @@ interface SurveyResponse {
 
 const CustomerSurvey: React.FC<CustomerSurveyProps> = ({
   contact,
-  companyGoogleUrl = "https://www.google.com/search?q=TrussCTR+reviews", // Default fallback
+  companyGoogleUrl,
   onSurveyComplete,
   onClose,
   autoTrigger = false
 }) => {
+  const { profile } = useAuth();
   const [currentStep, setCurrentStep] = useState(autoTrigger ? 0 : 1);
   const [surveyData, setSurveyData] = useState<Partial<SurveyResponse>>({
     contactId: contact.id,
@@ -102,7 +106,6 @@ const CustomerSurvey: React.FC<CustomerSurveyProps> = ({
   );
 
   const handleSubmitSurvey = async () => {
-    // Validate required fields
     if (!surveyData.overallSatisfaction || surveyData.overallSatisfaction === 0) {
       toast.error('Please provide an overall satisfaction rating');
       return;
@@ -115,25 +118,55 @@ const CustomerSurvey: React.FC<CustomerSurveyProps> = ({
         ...surveyData,
         submittedAt: new Date().toISOString()
       } as SurveyResponse;
-      
-      // Save survey to localStorage (in production, this would be saved to your database)
-      const existingSurveys = JSON.parse(localStorage.getItem('customerSurveys') || '[]');
-      existingSurveys.push(completedSurvey);
-      localStorage.setItem('customerSurveys', JSON.stringify(existingSurveys));
-      
-      // Update contact notes with survey completion
-      const surveyNote = `Customer survey completed - Overall satisfaction: ${surveyData.overallSatisfaction}/5 stars. ${surveyData.wouldRecommend ? 'Would recommend.' : 'Would not recommend.'} ${surveyData.feedback ? `Feedback: "${surveyData.feedback}"` : ''}`;
-      
-      // In a real app, you'd update the contact in your database
-      // For now, we'll just show success
-      
+
+      // 1. Persist survey record to Supabase
+      const companyId = profile?.company_id;
+      if (companyId) {
+        const { error: surveyError } = await supabase
+          .from('customer_surveys')
+          .insert({
+            company_id: companyId,
+            contact_id: contact.id,
+            overall_satisfaction: completedSurvey.overallSatisfaction,
+            work_quality: completedSurvey.workQuality,
+            communication: completedSurvey.communication,
+            timeliness: completedSurvey.timeliness,
+            cleanup: completedSurvey.cleanup,
+            would_recommend: completedSurvey.wouldRecommend,
+            feedback: completedSurvey.feedback,
+            willing_to_provide_testimonial: completedSurvey.willingToProvideTestimonial,
+            left_review: completedSurvey.leftReview,
+            submitted_at: completedSurvey.submittedAt,
+          });
+
+        if (surveyError) {
+          console.error('[CustomerSurvey] Failed to save survey to Supabase:', surveyError);
+          // Non-fatal — still create comm note and fire callback
+        }
+
+        // 2. Create a communication note summarising the survey
+        const surveyNote = `Customer survey completed — Overall satisfaction: ${completedSurvey.overallSatisfaction}/5 stars. ${
+          completedSurvey.wouldRecommend ? 'Would recommend.' : 'Would not recommend.'
+        }${completedSurvey.feedback ? ` Feedback: "${completedSurvey.feedback}"` : ''}`;
+
+        await db.createCommunication({
+          company_id: companyId,
+          contact_id: contact.id,
+          type: 'note',
+          direction: 'inbound',
+          content: surveyNote,
+          user_id: profile?.id,
+        });
+      }
+
+      // 3. Fire the callback with the full data so ContactDetail can update its state
       onSurveyComplete?.(completedSurvey);
+
       setShowThankYou(true);
-      
       toast.success('Thank you for your feedback!');
       
     } catch (error) {
-      console.error('Error submitting survey:', error);
+      console.error('[CustomerSurvey] Error submitting survey:', error);
       toast.error('Failed to submit survey. Please try again.');
     } finally {
       setIsSubmitting(false);
@@ -141,6 +174,10 @@ const CustomerSurvey: React.FC<CustomerSurveyProps> = ({
   };
 
   const openGoogleReview = () => {
+    if (!companyGoogleUrl) {
+      toast.error('No Google review link configured. Set it in Settings → Company Profile.');
+      return;
+    }
     window.open(companyGoogleUrl, '_blank', 'noopener,noreferrer');
     setSurveyData(prev => ({ ...prev, leftReview: true }));
     toast.success('Thank you for leaving a review!');
@@ -158,7 +195,7 @@ const CustomerSurvey: React.FC<CustomerSurveyProps> = ({
             Your feedback helps us continue providing excellent service.
           </p>
           
-          {surveyData.overallSatisfaction! >= 4 && (
+          {surveyData.overallSatisfaction! >= 4 && companyGoogleUrl && (
             <div className="bg-blue-50 rounded-lg p-4 mb-4">
               <h4 className="font-medium text-blue-900 mb-2">Help Others Find Us!</h4>
               <p className="text-sm text-blue-700 mb-3">
@@ -185,7 +222,6 @@ const CustomerSurvey: React.FC<CustomerSurveyProps> = ({
     );
   }
 
-  // Auto-trigger welcome step
   if (currentStep === 0) {
     return (
       <div className="bg-white rounded-lg border border-gray-200 p-6 max-w-md mx-auto">
@@ -197,7 +233,7 @@ const CustomerSurvey: React.FC<CustomerSurveyProps> = ({
             Project Completed!
           </h3>
           <p className="text-gray-600 mb-6">
-            Hi {contact.firstName}! We've finished your project and would love to hear about your experience with TrussCTR.
+            Hi {contact.firstName}! We've finished your project and would love to hear about your experience.
           </p>
           
           <div className="space-y-3">
@@ -207,13 +243,15 @@ const CustomerSurvey: React.FC<CustomerSurveyProps> = ({
             >
               Share Feedback
             </button>
-            <button
-              onClick={openGoogleReview}
-              className="w-full px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2"
-            >
-              <ExternalLink className="w-4 h-4" />
-              Leave Google Review
-            </button>
+            {companyGoogleUrl && (
+              <button
+                onClick={openGoogleReview}
+                className="w-full px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2"
+              >
+                <ExternalLink className="w-4 h-4" />
+                Leave Google Review
+              </button>
+            )}
             <button
               onClick={onClose}
               className="w-full px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
@@ -241,7 +279,6 @@ const CustomerSurvey: React.FC<CustomerSurveyProps> = ({
       </div>
 
       <div className="space-y-6">
-        {/* Project Summary */}
         <div className="bg-gray-50 rounded-lg p-4">
           <h3 className="font-medium text-gray-900 mb-2">Project Summary</h3>
           <div className="text-sm text-gray-600 space-y-1">
@@ -264,7 +301,6 @@ const CustomerSurvey: React.FC<CustomerSurveyProps> = ({
           </div>
         </div>
 
-        {/* Overall Satisfaction */}
         <StarRating
           rating={surveyData.overallSatisfaction || 0}
           onChange={(rating) => setSurveyData(prev => ({ ...prev, overallSatisfaction: rating }))}
@@ -272,26 +308,22 @@ const CustomerSurvey: React.FC<CustomerSurveyProps> = ({
           required
         />
 
-        {/* Detailed Ratings */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <StarRating
             rating={surveyData.workQuality || 0}
             onChange={(rating) => setSurveyData(prev => ({ ...prev, workQuality: rating }))}
             label="Work Quality"
           />
-          
           <StarRating
             rating={surveyData.communication || 0}
             onChange={(rating) => setSurveyData(prev => ({ ...prev, communication: rating }))}
             label="Communication"
           />
-          
           <StarRating
             rating={surveyData.timeliness || 0}
             onChange={(rating) => setSurveyData(prev => ({ ...prev, timeliness: rating }))}
             label="Timeliness"
           />
-          
           <StarRating
             rating={surveyData.cleanup || 0}
             onChange={(rating) => setSurveyData(prev => ({ ...prev, cleanup: rating }))}
@@ -299,10 +331,9 @@ const CustomerSurvey: React.FC<CustomerSurveyProps> = ({
           />
         </div>
 
-        {/* Recommendation */}
         <div className="space-y-3">
           <label className="block text-sm font-medium text-gray-700">
-            Would you recommend TrussCTR to friends and family?
+            Would you recommend us to friends and family?
           </label>
           <div className="flex gap-4">
             <button
@@ -331,7 +362,6 @@ const CustomerSurvey: React.FC<CustomerSurveyProps> = ({
           </div>
         </div>
 
-        {/* Feedback */}
         <div className="space-y-2">
           <label className="block text-sm font-medium text-gray-700">
             Additional Comments (Optional)
@@ -345,7 +375,6 @@ const CustomerSurvey: React.FC<CustomerSurveyProps> = ({
           />
         </div>
 
-        {/* Testimonial Permission */}
         <div className="space-y-2">
           <label className="flex items-center gap-3">
             <input
@@ -355,13 +384,12 @@ const CustomerSurvey: React.FC<CustomerSurveyProps> = ({
               className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
             />
             <span className="text-sm text-gray-700">
-              I'm willing to provide a testimonial for TrussCTR's marketing materials
+              I'm willing to provide a testimonial for marketing materials
             </span>
           </label>
         </div>
       </div>
 
-      {/* Actions */}
       <div className="flex gap-3 mt-8">
         <button
           onClick={handleSubmitSurvey}
@@ -376,7 +404,7 @@ const CustomerSurvey: React.FC<CustomerSurveyProps> = ({
           {isSubmitting ? 'Submitting...' : 'Submit Feedback'}
         </button>
 
-        {surveyData.overallSatisfaction! >= 4 && (
+        {surveyData.overallSatisfaction! >= 4 && companyGoogleUrl && (
           <button
             onClick={openGoogleReview}
             className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"

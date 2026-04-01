@@ -1,0 +1,50 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - region "Notifications (F8)":
+    - list
+  - region "Notifications alt+T"
+  - generic [ref=e5]:
+    - generic [ref=e6]:
+      - generic [ref=e7]:
+        - img "TrussCTR Logo" [ref=e8]
+        - generic [ref=e9]: TrussCTR
+      - paragraph [ref=e10]: Restoration Management Simplified
+    - generic [ref=e11]:
+      - generic [ref=e12]:
+        - heading "Welcome back" [level=2] [ref=e13]
+        - paragraph [ref=e14]: Sign in to access your CRM
+      - generic [ref=e15]:
+        - generic [ref=e17]:
+          - img [ref=e18]
+          - textbox "you@company.com" [ref=e21]
+        - generic [ref=e22]:
+          - generic [ref=e23]: Password
+          - generic [ref=e24]:
+            - img [ref=e25]
+            - textbox "••••••••" [ref=e28]
+            - button [ref=e29] [cursor=pointer]:
+              - img [ref=e30]
+        - generic [ref=e33]:
+          - generic [ref=e34] [cursor=pointer]:
+            - checkbox "Remember me" [ref=e35]
+            - generic [ref=e36]: Remember me
+          - button "Forgot password?" [ref=e37] [cursor=pointer]
+        - button "Sign In" [ref=e38] [cursor=pointer]:
+          - text: Sign In
+          - img [ref=e39]
+      - paragraph [ref=e42]:
+        - text: Don't have an account?
+        - button "Sign up free" [ref=e43] [cursor=pointer]
+    - paragraph [ref=e44]:
+      - text: By signing up, you agree to our
+      - link "Terms of Service" [ref=e45] [cursor=pointer]:
+        - /url: /terms
+      - text: ","
+      - link "EULA" [ref=e46] [cursor=pointer]:
+        - /url: /eula
+      - text: and
+      - link "Privacy Policy" [ref=e47] [cursor=pointer]:
+        - /url: /privacy
+```

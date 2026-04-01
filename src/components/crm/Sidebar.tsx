@@ -24,13 +24,13 @@ import {
   Clipboard,
   Package,
   Receipt,
-  FilePlus,
   BarChart,
   Shield,
   AlertCircle,
   CalendarClock,
   Wrench,
   BadgeDollarSign,
+  TrendingUp,
 } from 'lucide-react';
 
 interface NavItem {
@@ -47,7 +47,6 @@ const navItems: NavItem[] = [
   { id: 'communications', label: 'Communications', icon: <MessageSquare size={20} /> },
   { id: 'calendar', label: 'Calendar', icon: <Calendar size={20} /> },
   { id: 'documents', label: 'Documents', icon: <FileText size={20} /> },
-  { id: 'document-templates', label: 'Templates', icon: <FilePlus size={20} /> },
   { id: 'financial', label: 'Financial', icon: <DollarSign size={20} />, requiresPermission: 'financials' },
   { id: 'expenses', label: 'Expenses', icon: <Receipt size={20} /> },
   { id: 'suppliers', label: 'Suppliers', icon: <Store size={20} /> },
@@ -59,6 +58,7 @@ const navItems: NavItem[] = [
   { id: 'material-orders', label: 'Material Orders', icon: <Package size={20} /> },
   { id: 'insurance-tracking', label: 'Insurance', icon: <Shield size={20} /> },
   { id: 'supplement-tracking', label: 'Supplements', icon: <AlertCircle size={20} /> },
+  { id: 'sales-analytics', label: 'Sales Analytics', icon: <TrendingUp size={20} />, requiresPermission: 'financials' },
   { id: 'reports', label: 'Reports', icon: <BarChart size={20} /> },
   { id: 'commission-payroll', label: 'Commission Payroll', icon: <BadgeDollarSign size={20} />, requiresPermission: 'financials' },
   { id: 'team', label: 'Team', icon: <UserCog size={20} />, requiresPermission: 'team' },
@@ -93,50 +93,48 @@ export default function Sidebar() {
   const { state, dispatch } = useCRM();
   const { profile, signOut } = useAuth();
   const { currentView, sidebarCollapsed, currentUser } = state;
-  const [companyName, setCompanyName] = useState('TrussCTR');
+  const [companyName, setCompanyName] = useState('Loading...');
   const [companyLogoUrl, setCompanyLogoUrl] = useState<string | null>(null);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [isLoadingCompany, setIsLoadingCompany] = useState(true);
 
   const userRole = (currentUser?.role || profile?.role || 'owner') as any;
 
   const loadCompanyBrand = useCallback(async () => {
     if (!profile?.company_id) {
-      // Don't reset to defaults — keep whatever branding is already loaded.
-      // This prevents flicker during token refresh when profile is momentarily stale.
+      setIsLoadingCompany(false);
       return;
     }
-
     try {
+      setIsLoadingCompany(true);
       const company = await db.getCompany(profile.company_id);
-      if (!company) return;
-
+      if (!company) {
+        console.warn('[Sidebar] No company data returned for ID:', profile.company_id);
+        setCompanyName('My Company');
+        setIsLoadingCompany(false);
+        return;
+      }
       setCompanyName(normalizeCompanyName(company.name, company.email));
       setCompanyLogoUrl(company.logo_url || null);
+      setIsLoadingCompany(false);
     } catch (error) {
-      console.error('Failed to load company branding:', error);
+      console.error('[Sidebar] Failed to load company branding:', error);
+      setCompanyName('My Company');
+      setIsLoadingCompany(false);
     }
   }, [profile?.company_id]);
 
-  useEffect(() => {
-    loadCompanyBrand();
-  }, [loadCompanyBrand]);
+  useEffect(() => { loadCompanyBrand(); }, [loadCompanyBrand]);
 
   useEffect(() => {
-    const onCompanyUpdated = () => {
-      loadCompanyBrand();
-    };
-
+    const onCompanyUpdated = () => { loadCompanyBrand(); };
     window.addEventListener('crm-company-updated', onCompanyUpdated);
     return () => window.removeEventListener('crm-company-updated', onCompanyUpdated);
   }, [loadCompanyBrand]);
 
   const filteredNavItems = navItems.filter((item) => {
-    if (item.requiresPermission === 'financials') {
-      return canViewFinancials(userRole);
-    }
-    if (item.requiresPermission === 'team') {
-      return canManageTeam(userRole);
-    }
+    if (item.requiresPermission === 'financials') return canViewFinancials(userRole);
+    if (item.requiresPermission === 'team') return canManageTeam(userRole);
     return true;
   });
 
@@ -144,9 +142,7 @@ export default function Sidebar() {
     dispatch({ type: 'SET_VIEW', payload: viewId });
   };
 
-  const handleSignOut = async () => {
-    await signOut();
-  };
+  const handleSignOut = async () => { await signOut(); };
 
   return (
     <aside
@@ -159,24 +155,14 @@ export default function Sidebar() {
         {!sidebarCollapsed && (
           <div className="flex items-center gap-2 min-w-0">
             {companyLogoUrl ? (
-              <img
-                src={companyLogoUrl}
-                alt="Company logo"
-                className="w-8 h-8 rounded-lg object-contain"
-                onError={() => setCompanyLogoUrl(null)}
-              />
+              <img src={companyLogoUrl} alt="Company logo" className="w-8 h-8 rounded-lg object-contain" onError={() => setCompanyLogoUrl(null)} />
             ) : (
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
-                <Building2 size={18} className="text-white" />
-              </div>
+              <img src="/trussctr-logo-shield.png" alt="TrussCTR Logo" className="w-8 h-8 object-contain" />
             )}
             <span className="font-bold text-lg truncate">{companyName}</span>
           </div>
         )}
-        <button
-          onClick={() => dispatch({ type: 'TOGGLE_SIDEBAR' })}
-          className="p-1.5 rounded-lg hover:bg-slate-800 transition-colors"
-        >
+        <button onClick={() => dispatch({ type: 'TOGGLE_SIDEBAR' })} className="p-1.5 rounded-lg hover:bg-slate-800 transition-colors">
           {sidebarCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
         </button>
       </div>
@@ -207,7 +193,7 @@ export default function Sidebar() {
       <div className="px-3 mb-2 relative">
         <button
           onClick={() => setShowNotifications(!showNotifications)}
-          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 text-slate-300 hover:bg-slate-800 hover:text-white relative`}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 text-slate-300 hover:bg-slate-800 hover:text-white relative"
           title={sidebarCollapsed ? 'Notifications' : undefined}
         >
           <span className="flex-shrink-0 relative">
@@ -218,58 +204,36 @@ export default function Sidebar() {
               </span>
             )}
           </span>
-          {!sidebarCollapsed && (
-            <span className="font-medium">Notifications</span>
-          )}
+          {!sidebarCollapsed && <span className="font-medium">Notifications</span>}
           {!sidebarCollapsed && state.notifications.filter(n => !n.read).length > 0 && (
             <span className="ml-auto bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
               {state.notifications.filter(n => !n.read).length}
             </span>
           )}
         </button>
-
         {showNotifications && (
           <>
-            <div
-              className="fixed inset-0 z-40"
-              onClick={() => setShowNotifications(false)}
-            />
+            <div className="fixed inset-0 z-40" onClick={() => setShowNotifications(false)} />
             <div className={`absolute bottom-full mb-2 ${sidebarCollapsed ? 'left-full ml-2' : 'left-0'} w-80 bg-white rounded-xl shadow-xl border border-gray-200 z-50`}>
               <div className="flex items-center justify-between p-4 border-b border-gray-100">
                 <h3 className="font-semibold text-gray-900">Notifications</h3>
                 {state.notifications.length > 0 && (
-                  <button
-                    onClick={() => { dispatch({ type: 'CLEAR_NOTIFICATIONS' }); setShowNotifications(false); }}
-                    className="text-sm text-blue-600 hover:text-blue-700"
-                  >
-                    Clear all
-                  </button>
+                  <button onClick={() => { dispatch({ type: 'CLEAR_NOTIFICATIONS' }); setShowNotifications(false); }} className="text-sm text-blue-600 hover:text-blue-700">Clear all</button>
                 )}
               </div>
               <div className="max-h-80 overflow-y-auto">
                 {state.notifications.length === 0 ? (
-                  <div className="p-8 text-center text-gray-500">
-                    <Bell size={32} className="mx-auto mb-2 opacity-50" />
-                    <p>No notifications</p>
-                  </div>
+                  <div className="p-8 text-center text-gray-500"><Bell size={32} className="mx-auto mb-2 opacity-50" /><p>No notifications</p></div>
                 ) : (
                   state.notifications.map((notification) => (
-                    <div
-                      key={notification.id}
-                      onClick={() => dispatch({ type: 'MARK_NOTIFICATION_READ', payload: notification.id })}
-                      className={`p-4 border-b border-gray-50 hover:bg-gray-50 cursor-pointer transition-colors ${!notification.read ? 'bg-blue-50/50' : ''}`}
-                    >
+                    <div key={notification.id} onClick={() => dispatch({ type: 'MARK_NOTIFICATION_READ', payload: notification.id })} className={`p-4 border-b border-gray-50 hover:bg-gray-50 cursor-pointer transition-colors ${!notification.read ? 'bg-blue-50/50' : ''}`}>
                       <div className="flex gap-3">
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-gray-900">{notification.title}</p>
                           <p className="text-sm text-gray-500 truncate">{notification.message}</p>
-                          <p className="text-xs text-gray-400 mt-1">
-                            {new Date(notification.timestamp).toLocaleTimeString()}
-                          </p>
+                          <p className="text-xs text-gray-400 mt-1">{new Date(notification.timestamp).toLocaleTimeString()}</p>
                         </div>
-                        {!notification.read && (
-                          <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-2" />
-                        )}
+                        {!notification.read && <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-2" />}
                       </div>
                     </div>
                   ))
@@ -283,13 +247,13 @@ export default function Sidebar() {
       {/* Legal Links */}
       {!sidebarCollapsed && (
         <div className="px-3 pb-2 flex flex-wrap gap-x-2 gap-y-1 justify-center">
-          <a href="/crm-kanban-integrate/terms" target="_blank" rel="noopener noreferrer" className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Terms</a>
+          <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Terms</a>
           <span className="text-slate-600 text-xs">·</span>
-          <a href="/crm-kanban-integrate/privacy" target="_blank" rel="noopener noreferrer" className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Privacy</a>
+          <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Privacy</a>
           <span className="text-slate-600 text-xs">·</span>
-          <a href="/crm-kanban-integrate/eula" target="_blank" rel="noopener noreferrer" className="text-xs text-slate-500 hover:text-slate-300 transition-colors">EULA</a>
+          <a href="/eula" target="_blank" rel="noopener noreferrer" className="text-xs text-slate-500 hover:text-slate-300 transition-colors">EULA</a>
           <span className="text-slate-600 text-xs">·</span>
-          <a href="mailto:scopemgr@614restore.com?subject=CONTACT%20TrussCTR" className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Support</a>
+          <a href="mailto:614restorellc@gmail.com?subject=TrussCTR%20Support" className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Support</a>
         </div>
       )}
 
@@ -298,11 +262,7 @@ export default function Sidebar() {
         {profile ? (
           <div className={`flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'}`}>
             {profile.avatar_url ? (
-              <img
-                src={profile.avatar_url}
-                alt={profile.email || 'Profile avatar'}
-                className="w-10 h-10 rounded-full object-cover flex-shrink-0"
-              />
+              <img src={profile.avatar_url} alt={profile.email || 'Profile avatar'} className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
             ) : (
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
                 {profile.first_name?.[0]?.toUpperCase() || profile.email?.[0]?.toUpperCase() || 'U'}
@@ -312,28 +272,18 @@ export default function Sidebar() {
             {!sidebarCollapsed && (
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-white truncate">
-                  {profile.first_name && profile.last_name
-                    ? `${profile.first_name} ${profile.last_name}`
-                    : profile.email}
+                  {profile.first_name && profile.last_name ? `${profile.first_name} ${profile.last_name}` : profile.email}
                 </p>
                 <p className="text-xs text-slate-400 capitalize">{profile.role || 'User'}</p>
               </div>
             )}
-            <button
-              onClick={handleSignOut}
-              className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors flex-shrink-0"
-              title="Sign out"
-            >
+            <button onClick={handleSignOut} className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors flex-shrink-0" title="Sign out">
               <LogOut size={16} />
             </button>
           </div>
         ) : currentUser ? (
           <div className={`flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'}`}>
-            <img
-              src={currentUser.avatar}
-              alt={currentUser.name}
-              className="w-10 h-10 rounded-full object-cover flex-shrink-0"
-            />
+            <img src={currentUser.avatar} alt={currentUser.name} className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
             {!sidebarCollapsed && (
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-white truncate">{currentUser.name}</p>

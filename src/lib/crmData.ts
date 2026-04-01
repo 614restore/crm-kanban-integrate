@@ -1,20 +1,22 @@
 // CRM Data Types and Mock Data
 
-export type CustomerStatus = 
-  | 'prospect' 
-  | 'lead' 
-  | 'appt_set' 
+export type CustomerStatus =
+  | 'prospect'
+  | 'lead'
+  | 'appt_set'
   | 'inspection_completed'
-  | 'estimate_sent' 
-  | 'contingency' 
-  | 'retail' 
-  | 'signed' 
-  | 'in_progress' 
-  | 'build_phase' 
-  | 'cleanup' 
-  | 'invoicing' 
-  | 'pending_payment' 
-  | 'completed' 
+  | 'estimating'
+  | 'estimate_sent'
+  | 'contingency'
+  | 'retail'
+  | 'signed'
+  | 'ordering_material'
+  | 'in_progress'
+  | 'build_phase'
+  | 'cleanup'
+  | 'invoicing'
+  | 'pending_payment'
+  | 'completed'
   | 'lost'
   | 'claim_filed'
   | 'adjuster_scheduled'
@@ -248,6 +250,10 @@ export interface Automation {
   action: string;
   isActive: boolean;
   createdBy: string;
+  /** Custom message / email body for this automation */
+  messageBody?: string;
+  /** Hours of inactivity before this automation fires (used by stale-lead alert) */
+  triggerDelayHours?: number;
 }
 
 export interface DocumentTemplate {
@@ -366,6 +372,7 @@ export interface EstimateItem {
   unit: string;
   unitPrice: number;
   total: number;
+  hidePrice?: boolean;
 }
 
 export interface Project {
@@ -417,16 +424,41 @@ export interface WorkOrder {
   contactName: string;
   title: string;
   description?: string;
-  status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled' | 'on_hold';
+  status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled' | 'on_hold' | 'ready_to_invoice';
   priority: 'low' | 'medium' | 'high' | 'urgent';
   scheduledDate?: string;
   startedAt?: string;
   completedAt?: string;
-  assignedTo: string[]; // Array of team member IDs
+  // Crew assignment
+  assignedTo: string[]; // In-house team member IDs
   assignedToNames?: string[];
+  // Subcontractor assignment
+  isSubcontractor?: boolean;
+  subcontractorCompany?: string;
+  subcontractorForeman?: string;
+  subcontractorPhone?: string;
+  subcontractorPayType?: 'per_square' | 'per_job' | 'time_and_materials';
+  subcontractorRate?: number;
+  // Job type & insurance
+  isInsuranceJob?: boolean;
+  jobType?: 'tear_off' | 'recover' | 'repair' | 'shingle' | 'metal' | 'flat' | 'new_construction';
+  // Roof specs
+  squares?: number;
+  pitch?: string;
+  layers?: number;
+  deckingType?: string;
+  shingleBrand?: string;
+  shingleLine?: string;
+  shingleColor?: string;
+  underlayment?: string;
+  dripEdge?: string;
+  ventilation?: string;
+  flashing?: string;
+  // Costs
   estimatedHours?: number;
   actualHours?: number;
   laborCost: number;
+  subcontractorCost?: number;
   materialCost: number;
   totalCost: number;
   address?: string;
@@ -436,8 +468,12 @@ export interface WorkOrder {
   notes?: string;
   attachments?: string[];
   checklistItems?: WorkOrderChecklistItem[];
+  photoChecklist?: PhotoChecklistItem[];
+  changeOrders?: ChangeOrder[];
   signedBy?: string;
   signatureData?: string;
+  foremanSignedBy?: string;
+  foremanSignatureData?: string;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -449,6 +485,25 @@ export interface WorkOrderChecklistItem {
   completed: boolean;
   completedBy?: string;
   completedAt?: string;
+}
+
+export interface PhotoChecklistItem {
+  id: string;
+  label: string;
+  required: boolean;
+  completed: boolean;
+  photoUrl?: string;
+  uploadedAt?: string;
+}
+
+export interface ChangeOrder {
+  id: string;
+  description: string;
+  amount: number;
+  approvedBy: string; // 'customer' or 'adjuster'
+  approverName?: string;
+  approvalDate: string;
+  signatureData?: string;
 }
 
 // Avatar URLs
@@ -492,15 +547,17 @@ export const defaultBoards: KanbanBoard[] = [
     columns: [
       { id: 'ret-1',  title: 'New Lead',                    status: 'prospect',    color: '#94a3b8', order: 0 },
       { id: 'ret-2',  title: 'Contacted / Qualifying',       status: 'lead',        color: '#6366f1', order: 1 },
-      { id: 'ret-3',  title: 'Inspection Scheduled',         status: 'appt_set',    color: '#8b5cf6', order: 2 },
-      { id: 'ret-4',  title: 'Estimate Sent',                status: 'estimate_sent', color: '#a855f7', order: 3 },
-      { id: 'ret-5',  title: 'Follow-up / Negotiation',      status: 'contingency', color: '#f59e0b', order: 4 },
-      { id: 'ret-6',  title: 'Sold / Ready for Production',  status: 'signed',      color: '#22c55e', order: 5 },
-      { id: 'ret-7',  title: 'Scheduled',                    status: 'in_progress', color: '#3b82f6', order: 6 },
-      { id: 'ret-8',  title: 'In Progress',                  status: 'build_phase', color: '#06b6d4', order: 7 },
-      { id: 'ret-9',  title: 'Punch List',                   status: 'cleanup',     color: '#f97316', order: 8 },
-      { id: 'ret-10', title: 'Completed',                    status: 'completed',   color: '#10b981', order: 9 },
-      { id: 'ret-11', title: 'Lost',                         status: 'lost',        color: '#ef4444', order: 10 },
+      { id: 'ret-3',  title: 'Inspection Scheduled',         status: 'appt_set',      color: '#8b5cf6', order: 2 },
+      { id: 'ret-3b', title: 'Estimating',                   status: 'estimating',    color: '#0ea5e9', order: 3 },
+      { id: 'ret-4',  title: 'Estimate Sent',                status: 'estimate_sent', color: '#a855f7', order: 4 },
+      { id: 'ret-5',  title: 'Follow-up / Negotiation',      status: 'contingency',   color: '#f59e0b', order: 5 },
+      { id: 'ret-6',  title: 'Sold / Ready for Production',  status: 'signed',        color: '#22c55e', order: 6 },
+      { id: 'ret-7',  title: 'Scheduled',                    status: 'in_progress',   color: '#3b82f6', order: 7 },
+      { id: 'ret-8',  title: 'In Progress',                  status: 'build_phase',   color: '#06b6d4', order: 8 },
+      { id: 'ret-9',  title: 'Punch List',                   status: 'cleanup',       color: '#f97316', order: 9 },
+      { id: 'ret-10', title: 'Completed',                    status: 'completed',     color: '#10b981', order: 10 },
+      { id: 'ret-12', title: 'Retail (Cash Job)',            status: 'retail',        color: '#a855f7', order: 11 },
+      { id: 'ret-11', title: 'Lost',                         status: 'lost',          color: '#ef4444', order: 12 },
     ],
   },
   {
@@ -534,11 +591,12 @@ export const defaultBoards: KanbanBoard[] = [
     createdBy: 'system',
     isDefault: true,
     columns: [
-      { id: 'col-p1', title: 'Sold / New',   status: 'signed',      color: '#3b82f6', order: 0 },
-      { id: 'col-p2', title: 'Scheduled',    status: 'in_progress', color: '#8b5cf6', order: 1 },
-      { id: 'col-p3', title: 'In Progress',  status: 'build_phase', color: '#06b6d4', order: 2 },
-      { id: 'col-p4', title: 'Punch List',   status: 'cleanup',     color: '#f97316', order: 3 },
-      { id: 'col-p5', title: 'Completed',    status: 'completed',   color: '#22c55e', order: 4 },
+      { id: 'col-p1', title: 'Sold / New',         status: 'signed',             color: '#3b82f6', order: 0 },
+      { id: 'col-p6', title: 'Ordering Material',  status: 'ordering_material',  color: '#f59e0b', order: 1 },
+      { id: 'col-p2', title: 'Scheduled',          status: 'in_progress',        color: '#8b5cf6', order: 2 },
+      { id: 'col-p3', title: 'In Progress',        status: 'build_phase',        color: '#06b6d4', order: 3 },
+      { id: 'col-p4', title: 'Punch List',         status: 'cleanup',            color: '#f97316', order: 4 },
+      { id: 'col-p5', title: 'Completed',          status: 'completed',          color: '#22c55e', order: 5 },
     ],
   },
   {
@@ -1437,10 +1495,12 @@ export const statusLabels: Record<CustomerStatus, string> = {
   lead: 'Lead',
   appt_set: 'Appointment Set',
   inspection_completed: 'Inspection Completed',
+  estimating: 'Estimating',
   estimate_sent: 'Estimate Sent',
   contingency: 'Contingency',
   retail: 'Retail Customer',
   signed: 'Signed Customer',
+  ordering_material: 'Ordering Material',
   in_progress: 'In Progress',
   build_phase: 'Build Phase',
   cleanup: 'Cleanup',
@@ -1459,10 +1519,12 @@ export const statusColors: Record<CustomerStatus, string> = {
   lead: 'bg-blue-100 text-blue-800',
   appt_set: 'bg-purple-100 text-purple-800',
   inspection_completed: 'bg-cyan-100 text-cyan-800',
+  estimating: 'bg-sky-100 text-sky-800',
   estimate_sent: 'bg-indigo-100 text-indigo-800',
   contingency: 'bg-yellow-100 text-yellow-800',
   retail: 'bg-teal-100 text-teal-800',
   signed: 'bg-green-100 text-green-800',
+  ordering_material: 'bg-amber-100 text-amber-800',
   in_progress: 'bg-cyan-100 text-cyan-800',
   build_phase: 'bg-orange-100 text-orange-800',
   cleanup: 'bg-pink-100 text-pink-800',

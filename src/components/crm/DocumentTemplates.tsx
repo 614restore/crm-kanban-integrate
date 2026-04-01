@@ -1,7 +1,7 @@
 // Document Templates for Contractors
 // Pre-built templates for estimates, invoices, contracts, work orders
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   FileText,
   Plus,
@@ -27,7 +27,8 @@ import {
   FolderPlus,
   FolderX,
   ChevronRight,
-  X
+  X,
+  Save
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -86,6 +87,7 @@ const DocumentTemplates: React.FC = () => {
   const [customerEditMode, setCustomerEditMode] = useState(false);
   const [selectedContactId, setSelectedContactId] = useState<string>('');
   const [editedContent, setEditedContent] = useState<string>('');
+  const [manualVars, setManualVars] = useState<Record<string, string>>({});
 
   // ── Folder state ────────────────────────────────────────────────────────
   // 'all' = show everything; 'cat:CATEGORY_ID' = system folder; custom string = user folder
@@ -97,7 +99,26 @@ const DocumentTemplates: React.FC = () => {
   const [showNewFolderInput, setShowNewFolderInput] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [movingTemplateId, setMovingTemplateId] = useState<string | null>(null);
-  
+  const [sendingForSign, setSendingForSign] = useState(false);
+
+  // ── Create / Edit template state ────────────────────────────────────────
+  const [editingTemplate, setEditingTemplate] = useState<DocumentTemplate | null>(null);
+  const [templateFormData, setTemplateFormData] = useState<{
+    name: string;
+    description: string;
+    category: DocumentTemplate['category'];
+    fileType: DocumentTemplate['fileType'];
+    tags: string;
+    content: string;
+  }>({
+    name: '',
+    description: '',
+    category: 'estimate',
+    fileType: 'html',
+    tags: '',
+    content: '',
+  });
+
   const { toast } = useToast();
   const { profile } = useAuth();
   const { state: crmState, dispatch } = useCRM();
@@ -2549,6 +2570,132 @@ const DocumentTemplates: React.FC = () => {
     });
   };
 
+  // Download the customer-specific filled HTML from the customer editor
+  const downloadFilledCustomer = (html: string, docName: string) => {
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${docName.replace(/[^a-z0-9]/gi, '_')}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast({ title: 'Downloaded', description: `"${docName}" saved as HTML file.` });
+  };
+
+  // Upload HTML to Supabase storage, create a documents row, email the customer a signing link
+  const sendForSigning = async (html: string, docName: string, contactId: string) => {
+    if (!profile?.company_id || !profile?.id) {
+      toast({ title: 'Not authenticated', variant: 'destructive' });
+      return;
+    }
+    const contact = crmState.contacts.find(c => c.id === contactId);
+    if (!contact) {
+      toast({ title: 'Select a customer first', variant: 'destructive' });
+      return;
+    }
+    const contactEmail = (contact as any).email || '';
+    if (!contactEmail) {
+      toast({ title: 'No email on file', description: `${getContactFullName(contact)} has no email address saved.`, variant: 'destructive' });
+      return;
+    }
+
+    setSendingForSign(true);
+    try {
+      // Generate a secure token
+      const token = crypto.randomUUID();
+
+      // Store the document record with html_content + sign_token
+      const { uploadDocument } = await import('@/lib/storage');
+      const htmlBlob = new Blob([html], { type: 'text/html' });
+      const htmlFile = new File([htmlBlob], `${docName.replace(/[^a-z0-9]/gi, '_')}.html`, { type: 'text/html' });
+      const uploadResult = await uploadDocument(htmlFile, profile.company_id, contactId);
+
+      const docRow = await db.createDocument({
+        company_id: profile.company_id,
+        contact_id: contactId,
+        name: docName,
+        type: 'template-document',
+        url: uploadResult.path || '',
+        html_content: html,
+        sign_token: token,
+        sent_by: profile.id,
+        contact_email: contactEmail,
+        status: 'sent',
+      });
+
+      if (!docRow) throw new Error('Failed to create document record');
+
+      // Send email to customer via existing email API
+      const { sendEmail } = await import('@/lib/emailApi');
+      const appUrl = (import.meta.env.VITE_APP_URL as string | undefined)?.trim() || window.location.origin;
+      const signingUrl = `${appUrl}/sign-doc?token=${encodeURIComponent(token)}`;
+      const contactName = getContactFullName(contact);
+
+      await sendEmail({
+        to: contactEmail,
+        subject: `Please sign: ${docName}`,
+        html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
+          <h2 style="color:#2563eb;">Document Ready for Your Signature</h2>
+          <p>Hi ${contactName},</p>
+          <p>${companyProfile?.name || 'Your contractor'} has sent you <strong>"${docName}"</strong> for your review and signature.</p>
+          <p style="margin:24px 0;">
+            <a href="${signingUrl}" style="display:inline-block;background:#2563eb;color:white;padding:14px 28px;text-decoration:none;border-radius:8px;font-weight:600;">Review &amp; Sign Document</a>
+          </p>
+          <p style="color:#6b7280;font-size:12px;">If the button doesn't work, copy and paste this link into your browser:<br>${signingUrl}</p>
+          <hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;" />
+          <p style="color:#9ca3af;font-size:11px;">Sent by ${companyProfile?.name || 'your contractor'} via 614 Restore CRM</p>
+        </div>`,
+      });
+
+      // In-app notification for the sender
+      sonnerToast.success(`Sent to ${contactName}`, {
+        description: `Signing link emailed to ${contactEmail}. You'll be notified when they open and sign it.`,
+      });
+
+      setCustomerEditMode(false);
+      setTemplates(prev => prev.map(t =>
+        t.id === selectedTemplate?.id ? { ...t, usageCount: t.usageCount + 1 } : t
+      ));
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to send document.';
+      toast({ title: 'Send failed', description: message, variant: 'destructive' });
+    } finally {
+      setSendingForSign(false);
+    }
+  };
+
+
+  // Open a print-ready window with the filled template content
+  const generateDocument = (template: DocumentTemplate) => {
+    const content = getFillablePreviewContent(template);
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast({ title: 'Popup blocked', description: 'Allow popups for this site to generate documents.', variant: 'destructive' });
+      return;
+    }
+    printWindow.document.write(content);
+    printWindow.document.close();
+    printWindow.focus();
+    // Slight delay so the document renders before the print dialog opens
+    setTimeout(() => { printWindow.print(); }, 400);
+    // Increment usage count
+    setTemplates(prev => prev.map(t => t.id === template.id ? { ...t, usageCount: t.usageCount + 1 } : t));
+  };
+
+  // Download template as an HTML file (sample data pre-filled)
+  const downloadTemplate = (template: DocumentTemplate) => {
+    const content = getPreviewContent(template);
+    const blob = new Blob([content], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${template.name.replace(/[^a-z0-9]/gi, '_')}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setTemplates(prev => prev.map(t => t.id === template.id ? { ...t, usageCount: t.usageCount + 1 } : t));
+    toast({ title: 'Downloaded', description: `"${template.name}" saved as HTML file.` });
+  };
+
   // Duplicate template
   const duplicateTemplate = (template: DocumentTemplate) => {
     const newTemplate: DocumentTemplate = {
@@ -2587,6 +2734,83 @@ const DocumentTemplates: React.FC = () => {
       cancel: { label: 'Cancel' },
       duration: 8000,
     });
+  };
+
+  // Open create dialog
+  const openCreateTemplate = () => {
+    setEditingTemplate(null);
+    setTemplateFormData({ name: '', description: '', category: 'estimate', fileType: 'html', tags: '', content: '' });
+    setShowCreateTemplate(true);
+  };
+
+  // Open edit dialog for an existing template
+  const openEditTemplate = (template: DocumentTemplate) => {
+    setEditingTemplate(template);
+    setTemplateFormData({
+      name: template.name,
+      description: template.description,
+      category: template.category,
+      fileType: template.fileType,
+      tags: template.tags.join(', '),
+      content: template.content,
+    });
+    setShowCreateTemplate(true);
+  };
+
+  // Save (create or update) a template
+  const handleSaveTemplate = () => {
+    const name = templateFormData.name.trim();
+    if (!name) {
+      toast({ title: 'Name required', description: 'Please enter a template name.', variant: 'destructive' });
+      return;
+    }
+    if (!templateFormData.content.trim()) {
+      toast({ title: 'Content required', description: 'Please enter template content.', variant: 'destructive' });
+      return;
+    }
+    const tags = templateFormData.tags
+      .split(',')
+      .map(t => t.trim())
+      .filter(Boolean);
+    const variables = [...new Set(
+      (templateFormData.content.match(/\{\{([A-Z0-9_]+)\}\}/g) || []).map(m => m.slice(2, -2))
+    )];
+    const now = new Date().toISOString().split('T')[0];
+
+    if (editingTemplate) {
+      setTemplates(prev => prev.map(t => t.id === editingTemplate.id ? {
+        ...t,
+        name,
+        description: templateFormData.description.trim(),
+        category: templateFormData.category,
+        fileType: templateFormData.fileType,
+        tags,
+        content: templateFormData.content,
+        variables,
+        lastModified: now,
+      } : t));
+      toast({ title: 'Template Updated', description: `"${name}" has been saved.` });
+    } else {
+      const newTemplate: DocumentTemplate = {
+        id: Date.now().toString(),
+        name,
+        description: templateFormData.description.trim(),
+        category: templateFormData.category,
+        fileType: templateFormData.fileType,
+        tags,
+        content: templateFormData.content,
+        variables,
+        favorite: false,
+        isDefault: false,
+        createdAt: now,
+        lastModified: now,
+        usageCount: 0,
+      };
+      setTemplates(prev => [newTemplate, ...prev]);
+      toast({ title: 'Template Created', description: `"${name}" has been added.` });
+    }
+    setShowCreateTemplate(false);
+    setEditingTemplate(null);
   };
 
   // Fill template variables for a specific contact
@@ -2637,6 +2861,7 @@ const DocumentTemplates: React.FC = () => {
     const contactId = selectedContactId || crmState.contacts[0]?.id || '';
     setSelectedContactId(contactId);
     setEditedContent(fillTemplateForContact(template, contactId));
+    setManualVars({});
     setCustomerEditMode(true);
   };
 
@@ -2799,6 +3024,50 @@ const DocumentTemplates: React.FC = () => {
     return content;
   };
 
+  // Build a version of the template with auto-filled company/date fields and
+  // remaining {{VARIABLE}} placeholders converted to styled inline input elements.
+  const getFillablePreviewContent = (template: DocumentTemplate): string => {
+    let content = template.content;
+
+    // Auto-fill known company + date fields so the document looks real
+    const autoFill: Record<string, string> = {
+      'COMPANY_NAME': companyProfile?.name || 'TrussCTR',
+      'COMPANY_TAGLINE': companyProfile?.tagline || 'Professional Storm Damage Restoration',
+      'COMPANY_ADDRESS': companyProfile?.address || '1234 Commerce Blvd',
+      'COMPANY_CITY': companyProfile?.city || 'Columbus',
+      'COMPANY_STATE': companyProfile?.state || 'OH',
+      'COMPANY_ZIP': companyProfile?.zip || '43215',
+      'COMPANY_PHONE': companyProfile?.phone || '(614) 555-0199',
+      'COMPANY_EMAIL': companyProfile?.email || 'info@614restore.com',
+      'CONTRACTOR_LICENSE': companyProfile?.contractor_license || 'OH-RC-2024-8812',
+      'COMPANY_LOGO': companyProfile?.logo_url
+        ? `<img src="${companyProfile.logo_url}" alt="${companyProfile.name || 'Company'} Logo" style="max-height:80px;max-width:200px;object-fit:contain;display:block;" />`
+        : `<span style="font-size:11px;color:#9ca3af;font-style:italic;">[No logo — upload in Settings › Company Profile]</span>`,
+      'TAX_ID': companyProfile?.tax_id || '31-1234567',
+      'ROC_NUMBER': companyProfile?.contractor_license || 'ROC-123456',
+      'REP_NAME': (profile?.first_name && profile?.last_name) ? `${profile.first_name} ${profile.last_name}` : 'Your Name',
+      'REP_TITLE': (profile as any)?.title || 'Project Manager',
+      'ESTIMATE_DATE': new Date().toLocaleDateString(),
+      'CONTRACT_DATE': new Date().toLocaleDateString(),
+      'INVOICE_DATE': new Date().toLocaleDateString(),
+      'SIGNATURE_DATE': new Date().toLocaleDateString(),
+      'INSPECTION_DATE': new Date().toLocaleDateString(),
+      'CHANGE_DATE': new Date().toLocaleDateString(),
+    };
+
+    Object.entries(autoFill).forEach(([key, val]) => {
+      content = content.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), val);
+    });
+
+    // Replace remaining {{VARIABLE}} with styled fillable input elements
+    content = content.replace(/\{\{([A-Z0-9_]+)\}\}/g, (_match, varName) => {
+      const label = varName.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
+      return `<input type="text" name="${varName}" placeholder="${label}" style="display:inline-block;border:none;border-bottom:2px solid #3b82f6;background:#eff6ff;color:#1e3a8a;padding:2px 8px;min-width:120px;max-width:260px;border-radius:3px 3px 0 0;font-size:inherit;font-family:inherit;vertical-align:baseline;outline:none;" onfocus="this.style.background='#dbeafe';this.style.borderBottomColor='#1d4ed8'" onblur="this.style.background='#eff6ff';this.style.borderBottomColor='#3b82f6'" />`;
+    });
+
+    return content;
+  };
+
   // Get all unique tags
   const allTags = Array.from(new Set(templates.flatMap(t => t.tags))).sort();
 
@@ -2841,7 +3110,7 @@ const DocumentTemplates: React.FC = () => {
           <FileText className="w-6 h-6" />
           <h1 className="text-3xl font-bold">Document Templates</h1>
         </div>
-        <Button onClick={() => setShowCreateTemplate(true)}>
+        <Button onClick={openCreateTemplate}>
           <Plus className="w-4 h-4 mr-2" />
           New Template
         </Button>
@@ -3036,8 +3305,8 @@ const DocumentTemplates: React.FC = () => {
           <div className="md:col-span-3 text-center py-8">
             <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-600">No templates found</p>
-            <Button 
-              onClick={() => setShowCreateTemplate(true)} 
+            <Button
+              onClick={openCreateTemplate}
               className="mt-4"
             >
               Create Your First Template
@@ -3047,92 +3316,111 @@ const DocumentTemplates: React.FC = () => {
           filteredTemplates.map(template => {
             const category = templateCategories.find(c => c.id === template.category);
             return (
-              <Card key={template.id} className="hover:shadow-lg transition-shadow">
-                <CardContent className="p-4">
-                  <div className="space-y-3">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h3 className="font-semibold">{template.name}</h3>
+              <Card key={template.id} className="hover:shadow-lg transition-shadow flex flex-col">
+                <CardContent className="p-4 flex flex-col h-full">
+                  <div className="space-y-3 flex flex-col h-full">
+                    {/* Title row */}
+                    <div className="flex items-start gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 mb-1 min-w-0">
+                          <h3 className="font-semibold text-sm truncate">{template.name}</h3>
                           {template.isDefault && (
-                            <Badge variant="secondary" className="text-xs">Default</Badge>
+                            <Badge variant="secondary" className="text-[10px] shrink-0">Default</Badge>
                           )}
                         </div>
-                        <p className="text-sm text-gray-600">{template.description}</p>
+                        <p className="text-xs text-gray-500 line-clamp-2">{template.description}</p>
                       </div>
                       <Button
                         variant="ghost"
                         size="sm"
+                        className="shrink-0 h-7 w-7 p-0"
+                        title={template.favorite ? 'Remove from favorites' : 'Add to favorites'}
                         onClick={() => toggleFavorite(template.id)}
                       >
                         {template.favorite ? (
                           <Star className="w-4 h-4 text-yellow-500 fill-current" />
                         ) : (
-                          <StarOff className="w-4 h-4" />
+                          <StarOff className="w-4 h-4 text-gray-400" />
                         )}
                       </Button>
                     </div>
 
-                    <div className="flex items-center justify-between">
-                      <Badge className={category?.color}>
+                    {/* Category + usage */}
+                    <div className="flex items-center justify-between gap-2 min-w-0">
+                      <Badge className={`${category?.color} shrink-0 text-[10px]`}>
                         <div className="flex items-center gap-1">
                           {category?.icon}
-                          {category?.label}
+                          <span className="truncate max-w-[90px]">{category?.label}</span>
                         </div>
                       </Badge>
-                      <span className="text-xs text-gray-500">
-                        Used {template.usageCount} times
+                      <span className="text-[10px] text-gray-400 whitespace-nowrap">
+                        Used {template.usageCount}×
                       </span>
                     </div>
 
+                    {/* Tags */}
                     <div className="flex flex-wrap gap-1">
                       {template.tags.slice(0, 3).map(tag => (
-                        <Badge key={tag} variant="outline" className="text-xs">
+                        <Badge key={tag} variant="outline" className="text-[10px] px-1.5 py-0">
                           {tag}
                         </Badge>
                       ))}
                       {template.tags.length > 3 && (
-                        <Badge variant="outline" className="text-xs">
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">
                           +{template.tags.length - 3}
                         </Badge>
                       )}
                     </div>
 
-                    <div className="flex items-center justify-between text-xs text-gray-500">
+                    {/* Modified + type */}
+                    <div className="flex items-center justify-between text-[10px] text-gray-400">
                       <span>Modified {new Date(template.lastModified).toLocaleDateString()}</span>
                       <span className="capitalize">{template.fileType}</span>
                     </div>
 
-                    <div className="flex gap-2">
-                      <Button 
-                        size="sm" 
-                        variant="outline" 
-                        className="flex-1"
+                    {/* Action buttons — all icon-only so they never overflow */}
+                    <div className="flex items-center gap-1 mt-auto pt-1 border-t border-gray-100">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 h-8 text-xs"
+                        title="Preview template"
                         onClick={() => {
                           setSelectedTemplate(template);
                           setPreviewMode(true);
                         }}
                       >
-                        <Eye className="w-4 h-4 mr-1" />
+                        <Eye className="w-3.5 h-3.5 mr-1" />
                         Preview
                       </Button>
-                      <Button 
-                        size="sm" 
+                      <Button
+                        size="sm"
                         variant="outline"
+                        className="h-8 w-8 p-0"
+                        title="Edit template"
+                        onClick={() => openEditTemplate(template)}
+                      >
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 w-8 p-0"
+                        title="Duplicate template"
                         onClick={() => duplicateTemplate(template)}
                       >
-                        <Copy className="w-4 h-4" />
+                        <Copy className="w-3.5 h-3.5" />
                       </Button>
                       {/* Move to folder button */}
                       <div className="relative">
                         <Button
                           size="sm"
                           variant="outline"
+                          className={`h-8 w-8 p-0 ${templateFolderMap[template.id] ? 'text-blue-600 border-blue-300 bg-blue-50' : ''}`}
                           title={templateFolderMap[template.id] ? `In folder: ${templateFolderMap[template.id]}` : 'Move to folder'}
                           onClick={() => setMovingTemplateId(movingTemplateId === template.id ? null : template.id)}
-                          className={templateFolderMap[template.id] ? 'text-blue-600 border-blue-300 bg-blue-50' : ''}
                         >
-                          <FolderPlus className="w-4 h-4" />
+                          <FolderPlus className="w-3.5 h-3.5" />
                         </Button>
                         {movingTemplateId === template.id && (
                           <div className="absolute bottom-full mb-1 right-0 z-20 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[160px]">
@@ -3169,14 +3457,21 @@ const DocumentTemplates: React.FC = () => {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="text-red-500 hover:bg-red-50 hover:border-red-300"
+                          className="h-8 w-8 p-0 text-red-500 hover:bg-red-50 hover:border-red-300"
+                          title="Delete template"
                           onClick={() => deleteTemplate(template)}
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       )}
-                      <Button size="sm">
-                        <Download className="w-4 h-4" />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 w-8 p-0"
+                        title="Download as HTML"
+                        onClick={() => downloadTemplate(template)}
+                      >
+                        <Download className="w-3.5 h-3.5" />
                       </Button>
                     </div>
                   </div>
@@ -3201,31 +3496,18 @@ const DocumentTemplates: React.FC = () => {
             </DialogHeader>
             
             <div className="space-y-4">
-              <div className="bg-gray-50 p-4 rounded">
-                <Label>Variables in this template:</Label>
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {selectedTemplate.variables.map(variable => (
-                    <Badge key={variable} variant="secondary" className="text-xs">
-                      {variable}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-              
-              <div className="border rounded p-4 bg-white">
-                {selectedTemplate.content.trim().startsWith('<!DOCTYPE') || selectedTemplate.content.trim().startsWith('<html') ? (
-                  <iframe
-                    srcDoc={getPreviewContent(selectedTemplate)}
-                    className="w-full border-0 rounded"
-                    style={{ minHeight: '600px', height: '70vh' }}
-                    title={`Preview: ${selectedTemplate.name}`}
-                    sandbox="allow-same-origin"
-                  />
-                ) : (
-                  <pre className="whitespace-pre-wrap font-mono text-sm">
-                    {getPreviewContent(selectedTemplate)}
-                  </pre>
-                )}
+              <p className="text-sm text-muted-foreground">
+                Blue underlined fields are fillable — click any field to type in a value.
+              </p>
+
+              <div className="border rounded bg-white overflow-hidden">
+                <iframe
+                  srcDoc={getFillablePreviewContent(selectedTemplate)}
+                  className="w-full border-0"
+                  style={{ minHeight: '640px', height: '72vh' }}
+                  title={`Preview: ${selectedTemplate.name}`}
+                  sandbox="allow-same-origin allow-scripts"
+                />
               </div>
               
               <div className="flex justify-end gap-2">
@@ -3237,7 +3519,7 @@ const DocumentTemplates: React.FC = () => {
                   <User className="w-4 h-4 mr-2" />
                   Use for Customer
                 </Button>
-                <Button>
+                <Button onClick={() => generateDocument(selectedTemplate)}>
                   <Download className="w-4 h-4 mr-2" />
                   Generate Document
                 </Button>
@@ -3248,66 +3530,303 @@ const DocumentTemplates: React.FC = () => {
       )}
 
       {/* Per-Customer Template Editor */}
-      {customerEditMode && selectedTemplate && (
-        <Dialog open={customerEditMode} onOpenChange={() => setCustomerEditMode(false)}>
-          <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Edit "{selectedTemplate.name}" for Customer</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label>Customer</Label>
-                <select
-                  value={selectedContactId}
-                  onChange={(e) => {
-                    setSelectedContactId(e.target.value);
-                    setEditedContent(fillTemplateForContact(selectedTemplate, e.target.value));
-                  }}
-                  className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                >
-                  <option value="">— Select a customer —</option>
-                  {crmState.contacts.map(c => (
-                    <option key={c.id} value={c.id}>{getContactFullName(c)}</option>
-                  ))}
-                </select>
+      {customerEditMode && selectedTemplate && (() => {
+        // Derive unfilled variables from base content
+        const unfilledVars = [...new Set((editedContent.match(/\{\{([A-Z0-9_]+)\}\}/g) || []).map(m => m.slice(2, -2)))];
+        // Build final preview by applying manual overrides on top of base content
+        let customerPreview = editedContent;
+        Object.entries(manualVars).forEach(([key, val]) => {
+          if (val) customerPreview = customerPreview.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), val);
+        });
+        return (
+          <Dialog open={customerEditMode} onOpenChange={() => setCustomerEditMode(false)}>
+            <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Use "{selectedTemplate.name}" for Customer</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                {/* Customer selector */}
+                <div>
+                  <Label>Customer</Label>
+                  <select
+                    value={selectedContactId}
+                    onChange={(e) => {
+                      setSelectedContactId(e.target.value);
+                      setEditedContent(fillTemplateForContact(selectedTemplate, e.target.value));
+                      setManualVars({});
+                    }}
+                    className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                  >
+                    <option value="">— Select a customer —</option>
+                    {crmState.contacts.map(c => (
+                      <option key={c.id} value={c.id}>{getContactFullName(c)}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Remaining fields to fill in */}
+                {unfilledVars.length > 0 && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                    <Label className="text-amber-800 font-semibold text-sm mb-3 block">
+                      Fields to fill in ({unfilledVars.length} remaining)
+                    </Label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {unfilledVars.map(variable => (
+                        <div key={variable}>
+                          <Label className="text-xs text-gray-600 mb-1 block">
+                            {variable.replace(/_/g, ' ')}
+                          </Label>
+                          <Input
+                            value={manualVars[variable] || ''}
+                            onChange={(e) => setManualVars(prev => ({ ...prev, [variable]: e.target.value }))}
+                            placeholder={`Enter ${variable.replace(/_/g, ' ').toLowerCase()}`}
+                            className="text-sm"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Rendered preview */}
+                <div>
+                  <Label className="text-sm font-semibold mb-2 block">Document Preview</Label>
+                  <div className="border rounded-lg overflow-hidden">
+                    <iframe
+                      srcDoc={customerPreview}
+                      className="w-full border-0"
+                      style={{ minHeight: '500px', height: '60vh' }}
+                      title="Document Preview"
+                      sandbox="allow-same-origin"
+                    />
+                  </div>
+                </div>
+
+                {/* Send for Signing — primary CTA, shown at the bottom of the document */}
+                <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <FileSignature className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold text-blue-900">Ready to send to the customer?</p>
+                      <p className="text-xs text-blue-700 mt-0.5">
+                        They'll receive an email with a link to review and sign. You'll be notified when they open it and again when they sign. The signed copy is saved to their file automatically.
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    className="w-full"
+                    disabled={sendingForSign}
+                    onClick={() => {
+                      if (!selectedContactId) {
+                        toast({ title: 'Select a customer first', variant: 'destructive' });
+                        return;
+                      }
+                      const contact = crmState.contacts.find(c => c.id === selectedContactId);
+                      const contactName = contact ? getContactFullName(contact) : 'Customer';
+                      sendForSigning(customerPreview, `${selectedTemplate.name} — ${contactName}`, selectedContactId);
+                    }}
+                  >
+                    {sendingForSign ? (
+                      <>
+                        <span className="w-4 h-4 mr-2 animate-spin rounded-full border-2 border-white border-t-transparent inline-block" />
+                        Sending…
+                      </>
+                    ) : (
+                      <>
+                        <FileSignature className="w-4 h-4 mr-2" />
+                        Send Document to Customer
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+
+                <div className="flex flex-wrap justify-end gap-2">
+                  <Button variant="outline" onClick={() => setCustomerEditMode(false)}>Cancel</Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      if (!selectedContactId) {
+                        toast({ title: 'Select a customer first', variant: 'destructive' });
+                        return;
+                      }
+                      const contact = crmState.contacts.find(c => c.id === selectedContactId);
+                      const contactName = contact ? getContactFullName(contact) : 'Customer';
+                      downloadFilledCustomer(customerPreview, `${selectedTemplate.name} — ${contactName}`);
+                    }}
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Download
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      if (!selectedContactId) {
+                        toast({ title: 'Select a customer first', variant: 'destructive' });
+                        return;
+                      }
+                      const contact = crmState.contacts.find(c => c.id === selectedContactId);
+                      const contactName = contact ? getContactFullName(contact) : 'Customer';
+                      const customized: DocumentTemplate = {
+                        ...selectedTemplate,
+                        id: Date.now().toString(),
+                        name: `${selectedTemplate.name} — ${contactName}`,
+                        content: customerPreview,
+                        isDefault: false,
+                        createdAt: new Date().toISOString().split('T')[0],
+                        lastModified: new Date().toISOString().split('T')[0],
+                        usageCount: 0,
+                      };
+                      setTemplates(prev => [customized, ...prev]);
+                      setCustomerEditMode(false);
+                      toast({ title: 'Saved', description: `Customer document saved as "${customized.name}"` });
+                    }}
+                  >
+                    Save as Customer Document
+                  </Button>
+                </div>
               </div>
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
+
+      {/* ── Create / Edit Template Dialog ───────────────────────────────── */}
+      {showCreateTemplate && (
+        <Dialog open={showCreateTemplate} onOpenChange={(open) => {
+          if (!open) { setShowCreateTemplate(false); setEditingTemplate(null); }
+        }}>
+          <DialogContent
+            className="max-w-4xl max-h-[90vh] flex flex-col overflow-hidden"
+            onInteractOutside={(e) => {
+              // Prevent accidental closes when the user clicks just outside the dialog
+              // while editing a textarea (common when scrolling with a trackpad).
+              e.preventDefault();
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>{editingTemplate ? `Edit "${editingTemplate.name}"` : 'Create New Template'}</DialogTitle>
+            </DialogHeader>
+
+            <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+              {/* Name */}
               <div>
-                <Label>Document Content (editable)</Label>
-                <Textarea
-                  value={editedContent}
-                  onChange={(e) => setEditedContent(e.target.value)}
-                  className="mt-1 font-mono text-xs"
-                  rows={20}
+                <Label htmlFor="tpl-name" className="text-sm font-medium">Template Name <span className="text-red-500">*</span></Label>
+                <Input
+                  id="tpl-name"
+                  value={templateFormData.name}
+                  onChange={e => setTemplateFormData(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="e.g. Roofing Estimate — Standard"
+                  className="mt-1"
                 />
               </div>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setCustomerEditMode(false)}>Cancel</Button>
-                <Button
-                  onClick={() => {
-                    if (!selectedContactId) {
-                      toast({ title: 'Select a customer first', variant: 'destructive' });
-                      return;
-                    }
-                    const contact = crmState.contacts.find(c => c.id === selectedContactId);
-                    const contactName = contact ? getContactFullName(contact) : 'Customer';
-                    const customized: DocumentTemplate = {
-                      ...selectedTemplate,
-                      id: Date.now().toString(),
-                      name: `${selectedTemplate.name} — ${contactName}`,
-                      content: editedContent,
-                      isDefault: false,
-                      createdAt: new Date().toISOString().split('T')[0],
-                      lastModified: new Date().toISOString().split('T')[0],
-                      usageCount: 0,
-                    };
-                    setTemplates(prev => [customized, ...prev]);
-                    setCustomerEditMode(false);
-                    toast({ title: 'Saved', description: `Customer document saved as "${customized.name}"` });
-                  }}
-                >
-                  Save as Customer Document
-                </Button>
+
+              {/* Description */}
+              <div>
+                <Label htmlFor="tpl-desc" className="text-sm font-medium">Description</Label>
+                <Input
+                  id="tpl-desc"
+                  value={templateFormData.description}
+                  onChange={e => setTemplateFormData(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="Short description of what this template is for"
+                  className="mt-1"
+                />
               </div>
+
+              {/* Category + File Type */}
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <Label className="text-sm font-medium">Category</Label>
+                  <Select
+                    value={templateFormData.category}
+                    onValueChange={(v) => setTemplateFormData(prev => ({ ...prev, category: v as DocumentTemplate['category'] }))}
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="estimate">Estimate</SelectItem>
+                      <SelectItem value="invoice">Invoice</SelectItem>
+                      <SelectItem value="contract">Contract</SelectItem>
+                      <SelectItem value="work-order">Work Order</SelectItem>
+                      <SelectItem value="proposal">Proposal</SelectItem>
+                      <SelectItem value="change-order">Change Order</SelectItem>
+                      <SelectItem value="safety">Safety Form</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex-1">
+                  <Label className="text-sm font-medium">File Type</Label>
+                  <Select
+                    value={templateFormData.fileType}
+                    onValueChange={(v) => setTemplateFormData(prev => ({ ...prev, fileType: v as DocumentTemplate['fileType'] }))}
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="html">HTML</SelectItem>
+                      <SelectItem value="docx">DOCX</SelectItem>
+                      <SelectItem value="pdf">PDF</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Tags */}
+              <div>
+                <Label htmlFor="tpl-tags" className="text-sm font-medium">Tags <span className="text-gray-400 font-normal">(comma-separated)</span></Label>
+                <Input
+                  id="tpl-tags"
+                  value={templateFormData.tags}
+                  onChange={e => setTemplateFormData(prev => ({ ...prev, tags: e.target.value }))}
+                  placeholder="e.g. roofing, insurance, storm damage"
+                  className="mt-1"
+                />
+              </div>
+
+              {/* Content */}
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="tpl-content" className="text-sm font-medium">
+                  Template Content <span className="text-red-500">*</span>
+                  <span className="ml-2 text-xs text-gray-400 font-normal">Use {'{{VARIABLE_NAME}}'} for dynamic fields</span>
+                </Label>
+                <Textarea
+                  id="tpl-content"
+                  value={templateFormData.content}
+                  onChange={e => setTemplateFormData(prev => ({ ...prev, content: e.target.value }))}
+                  placeholder={`<!DOCTYPE html>\n<html><body>\n  <h1>{{COMPANY_NAME}}</h1>\n  <p>Customer: {{CUSTOMER_NAME}}</p>\n</body></html>`}
+                  className="mt-1 font-mono text-xs resize-none"
+                  rows={14}
+                />
+                {/* Detected variables */}
+                {templateFormData.content && (() => {
+                  const vars = [...new Set(
+                    (templateFormData.content.match(/\{\{([A-Z0-9_]+)\}\}/g) || []).map(m => m.slice(2, -2))
+                  )];
+                  return vars.length > 0 ? (
+                    <div className="mt-1">
+                      <p className="text-xs text-gray-500 mb-1">Detected variables ({vars.length}):</p>
+                      <div className="flex flex-wrap gap-1">
+                        {vars.map(v => (
+                          <Badge key={v} variant="secondary" className="text-xs font-mono">{`{{${v}}}`}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null;
+                })()}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-4 border-t mt-2">
+              <Button variant="outline" onClick={() => { setShowCreateTemplate(false); setEditingTemplate(null); }}>
+                Cancel
+              </Button>
+              <Button onClick={handleSaveTemplate}>
+                <Save className="w-4 h-4 mr-2" />
+                {editingTemplate ? 'Save Changes' : 'Create Template'}
+              </Button>
             </div>
           </DialogContent>
         </Dialog>

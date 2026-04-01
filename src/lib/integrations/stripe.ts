@@ -229,7 +229,7 @@ export class StripeIntegration {
   }
 
   private buildHeaders(): HeadersInit {
-    const auth = Buffer.from(`${this.apiKey}:`).toString('base64');
+    const auth = btoa(`${this.apiKey}:`);
     return {
       Authorization: `Basic ${auth}`,
       'Content-Type': 'application/x-www-form-urlencoded',

@@ -48,6 +48,10 @@ const IntegrationsSettings: React.FC = () => {
     setLoading(true);
     try {
       await integrationManager.initializeIntegrations();
+      // Load credentials from Supabase — localStorage only holds meta (no keys).
+      // This ensures integrations show as configured in private browsers and
+      // after dormancy, even when localStorage is empty or stale.
+      await integrationManager.loadSavedIntegrationsAsync();
       const groupedIntegrations = integrationManager.getIntegrationsByCategory();
       setIntegrations(groupedIntegrations);
     } catch (error) {

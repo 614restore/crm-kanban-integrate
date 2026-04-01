@@ -11,6 +11,7 @@ import {
   Check,
   ChevronDown,
   Loader2,
+  Tag,
 } from 'lucide-react';
 
 // Price IDs come from Vite env vars (set in Vercel dashboard for live, .env.local for dev)
@@ -274,6 +275,12 @@ export default function SubscriptionView() {
       {/* Pricing grid */}
       <div>
         <h4 className="text-base font-semibold text-gray-900 mb-4">Available Plans</h4>
+        {status === 'trialing' && (
+          <div className="flex items-center gap-2 mb-4 px-4 py-2.5 bg-indigo-50 border border-indigo-200 rounded-lg text-sm text-indigo-800">
+            <Tag className="w-4 h-4 shrink-0" />
+            Use code <strong className="font-mono">LAUNCH50</strong> at checkout — 50% off your first 3 months on any monthly plan.
+          </div>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           {PLANS.map((p) => (
             <div
