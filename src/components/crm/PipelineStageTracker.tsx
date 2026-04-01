@@ -8,21 +8,29 @@ interface PipelineStage {
   order: number;
 }
 
-// Define the standard pipeline stages in order
+// Define the standard pipeline stages in order.
+// Every CustomerStatus value must appear here so currentStageIndex is never -1.
 const PIPELINE_STAGES: PipelineStage[] = [
-  { status: 'prospect', label: 'New Lead', order: 0 },
-  { status: 'lead', label: 'Contacted', order: 1 },
-  { status: 'appt_set', label: 'Appointment Set', order: 2 },
-  { status: 'inspection_completed', label: 'Inspection Done', order: 3 },
-  { status: 'estimate_sent', label: 'Estimate Sent', order: 4 },
-  { status: 'contingency', label: 'Follow-up', order: 5 },
-  { status: 'signed', label: 'Signed', order: 6 },
-  { status: 'in_progress', label: 'Scheduled', order: 7 },
-  { status: 'build_phase', label: 'In Progress', order: 8 },
-  { status: 'cleanup', label: 'Punch List', order: 9 },
-  { status: 'invoicing', label: 'Invoicing', order: 10 },
-  { status: 'pending_payment', label: 'Pending Payment', order: 11 },
-  { status: 'completed', label: 'Completed', order: 12 },
+  { status: 'prospect',             label: 'New Lead',          order: 0 },
+  { status: 'lead',                 label: 'Contacted',         order: 1 },
+  { status: 'appt_set',            label: 'Appointment Set',   order: 2 },
+  { status: 'inspection_completed', label: 'Inspection Done',   order: 3 },
+  { status: 'estimating',          label: 'Estimating',        order: 4 },
+  { status: 'estimate_sent',       label: 'Estimate Sent',     order: 5 },
+  { status: 'contingency',         label: 'Follow-up',         order: 6 },
+  { status: 'claim_filed',         label: 'Claim Filed',       order: 7 },
+  { status: 'adjuster_scheduled',  label: 'Adjuster Scheduled',order: 8 },
+  { status: 'supplement_filed',    label: 'Supplement Filed',  order: 9 },
+  { status: 'approved',            label: 'Approved',          order: 10 },
+  { status: 'retail',              label: 'Retail',            order: 11 },
+  { status: 'signed',              label: 'Signed',            order: 12 },
+  { status: 'ordering_material',   label: 'Ordering Material', order: 13 },
+  { status: 'in_progress',         label: 'Scheduled',         order: 14 },
+  { status: 'build_phase',         label: 'In Progress',       order: 15 },
+  { status: 'cleanup',             label: 'Punch List',        order: 16 },
+  { status: 'invoicing',           label: 'Invoicing',         order: 17 },
+  { status: 'pending_payment',     label: 'Pending Payment',   order: 18 },
+  { status: 'completed',           label: 'Completed',         order: 19 },
 ];
 
 interface PipelineStageTrackerProps {
@@ -36,8 +44,9 @@ export function PipelineStageTracker({ currentStatus, statusChangedAt, inspectio
   const effectiveStatus: CustomerStatus =
     inspectionCompleted && currentStatus === 'appt_set' ? 'inspection_completed' : currentStatus;
 
-  // Find current stage index
-  const currentStageIndex = PIPELINE_STAGES.findIndex(stage => stage.status === effectiveStatus);
+  // Find current stage index (-1 means an unknown status; treat as stage 0)
+  const rawIndex = PIPELINE_STAGES.findIndex(stage => stage.status === effectiveStatus);
+  const currentStageIndex = rawIndex >= 0 ? rawIndex : 0;
   
   // Handle special statuses
   if (currentStatus === 'lost') {
