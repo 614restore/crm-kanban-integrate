@@ -7,14 +7,17 @@ export async function handleAutoProgression(
   userId: string,
   userEmail: string
 ) {
-  if (newStatus === 'signed_won') {
-    await moveToBoard(contactId, 'project', 'project_scheduled', userId, userEmail)
+  // When a job is signed/won, advance to ordering material on Production Board
+  if (newStatus === 'signed' || newStatus === 'approved') {
+    await moveToBoard(contactId, 'production', 'ordering_material', userId, userEmail)
   }
-  if (newStatus === 'complete') {
-    await moveToBoard(contactId, 'financial', 'invoice_sent', userId, userEmail)
+  // When a job is completed, advance to invoicing on Billing Board
+  if (newStatus === 'completed') {
+    await moveToBoard(contactId, 'billing', 'invoicing', userId, userEmail)
   }
-  if (newStatus === 'needs_attention') {
-    await moveToBoard(contactId, 'owner', 'needs_attention', userId, userEmail)
+  // When invoicing is done, advance to pending payment
+  if (newStatus === 'invoicing') {
+    await moveToBoard(contactId, 'billing', 'pending_payment', userId, userEmail)
   }
 }
 
@@ -46,7 +49,24 @@ async function moveToBoard(
     .eq('type', boardType)
     .single()
 
-  if (!board) return
+  if (!board) {
+    console.warn(`Board type "${boardType}" not found for auto-progression`)
+    return
+  }
+
+  // Actually update the contact status
+  const { error } = await supabase
+    .from('contacts')
+    .update({ 
+      status: initialStatus,
+      status_changed_at: new Date().toISOString()
+    })
+    .eq('id', contactId)
+
+  if (error) {
+    console.error('Auto-progression update failed:', error)
+    return
+  }
 
   await logAudit({
     userId,
@@ -54,6 +74,7 @@ async function moveToBoard(
     action: 'auto_board_progression',
     entityType: 'contact',
     entityId: contactId,
+    oldValue: { note: 'Auto-advanced by progression rules' },
     newValue: { board: boardType, status: initialStatus },
   })
 }

@@ -1,0 +1,83 @@
+// api/stripe-checkout.mjs
+// Creates a Stripe Checkout session for a given price ID
+// Environment variables required:
+//   STRIPE_SECRET_KEY  — your Stripe secret key (sk_live_... or sk_test_...)
+//   APP_URL            — your app's base URL (e.g. https://crm-kanban-integrate.vercel.app)
+
+import Stripe from 'stripe';
+import { requireAuth } from './_auth-middleware.mjs';
+
+// Only allow price IDs that are configured in environment variables
+function getAllowedPriceIds() {
+  return [
+    process.env.VITE_STRIPE_STARTER_MONTHLY,
+    process.env.VITE_STRIPE_STARTER_YEARLY,
+    process.env.VITE_STRIPE_PRO_MONTHLY,
+    process.env.VITE_STRIPE_PRO_YEARLY,
+    process.env.VITE_STRIPE_BUSINESS_MONTHLY,
+    process.env.VITE_STRIPE_BUSINESS_YEARLY,
+    process.env.VITE_STRIPE_ENTERPRISE_MONTHLY,
+    process.env.VITE_STRIPE_ENTERPRISE_YEARLY,
+  ].filter(Boolean);
+}
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const user = await requireAuth(req, res);
+  if (!user) return;
+
+  const stripeKey = process.env.STRIPE_SECRET_KEY;
+  if (!stripeKey) {
+    return res.status(500).json({ error: 'Stripe is not configured. Set STRIPE_SECRET_KEY.' });
+  }
+
+  const stripe = new Stripe(stripeKey, { apiVersion: '2023-10-16' });
+
+  const { priceId, planId, couponId } = req.body;
+
+  if (!priceId) {
+    return res.status(400).json({ error: 'priceId is required' });
+  }
+
+  // Validate that the requested price ID is one we actually offer
+  const allowedIds = getAllowedPriceIds();
+  if (allowedIds.length > 0 && !allowedIds.includes(priceId)) {
+    return res.status(400).json({ error: 'Invalid price ID.' });
+  }
+
+  const appUrl = process.env.APP_URL;
+  if (!appUrl) {
+    console.error('APP_URL env var is not configured — cannot complete Stripe checkout redirect');
+    return res.status(500).json({ error: 'APP_URL is not configured on this server. Contact support.' });
+  }
+
+  try {
+    const sessionParams = {
+      mode: 'subscription',
+      payment_method_types: ['card'],
+      line_items: [{ price: priceId, quantity: 1 }],
+      subscription_data: {
+        trial_period_days: 14,
+        metadata: { planId: planId || '' },
+      },
+      // If a couponId is passed, apply it directly (disables the promo code field to avoid double-dipping)
+      ...(couponId
+        ? { discounts: [{ coupon: couponId }] }
+        : { allow_promotion_codes: true }),
+      phone_number_collection: { enabled: true },
+      tax_id_collection: { enabled: true },
+      success_url: `${appUrl}/?checkout=success&plan=${planId}`,
+      cancel_url: `${appUrl}/?checkout=cancelled`,
+    };
+
+    const session = await stripe.checkout.sessions.create(sessionParams);
+
+    return res.status(200).json({ url: session.url });
+  } catch (err) {
+    console.error('Stripe checkout error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+}

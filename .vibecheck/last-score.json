@@ -1,10 +1,10 @@
 {
-  "overall": 100,
+  "overall": 70,
   "ghostRisk": 0,
   "authCoverage": 0,
   "envIntegrity": 0,
   "runtimeProof": 0,
   "contracts": 0,
   "mockData": 0,
-  "lastUpdated": "2026-03-19T22:56:11.264Z"
+  "lastUpdated": "2026-04-01T10:28:47.297Z"
 }
