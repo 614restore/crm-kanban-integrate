@@ -1,12 +1,3 @@
-// temp-password-reset edge function
-//
-// Public endpoint (no auth required) — called when a user clicks "Forgot Password".
-// Generates a short random temporary password, sets it on the user's account via
-// the Admin API, flags must_change_password = true in their profile, and emails
-// the temp password to them using Resend.
-//
-// Always returns 200 so we don't leak whether an email is registered.
-
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -15,13 +6,43 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-function generateTempPassword(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-  let pass = 'TC-'
-  for (let i = 0; i < 8; i++) {
-    pass += chars[Math.floor(Math.random() * chars.length)]
+function buildTempPassword() {
+  const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
+  const lower = 'abcdefghijkmnpqrstuvwxyz'
+  const numbers = '23456789'
+  const symbols = '!@#$%'
+  const all = upper + lower + numbers + symbols
+
+  let out = ''
+  out += upper[Math.floor(Math.random() * upper.length)]
+  out += lower[Math.floor(Math.random() * lower.length)]
+  out += numbers[Math.floor(Math.random() * numbers.length)]
+  out += symbols[Math.floor(Math.random() * symbols.length)]
+  for (let i = 0; i < 8; i++) out += all[Math.floor(Math.random() * all.length)]
+
+  return out
+    .split('')
+    .sort(() => Math.random() - 0.5)
+    .join('')
+}
+
+async function findUserIdByEmail(adminClient: ReturnType<typeof createClient>, email: string) {
+  const normalized = email.trim().toLowerCase()
+  let page = 1
+  const perPage = 1000
+
+  while (page <= 20) {
+    const { data, error } = await adminClient.auth.admin.listUsers({ page, perPage })
+    if (error) throw error
+
+    const users = data?.users || []
+    const match = users.find((u) => String(u.email || '').toLowerCase() === normalized)
+    if (match) return match.id
+    if (users.length < perPage) break
+    page += 1
   }
-  return pass
+
+  return null
 }
 
 serve(async (req) => {
@@ -29,119 +50,101 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders })
   }
 
-  const ok = new Response(
-    JSON.stringify({ ok: true }),
-    { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-  )
-
   try {
-    const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
-    const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
+    const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
     const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
+    const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'TrussCTR CRM <scopemgr@614restore.com>'
 
     if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
-      console.error('temp-password-reset: missing env vars')
-      return ok
+      return new Response(
+        JSON.stringify({ error: 'Server misconfiguration: missing Supabase credentials.' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
     }
-
     if (!RESEND_API_KEY) {
-      console.warn('temp-password-reset: RESEND_API_KEY not set')
-      return ok
+      return new Response(
+        JSON.stringify({ error: 'Email service not configured. Missing RESEND_API_KEY.' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
     }
 
-    const body = await req.json().catch(() => ({}))
-    const email: string = (body?.email || '').trim().toLowerCase()
-    if (!email) return ok
-
-    const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
-
-    // Find user — fetch up to 1000 to avoid missing users with default perPage=50
-    const { data: { users }, error: listErr } = await admin.auth.admin.listUsers({ perPage: 1000 })
-    if (listErr) {
-      console.error('temp-password-reset: listUsers error', listErr)
-      return ok
-    }
-    const user = users?.find(u => u.email?.toLowerCase() === email)
-    if (!user) {
-      console.log('temp-password-reset: no user for email', email)
-      return ok
+    const { email } = await req.json().catch(() => ({}))
+    if (!email || typeof email !== 'string') {
+      return new Response(
+        JSON.stringify({ error: 'Email is required.' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
     }
 
-    // Set the temporary password
-    const tempPassword = generateTempPassword()
-    const { error: pwErr } = await admin.auth.admin.updateUserById(user.id, { password: tempPassword })
-    if (pwErr) {
-      console.error('temp-password-reset: updateUserById error', pwErr)
-      return ok
+    const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
+    const userId = await findUserIdByEmail(adminClient, email)
+
+    // Security: do not reveal whether the user exists
+    if (!userId) {
+      return new Response(
+        JSON.stringify({ ok: true }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
     }
 
-    // Run email send and profile flag update in parallel so both complete before returning
-    const [emailRes, profileRes] = await Promise.all([
-      fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${RESEND_API_KEY}`,
-        },
-        body: JSON.stringify({
-          from: 'TrussCTR CRM <scopemgr@614restore.com>',
-          to: [email],
-          subject: 'Your TrussCTR Temporary Password',
-          html: `
-            <div style="font-family:sans-serif;max-width:480px;margin:0 auto;background:#fff;border-radius:12px;border:1px solid #e5e7eb;overflow:hidden">
-              <div style="background:#1e3a5f;padding:28px 32px">
-                <h1 style="margin:0;color:#fff;font-size:20px;font-weight:700;letter-spacing:-0.3px">TrussCTR</h1>
-                <p style="margin:6px 0 0;color:#93c5fd;font-size:13px">Password Reset</p>
-              </div>
-              <div style="padding:32px">
-                <p style="margin:0 0 24px;color:#374151;font-size:15px">
-                  We received a request to reset your password. Use the temporary password below
-                  to sign in — you'll be prompted to set a new password immediately after.
-                </p>
-                <div style="background:#f0f9ff;border:2px dashed #3b82f6;border-radius:10px;padding:20px;text-align:center;margin:0 0 24px">
-                  <p style="margin:0 0 6px;color:#6b7280;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px">Temporary Password</p>
-                  <p style="margin:0;color:#1e3a5f;font-size:28px;font-weight:800;letter-spacing:3px;font-family:monospace">${tempPassword}</p>
-                </div>
-                <p style="margin:0 0 8px;color:#374151;font-size:14px"><strong>Steps:</strong></p>
-                <ol style="margin:0 0 24px;padding-left:20px;color:#374151;font-size:14px;line-height:1.8">
-                  <li>Open the TrussCTR app</li>
-                  <li>Enter your email and the temporary password above</li>
-                  <li>You'll be taken to the "Set New Password" screen</li>
-                  <li>Choose a permanent password (min. 8 characters)</li>
-                </ol>
-                <div style="background:#fef3c7;border-radius:8px;padding:14px 16px">
-                  <p style="margin:0;color:#92400e;font-size:13px">
-                    ⚠️ This temporary password expires after one use. If you didn't request this, you can safely ignore this email.
-                  </p>
-                </div>
-              </div>
-              <div style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:16px 32px;text-align:center">
-                <p style="margin:0;color:#9ca3af;font-size:12px">TrussCTR · Powered by 614 Restore</p>
-              </div>
+    const tempPassword = buildTempPassword()
+
+    const { error: updateErr } = await adminClient.auth.admin.updateUserById(userId, {
+      password: tempPassword,
+    })
+    if (updateErr) {
+      return new Response(
+        JSON.stringify({ error: updateErr.message || 'Failed to set temporary password.' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    await adminClient
+      .from('profiles')
+      .update({ must_change_password: true, updated_at: new Date().toISOString() })
+      .eq('id', userId)
+
+    const emailResponse = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${RESEND_API_KEY}`,
+      },
+      body: JSON.stringify({
+        from: FROM_EMAIL,
+        to: [email],
+        subject: 'Your TrussCTR temporary password',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 620px; margin: 0 auto;">
+            <h2 style="color: #1e40af; margin-bottom: 8px;">Password reset requested</h2>
+            <p style="margin: 0 0 12px;">Use this temporary password to sign in:</p>
+            <div style="font-family: Menlo, monospace; font-size: 20px; font-weight: 700; letter-spacing: 1px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px 14px; display: inline-block;">
+              ${tempPassword}
             </div>
-          `,
-        }),
+            <p style="margin: 14px 0 0;">After signing in, you will be required to set a new permanent password.</p>
+            <p style="color: #64748b; font-size: 12px; margin-top: 20px;">If you did not request this, contact your administrator.</p>
+          </div>
+        `,
       }),
-      admin
-        .from('profiles')
-        .update({ must_change_password: true, updated_at: new Date().toISOString() })
-        .eq('id', user.id),
-    ])
+    })
 
-    if (!emailRes.ok) {
-      const errText = await emailRes.text().catch(() => '')
-      console.error('temp-password-reset: resend error', emailRes.status, errText)
-    } else {
-      console.log('temp-password-reset: email sent to', email)
+    if (!emailResponse.ok) {
+      const details = await emailResponse.json().catch(() => ({}))
+      return new Response(
+        JSON.stringify({ error: 'Failed to send temporary password email.', details }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
     }
 
-    if (profileRes.error) {
-      console.error('temp-password-reset: profile update error', profileRes.error)
-    }
-
-    return ok
+    return new Response(
+      JSON.stringify({ ok: true }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
   } catch (err) {
-    console.error('temp-password-reset: unexpected error', err)
-    return ok
+    return new Response(
+      JSON.stringify({ error: (err as Error)?.message || 'Unexpected server error.' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
   }
 })

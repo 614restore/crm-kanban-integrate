@@ -26,6 +26,7 @@ import { useCRM, useCurrentContact } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
 import { supabase } from '@/lib/supabase';
+import { sendEmail } from '@/lib/emailApi';
 import { formatPhoneNumber } from '@/lib/utils';
 import JobStatusTimeline from './JobStatusTimeline';
 import CustomerSurvey from './CustomerSurvey';
@@ -249,6 +250,7 @@ export default function ContactDetail() {
   const [editingProjectInDetail, setEditingProjectInDetail] = useState<any>(null);
   const [showEstimateModal, setShowEstimateModal] = useState(false);
   const [viewingEstimate, setViewingEstimate] = useState<any>(null);
+  const [editingEstimate, setEditingEstimate] = useState<any>(null);
   const [showWorkOrderModal, setShowWorkOrderModal] = useState(false);
   const [contactChangeOrders, setContactChangeOrders] = useState<ChangeOrder[]>([]);
   const [showChangeOrderModal, setShowChangeOrderModal] = useState(false);
@@ -264,6 +266,7 @@ export default function ContactDetail() {
   const [newEstNotes, setNewEstNotes] = useState('');
   const [newEstTax, setNewEstTax] = useState(0);
   const [isSavingEstimate, setIsSavingEstimate] = useState(false);
+  const [isSharingEstimateId, setIsSharingEstimateId] = useState<string | null>(null);
   const [showTemplateForEstimate, setShowTemplateForEstimate] = useState(false);
   const noteInputRef = useRef<HTMLInputElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
@@ -272,6 +275,84 @@ export default function ContactDetail() {
   const effectiveCompanyId = profile?.company_id || state.companyId || null;
   const contactId = contact?.id;
   const contactNotes = stripSchedulePrefix(contact?.notes);
+
+  const isEstimateLocked = (estimate: any) => {
+    const status = String(estimate?.status || '').toLowerCase();
+    return status === 'sent' || status === 'viewed' || status === 'accepted';
+  };
+
+  const openEstimateEditor = (estimate: any) => {
+    if (isEstimateLocked(estimate)) {
+      toast.error('This estimate has already been shared. Use a change order for any further changes.');
+      return;
+    }
+    setViewingEstimate(null);
+    setEditingEstimate(estimate);
+    setShowEstimateModal(true);
+  };
+
+  const handleShareEstimate = async (estimate: any) => {
+    if (!contact || !profile?.company_id) {
+      toast.error('Missing contact or company information.');
+      return;
+    }
+    if (!contact.email) {
+      toast.error('This contact does not have an email address on file.');
+      return;
+    }
+    if (isEstimateLocked(estimate)) {
+      toast.error('This estimate has already been shared and can no longer be edited.');
+      return;
+    }
+
+    setIsSharingEstimateId(estimate.id);
+    try {
+      const token = crypto.randomUUID();
+      const updated = await db.updateEstimate(estimate.id, {
+        status: 'sent',
+        sent_at: new Date().toISOString(),
+        sign_token: token,
+      });
+
+      if (!updated) {
+        throw new Error('Failed to update estimate status');
+      }
+
+      const appUrl = (import.meta.env.VITE_APP_URL as string | undefined)?.trim() || window.location.origin;
+      const signUrl = `${appUrl}/sign?estimateId=${encodeURIComponent(updated.id)}&token=${encodeURIComponent(token)}`;
+      const company = await db.getCompany(profile.company_id).catch(() => null);
+      const companyName = company?.name || 'Your contractor';
+      const customerName = getContactFullName(contact);
+      const estimateNumber = updated.estimate_number || estimate.estimateNumber || estimate.estimate_number || `EST-${String(updated.id).slice(0, 8).toUpperCase()}`;
+
+      await sendEmail({
+        to: contact.email,
+        subject: `Estimate ${estimateNumber} from ${companyName}`,
+        html: `
+          <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
+            <h2 style="color:#2563eb;margin:0 0 16px;">Estimate Ready for Review</h2>
+            <p>Hi ${customerName},</p>
+            <p>${companyName} has shared <strong>${updated.title || `Estimate ${estimateNumber}`}</strong> for your review.</p>
+            <p><strong>Total:</strong> ${formatCurrency(Number(updated.total || 0))}</p>
+            <p style="margin:24px 0;">
+              <a href="${signUrl}" style="display:inline-block;background:#2563eb;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;">
+                Review &amp; Sign Estimate
+              </a>
+            </p>
+            <p style="font-size:12px;color:#6b7280;">If the button does not work, copy and paste this link into your browser:<br>${signUrl}</p>
+          </div>`,
+      });
+
+      const refreshed = await db.getEstimatesByContact(contact.id);
+      setContactEstimates(refreshed);
+      setViewingEstimate((prev: any) => prev?.id === updated.id ? updated : prev);
+      toast.success('Estimate shared. Editing is now locked; use a change order for future revisions.');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to share estimate');
+    } finally {
+      setIsSharingEstimateId(null);
+    }
+  };
 
   useEffect(() => {
     if (!contactId) return;
@@ -2315,7 +2396,7 @@ export default function ContactDetail() {
                   Estimates ({contactEstimates.length})
                 </h3>
                 <button
-                  onClick={() => setShowEstimateModal(true)}
+                  onClick={() => { setEditingEstimate(null); setShowEstimateModal(true); }}
                   className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
                 >
                   <Plus size={18} />
@@ -2358,6 +2439,25 @@ export default function ContactDetail() {
                           >
                             <Eye size={16} />
                           </button>
+                          {!isEstimateLocked(estimate) && (
+                            <>
+                              <button
+                                onClick={() => openEstimateEditor(estimate)}
+                                className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                title="Edit estimate"
+                              >
+                                <Edit2 size={16} />
+                              </button>
+                              <button
+                                onClick={() => handleShareEstimate(estimate)}
+                                disabled={isSharingEstimateId === estimate.id}
+                                className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors disabled:opacity-50"
+                                title="Share estimate"
+                              >
+                                {isSharingEstimateId === estimate.id ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                              </button>
+                            </>
+                          )}
                         </div>
                       </div>
                       
@@ -2381,7 +2481,7 @@ export default function ContactDetail() {
                   <FileText size={32} className="mx-auto mb-2 text-gray-400" />
                   <p className="text-gray-500">No estimates yet</p>
                   <button
-                    onClick={() => setShowEstimateModal(true)}
+                    onClick={() => { setEditingEstimate(null); setShowEstimateModal(true); }}
                     className="mt-4 text-green-600 hover:text-green-700 font-medium"
                   >
                     Create your first estimate
@@ -2674,7 +2774,7 @@ export default function ContactDetail() {
               }))}
               onStatusChange={handleStatusChange}
               onScheduleInspection={() => setShowAppointmentModal(true)}
-              onSendEstimate={() => setShowEstimateModal(true)}
+              onSendEstimate={() => { setEditingEstimate(null); setShowEstimateModal(true); }}
             />
           </div>
         )}
@@ -3221,9 +3321,33 @@ export default function ContactDetail() {
               )}
             </div>
             <div className="p-6 border-t border-gray-200 bg-gray-50 rounded-b-xl">
-              <button onClick={() => setViewingEstimate(null)} className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-white transition-colors text-sm">
-                Close
-              </button>
+              <div className="flex flex-wrap gap-3">
+                {!isEstimateLocked(viewingEstimate) && (
+                  <>
+                    <button
+                      onClick={() => openEstimateEditor(viewingEstimate)}
+                      className="px-4 py-2 text-blue-700 border border-blue-300 rounded-lg hover:bg-white transition-colors text-sm"
+                    >
+                      Edit Estimate
+                    </button>
+                    <button
+                      onClick={() => handleShareEstimate(viewingEstimate)}
+                      disabled={isSharingEstimateId === viewingEstimate.id}
+                      className="px-4 py-2 text-purple-700 border border-purple-300 rounded-lg hover:bg-white transition-colors text-sm disabled:opacity-50"
+                    >
+                      {isSharingEstimateId === viewingEstimate.id ? 'Sharing…' : 'Share Estimate'}
+                    </button>
+                  </>
+                )}
+                {isEstimateLocked(viewingEstimate) && (
+                  <div className="px-4 py-2 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg">
+                    This estimate has already been shared. Further revisions should be handled with a change order.
+                  </div>
+                )}
+                <button onClick={() => setViewingEstimate(null)} className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-white transition-colors text-sm">
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -3408,9 +3532,12 @@ export default function ContactDetail() {
           <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-gray-900">Create Estimate</h2>
+                <h2 className="text-xl font-semibold text-gray-900">{editingEstimate ? 'Edit Estimate' : 'Create Estimate'}</h2>
                 <button
-                  onClick={() => setShowEstimateModal(false)}
+                  onClick={() => {
+                    setShowEstimateModal(false);
+                    setEditingEstimate(null);
+                  }}
                   className="text-gray-400 hover:text-gray-600"
                 >
                   <X size={24} />
@@ -3435,34 +3562,37 @@ export default function ContactDetail() {
                 const estimateData = {
                   company_id: profile.company_id,
                   contact_id: contactId,
-                  estimate_number: `EST-${Date.now()}`,
+                  estimate_number: editingEstimate?.estimate_number || editingEstimate?.estimateNumber || `EST-${Date.now()}`,
                   title: formData.get('title') as string,
                   description: (formData.get('description') as string) || undefined,
-                  status: 'draft',
+                  status: editingEstimate?.status || 'draft',
                   subtotal: amount,
                   tax: tax,
                   total: total,
                   valid_until: (formData.get('valid_until') as string) || undefined,
                   terms: (formData.get('terms') as string) || undefined,
                   notes: (formData.get('notes') as string) || undefined,
-                  created_by: profile.id || undefined,
+                  created_by: editingEstimate?.created_by || profile.id || undefined,
                 };
 
-                let newEstimate = null;
+                let savedEstimate = null;
                 try {
-                  newEstimate = await db.createEstimate(estimateData);
+                  savedEstimate = editingEstimate
+                    ? await db.updateEstimate(editingEstimate.id, estimateData)
+                    : await db.createEstimate(estimateData);
                 } catch (err: any) {
-                  toast.error(`Failed to create estimate: ${err.message || 'Unknown error'}`);
+                  toast.error(`Failed to ${editingEstimate ? 'update' : 'create'} estimate: ${err.message || 'Unknown error'}`);
                   return;
                 }
-                if (newEstimate) {
-                  toast.success('Estimate created successfully');
+                if (savedEstimate) {
+                  toast.success(`Estimate ${editingEstimate ? 'updated' : 'created'} successfully`);
                   setShowEstimateModal(false);
+                  setEditingEstimate(null);
                   // Reload data
                   const estimates = await db.getEstimatesByContact(contactId!);
                   setContactEstimates(estimates);
                 } else {
-                  toast.error('Failed to create estimate');
+                  toast.error(`Failed to ${editingEstimate ? 'update' : 'create'} estimate`);
                 }
               }}
               className="p-6 space-y-4"
@@ -3475,6 +3605,7 @@ export default function ContactDetail() {
                   type="text"
                   name="title"
                   required
+                  defaultValue={editingEstimate?.title || ''}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                   placeholder="Enter estimate title"
                 />
@@ -3487,6 +3618,7 @@ export default function ContactDetail() {
                 <textarea
                   name="description"
                   rows={3}
+                  defaultValue={editingEstimate?.description || ''}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                   placeholder="Estimate description"
                 />
@@ -3503,6 +3635,7 @@ export default function ContactDetail() {
                     required
                     step="0.01"
                     min="0"
+                    defaultValue={editingEstimate ? Number(editingEstimate.subtotal || editingEstimate.amount || 0) : undefined}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                     placeholder="0.00"
                   />
@@ -3518,7 +3651,9 @@ export default function ContactDetail() {
                     step="0.01"
                     min="0"
                     max="100"
-                    defaultValue="0"
+                    defaultValue={editingEstimate && Number(editingEstimate.subtotal || editingEstimate.amount || 0) > 0
+                      ? (((Number(editingEstimate.tax || 0) / Number(editingEstimate.subtotal || editingEstimate.amount || 0)) * 100).toFixed(2))
+                      : '0'}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                     placeholder="0.00"
                   />
@@ -3532,6 +3667,7 @@ export default function ContactDetail() {
                 <input
                   type="date"
                   name="valid_until"
+                  defaultValue={editingEstimate?.valid_until || editingEstimate?.validUntil || editingEstimate?.validity_date || ''}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 />
               </div>
@@ -3543,6 +3679,7 @@ export default function ContactDetail() {
                 <textarea
                   name="terms"
                   rows={2}
+                  defaultValue={editingEstimate?.terms || editingEstimate?.terms_and_conditions || ''}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                   placeholder="Payment terms, conditions, etc."
                 />
@@ -3555,6 +3692,7 @@ export default function ContactDetail() {
                 <textarea
                   name="notes"
                   rows={2}
+                  defaultValue={editingEstimate?.notes || ''}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                   placeholder="Internal notes"
                 />
@@ -3563,7 +3701,10 @@ export default function ContactDetail() {
               <div className="flex gap-3 pt-4 border-t border-gray-200">
                 <button
                   type="button"
-                  onClick={() => setShowEstimateModal(false)}
+                  onClick={() => {
+                    setShowEstimateModal(false);
+                    setEditingEstimate(null);
+                  }}
                   className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                 >
                   Cancel
@@ -3572,7 +3713,7 @@ export default function ContactDetail() {
                   type="submit"
                   className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
                 >
-                  Create Estimate
+                  {editingEstimate ? 'Save Changes' : 'Create Estimate'}
                 </button>
               </div>
             </form>

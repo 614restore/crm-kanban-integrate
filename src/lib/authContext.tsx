@@ -369,20 +369,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // ── resetPassword ─────────────────────────────────────────────────────
-  // Calls the temp-password-reset edge function which generates a temporary
-  // password, emails it to the user, and sets must_change_password = true.
-  // No redirect links are involved, so it works from any device or email client.
+  // Temp-password flow only. The edge function sets a temporary password,
+  // emails it to the user, and marks must_change_password = true.
   const resetPassword = async (email: string) => {
     try {
+      if (!supabaseUrl || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
+        return { error: new Error('Missing app auth configuration.') };
+      }
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 12000);
       const res = await fetch(`${supabaseUrl}/functions/v1/temp-password-reset`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY },
         body: JSON.stringify({ email }),
+        signal: controller.signal,
       });
+      window.clearTimeout(timeout);
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        return { error: new Error(data?.error || 'Failed to send temporary password.') };
+        return { error: new Error(data?.error || 'Unable to send temporary password right now.') };
       }
+
       return { error: null };
     } catch (err) {
       return { error: err as Error };
