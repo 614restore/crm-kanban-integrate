@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { formatDate, getContactFullName } from '@/lib/crmData';
 import { db } from '@/lib/database';
-import { uploadDocument, validateDocumentFile, formatFileSize, getDocumentSignedUrl, isHttpUrl, isSupabaseStorageUrl } from '@/lib/storage';
+import { uploadDocument, validateDocumentFile, formatFileSize, getDocumentSignedUrl, isHttpUrl, isSupabaseStorageUrl, deleteFile } from '@/lib/storage';
 import { toast } from 'sonner';
 import {
   FileText,
