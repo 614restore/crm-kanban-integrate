@@ -73,38 +73,95 @@ export default function ContactList() {
   });
 
   // Load archived contacts from Supabase
+  const [loadingArchived, setLoadingArchived] = useState(false);
+  const [archiveOperationInProgress, setArchiveOperationInProgress] = useState<string | null>(null);
+
   const loadArchivedContacts = useCallback(async () => {
     if (!profile?.company_id) return;
-    const { data } = await supabase
-      .from('contacts')
-      .select('*')
-      .eq('company_id', profile.company_id)
-      .eq('is_archived', true)
-      .order('archived_at', { ascending: false });
-    if (data) setArchivedContacts(data as unknown as Contact[]);
+    
+    setLoadingArchived(true);
+    try {
+      const { data, error } = await supabase
+        .from('contacts')
+        .select('*')
+        .eq('company_id', profile.company_id)
+        .eq('is_archived', true)
+        .order('archived_at', { ascending: false });
+      
+      if (error) {
+        console.error('Failed to load archived contacts:', error);
+        toast.error('Failed to load archived contacts');
+        return;
+      }
+      
+      if (data) setArchivedContacts(data as unknown as Contact[]);
+    } catch (err) {
+      console.error('Unexpected error loading archived contacts:', err);
+      toast.error('Failed to load archived contacts');
+    } finally {
+      setLoadingArchived(false);
+    }
   }, [profile?.company_id]);
 
   useEffect(() => { if (showArchived) loadArchivedContacts(); }, [showArchived, loadArchivedContacts]);
 
   const handleArchiveContact = async (contactId: string) => {
     if (!confirm('Archive this contact? They will be hidden from the active list but can be restored.')) return;
-    const { error } = await supabase
-      .from('contacts')
-      .update({ is_archived: true, archived_at: new Date().toISOString() })
-      .eq('id', contactId);
-    if (error) { toast.error('Failed to archive contact'); return; }
-    dispatch({ type: 'DELETE_CONTACT', payload: contactId });
-    toast.success('Contact archived');
+    if (archiveOperationInProgress) {
+      toast.error('Another archive operation is in progress');
+      return;
+    }
+    
+    setArchiveOperationInProgress(contactId);
+    try {
+      const { error } = await supabase
+        .from('contacts')
+        .update({ is_archived: true, archived_at: new Date().toISOString() })
+        .eq('id', contactId);
+      
+      if (error) { 
+        console.error('Archive failed:', error);
+        toast.error('Failed to archive contact'); 
+        return; 
+      }
+      
+      dispatch({ type: 'DELETE_CONTACT', payload: contactId });
+      toast.success('Contact archived');
+    } catch (err) {
+      console.error('Unexpected archive error:', err);
+      toast.error('Failed to archive contact');
+    } finally {
+      setArchiveOperationInProgress(null);
+    }
   };
 
   const handleRestoreContact = async (contactId: string) => {
-    const { error } = await supabase
-      .from('contacts')
-      .update({ is_archived: false, archived_at: null })
-      .eq('id', contactId);
-    if (error) { toast.error('Failed to restore contact'); return; }
-    setArchivedContacts(prev => prev.filter(c => c.id !== contactId));
-    toast.success('Contact restored — refresh Contacts to see them');
+    if (archiveOperationInProgress) {
+      toast.error('Another restore operation is in progress');
+      return;
+    }
+    
+    setArchiveOperationInProgress(contactId);
+    try {
+      const { error } = await supabase
+        .from('contacts')
+        .update({ is_archived: false, archived_at: null })
+        .eq('id', contactId);
+      
+      if (error) { 
+        console.error('Restore failed:', error);
+        toast.error('Failed to restore contact'); 
+        return; 
+      }
+      
+      setArchivedContacts(prev => prev.filter(c => c.id !== contactId));
+      toast.success('Contact restored — refresh Contacts to see them');
+    } catch (err) {
+      console.error('Unexpected restore error:', err);
+      toast.error('Failed to restore contact');
+    } finally {
+      setArchiveOperationInProgress(null);
+    }
   };
 
   const handleExportArchived = () => {

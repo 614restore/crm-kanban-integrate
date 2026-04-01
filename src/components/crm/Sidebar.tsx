@@ -139,6 +139,12 @@ export default function Sidebar() {
   });
 
   const handleNavClick = (viewId: ViewType) => {
+    // CRITICAL FIX: Validate company context before navigation
+    if (!state.companyId) {
+      toast.error('Company not loaded. Please refresh and try again.');
+      console.warn('[Sidebar] Navigation blocked - no company_id in state');
+      return;
+    }
     dispatch({ type: 'SET_VIEW', payload: viewId });
   };
 

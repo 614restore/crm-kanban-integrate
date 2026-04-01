@@ -101,6 +101,12 @@ export default function DocumentCenter() {
   };
 
   const handleUploadFile = async (event: React.ChangeEvent<HTMLInputElement>, forceCategory?: DocCategory) => {
+    // CRITICAL FIX: Prevent double-click uploads
+    if (isUploading) {
+      toast.warning('Upload already in progress');
+      return;
+    }
+    
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -112,6 +118,7 @@ export default function DocumentCenter() {
     const validationError = validateDocumentFile(file, 15);
     if (validationError) {
       toast.error(validationError);
+      event.target.value = ''; // Clear input on validation error
       return;
     }
 
