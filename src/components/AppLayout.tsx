@@ -950,7 +950,10 @@ useEffect(() => {
 }, [profile?.company_id, authLoading]);
 
   // Track idle time and reload data when the tab regains focus.
-  // After >30 min dormant, re-validate the auth session before refreshing.
+  // Only reload after the tab has been hidden for >5 min so that brief
+  // context switches (e.g. copy-pasting an address, checking a text) never
+  // interrupt an active editing session (template editor, note, form, etc.).
+  // After >30 min dormant, also re-validate the auth session before refreshing.
   useEffect(() => {
     if (!profile?.company_id) return;
     const handleVisibility = () => {
@@ -958,6 +961,9 @@ useEffect(() => {
         lastHiddenAtRef.current = Date.now();
       } else if (document.visibilityState === 'visible') {
         const idleMs = lastHiddenAtRef.current ? Date.now() - lastHiddenAtRef.current : 0;
+        // Skip reload for brief tab switches — anything under 5 minutes is noise
+        if (idleMs < 5 * 60 * 1000) return;
+
         if (idleMs > 30 * 60 * 1000) {
           // Dormant >30 min — re-validate session first, then reload
           supabase.auth.getSession().then(({ data: { session } }) => {
@@ -965,6 +971,7 @@ useEffect(() => {
             // No session → onAuthStateChange listener handles sign-out automatically
           });
         } else {
+          // Dormant 5–30 min — refresh data but skip session re-check
           requestSoftReload();
         }
       }

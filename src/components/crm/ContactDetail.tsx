@@ -34,6 +34,7 @@ import ContactTemplateModal from './ContactTemplateModal';
 import ChangeOrderModal, { ChangeOrder } from './ChangeOrderModal';
 import HailTracePanel from './HailTracePanel';
 import EagleViewPanel from './EagleViewPanel';
+import RoofrPanel from './RoofrPanel';
 import InsuranceTrackingView from './InsuranceTrackingView';
 import SupplementTrackingView from './SupplementTrackingView';
 import { PipelineStageTracker } from './PipelineStageTracker';
@@ -95,6 +96,9 @@ import {
   Activity,
   Star,
   Zap,
+  CloudLightning,
+  Wind,
+  RefreshCw,
 } from 'lucide-react';
 
 type TabType = 'overview' | 'timeline' | 'documents' | 'financial' | 'projects' | 'jobStatus' | 'survey' | 'insurance';
@@ -222,6 +226,16 @@ export default function ContactDetail() {
   const [mentionSuggestions, setMentionSuggestions] = useState<ReturnType<typeof getMentionTargets>>([]);
   const [isUploadingDocument, setIsUploadingDocument] = useState(false);
   const [contactDocuments, setContactDocuments] = useState<Document[]>([]);
+  const [weatherAlerts, setWeatherAlerts] = useState<{
+    alerts: Array<{
+      type: string; severity: string; urgency: string; certainty: string;
+      headline: string; instruction: string | null; areaDesc: string;
+      onset: string; expires: string;
+    }>;
+    hasActiveStorm: boolean;
+    location?: string;
+  } | null>(null);
+  const [weatherLoading, setWeatherLoading] = useState(false);
   const [signedDocs, setSignedDocs] = useState<SignedDoc[]>([]);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   
@@ -386,6 +400,31 @@ export default function ContactDetail() {
 
     loadContactDocuments();
   }, [contactId]);
+
+  // NOAA weather alerts for this contact's zip code
+  const fetchWeatherAlerts = async (zip: string) => {
+    if (!zip || zip.trim().length < 5) return;
+    setWeatherLoading(true);
+    try {
+      const res = await fetch('/api/eagleview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'weather', zipCode: zip.trim() }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setWeatherAlerts(data);
+      }
+    } catch {
+      // silently fail — no weather is fine
+    } finally {
+      setWeatherLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (contact?.zip) fetchWeatherAlerts(contact.zip);
+  }, [contact?.zip]);
 
   const handleUploadDocument = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -1478,6 +1517,80 @@ export default function ContactDetail() {
                 </div>
               </div>
 
+              {/* NOAA Storm Alerts */}
+              {contact?.zip && (
+                <div className={`rounded-xl border p-4 ${
+                  weatherAlerts?.hasActiveStorm
+                    ? 'bg-red-50 border-red-300'
+                    : 'bg-white border-gray-200'
+                }`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <CloudLightning size={16} className={weatherAlerts?.hasActiveStorm ? 'text-red-600' : 'text-gray-500'} />
+                      <h3 className={`text-sm font-semibold ${weatherAlerts?.hasActiveStorm ? 'text-red-700' : 'text-gray-700'}`}>
+                        NOAA Storm Alerts
+                      </h3>
+                    </div>
+                    <button
+                      onClick={() => fetchWeatherAlerts(contact.zip || '')}
+                      disabled={weatherLoading}
+                      className="text-gray-400 hover:text-gray-600 transition-colors"
+                      title="Refresh alerts"
+                    >
+                      <RefreshCw size={13} className={weatherLoading ? 'animate-spin' : ''} />
+                    </button>
+                  </div>
+
+                  {weatherLoading && !weatherAlerts && (
+                    <p className="text-xs text-gray-400 flex items-center gap-1">
+                      <Loader2 size={12} className="animate-spin" /> Checking alerts…
+                    </p>
+                  )}
+
+                  {weatherAlerts && !weatherAlerts.hasActiveStorm && (
+                    <div className="flex items-center gap-2 text-xs text-green-700">
+                      <CheckCircle size={13} className="text-green-500" />
+                      <span>No active storm alerts</span>
+                      {weatherAlerts.location && (
+                        <span className="text-gray-400">· {weatherAlerts.location}</span>
+                      )}
+                    </div>
+                  )}
+
+                  {weatherAlerts?.hasActiveStorm && weatherAlerts.alerts.map((alert, i) => (
+                    <div key={i} className="mb-2 last:mb-0 bg-white/80 rounded-lg p-3 border border-red-200">
+                      <div className="flex items-start gap-2">
+                        <Wind size={13} className="text-red-500 mt-0.5 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-red-700 truncate">{alert.type}</p>
+                          <p className="text-xs text-gray-600 mt-0.5 line-clamp-2">{alert.headline}</p>
+                          {alert.instruction && (
+                            <p className="text-xs text-gray-500 mt-1 line-clamp-2 italic">{alert.instruction}</p>
+                          )}
+                          <div className="flex gap-2 mt-1 text-[10px] text-gray-400">
+                            <span className={`font-medium ${alert.severity === 'Extreme' || alert.severity === 'Severe' ? 'text-red-500' : 'text-orange-500'}`}>
+                              {alert.severity}
+                            </span>
+                            {alert.urgency && <span>· {alert.urgency}</span>}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  {!weatherLoading && !weatherAlerts && (
+                    <button
+                      onClick={() => fetchWeatherAlerts(contact.zip || '')}
+                      className="text-xs text-blue-600 hover:underline"
+                    >
+                      Check alerts for {contact.zip}
+                    </button>
+                  )}
+
+                  <p className="text-[10px] text-gray-300 mt-2">NOAA National Weather Service</p>
+                </div>
+              )}
+
               {/* Quick Actions */}
               <div className="bg-white rounded-xl border border-gray-200 p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
@@ -1632,17 +1745,31 @@ export default function ContactDetail() {
 
         {activeTab === 'documents' && (
           <div className="space-y-4">
-            <EagleViewPanel
-              address={contact.address || ''}
-              city={contact.city || ''}
-              state={contact.state || ''}
-              zip={contact.zip || ''}
-              companyId={effectiveCompanyId || ''}
-              contactId={contact.id}
-              contactName={getContactFullName(contact)}
-              userId={profile?.id}
-              onDocumentSaved={(doc) => setContactDocuments(prev => [doc, ...prev])}
-            />
+            {/* ── Aerial Measurement Reports ── */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              <EagleViewPanel
+                address={contact.address || ''}
+                city={contact.city || ''}
+                state={contact.state || ''}
+                zip={contact.zip || ''}
+                companyId={effectiveCompanyId || ''}
+                contactId={contact.id}
+                contactName={getContactFullName(contact)}
+                userId={profile?.id}
+                onDocumentSaved={(doc) => setContactDocuments(prev => [doc, ...prev])}
+              />
+              <RoofrPanel
+                address={contact.address || ''}
+                city={contact.city || ''}
+                state={contact.state || ''}
+                zip={contact.zip || ''}
+                companyId={effectiveCompanyId || ''}
+                contactId={contact.id}
+                contactName={getContactFullName(contact)}
+                userId={profile?.id}
+                onDocumentSaved={(doc) => setContactDocuments(prev => [doc, ...prev])}
+              />
+            </div>
 
             {/* ── Signed Documents ── */}
             <div className="bg-white rounded-xl border border-gray-200">

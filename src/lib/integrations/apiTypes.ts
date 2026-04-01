@@ -350,6 +350,11 @@ export const INTEGRATION_TEMPLATES: Record<string, Partial<BaseIntegration>> = {
     description: 'Aerial imagery and roof measurements',
     category: 'aerial-imagery'
   },
+  roofr: {
+    name: 'Roofr',
+    description: 'Instant aerial roof measurement reports — order directly from a contact',
+    category: 'aerial-imagery'
+  },
   stripe: {
     name: 'Stripe',
     description: 'Payment processing and invoicing',
