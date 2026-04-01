@@ -49,6 +49,7 @@ import { useCRM, useFinancialStats } from '@/lib/crmStore';
 import { formatCurrency, getContactFullName } from '@/lib/crmData';
 import { printDataAsPDF } from '@/lib/exportUtils';
 import { useAuth } from '@/lib/authContext';
+import { isSoldStatus, isLostStatus } from '@/lib/statusDefinitions';
 
 interface RevenueData {
   month: string;
@@ -134,7 +135,8 @@ const ReportsAnalytics: React.FC = () => {
     state.contacts
       .filter(c => c.company_id === profile?.company_id)
       .forEach((c) => {
-        if (c.status === 'completed' && c.finalPaymentPaid && c.finalPaymentAmount) {
+        // FIXED: Use standardized status check instead of hardcoded 'completed'
+        if (isSoldStatus(c.status) && c.finalPaymentPaid && c.finalPaymentAmount) {
           const d = new Date(c.updatedAt);
           if (isNaN(d.getTime()) || d < cutoff) return;
           const key = d.toLocaleString('default', { month: 'short', year: selectedPeriod === 'ytd' || monthCount <= 3 ? undefined : '2-digit' });
@@ -203,7 +205,8 @@ const ReportsAnalytics: React.FC = () => {
         const src = c.leadSource || 'Direct';
         if (!sources[src]) sources[src] = { leads: 0, conversions: 0, revenue: 0 };
         sources[src].leads += 1;
-        if (c.status === 'completed' || c.status === 'in_progress' || c.status === 'build_phase') {
+        // FIXED: Use standardized status check
+        if (isSoldStatus(c.status) || c.status === 'in_progress' || c.status === 'build_phase') {
           sources[src].conversions += 1;
           sources[src].revenue += c.projectValue || 0;
         }
@@ -245,10 +248,12 @@ const ReportsAnalytics: React.FC = () => {
                  (c.assignedTo === tm.userId || c.assignedTo === tm.id || c.assignedTo === tm.email)
         );
         const totalLeads = repContacts.length;
-        const closedDeals = repContacts.filter((c) => c.status === 'completed').length;
+        // FIXED: Use standardized status check  
+        const closedDeals = repContacts.filter((c) => isSoldStatus(c.status)).length;
         const activeDeals = repContacts.filter((c) => ['active', 'in_progress', 'job_started'].includes(c.status || '')).length;
         const revenue = repContacts
-          .filter((c) => c.status === 'completed')
+          // FIXED: Use standardized status check
+          .filter((c) => isSoldStatus(c.status))
           .reduce((sum, c) => sum + (c.jobValue || c.estimateAmount || 0), 0);
         const avgDealSize = closedDeals > 0 ? revenue / closedDeals : 0;
         const conversionRate = totalLeads > 0 ? (closedDeals / totalLeads) * 100 : 0;

@@ -323,7 +323,18 @@ export interface DbMaterialOrderItem {
   total: number;
 }
 
-export interface DbEstimate {
+export interface DbEstimateItem {
+  id: string;
+  estimate_id: string;
+  company_id: string;
+  description: string;
+  quantity: number;
+  unit_price: number;
+  total: number;
+  order_index: number;
+  created_at: string;
+  updated_at: string;
+}
   id: string;
   company_id: string;
   contact_id: string;
@@ -356,11 +367,14 @@ export interface DbEstimate {
 export interface DbEstimateItem {
   id: string;
   estimate_id: string;
+  company_id: string;
   description: string;
   quantity: number;
-  unit: string;
   unit_price: number;
   total: number;
+  order_index: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface DbProject {
@@ -1327,6 +1341,117 @@ class DatabaseService {
 
   async markEstimateDeclined(estimateId: string): Promise<DbEstimate | null> {
     return this.updateEstimate(estimateId, { status: 'declined', declined_at: new Date().toISOString() });
+  }
+
+  async getEstimate(estimateId: string): Promise<DbEstimate | null> {
+    const { data, error } = await supabase
+      .from('estimates')
+      .select('*')
+      .eq('id', estimateId)
+      .single();
+    if (error) { console.error('Error fetching estimate:', error); return null; }
+    return data;
+  }
+
+  // Estimate Items operations
+  async getEstimateItems(estimateId: string): Promise<DbEstimateItem[]> {
+    const { data, error } = await supabase
+      .from('estimate_items')
+      .select('*')
+      .eq('estimate_id', estimateId)
+      .order('order_index');
+    if (error) { console.error('Error fetching estimate items:', error); return []; }
+    return data || [];
+  }
+
+  async createEstimateItem(item: Partial<DbEstimateItem>): Promise<DbEstimateItem | null> {
+    assertCompanyId(item.company_id, 'createEstimateItem');
+    const { data, error } = await supabase
+      .from('estimate_items')
+      .insert(item)
+      .select()
+      .single();
+    if (error) { console.error('Error creating estimate item:', error); return null; }
+    return data;
+  }
+
+  async updateEstimateItem(itemId: string, updates: Partial<DbEstimateItem>): Promise<DbEstimateItem | null> {
+    const { data, error } = await supabase
+      .from('estimate_items')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', itemId)
+      .select()
+      .single();
+    if (error) { console.error('Error updating estimate item:', error); return null; }
+    return data;
+  }
+
+  async deleteEstimateItem(itemId: string): Promise<boolean> {
+    const { error } = await supabase.from('estimate_items').delete().eq('id', itemId);
+    if (error) { console.error('Error deleting estimate item:', error); return false; }
+    return true;
+  }
+
+  async getEstimateWithItems(estimateId: string): Promise<{ estimate: DbEstimate; items: DbEstimateItem[] } | null> {
+    const [estimate, items] = await Promise.all([
+      this.getEstimate(estimateId),
+      this.getEstimateItems(estimateId)
+    ]);
+    
+    if (!estimate) return null;
+    return { estimate, items };
+  }
+
+  // Convert estimate to invoice (NEW)
+  async createInvoiceFromEstimate(estimateId: string): Promise<DbInvoice | null> {
+    try {
+      const estimateData = await this.getEstimateWithItems(estimateId);
+      if (!estimateData) {
+        throw new Error('Estimate not found');
+      }
+
+      const { estimate, items } = estimateData;
+      
+      // Create invoice with estimate data and items
+      const invoiceItems = items.map(item => ({
+        description: item.description,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        total: item.total,
+        order_index: item.order_index
+      }));
+
+      const invoice = await this.createInvoice({
+        company_id: estimate.company_id,
+        contact_id: estimate.contact_id,
+        invoice_number: `INV-${Date.now()}`, // Generate unique invoice number
+        title: estimate.title,
+        description: estimate.description,
+        status: 'draft',
+        subtotal: estimate.subtotal,
+        tax: estimate.tax,
+        total: estimate.total,
+        due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
+        notes: estimate.notes,
+        terms: estimate.terms,
+        created_by: estimate.created_by
+      }, invoiceItems);
+
+      if (!invoice) {
+        throw new Error('Failed to create invoice');
+      }
+
+      // Mark estimate as converted
+      await this.updateEstimate(estimateId, { 
+        status: 'converted',
+        notes: estimate.notes ? `${estimate.notes}\n\nConverted to invoice ${invoice.invoice_number}` : `Converted to invoice ${invoice.invoice_number}`
+      });
+
+      return invoice;
+    } catch (error) {
+      console.error('Error converting estimate to invoice:', error);
+      return null;
+    }
   }
 
   // Project operations
