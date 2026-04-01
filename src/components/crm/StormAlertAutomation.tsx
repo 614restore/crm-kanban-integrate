@@ -81,7 +81,7 @@ export function StormAlertAutomation({ contacts, onSendAlerts }: StormAlertProps
               const data = await response.json();
               return { zip, alerts: data.alerts || [], hasStorm: data.hasActiveStorm, location: data.location };
             }
-          } catch {}
+          } catch (_e) { /* weather check failed for zip — return empty */ }
           return { zip, alerts: [], hasStorm: false };
         })
       );
