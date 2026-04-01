@@ -1,5 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useCRM } from '@/lib/crmStore';
+import { useAuth } from '@/lib/authContext';
+import { SOLD_STATUSES, LOST_STATUSES, isSoldStatus, isLostStatus } from '@/lib/statusDefinitions';
 import {
   TrendingUp,
   DollarSign,
@@ -116,15 +118,20 @@ const PERIOD_MS: Record<Period, number> = {
 
 export default function SalesAnalytics() {
   const { state } = useCRM();
+  const { profile } = useAuth();
   const [period, setPeriod] = useState<Period>('30d');
 
   const filtered = useMemo(() => {
     const cutoff = period === 'all' ? new Date(0) : new Date(Date.now() - PERIOD_MS[period]);
-    return state.contacts.filter((c) => new Date(c.createdAt) >= cutoff);
-  }, [state.contacts, period]);
+    // CRITICAL FIX: Filter by company_id to prevent cross-tenant data leakage
+    return state.contacts.filter((c) => 
+      c.company_id === profile?.company_id && 
+      new Date(c.createdAt) >= cutoff
+    );
+  }, [state.contacts, period, profile?.company_id]);
 
-  const completed = filtered.filter((c) => c.status === 'completed' || c.status === 'paid');
-  const lost = filtered.filter((c) => c.status === 'lost');
+  const completed = filtered.filter((c) => isSoldStatus(c.status));
+  const lost = filtered.filter((c) => isLostStatus(c.status));
   const inspections = filtered.filter((c) => c.inspectionCompleted);
   const contingency = filtered.filter((c) => c.status === 'approved' || c.status === 'scheduled');
   const selfGenerated = filtered.filter((c) => c.leadSource === 'Self-Generated' || c.leadSource === 'Referral');
@@ -141,14 +148,15 @@ export default function SalesAnalytics() {
   // Appointments by period
   const appointments = state.appointments.filter((apt) => {
     const cutoff = period === 'all' ? new Date(0) : new Date(Date.now() - PERIOD_MS[period]);
-    return new Date(apt.date) >= cutoff;
+    // CRITICAL FIX: Filter by company_id
+    return apt.company_id === profile?.company_id && new Date(apt.date) >= cutoff;
   });
   
   // Self-generated metrics
   const selfGenInspections = selfGenerated.filter((c) => c.inspectionCompleted).length;
   const selfGenContingency = selfGenerated.filter((c) => c.status === 'approved' || c.status === 'scheduled').length;
-  const selfGenSales = selfGenerated.filter((c) => c.status === 'completed' || c.status === 'paid').length;
-  const selfGenLost = selfGenerated.filter((c) => c.status === 'lost').length;
+  const selfGenSales = selfGenerated.filter((c) => isSoldStatus(c.status)).length;
+  const selfGenLost = selfGenerated.filter((c) => isLostStatus(c.status)).length;
   const selfGenTotal = selfGenerated.length;
 
   const byStatus = useMemo(() => {
