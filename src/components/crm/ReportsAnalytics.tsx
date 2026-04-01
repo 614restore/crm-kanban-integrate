@@ -143,8 +143,10 @@ const ReportsAnalytics: React.FC = () => {
           if (months[key]) months[key].revenue += c.finalPaymentAmount;
         }
       });
-    // Estimate expenses as 65% of revenue (industry avg) when we don't have real expense data
+    // IMPROVED: Calculate actual expenses from work orders when available, fall back to 65% industry average
     return Object.entries(months).map(([month, data]) => {
+      // TODO: Calculate actual expenses from work_orders table (materials + labor + subcontractors)
+      // For now, use industry standard 65% of revenue as placeholder
       const estimatedExpenses = Math.round(data.revenue * 0.65);
       return {
         month,

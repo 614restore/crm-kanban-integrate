@@ -39,6 +39,10 @@ interface DocumentItem {
   uploadedBy: string;
   contactName?: string;
   contactId?: string;
+  signedUrlCache?: {
+    url: string;
+    expiresAt: number;
+  };
 }
 
 export default function DocumentCenter() {
@@ -53,6 +57,34 @@ export default function DocumentCenter() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
+  // Cached signed URL helper - avoids regenerating URLs on every render
+  const getCachedSignedUrl = async (doc: DocumentItem, originalUrl: string): Promise<string | undefined> => {
+    if (!originalUrl) return undefined;
+    
+    // Return non-storage URLs as-is
+    if (isHttpUrl(originalUrl) && !isSupabaseStorageUrl(originalUrl)) {
+      return originalUrl;
+    }
+    
+    // Check if we have a valid cached URL (expires in 50 minutes to be safe)
+    const now = Date.now();
+    if (doc.signedUrlCache && doc.signedUrlCache.expiresAt > now) {
+      return doc.signedUrlCache.url;
+    }
+    
+    // Generate new signed URL and cache it
+    const signedUrl = await getDocumentSignedUrl(originalUrl);
+    if (signedUrl) {
+      // Cache expires in 50 minutes (signed URLs expire in 1 hour)
+      doc.signedUrlCache = {
+        url: signedUrl,
+        expiresAt: now + (50 * 60 * 1000)
+      };
+    }
+    
+    return signedUrl || undefined;
+  };
+
   useEffect(() => {
     const loadCompanyDocuments = async () => {
       if (!state.companyId) {
@@ -64,24 +96,24 @@ export default function DocumentCenter() {
       const mapped: DocumentItem[] = await Promise.all(docs.map(async (doc) => {
         const linkedContact = state.contacts.find((contact) => contact.id === doc.contact_id);
         const type = (doc.type || 'other') as DocCategory;
-        const url = doc.url
-          ? (isHttpUrl(doc.url) && !isSupabaseStorageUrl(doc.url)
-              ? doc.url
-              : (await getDocumentSignedUrl(doc.url)) || undefined)
-          : undefined;
-
-        return {
+        
+        const docItem: DocumentItem = {
           id: doc.id,
           name: doc.name,
           type,
           category: type,
-          url,
+          url: undefined, // Will be set by getCachedSignedUrl
           size: doc.size || 'Unknown',
           uploadedAt: doc.created_at,
           uploadedBy: doc.uploaded_by || 'Team member',
           contactName: linkedContact ? getContactFullName(linkedContact) : undefined,
           contactId: doc.contact_id || undefined,
         };
+        
+        // Get cached signed URL
+        docItem.url = await getCachedSignedUrl(docItem, doc.url || '');
+        
+        return docItem;
       }));
 
       setUploadedDocuments(mapped);

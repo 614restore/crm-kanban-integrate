@@ -335,6 +335,8 @@ export interface DbEstimateItem {
   created_at: string;
   updated_at: string;
 }
+
+export interface DbEstimate {
   id: string;
   company_id: string;
   contact_id: string;
@@ -1753,6 +1755,90 @@ class DatabaseService {
       .order('signed_at', { ascending: false });
     if (error) { console.error('Error fetching signed change orders:', error); return []; }
     return data || [];
+  }
+}
+
+// ===============================
+// TIME TRACKING OPERATIONS
+// ===============================
+
+export interface DbTimeEntry {
+  id: string;
+  work_order_id: string;
+  company_id: string;
+  user_id?: string;
+  description: string;
+  start_time: string;
+  end_time?: string;
+  duration_minutes?: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function createTimeEntry(entry: {
+  work_order_id: string;
+  company_id: string;
+  description: string;
+  start_time: string;
+  is_active: boolean;
+}): Promise<DbTimeEntry> {
+  const { data, error } = await supabase
+    .from('time_entries')
+    .insert([entry])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('[DB] Create time entry error:', error);
+    throw new Error(`Failed to create time entry: ${error.message}`);
+  }
+
+  return data;
+}
+
+export async function updateTimeEntry(entryId: string, updates: {
+  end_time?: string;
+  is_active?: boolean;
+}): Promise<void> {
+  const { error } = await supabase
+    .from('time_entries')
+    .update({
+      ...updates,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', entryId);
+
+  if (error) {
+    console.error('[DB] Update time entry error:', error);
+    throw new Error(`Failed to update time entry: ${error.message}`);
+  }
+}
+
+export async function getTimeEntries(workOrderId: string): Promise<DbTimeEntry[]> {
+  const { data, error } = await supabase
+    .from('time_entries')
+    .select('*')
+    .eq('work_order_id', workOrderId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('[DB] Get time entries error:', error);
+    throw new Error(`Failed to get time entries: ${error.message}`);
+  }
+
+  return data || [];
+}
+
+export async function deleteTimeEntry(entryId: string): Promise<void> {
+  const { error } = await supabase
+    .from('time_entries')
+    .delete()
+    .eq('id', entryId);
+
+  if (error) {
+    console.error('[DB] Delete time entry error:', error);
+    throw new Error(`Failed to delete time entry: ${error.message}`);
   }
 }
 
