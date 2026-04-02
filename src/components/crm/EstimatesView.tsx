@@ -322,6 +322,8 @@ export default function EstimatesView() {
   };
 
   const handleSendEstimate = async (estimateId: string) => {
+    console.log('EstimatesView: Starting send estimate process for ID:', estimateId);
+    
     try {
       const estimate = state.estimates.find((e) => e.id === estimateId);
       if (!estimate) { toast.error('Estimate not found'); return; }
@@ -329,8 +331,17 @@ export default function EstimatesView() {
       const contact = state.contacts.find((c) => c.id === estimate.contactId);
 
       // Mark as sent first — this generates the sign_token
-      const updated = await db.markEstimateSent(estimateId);
-      if (!updated) { toast.error('Failed to mark estimate as sent'); return; }
+      console.log('EstimatesView: Marking estimate as sent...');
+      const updated = await withTimeout(
+        db.markEstimateSent(estimateId),
+        15000,
+        'Mark estimate as sent'
+      );
+      
+      if (!updated) { 
+        toast.error('Failed to mark estimate as sent'); 
+        return; 
+      }
       dispatch({ type: 'UPDATE_ESTIMATE', payload: mapDbEstimateToApp(updated) });
 
       if (!contact?.email) {
@@ -406,7 +417,10 @@ export default function EstimatesView() {
       }
       const fmtD = (d: Date) => d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
-      await sendEmail({
+      console.log('EstimatesView: Sending email to:', contact.email);
+      
+      await withTimeout(
+        sendEmail({
         to: contact.email,
         subject: `Estimate ${estimate.estimateNumber} from ${companyName}`,
         html: `
@@ -489,7 +503,12 @@ export default function EstimatesView() {
               <span style="font-size:10px;color:#9ca3af;margin-top:4px;display:inline-block">Powered by TrussCTR</span>
             </div>
           </div>`,
-      });
+        }),
+        25000,
+        'Send estimate email'
+      );
+      
+      console.log('EstimatesView: Email sent successfully');
 
       // Sync contact status
       const c = state.contacts.find(x => x.id === updated.contact_id);
@@ -1948,8 +1967,9 @@ export default function EstimatesView() {
                     try {
                       await handleSendEstimate(showShareModal.id);
                       setShowShareModal(null);
-                      toast.success('Estimate shared successfully!');
+                      // Don't show duplicate success toast - handleSendEstimate already shows one
                     } catch (error) {
+                      console.error('Share modal error:', error);
                       toast.error('Failed to share estimate');
                     }
                   }}
