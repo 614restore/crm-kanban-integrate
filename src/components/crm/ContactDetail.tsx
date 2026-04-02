@@ -686,6 +686,26 @@ export default function ContactDetail() {
     if (!editedContact) return;
     
     console.log('ContactDetail: Starting save process for contact:', editedContact.id);
+    
+    // Enhanced debugging for mobile save issues
+    console.log('ContactDetail: Authentication state check:');
+    console.log('- profile?.company_id:', profile?.company_id);
+    console.log('- state.companyId:', state.companyId);
+    console.log('- effectiveCompanyId:', effectiveCompanyId);
+    console.log('- profile exists:', !!profile);
+    console.log('- user authenticated:', !!state.currentUser);
+    
+    if (!effectiveCompanyId) {
+      console.error('ContactDetail: CRITICAL - No company context available');
+      console.error('ContactDetail: Authentication details:', {
+        profile: profile ? { id: profile.id, company_id: profile.company_id } : null,
+        stateCompanyId: state.companyId,
+        currentUser: state.currentUser ? { id: state.currentUser.id, email: state.currentUser.email } : null
+      });
+      toast.error('Authentication error: No company context. Please sign out and sign back in.');
+      return;
+    }
+    
     setIsSaving(true);
     
     // Extend safety timeout for slower mobile connections (45 seconds)
@@ -697,12 +717,6 @@ export default function ContactDetail() {
     
     const attemptSave = async (attempt: number = 1): Promise<boolean> => {
       try {
-        if (!effectiveCompanyId) {
-          console.error('ContactDetail: No company context available');
-          toast.error('No company context available. Please refresh and sign in again.');
-          return false;
-        }
-
         console.log(`ContactDetail: Save attempt ${attempt} - Updating contact with company ID:`, effectiveCompanyId);
         const updateData = {
           first_name: editedContact.firstName,
@@ -740,6 +754,7 @@ export default function ContactDetail() {
         };
 
         console.log('ContactDetail: Sending update data:', updateData);
+        console.log('ContactDetail: Database connection test - attempting save...');
         
         const updated = await db.updateContact(editedContact.id, updateData);
         console.log('ContactDetail: Database response:', updated);
@@ -758,6 +773,7 @@ export default function ContactDetail() {
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
         console.error(`ContactDetail: Save attempt ${attempt} failed:`, errorMessage);
+        console.error('ContactDetail: Full error object:', error);
         
         // Retry logic for network/timeout errors
         if ((errorMessage.includes('timed out') || errorMessage.includes('network') || errorMessage.includes('fetch')) && attempt < 3) {
@@ -773,6 +789,8 @@ export default function ContactDetail() {
           toast.error('Permission denied - you may not have access to edit this contact');
         } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
           toast.error('Network error - please check your connection and try again');
+        } else if (errorMessage.includes('Contact not found')) {
+          toast.error('Contact not found - it may have been deleted by another user');
         } else {
           toast.error(`Failed to save contact: ${errorMessage}`);
         }
