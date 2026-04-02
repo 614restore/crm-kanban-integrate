@@ -84,10 +84,15 @@ serve(async (req) => {
     }
 
     // Clear the forced-change flag
-    await adminClient
+    const { error: profileUpdateErr } = await adminClient
       .from('profiles')
       .update({ must_change_password: false, updated_at: new Date().toISOString() })
       .eq('id', user.id)
+    if (profileUpdateErr) {
+      // Log but don't fail the request — password was already changed successfully.
+      // The client-side clearPasswordReset() handles in-memory cleanup.
+      console.error('confirm-password-change: failed to clear must_change_password:', profileUpdateErr)
+    }
 
     return new Response(
       JSON.stringify({ ok: true }),

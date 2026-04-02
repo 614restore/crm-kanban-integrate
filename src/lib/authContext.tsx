@@ -29,6 +29,7 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: Error | null }>;
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: Error | null }>;
+  clearPasswordReset: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -156,6 +157,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (event === 'TOKEN_REFRESHED') {
+        setSession(session);
+        setUser(session?.user ?? null);
+        return;
+      }
+
+      // USER_UPDATED fires when the admin API changes a user's password/email.
+      // Only refresh session — do NOT re-fetch the profile. A concurrent
+      // clearPasswordReset() call already cleared must_change_password in memory
+      // and a profile re-fetch here could see the stale DB value and revert it.
+      if (event === 'USER_UPDATED') {
         setSession(session);
         setUser(session?.user ?? null);
         return;
@@ -396,6 +407,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // ── clearPasswordReset ────────────────────────────────────────────────
+  // Called after the user successfully sets a new password so AuthGate
+  // immediately re-renders without a hard page reload.
+  const clearPasswordReset = () => {
+    setIsRecoverySession(false);
+    setProfile(prev => (prev ? { ...prev, must_change_password: false } : null));
+  };
+
   // ── updateProfile ─────────────────────────────────────────────────────
   const updateProfile = async (updates: Partial<Profile>) => {
     if (!user) return { error: new Error('No user logged in') };
@@ -425,7 +444,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ session, user, profile, loading, isPasswordReset, signIn, signUp, signOut, resetPassword, updateProfile }}>
+    <AuthContext.Provider value={{ session, user, profile, loading, isPasswordReset, signIn, signUp, signOut, resetPassword, updateProfile, clearPasswordReset }}>
       {children}
     </AuthContext.Provider>
   );

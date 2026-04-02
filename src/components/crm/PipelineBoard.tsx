@@ -50,6 +50,7 @@ import {
 } from 'lucide-react';
 import { getNextStep, setPendingContactTab, type NextStep } from '@/lib/nextStepActions';
 import { fireAutomationEvent } from '@/lib/automationEngine';
+import { handleAutoProgression } from '@/lib/progressionRules';
 import type { KanbanStatus } from '@/lib/kanbanStatuses';
 
 const NEXT_STEP_ICONS: Record<string, React.ElementType> = {
@@ -300,6 +301,14 @@ export default function PipelineBoard() {
                 read: false,
               },
             });
+            // Auto-advance to next board when status triggers a progression rule
+            handleAutoProgression(
+              draggedContact.id,
+              column.status,
+              effectiveCompanyId,
+              profile?.id || '',
+              profile?.email || ''
+            ).catch(() => {});
           } else {
             toast.error(`Failed to move contact: ${result.error}`);
           }

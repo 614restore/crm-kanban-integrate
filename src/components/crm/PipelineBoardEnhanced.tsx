@@ -3,6 +3,8 @@ import { useCRM, useCurrentBoard, canCreateBoard, canEditBoard } from '@/lib/crm
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
 import { toast } from 'sonner';
+import { fireAutomationEvent } from '@/lib/automationEngine';
+import { handleAutoProgression } from '@/lib/progressionRules';
 import OwnerPriorityBoard from './OwnerPriorityBoard';
 import {
   Contact,
@@ -100,9 +102,26 @@ export default function PipelineBoardEnhanced() {
   const handleDrop = async (e: React.DragEvent, column: KanbanColumn) => {
     e.preventDefault();
     if (draggedContact && draggedContact.status !== column.status) {
+      const oldStatus = draggedContact.status;
       try {
         if (effectiveCompanyId) await db.updateContact(draggedContact.id, { status: column.status, status_changed_at: new Date().toISOString() });
         dispatch({ type: 'UPDATE_CONTACT_STATUS', payload: { contactId: draggedContact.id, status: column.status } });
+        if (effectiveCompanyId) {
+          fireAutomationEvent('contact_status_changed', effectiveCompanyId, {
+            contactId: draggedContact.id,
+            contactName: getContactFullName(draggedContact),
+            contactEmail: draggedContact.email,
+            oldStatus,
+            newStatus: column.status,
+          }).catch(() => {});
+          handleAutoProgression(
+            draggedContact.id,
+            column.status,
+            effectiveCompanyId,
+            profile?.id || '',
+            profile?.email || ''
+          ).catch(() => {});
+        }
       } catch (error) {
         toast.error('Failed to move contact');
       }

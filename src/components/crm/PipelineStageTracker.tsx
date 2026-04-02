@@ -8,7 +8,8 @@ interface PipelineStage {
   order: number;
 }
 
-// Define the standard pipeline stages in order
+// Define the standard pipeline stages in order.
+// Every CustomerStatus value must appear here so currentStageIndex is never -1.
 const PIPELINE_STAGES: PipelineStage[] = [
   { status: 'prospect', label: 'New Lead', order: 0 },
   { status: 'lead', label: 'Contacted', order: 1 },

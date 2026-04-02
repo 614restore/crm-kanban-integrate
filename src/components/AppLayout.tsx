@@ -59,7 +59,7 @@ const CommissionPayrollView = lazy(() => import('./crm/CommissionPayrollView'));
 
 // --- LocalStorage data cache (stale-while-revalidate) ---
 const DATA_CACHE_KEY = 'crm_app_data_v1';
-const DATA_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+const DATA_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours — cache survives page refreshes throughout the day
 
 function readDataCache(companyId: string): Record<string, unknown> | null {
   try {
@@ -488,6 +488,9 @@ function CRMApp() {
     // Serve cached data immediately so the UI isn't blank while fresh data loads.
     // On the first-ever load (no cache) we show the loading screen as before.
     const cached = !silent ? readDataCache(profile.company_id) : null;
+    // Track whether we already showed data from cache — used below to avoid
+    // overwriting good cached data with empty/timed-out Supabase results.
+    const loadedFromCache = cached !== null;
     if (cached) {
       dispatch({ type: 'INITIALIZE_DATA', payload: cached as any });
       // Don't show the loading screen — continue fetching fresh data silently.
@@ -805,6 +808,17 @@ function CRMApp() {
         companyGoals: [],
       };
 
+      // Guard: if we already served from cache and got back zero entities, it
+      // means all Supabase queries timed-out. Don't overwrite good cached data
+      // with empty results, and don't corrupt the cache for the next refresh.
+      const totalEntities = freshPayload.contacts.length + freshPayload.appointments.length +
+        freshPayload.invoices.length + freshPayload.teamMembers.length +
+        freshPayload.estimates.length + freshPayload.workOrders.length;
+      if (loadedFromCache && totalEntities === 0) {
+        console.warn('[loadData] Fresh fetch returned empty — keeping cached data to avoid data loss.');
+        return;
+      }
+
       dispatch({ type: 'INITIALIZE_DATA', payload: freshPayload });
 
       // Persist to localStorage so next refresh shows data instantly
@@ -812,26 +826,29 @@ function CRMApp() {
 
     } catch (error) {
       console.error('Error loading CRM data:', error);
-      // Show empty state on error
-      dispatch({
-        type: 'INITIALIZE_DATA',
-        payload: {
-          contacts: [],
-          appointments: [],
-          invoices: [],
-          boards: defaultBoards,
-          leadSources: defaultLeadSources,
-          automations: [],
-          teamMembers: [],
-          suppliers: [],
-          materialOrders: [],
-          estimates: [],
-          projects: [],
-          workOrders: [],
-          documentTemplates: [],
-          companyGoals: [],
-        },
-      });
+      // If we already showed cached data, leave it intact — showing empty state
+      // after a failed refresh would wipe out data the user can see perfectly well.
+      if (!loadedFromCache) {
+        dispatch({
+          type: 'INITIALIZE_DATA',
+          payload: {
+            contacts: [],
+            appointments: [],
+            invoices: [],
+            boards: defaultBoards,
+            leadSources: defaultLeadSources,
+            automations: [],
+            teamMembers: [],
+            suppliers: [],
+            materialOrders: [],
+            estimates: [],
+            projects: [],
+            workOrders: [],
+            documentTemplates: [],
+            companyGoals: [],
+          },
+        });
+      }
     }
   }, [profile?.company_id, authLoading]);
 
@@ -1000,7 +1017,7 @@ useEffect(() => {
     if (authLoading) return;
 
     const timer = window.setTimeout(() => {
-      console.warn('Initial CRM data load timed out after 8 s; showing app shell with empty data.');
+      console.warn('Initial CRM data load timed out after 15 s; showing app shell with empty data.');
       dispatch({
         type: 'INITIALIZE_DATA',
         payload: {
@@ -1020,7 +1037,7 @@ useEffect(() => {
           companyGoals: [],
         },
       });
-    }, 8000);
+    }, 15000);
 
     return () => window.clearTimeout(timer);
   }, [state.isLoading, state.isInitialized, authLoading]);
@@ -1040,6 +1057,14 @@ useEffect(() => {
         company.subscription_status === 'past_due';
       setSubscriptionBlocked(blocked);
     });
+  }, [profile?.company_id]);
+
+  // Set company_id immediately when profile arrives so QuickAddModal / other
+  // components that check state.companyId don't race with loadData.
+  useEffect(() => {
+    if (profile?.company_id) {
+      dispatch({ type: 'SET_COMPANY_ID', payload: profile.company_id });
+    }
   }, [profile?.company_id]);
 
   // Set current user from profile
