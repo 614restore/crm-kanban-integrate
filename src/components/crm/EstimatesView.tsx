@@ -32,7 +32,7 @@ import {
   PenLine,
   Mail,
 } from 'lucide-react';
-import { toast } from 'sonner';
+import { withTimeout } from '@/lib/utils';
 
 // Status badge component
 function StatusBadge({ status }: { status: Estimate['status'] }) {
@@ -256,6 +256,13 @@ export default function EstimatesView() {
 
     setIsSaving(true);
 
+    // Safety timeout to prevent infinite spinner (30 seconds max)
+    const safetyTimeout = setTimeout(() => {
+      console.error('EstimateView: Save operation exceeded 30 second limit, forcing reset');
+      setIsSaving(false);
+      toast.error('Save operation timed out. Please try again.');
+    }, 30000);
+
     try {
       const estimateData = {
         company_id: profile.company_id,
@@ -273,7 +280,11 @@ export default function EstimatesView() {
       };
 
       if (editingEstimate) {
-        const updated = await db.updateEstimate(editingEstimate.id, estimateData);
+        const updated = await withTimeout(
+          db.updateEstimate(editingEstimate.id, estimateData),
+          20000,
+          'Update estimate'
+        );
         if (updated) {
           dispatch({ type: 'UPDATE_ESTIMATE', payload: mapDbEstimateToApp(updated) });
           toast.success('Estimate updated');
@@ -282,7 +293,11 @@ export default function EstimatesView() {
           toast.error('Failed to save estimate. Please try again.');
         }
       } else {
-        const created = await db.createEstimate(estimateData);
+        const created = await withTimeout(
+          db.createEstimate(estimateData),
+          20000,
+          'Create estimate'
+        );
         if (created) {
           dispatch({ type: 'ADD_ESTIMATE', payload: mapDbEstimateToApp(created) });
           toast.success('Estimate created');
@@ -293,8 +308,15 @@ export default function EstimatesView() {
       }
     } catch (error: any) {
       console.error('Error saving estimate:', error);
-      toast.error(`Failed to save estimate: ${error?.message || 'Unknown error'}`);
+      const errorMessage = error?.message || 'Unknown error';
+      
+      if (errorMessage.includes('timed out')) {
+        toast.error('Save timed out - please check your connection and try again');
+      } else {
+        toast.error(`Failed to save estimate: ${errorMessage}`);
+      }
     } finally {
+      clearTimeout(safetyTimeout);
       setIsSaving(false);
     }
   };

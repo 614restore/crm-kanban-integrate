@@ -33,6 +33,7 @@ import {
   Eye,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { withTimeout } from '@/lib/utils';
 
 // Status badge component
 function StatusBadge({ status }: { status: WorkOrder['status'] }) {
@@ -238,6 +239,13 @@ export default function WorkOrdersView() {
 
     setIsSaving(true);
 
+    // Safety timeout to prevent infinite spinner (30 seconds max)
+    const safetyTimeout = setTimeout(() => {
+      console.error('WorkOrdersView: Save operation exceeded 30 second limit, forcing reset');
+      setIsSaving(false);
+      toast.error('Save operation timed out. Please try again.');
+    }, 30000);
+
     try {
       const totalCost = (parseFloat(laborCost) || 0) + (parseFloat(materialCost) || 0);
       
@@ -267,7 +275,11 @@ export default function WorkOrdersView() {
       };
 
       if (editingWorkOrder) {
-        const updated = await db.updateWorkOrder(editingWorkOrder.id, workOrderData);
+        const updated = await withTimeout(
+          db.updateWorkOrder(editingWorkOrder.id, workOrderData),
+          20000,
+          'Update work order'
+        );
         if (updated) {
           const appWorkOrder: WorkOrder = {
             id: updated.id,
@@ -308,7 +320,11 @@ export default function WorkOrdersView() {
           toast.error('Failed to update work order. Please try again.');
         }
       } else {
-        const created = await db.createWorkOrder(workOrderData);
+        const created = await withTimeout(
+          db.createWorkOrder(workOrderData),
+          20000,
+          'Create work order'
+        );
         if (created) {
           const appWorkOrder: WorkOrder = {
             id: created.id,
@@ -351,8 +367,15 @@ export default function WorkOrdersView() {
       }
     } catch (error) {
       console.error('Error saving work order:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to save work order');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save work order';
+      
+      if (errorMessage.includes('timed out')) {
+        toast.error('Save timed out - please check your connection and try again');
+      } else {
+        toast.error(errorMessage);
+      }
     } finally {
+      clearTimeout(safetyTimeout);
       setIsSaving(false);
     }
   };

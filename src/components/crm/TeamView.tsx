@@ -5,6 +5,7 @@ import { db } from '@/lib/database';
 import { supabase } from '@/lib/supabase';
 import { TeamMember, formatCurrency, roleLabels, UserRole } from '@/lib/crmData';
 import { toast } from 'sonner';
+import { withTimeout } from '@/lib/utils';
 import PermissionsEditor from '../settings/PermissionsEditor';
 import LimitedAccountManager from '@/components/LimitedAccountManager';
 import type { PermissionCategory, PermissionLevel } from '@/lib/permissions';
@@ -307,27 +308,43 @@ export default function TeamView() {
     }
 
     setIsSavingMember(true);
+    
+    // Safety timeout to prevent infinite spinner (30 seconds max)
+    const safetyTimeout = setTimeout(() => {
+      console.error('TeamView: Save operation exceeded 30 second limit, forcing reset');
+      setIsSavingMember(false);
+      toast.error('Save operation timed out. Please try again.');
+    }, 30000);
+    
     try {
       const [firstName, ...lastParts] = selectedMember.name.trim().split(/\s+/);
-      const updated = await db.updateProfile(selectedMember.id, {
-        first_name: firstName || '',
-        last_name: lastParts.join(' '),
-        email: selectedMember.email,
-        role: selectedMember.role,
-        department: selectedMember.department,
-        phone: selectedMember.phone,
-        is_active: selectedMember.isActive,
-      });
+      const updated = await withTimeout(
+        db.updateProfile(selectedMember.id, {
+          first_name: firstName || '',
+          last_name: lastParts.join(' '),
+          email: selectedMember.email,
+          role: selectedMember.role,
+          department: selectedMember.department,
+          phone: selectedMember.phone,
+          is_active: selectedMember.isActive,
+        }),
+        20000,
+        'Update team member'
+      );
 
       // Save commission rates separately (not in RPC args)
-      await supabase
-        .from('profiles')
-        .update({
-          commission_rate_self_gen: selectedMember.commission_rate_self_gen ?? 0,
-          commission_rate_company:  selectedMember.commission_rate_company  ?? 0,
-          commission_rate_custom:   selectedMember.commission_rate_custom   ?? 0,
-        })
-        .eq('id', selectedMember.id);
+      await withTimeout(
+        supabase
+          .from('profiles')
+          .update({
+            commission_rate_self_gen: selectedMember.commission_rate_self_gen ?? 0,
+            commission_rate_company:  selectedMember.commission_rate_company  ?? 0,
+            commission_rate_custom:   selectedMember.commission_rate_custom   ?? 0,
+          })
+          .eq('id', selectedMember.id),
+        15000,
+        'Update commission rates'
+      );
 
       if (!updated) {
         toast.error('Failed to save team member');
@@ -340,8 +357,15 @@ export default function TeamView() {
       setSelectedMember(null);
     } catch (error) {
       console.error('Failed to save team member:', error);
-      toast.error('Failed to save team member');
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      
+      if (errorMessage.includes('timed out')) {
+        toast.error('Save timed out - please check your connection and try again');
+      } else {
+        toast.error('Failed to save team member');
+      }
     } finally {
+      clearTimeout(safetyTimeout);
       setIsSavingMember(false);
     }
   };
