@@ -688,83 +688,103 @@ export default function ContactDetail() {
     console.log('ContactDetail: Starting save process for contact:', editedContact.id);
     setIsSaving(true);
     
-    // Safety timeout to prevent infinite spinner (30 seconds max)
+    // Extend safety timeout for slower mobile connections (45 seconds)
     const safetyTimeout = setTimeout(() => {
-      console.error('ContactDetail: Save operation exceeded 30 second limit, forcing reset');
+      console.error('ContactDetail: Save operation exceeded 45 second limit, forcing reset');
       setIsSaving(false);
-      toast.error('Save operation timed out. Please try again.');
-    }, 30000);
+      toast.error('Save operation timed out. Please check your connection and try again.');
+    }, 45000);
     
+    const attemptSave = async (attempt: number = 1): Promise<boolean> => {
+      try {
+        if (!effectiveCompanyId) {
+          console.error('ContactDetail: No company context available');
+          toast.error('No company context available. Please refresh and sign in again.');
+          return false;
+        }
+
+        console.log(`ContactDetail: Save attempt ${attempt} - Updating contact with company ID:`, effectiveCompanyId);
+        const updateData = {
+          first_name: editedContact.firstName,
+          last_name: editedContact.lastName,
+          email: editedContact.email,
+          phone1: editedContact.phone1,
+          phone2: editedContact.phone2,
+          address: editedContact.address,
+          city: editedContact.city,
+          state: editedContact.state,
+          zip: editedContact.zip,
+          lead_source: editedContact.leadSource,
+          assigned_to: editedContact.assignedTo,
+          tags: editedContact.tags || [],
+          // Project / Financial fields — critical for pipeline board dollar totals
+          project_type: editedContact.projectType,
+          project_value: editedContact.projectValue ?? null,
+          deposit_amount: editedContact.depositAmount ?? null,
+          deposit_paid: editedContact.depositPaid ?? false,
+          deposit_date: editedContact.depositDate ?? null,
+          final_payment_amount: editedContact.finalPaymentAmount ?? null,
+          final_payment_paid: editedContact.finalPaymentPaid ?? false,
+          final_payment_date: editedContact.finalPaymentDate ?? null,
+          // Insurance fields
+          insurance_company: editedContact.insuranceCompany,
+          policy_number: editedContact.policyNumber,
+          claim_number: editedContact.claimNumber,
+          adjuster_name: editedContact.adjusterName,
+          adjuster_phone: editedContact.adjusterPhone,
+          adjuster_email: editedContact.adjusterEmail,
+          deductible: editedContact.deductible ?? null,
+          is_retail: editedContact.isRetail ?? false,
+          retail_notes: editedContact.retailNotes,
+          notes: editedContact.notes,
+        };
+
+        console.log('ContactDetail: Sending update data:', updateData);
+        
+        const updated = await db.updateContact(editedContact.id, updateData);
+        console.log('ContactDetail: Database response:', updated);
+
+        if (!updated) {
+          console.error('ContactDetail: Update returned null/undefined');
+          throw new Error('Failed to save contact changes - no data returned from database');
+        }
+
+        dispatch({ type: 'UPDATE_CONTACT', payload: { ...editedContact, updatedAt: new Date().toISOString() } });
+        setIsEditing(false);
+        setEditedContact(null);
+        toast.success('Contact saved successfully');
+        console.log('ContactDetail: Save completed successfully');
+        return true;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+        console.error(`ContactDetail: Save attempt ${attempt} failed:`, errorMessage);
+        
+        // Retry logic for network/timeout errors
+        if ((errorMessage.includes('timed out') || errorMessage.includes('network') || errorMessage.includes('fetch')) && attempt < 3) {
+          console.log(`ContactDetail: Retrying save operation (attempt ${attempt + 1}/3) after 2 seconds...`);
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          return attemptSave(attempt + 1);
+        }
+        
+        // Final error handling
+        if (errorMessage.includes('timed out')) {
+          toast.error('Save timed out after multiple attempts - please check your connection');
+        } else if (errorMessage.includes('permission')) {
+          toast.error('Permission denied - you may not have access to edit this contact');
+        } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
+          toast.error('Network error - please check your connection and try again');
+        } else {
+          toast.error(`Failed to save contact: ${errorMessage}`);
+        }
+        
+        throw error;
+      }
+    };
+
     try {
-      if (!effectiveCompanyId) {
-        console.error('ContactDetail: No company context available');
-        toast.error('No company context available. Please refresh and sign in again.');
-        return;
-      }
-
-      console.log('ContactDetail: Updating contact with company ID:', effectiveCompanyId);
-      const updateData = {
-        first_name: editedContact.firstName,
-        last_name: editedContact.lastName,
-        email: editedContact.email,
-        phone1: editedContact.phone1,
-        phone2: editedContact.phone2,
-        address: editedContact.address,
-        city: editedContact.city,
-        state: editedContact.state,
-        zip: editedContact.zip,
-        lead_source: editedContact.leadSource,
-        assigned_to: editedContact.assignedTo,
-        tags: editedContact.tags || [],
-        // Project / Financial fields — critical for pipeline board dollar totals
-        project_type: editedContact.projectType,
-        project_value: editedContact.projectValue ?? null,
-        deposit_amount: editedContact.depositAmount ?? null,
-        deposit_paid: editedContact.depositPaid ?? false,
-        deposit_date: editedContact.depositDate ?? null,
-        final_payment_amount: editedContact.finalPaymentAmount ?? null,
-        final_payment_paid: editedContact.finalPaymentPaid ?? false,
-        final_payment_date: editedContact.finalPaymentDate ?? null,
-        // Insurance fields
-        insurance_company: editedContact.insuranceCompany,
-        policy_number: editedContact.policyNumber,
-        claim_number: editedContact.claimNumber,
-        adjuster_name: editedContact.adjusterName,
-        adjuster_phone: editedContact.adjusterPhone,
-        adjuster_email: editedContact.adjusterEmail,
-        deductible: editedContact.deductible ?? null,
-        is_retail: editedContact.isRetail ?? false,
-        retail_notes: editedContact.retailNotes,
-        notes: editedContact.notes,
-      };
-
-      console.log('ContactDetail: Sending update data:', updateData);
-      
-      const updated = await db.updateContact(editedContact.id, updateData);
-      console.log('ContactDetail: Database response:', updated);
-
-      if (!updated) {
-        console.error('ContactDetail: Update returned null/undefined');
-        toast.error('Failed to save contact changes - no data returned');
-        return;
-      }
-
-      dispatch({ type: 'UPDATE_CONTACT', payload: { ...editedContact, updatedAt: new Date().toISOString() } });
-      setIsEditing(false);
-      setEditedContact(null);
-      toast.success('Contact saved successfully');
-      console.log('ContactDetail: Save completed successfully');
+      await attemptSave();
     } catch (error) {
-      console.error('ContactDetail: Save failed with error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      
-      if (errorMessage.includes('timed out')) {
-        toast.error('Save timed out - please check your connection and try again');
-      } else if (errorMessage.includes('permission')) {
-        toast.error('Permission denied - you may not have access to edit this contact');
-      } else {
-        toast.error(`Failed to save contact: ${errorMessage}`);
-      }
+      // Final catch - error already handled in attemptSave
     } finally {
       clearTimeout(safetyTimeout);
       console.log('ContactDetail: Save process completed, resetting loading state');

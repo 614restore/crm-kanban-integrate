@@ -685,15 +685,28 @@ class DatabaseService {
 
   async updateContact(contactId: string, updates: Partial<DbContact>): Promise<DbContact | null> {
     try {
-      // Increase timeout for mobile-friendly performance (20 seconds)
+      // Extended timeout for mobile-friendly performance (30 seconds)
       const { data, error } = await this.raceTimeout(
         supabase.from('contacts').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', contactId).select().single(),
-        20000, 'updateContact',
+        30000, 'updateContact',
       );
-      if (error) { console.error('Error updating contact:', error); throw new Error(error.message || 'Failed to update contact'); }
+      if (error) { 
+        console.error('Error updating contact:', error); 
+        // Provide more specific error messages
+        if (error.code === 'PGRST116') {
+          throw new Error('Contact not found or permission denied');
+        } else if (error.message.includes('timeout')) {
+          throw new Error('Database timeout - please try again with a better connection');
+        } else {
+          throw new Error(error.message || 'Failed to update contact');
+        }
+      }
       return data;
     } catch (err) {
       console.error('updateContact timed out or failed:', err);
+      if (err instanceof Error && err.message.includes('timed out')) {
+        throw new Error('Contact save timed out - please check your connection and try again');
+      }
       throw err instanceof Error ? err : new Error('Failed to update contact');
     }
   }
