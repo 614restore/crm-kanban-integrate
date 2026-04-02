@@ -968,7 +968,7 @@ class DatabaseService {
   async createDocument(document: Partial<DbDocument>): Promise<DbDocument | null> {
     assertCompanyId(document.company_id, 'createDocument');
     const { data, error } = await supabase.from('documents').insert(document).select().single();
-    if (error) { console.error('Error creating document:', error); return null; }
+    if (error) { console.error('Error creating document:', error); throw new Error(error.message || error.code || 'Database error inserting document'); }
     return data;
   }
 

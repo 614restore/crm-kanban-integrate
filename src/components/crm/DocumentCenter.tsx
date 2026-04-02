@@ -189,19 +189,6 @@ export default function DocumentCenter() {
         uploaded_by: state.currentUser?.id,
       });
 
-      if (!created) {
-        // CRITICAL FIX: Rollback storage upload if metadata save fails
-        console.error('[DocumentCenter] Metadata save failed - rolling back storage upload');
-        if (uploadedPath) {
-          await deleteFile('projectceo-documents', uploadedPath);
-          console.log('[DocumentCenter] Successfully rolled back orphaned file');
-        }
-        toast.error('Failed to save document record. File upload was rolled back.');
-        setIsUploading(false);
-        event.target.value = '';
-        return;
-      }
-
       const signedUrl = created.url
         ? (isHttpUrl(created.url) && !isSupabaseStorageUrl(created.url)
             ? created.url
@@ -229,7 +216,11 @@ export default function DocumentCenter() {
       toast.success(`${file.name} uploaded successfully!${linkedContact ? ` Linked to ${getContactFullName(linkedContact)}` : ''}`);
     } catch (error) {
       console.error('[DocumentCenter] Document upload error:', error);
-      toast.error('Failed to upload file: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      if (uploadedPath) {
+        await deleteFile('projectceo-documents', uploadedPath);
+        console.log('[DocumentCenter] Rolled back orphaned file after error');
+      }
+      toast.error('Failed to save document: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setIsUploading(false);
       event.target.value = '';

@@ -2626,13 +2626,16 @@ const DocumentTemplates: React.FC = () => {
       const htmlBlob = new Blob([html], { type: 'text/html' });
       const htmlFile = new File([htmlBlob], `${docName.replace(/[^a-z0-9]/gi, '_')}.html`, { type: 'text/html' });
       const uploadResult = await uploadDocument(htmlFile, profile.company_id, contactId);
+      if (uploadResult.error || !uploadResult.path) {
+        throw new Error(uploadResult.error || 'File upload failed');
+      }
 
       const docRow = await db.createDocument({
         company_id: profile.company_id,
         contact_id: contactId,
         name: docName,
         type: 'template-document',
-        url: uploadResult.path || '',
+        url: uploadResult.path,
         html_content: html,
         sign_token: token,
         sent_by: profile.id,
