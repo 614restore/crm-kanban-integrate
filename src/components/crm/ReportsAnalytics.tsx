@@ -1,7 +1,7 @@
 // Reports & Analytics Dashboard for Contractors
 // Comprehensive business intelligence and performance metrics
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   BarChart,
   Bar,
@@ -92,31 +92,10 @@ const ReportsAnalytics: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedRep, setSelectedRep] = useState<string>('all');
-  const [realExpenses, setRealExpenses] = useState<Array<{ date: string; amount: number }>>([]);
-
+  
   const { toast } = useToast();
   const { state } = useCRM();
-  const { profile } = useAuth();
   const financialStats = useFinancialStats();
-
-  // Load real expense data from the database
-  useEffect(() => {
-    const loadExpenses = async () => {
-      const companyId = profile?.company_id || state.companyId;
-      if (!companyId) return;
-      try {
-        const expenses = await db.getExpenses(companyId);
-        setRealExpenses(
-          expenses
-            .filter(e => e.status === 'approved' || e.status === 'paid')
-            .map(e => ({ date: e.date || e.submitted_at, amount: e.amount }))
-        );
-      } catch {
-        // silently fall back to no expense data
-      }
-    };
-    loadExpenses();
-  }, [profile?.company_id, state.companyId]);
 
   // Build revenue data from real invoices grouped by month
   const revenueData: RevenueData[] = useMemo(() => {
@@ -136,47 +115,56 @@ const ReportsAnalytics: React.FC = () => {
     const cutoff = new Date(now.getFullYear(), now.getMonth() - (monthCount - 1), 1);
 
     // Sum invoices by month
-    // CRITICAL FIX: Filter by company_id to prevent cross-tenant data leakage
-    state.invoices
-      .filter(inv => inv.company_id === profile?.company_id)
-      .forEach((inv) => {
-        const d = new Date(inv.createdAt || inv.dueDate || '');
+    state.invoices.forEach((inv) => {
+      const d = new Date(inv.createdAt || inv.dueDate || '');
+      if (isNaN(d.getTime()) || d < cutoff) return;
+      const key = d.toLocaleString('default', { month: 'short', year: selectedPeriod === 'ytd' || monthCount <= 3 ? undefined : '2-digit' });
+      if (months[key]) {
+        if (inv.status === 'paid') months[key].revenue += inv.amount;
+        if (inv.contactId) months[key].projects.add(inv.contactId);
+      }
+    });
+    // Sum deposits & final payments from contacts by completed month
+    state.contacts.forEach((c) => {
+      if (c.status === 'completed' && c.finalPaymentPaid && c.finalPaymentAmount) {
+        const d = new Date(c.updatedAt);
         if (isNaN(d.getTime()) || d < cutoff) return;
         const key = d.toLocaleString('default', { month: 'short', year: selectedPeriod === 'ytd' || monthCount <= 3 ? undefined : '2-digit' });
+        if (months[key]) months[key].revenue += c.finalPaymentAmount;
+      }
+    });
+    // Estimate expenses as 65% of revenue (industry avg) when we don't have real expense data
+    return Object.entries(months).map(([month, data]) => {
+      const estimatedExpenses = Math.round(data.revenue * 0.65);
       return {
         month,
         revenue: data.revenue,
-        expenses: Math.round(data.expenses),
-        profit: Math.round(data.revenue - data.expenses),
+        expenses: estimatedExpenses,
+        profit: data.revenue - estimatedExpenses,
         projects: data.projects.size,
       };
     });
+  }, [state.invoices, state.contacts, selectedPeriod]);
 
   // Build project data from real projects or contacts in project stages
   const projectData: ProjectData[] = useMemo(() => {
-    // CRITICAL FIX: Filter by company_id
     if (state.projects.length > 0) {
-      return state.projects
-        .filter(p => p.company_id === profile?.company_id)
-        .map((p) => ({
-          id: p.id,
-          name: p.name || 'Unnamed Project',
-          client: p.contactName || '',
-          value: p.estimatedBudget || 0,
-          profit: Math.round((p.estimatedBudget || 0) - (p.actualCost || 0)) || Math.round((p.estimatedBudget || 0) * 0.30),
-          profitMargin: p.estimatedBudget ? Math.round(((p.estimatedBudget - (p.actualCost || 0)) / p.estimatedBudget) * 100) : 30,
-          status: (p.status === 'in_progress' ? 'active' : p.status === 'scheduled' ? 'planning' : p.status) as ProjectData['status'],
-          startDate: p.startDate || p.createdAt,
-          completionDate: p.completedDate || p.endDate,
-          category: p.tags?.[0] || 'General',
-        }));
+      return state.projects.map((p) => ({
+        id: p.id,
+        name: p.name || 'Unnamed Project',
+        client: p.contactName || '',
+        value: p.estimatedBudget || 0,
+        profit: Math.round((p.estimatedBudget || 0) - (p.actualCost || 0)) || Math.round((p.estimatedBudget || 0) * 0.30),
+        profitMargin: p.estimatedBudget ? Math.round(((p.estimatedBudget - (p.actualCost || 0)) / p.estimatedBudget) * 100) : 30,
+        status: (p.status === 'in_progress' ? 'active' : p.status === 'scheduled' ? 'planning' : p.status) as ProjectData['status'],
+        startDate: p.startDate || p.createdAt,
+        completionDate: p.completedDate || p.endDate,
+        category: p.tags?.[0] || 'General',
+      }));
     }
-    // Fallback: derive from contacts (already filtered by company_id in CRM state)
+    // Fallback: derive from contacts
     return state.contacts
-      .filter((c) => 
-        c.company_id === profile?.company_id &&
-        ['in_progress', 'build_phase', 'completed', 'contingency'].includes(c.status)
-      )
+      .filter((c) => ['in_progress', 'build_phase', 'completed', 'contingency'].includes(c.status))
       .map((c) => ({
         id: c.id,
         name: `${getContactFullName(c)} Project`,
@@ -184,29 +172,25 @@ const ReportsAnalytics: React.FC = () => {
         value: c.projectValue || 0,
         profit: Math.round((c.projectValue || 0) * 0.30),
         profitMargin: 30,
-        status: (COMPLETED_PROJECT_STATUSES.includes(c.status) ? 'completed' : 'active') as ProjectData['status'],
+        status: (c.status === 'completed' ? 'completed' : 'active') as ProjectData['status'],
         startDate: c.createdAt,
-        completionDate: COMPLETED_PROJECT_STATUSES.includes(c.status) ? c.updatedAt : undefined,
+        completionDate: c.status === 'completed' ? c.updatedAt : undefined,
         category: c.insuranceCompany ? 'Insurance' : 'Retail',
       }));
-  }, [state.projects, state.contacts, profile?.company_id]);
+  }, [state.projects, state.contacts]);
 
   // Build lead source data from contacts
   const leadSources: LeadData[] = useMemo(() => {
     const sources: Record<string, { leads: number; conversions: number; revenue: number }> = {};
-    // CRITICAL FIX: Filter by company_id
-    state.contacts
-      .filter(c => c.company_id === profile?.company_id)
-      .forEach((c) => {
-        const src = c.leadSource || 'Direct';
-        if (!sources[src]) sources[src] = { leads: 0, conversions: 0, revenue: 0 };
-        sources[src].leads += 1;
-        // FIXED: Use standardized status check
-        if (isSoldStatus(c.status) || c.status === 'in_progress' || c.status === 'build_phase') {
-          sources[src].conversions += 1;
-          sources[src].revenue += c.projectValue || 0;
-        }
-      });
+    state.contacts.forEach((c) => {
+      const src = c.leadSource || 'Direct';
+      if (!sources[src]) sources[src] = { leads: 0, conversions: 0, revenue: 0 };
+      sources[src].leads += 1;
+      if (c.status === 'completed' || c.status === 'in_progress' || c.status === 'build_phase') {
+        sources[src].conversions += 1;
+        sources[src].revenue += c.projectValue || 0;
+      }
+    });
     return Object.entries(sources)
       .map(([source, data]) => ({
         source,
@@ -216,7 +200,7 @@ const ReportsAnalytics: React.FC = () => {
         revenue: data.revenue,
       }))
       .sort((a, b) => b.revenue - a.revenue);
-  }, [state.contacts, profile?.company_id]);
+  }, [state.contacts]);
 
   // Build team performance from real team members
   const teamPerformance: TeamPerformance[] = useMemo(() => {
@@ -238,18 +222,14 @@ const ReportsAnalytics: React.FC = () => {
     return state.teamMembers
       .filter((tm) => tm.isActive)
       .map((tm) => {
-        // CRITICAL FIX: Filter by company_id to prevent cross-tenant data leakage
         const repContacts = state.contacts.filter(
-          (c) => c.company_id === profile?.company_id && 
-                 (c.assignedTo === tm.userId || c.assignedTo === tm.id || c.assignedTo === tm.email)
+          (c) => c.assignedTo === tm.userId || c.assignedTo === tm.id || c.assignedTo === tm.email
         );
         const totalLeads = repContacts.length;
-        // FIXED: Use standardized status check  
-        const closedDeals = repContacts.filter((c) => isSoldStatus(c.status)).length;
+        const closedDeals = repContacts.filter((c) => c.status === 'completed').length;
         const activeDeals = repContacts.filter((c) => ['active', 'in_progress', 'job_started'].includes(c.status || '')).length;
         const revenue = repContacts
-          // FIXED: Use standardized status check
-          .filter((c) => isSoldStatus(c.status))
+          .filter((c) => c.status === 'completed')
           .reduce((sum, c) => sum + (c.jobValue || c.estimateAmount || 0), 0);
         const avgDealSize = closedDeals > 0 ? revenue / closedDeals : 0;
         const conversionRate = totalLeads > 0 ? (closedDeals / totalLeads) * 100 : 0;
@@ -263,7 +243,7 @@ const ReportsAnalytics: React.FC = () => {
           monthlyRevenue[d.toLocaleString('default', { month: 'short' })] = 0;
         }
         repContacts
-          .filter((c) => isDealWon(c.status) && c.updatedAt)
+          .filter((c) => c.status === 'completed' && c.updatedAt)
           .forEach((c) => {
             const d = new Date(c.updatedAt);
             const key = d.toLocaleString('default', { month: 'short' });
@@ -286,7 +266,7 @@ const ReportsAnalytics: React.FC = () => {
           monthlyRevenue: Object.entries(monthlyRevenue).map(([month, rev]) => ({ month, revenue: rev })),
         };
       });
-  }, [state.teamMembers, state.contacts, profile?.company_id]);
+  }, [state.teamMembers, state.contacts]);
 
   // Calculate key metrics
   const metrics = useMemo(() => {

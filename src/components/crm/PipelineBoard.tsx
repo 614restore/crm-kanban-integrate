@@ -214,6 +214,16 @@ export default function PipelineBoard() {
 
   const [draggedContact, setDraggedContact] = useState<Contact | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
+  
+  // Touch/mobile drag support
+  const [touchData, setTouchData] = useState({
+    startY: 0,
+    startX: 0,
+    isDragging: false,
+    dragElement: null as HTMLElement | null,
+    initialParent: null as HTMLElement | null,
+  });
+  
   const [showBoardSelector, setShowBoardSelector] = useState(false);
   const [showBoardEditor, setShowBoardEditor] = useState(false);
   const [editingBoard, setEditingBoard] = useState<KanbanBoard | null>(null);
@@ -302,6 +312,151 @@ export default function PipelineBoard() {
     }
     setDraggedContact(null);
     setDragOverColumn(null);
+  };
+
+  // Touch/Mobile drag handlers
+  const handleTouchStart = (e: React.TouchEvent, contact: Contact) => {
+    const touch = e.touches[0];
+    const element = e.currentTarget as HTMLElement;
+    
+    setTouchData({
+      startY: touch.clientY,
+      startX: touch.clientX,
+      isDragging: false,
+      dragElement: element,
+      initialParent: element.parentElement,
+    });
+    setDraggedContact(contact);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!draggedContact || !touchData.dragElement) return;
+    
+    e.preventDefault(); // Prevent scrolling
+    const touch = e.touches[0];
+    const deltaY = Math.abs(touch.clientY - touchData.startY);
+    const deltaX = Math.abs(touch.clientX - touchData.startX);
+    
+    // Start dragging if moved enough (prevents accidental drags)
+    if ((deltaY > 10 || deltaX > 10) && !touchData.isDragging) {
+      setTouchData(prev => ({ ...prev, isDragging: true }));
+      
+      // Add visual feedback
+      touchData.dragElement.style.opacity = '0.7';
+      touchData.dragElement.style.transform = 'scale(1.05)';
+      touchData.dragElement.style.zIndex = '1000';
+      touchData.dragElement.style.position = 'relative';
+    }
+    
+    if (touchData.isDragging) {
+      // Find the element under the touch point
+      const elementBelow = document.elementFromPoint(touch.clientX, touch.clientY);
+      const columnElement = elementBelow?.closest('[data-column-id]');
+      
+      if (columnElement) {
+        const columnId = columnElement.getAttribute('data-column-id');
+        setDragOverColumn(columnId);
+      } else {
+        setDragOverColumn(null);
+      }
+    }
+  };
+
+  const handleTouchEnd = async (e: React.TouchEvent) => {
+    if (!draggedContact || !touchData.isDragging) {
+      // Reset state for non-drag touches
+      setDraggedContact(null);
+      setTouchData({
+        startY: 0,
+        startX: 0,
+        isDragging: false,
+        dragElement: null,
+        initialParent: null,
+      });
+      return;
+    }
+
+    const touch = e.changedTouches[0];
+    const elementBelow = document.elementFromPoint(touch.clientX, touch.clientY);
+    const columnElement = elementBelow?.closest('[data-column-id]');
+    
+    // Reset visual feedback
+    if (touchData.dragElement) {
+      touchData.dragElement.style.opacity = '';
+      touchData.dragElement.style.transform = '';
+      touchData.dragElement.style.zIndex = '';
+      touchData.dragElement.style.position = '';
+    }
+    
+    if (columnElement && dragOverColumn) {
+      const columnId = columnElement.getAttribute('data-column-id');
+      
+      // Find the column object that matches this ID
+      let targetColumn: KanbanColumn | null = null;
+      
+      // Check current board columns
+      if (currentBoard?.columns) {
+        targetColumn = currentBoard.columns.find(col => col.id === columnId) || null;
+      }
+      
+      // Check unified sales columns if not found
+      if (!targetColumn && canViewUnified) {
+        targetColumn = UNIFIED_SALES_STAGES.find(col => col.status === columnId) || null;
+      }
+      
+      // Perform the drop operation if we have a valid target
+      if (targetColumn && draggedContact.status !== targetColumn.status) {
+        try {
+          if (effectiveCompanyId) {
+            const { updateContactStatus } = await import('../../lib/statusManager');
+            
+            const result = await updateContactStatus({
+              contactId: draggedContact.id,
+              newStatus: targetColumn.status,
+              oldStatus: draggedContact.status,
+              contactName: getContactFullName(draggedContact),
+              contactEmail: draggedContact.email,
+              userId: user?.id || 'system',
+              userEmail: user?.email || 'system@trussctr.com',
+              companyId: effectiveCompanyId,
+              source: 'touch_drag_drop',
+              reason: `Touch moved from ${draggedContact.status} to ${targetColumn.status}`,
+            });
+
+            if (result.success) {
+              dispatch({
+                type: 'UPDATE_CONTACT_STATUS',
+                payload: { contactId: draggedContact.id, status: targetColumn.status },
+              });
+              
+              // Show success toast
+              toast.success({
+                title: 'Contact Moved',
+                description: `${getContactFullName(draggedContact)} moved to ${targetColumn.title}`,
+                duration: 3000,
+              });
+            } else {
+              toast.error(`Failed to move contact: ${result.error}`);
+            }
+          }
+        } catch (error) {
+          console.error('Error updating contact status:', error);
+          const msg = error instanceof Error ? error.message : 'Failed to move contact';
+          toast.error(msg);
+        }
+      }
+    }
+    
+    // Reset all state
+    setDraggedContact(null);
+    setDragOverColumn(null);
+    setTouchData({
+      startY: 0,
+      startX: 0,
+      isDragging: false,
+      dragElement: null,
+      initialParent: null,
+    });
   };
 
   const handleContactClick = (contactId: string) => {
@@ -625,6 +780,7 @@ export default function PipelineBoard() {
                 return (
                   <div
                     key={stage.status}
+                    data-column-id={stage.status}
                     className={`w-72 flex-shrink-0 flex flex-col rounded-xl transition-colors ${stageStyle.column} ${dragOverColumn === fakeColumn.id ? 'ring-2 ring-blue-500' : ''}`}
                     onDragOver={(e) => handleDragOver(e, fakeColumn.id)}
                     onDragLeave={handleDragLeave}
@@ -655,8 +811,11 @@ export default function PipelineBoard() {
                             key={contact.id}
                             draggable
                             onDragStart={(e) => handleDragStart(e, contact)}
+                            onTouchStart={(e) => handleTouchStart(e, contact)}
+                            onTouchMove={handleTouchMove}
+                            onTouchEnd={handleTouchEnd}
                             onClick={() => handleContactClick(contact.id)}
-                            className={`bg-white rounded-lg p-3 shadow-sm cursor-pointer hover:shadow-md transition-all group ${cardBorder} ${draggedContact?.id === contact.id ? 'opacity-50' : ''}`}
+                            className={`bg-white rounded-lg p-3 shadow-sm cursor-pointer hover:shadow-md transition-all group ${cardBorder} ${draggedContact?.id === contact.id ? 'opacity-50' : ''} ${touchData.isDragging ? 'pointer-events-none' : ''}`}
                           >
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0 flex-1">
@@ -793,6 +952,7 @@ export default function PipelineBoard() {
                     return (
                       <div
                         key={column.id}
+                        data-column-id={column.status}
                         className={`w-72 flex-shrink-0 flex flex-col bg-gray-100 rounded-xl transition-colors ${dragOverColumn === column.id ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}
                         onDragOver={(e) => handleDragOver(e, column.id)}
                         onDragLeave={handleDragLeave}
@@ -815,8 +975,11 @@ export default function PipelineBoard() {
                                 key={contact.id}
                                 draggable
                                 onDragStart={(e) => handleDragStart(e, contact)}
+                                onTouchStart={(e) => handleTouchStart(e, contact)}
+                                onTouchMove={handleTouchMove}
+                                onTouchEnd={handleTouchEnd}
                                 onClick={() => handleContactClick(contact.id)}
-                                className="bg-white rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer border border-gray-100"
+                                className={`bg-white rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer border border-gray-100 ${touchData.isDragging ? 'pointer-events-none' : ''}`}
                               >
                                 <div className="flex items-start justify-between gap-2">
                                   <div className="min-w-0 flex-1">
@@ -917,6 +1080,7 @@ export default function PipelineBoard() {
               return (
                 <div
                   key={column.id}
+                  data-column-id={column.status}
                   className={`w-80 flex-shrink-0 flex flex-col bg-gray-100 rounded-xl transition-colors ${dragOverColumn === column.id ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}
                   onDragOver={(e) => handleDragOver(e, column.id)}
                   onDragLeave={handleDragLeave}
@@ -951,8 +1115,11 @@ export default function PipelineBoard() {
                           key={contact.id}
                           draggable
                           onDragStart={(e) => handleDragStart(e, contact)}
+                          onTouchStart={(e) => handleTouchStart(e, contact)}
+                          onTouchMove={handleTouchMove}
+                          onTouchEnd={handleTouchEnd}
                           onClick={() => handleContactClick(contact.id)}
-                          className={`bg-white rounded-lg p-4 shadow-sm border border-gray-200 cursor-pointer hover:shadow-md transition-all group ${draggedContact?.id === contact.id ? 'opacity-50' : ''}`}
+                          className={`bg-white rounded-lg p-4 shadow-sm border border-gray-200 cursor-pointer hover:shadow-md transition-all group ${draggedContact?.id === contact.id ? 'opacity-50' : ''} ${touchData.isDragging ? 'pointer-events-none' : ''}`}
                         >
                           <div className="flex items-start justify-between">
                             <div className="flex-1 min-w-0">

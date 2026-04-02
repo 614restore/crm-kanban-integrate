@@ -24,6 +24,7 @@ import {
   Phone,
   Video,
   AlertTriangle,
+  ExternalLink,
 } from 'lucide-react';
 
 type ViewMode = 'month' | 'week' | 'list';
@@ -314,6 +315,13 @@ export default function CalendarView() {
     });
   };
 
+  const handleNavigateToContact = (contactId: string) => {
+    if (contactId) {
+      dispatch({ type: 'SELECT_CONTACT', payload: contactId });
+      toast.success('Navigating to contact...');
+    }
+  };
+
   const renderMentions = (value: string) => {
     const known = new Set(mentionTargets.map((t) => t.handle.toLowerCase()));
     return value.split(/(@[a-zA-Z0-9_]+)/g).map((part, index) => {
@@ -483,7 +491,24 @@ export default function CalendarView() {
                                 <p className="font-semibold text-gray-900 text-sm truncate">{apt.title}</p>
                               </div>
                             </div>
-                            <p className="text-xs text-gray-600 mb-1">{apt.contactName}</p>
+                            <div className="flex items-center justify-between mb-1">
+                              <p 
+                                className="text-xs text-gray-600 hover:text-blue-600 cursor-pointer transition-colors"
+                                onClick={() => apt.contactId && handleNavigateToContact(apt.contactId)}
+                                title="Click to view contact details"
+                              >
+                                {apt.contactName}
+                              </p>
+                              {apt.contactId && (
+                                <button
+                                  onClick={() => handleNavigateToContact(apt.contactId)}
+                                  className="p-1 hover:bg-blue-100 rounded transition-colors"
+                                  title="View contact details"
+                                >
+                                  <ExternalLink size={10} className="text-blue-600" />
+                                </button>
+                              )}
+                            </div>
                             <div className="flex items-center gap-3 text-xs text-gray-500 mb-2">
                               <span className="flex items-center gap-1"><Clock size={11} />{formatTime(apt.time)} &middot; {apt.duration}min</span>
                             </div>
@@ -504,6 +529,9 @@ export default function CalendarView() {
                               <p className="text-xs text-gray-500 bg-gray-50 rounded p-2 mb-2">{renderMentions(apt.notes)}</p>
                             )}
                             <div className="flex items-center gap-1 pt-1 border-t border-gray-100">
+                              {apt.contactId && (
+                                <button onClick={() => handleNavigateToContact(apt.contactId)} className="p-1.5 hover:bg-blue-100 rounded transition-colors" title="View contact details"><ExternalLink size={14} className="text-blue-600" /></button>
+                              )}
                               {apt.type === 'inspection' && apt.status === 'scheduled' && (
                                 <button onClick={() => handleCompleteInspection(apt)} className="p-1.5 hover:bg-green-100 rounded transition-colors" title="Mark complete"><CheckCircle size={14} className="text-green-600" /></button>
                               )}
