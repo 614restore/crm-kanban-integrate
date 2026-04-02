@@ -31,6 +31,7 @@ import {
   FolderPlus,
   PenLine,
   Mail,
+  Lock,
 } from 'lucide-react';
 import { withTimeout } from '@/lib/utils';
 
@@ -192,6 +193,12 @@ export default function EstimatesView() {
 
   const handleOpenModal = (estimate?: Estimate) => {
     if (estimate) {
+      // Check if estimate has been viewed by customer
+      if (estimate.viewedAt) {
+        toast.error('Cannot edit estimate - customer has already viewed it. Create a change order instead.');
+        return;
+      }
+      
       setEditingEstimate(estimate);
       setSelectedContactId(estimate.contactId);
       setTitle(estimate.title);
@@ -991,6 +998,15 @@ export default function EstimatesView() {
                         Signed
                       </span>
                     )}
+                    {estimate.viewedAt && !estimate.signatureData && (
+                      <span 
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700"
+                        title="Customer has viewed - editing locked"
+                      >
+                        <Lock size={11} />
+                        Locked
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-4 text-sm text-gray-600">
                     <span className="font-mono">{estimate.estimateNumber}</span>
@@ -1040,12 +1056,49 @@ export default function EstimatesView() {
                     <FileText size={18} />
                   </button>
                   <button
-                    onClick={() => handleOpenModal(estimate)}
-                    className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                    title="Edit"
+                    onClick={() => {
+                      if (estimate.viewedAt) {
+                        toast.info('Customer has viewed this estimate. Use "Create Change Order" to make modifications.');
+                      } else {
+                        handleOpenModal(estimate);
+                      }
+                    }}
+                    className={`p-2 rounded-lg transition-colors ${
+                      estimate.viewedAt 
+                        ? 'text-gray-400 cursor-not-allowed' 
+                        : 'text-gray-600 hover:bg-gray-100'
+                    }`}
+                    title={estimate.viewedAt ? 'Cannot edit - Customer has viewed' : 'Edit'}
                   >
                     <Edit2 size={18} />
                   </button>
+                  
+                  {/* Add Change Order button for viewed estimates */}
+                  {estimate.viewedAt && (
+                    <button
+                      onClick={() => {
+                        // Create a new estimate based on this one as a change order
+                        setSelectedContactId(estimate.contactId);
+                        setTitle(`Change Order - ${estimate.title}`);
+                        setEstimateNumber(`CO-${Date.now().toString().slice(-6)}`);
+                        setValidityDate('');
+                        setItems(estimate.items.map(item => ({
+                          ...item,
+                          id: crypto.randomUUID() // New IDs for change order items
+                        })));
+                        setNotes(estimate.notes || '');
+                        setTerms(estimate.terms || '');
+                        setTaxRate(estimate.amount > 0 ? (estimate.tax / estimate.amount) * 100 : 0);
+                        setShowModal(true);
+                        toast.info('Creating change order based on original estimate');
+                      }}
+                      className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                      title="Create Change Order"
+                    >
+                      <PenLine size={18} />
+                    </button>
+                  )}
+                  
                   <button
                     onClick={() => setShowDeleteConfirm(estimate.id)}
                     className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
@@ -1697,12 +1750,52 @@ export default function EstimatesView() {
             <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50 rounded-b-xl">
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => { setViewingEstimate(null); handleOpenModal(viewingEstimate); }}
-                  className="flex items-center gap-2 px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-white transition-colors text-sm"
+                  onClick={() => { 
+                    setViewingEstimate(null); 
+                    if (viewingEstimate?.viewedAt) {
+                      toast.info('Customer has viewed this estimate. Use "Create Change Order" to make modifications.');
+                    } else {
+                      handleOpenModal(viewingEstimate); 
+                    }
+                  }}
+                  className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition-colors text-sm ${
+                    viewingEstimate?.viewedAt
+                      ? 'text-gray-400 border-gray-200 cursor-not-allowed'
+                      : 'text-gray-700 border-gray-300 hover:bg-white'
+                  }`}
+                  title={viewingEstimate?.viewedAt ? 'Cannot edit - Customer has viewed' : 'Edit'}
                 >
                   <Edit2 size={16} />
-                  Edit
+                  {viewingEstimate?.viewedAt ? 'Viewed by Customer' : 'Edit'}
                 </button>
+                
+                {/* Show Change Order button only for viewed estimates */}
+                {viewingEstimate?.viewedAt && (
+                  <button
+                    onClick={() => {
+                      // Create a new estimate based on this one as a change order
+                      setViewingEstimate(null);
+                      setSelectedContactId(viewingEstimate.contactId);
+                      setTitle(`Change Order - ${viewingEstimate.title}`);
+                      setEstimateNumber(`CO-${Date.now().toString().slice(-6)}`);
+                      setValidityDate('');
+                      setItems(viewingEstimate.items.map(item => ({
+                        ...item,
+                        id: crypto.randomUUID() // New IDs for change order items
+                      })));
+                      setNotes(viewingEstimate.notes || '');
+                      setTerms(viewingEstimate.terms || '');
+                      setTaxRate(viewingEstimate.amount > 0 ? (viewingEstimate.tax / viewingEstimate.amount) * 100 : 0);
+                      setShowModal(true);
+                      toast.info('Creating change order based on original estimate');
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm"
+                  >
+                    <PenLine size={16} />
+                    Create Change Order
+                  </button>
+                )}
+                
                 <button
                   onClick={() => printEstimate(viewingEstimate)}
                   className="flex items-center gap-2 px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-white transition-colors text-sm"
