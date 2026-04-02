@@ -2587,16 +2587,18 @@ const DocumentTemplates: React.FC = () => {
     });
   };
 
-  // Download the customer-specific filled HTML from the customer editor
-  const downloadFilledCustomer = (html: string, docName: string) => {
-    const blob = new Blob([html], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
+  // Download the customer-specific filled document as PDF
+  const downloadFilledCustomer = async (html: string, docName: string) => {
+    const { htmlStringToPdfBlob } = await import('@/lib/pdfService');
+    const filename = `${docName.replace(/[^a-z0-9]/gi, '_')}.pdf`;
+    const pdfBlob = await htmlStringToPdfBlob(html, filename);
+    const url = URL.createObjectURL(pdfBlob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${docName.replace(/[^a-z0-9]/gi, '_')}.html`;
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
-    toast({ title: 'Downloaded', description: `"${docName}" saved as HTML file.` });
+    toast({ title: 'Downloaded', description: `"${docName}" saved as PDF.` });
   };
 
   // Upload HTML to Supabase storage, create a documents row, email the customer a signing link
@@ -2621,18 +2623,21 @@ const DocumentTemplates: React.FC = () => {
       // Generate a secure token
       const token = crypto.randomUUID();
 
-      // Store the document record with html_content + sign_token
-      const { uploadDocument } = await import('@/lib/storage');
-      const htmlBlob = new Blob([html], { type: 'text/html' });
-      const htmlFile = new File([htmlBlob], `${docName.replace(/[^a-z0-9]/gi, '_')}.html`, { type: 'text/html' });
-      const uploadResult = await uploadDocument(htmlFile, profile.company_id, contactId);
+      // Generate PDF and upload; keep html_content for the signing page
+      const { htmlStringToPdfBlob, uploadToAvailableBucket } = await import('@/lib/pdfService');
+      const { buildStoredDocumentUrl } = await import('@/lib/documentAccess');
+      const pdfBlob = await htmlStringToPdfBlob(html, `${docName.replace(/[^a-z0-9]/gi, '_')}.pdf`);
+      const storagePath = `${profile.company_id}/${contactId}/template-document-${token}-${Date.now()}.pdf`;
+      const uploaded = await uploadToAvailableBucket(storagePath, pdfBlob, 'application/pdf', profile.company_id);
+      const storedUrl = buildStoredDocumentUrl(uploaded.publicUrl, uploaded.bucket, uploaded.path);
 
       const docRow = await db.createDocument({
         company_id: profile.company_id,
         contact_id: contactId,
         name: docName,
         type: 'template-document',
-        url: uploadResult.path || '',
+        url: storedUrl,
+        size: `${Math.round(pdfBlob.size / 1024)} KB`,
         html_content: html,
         sign_token: token,
         sent_by: profile.id,

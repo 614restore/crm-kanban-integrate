@@ -9,6 +9,7 @@ type ViewerState = {
   sourceUrl: string | null;
   contentType: string;
   name: string;
+  htmlContent: string | null;
 };
 
 export default function DocumentViewer() {
@@ -20,11 +21,21 @@ export default function DocumentViewer() {
     sourceUrl: null,
     contentType: '',
     name: '',
+    htmlContent: null,
   });
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
 
+  const isHtml = useMemo(() => {
+    return (
+      viewerState.contentType.includes('html') ||
+      viewerState.htmlContent !== null ||
+      (documentRecord?.html_content && !viewerState.contentType.includes('pdf'))
+    );
+  }, [documentRecord?.html_content, viewerState.contentType, viewerState.htmlContent]);
+
   const isPdf = useMemo(() => {
+    if (isHtml) return false;
     return (
       viewerState.contentType.includes('pdf') ||
       viewerState.name.toLowerCase().endsWith('.pdf') ||
@@ -32,7 +43,7 @@ export default function DocumentViewer() {
       documentRecord?.type === 'estimate' ||
       documentRecord?.type === 'invoice'
     );
-  }, [documentRecord?.type, viewerState.contentType, viewerState.name]);
+  }, [isHtml, documentRecord?.type, viewerState.contentType, viewerState.name]);
 
   const isImage = useMemo(() => {
     return viewerState.contentType.startsWith('image/');
@@ -65,17 +76,41 @@ export default function DocumentViewer() {
         const record: any = data;
         setDocumentRecord(record);
 
+        // If the record already has html_content, use it directly — no need to fetch storage
+        if (record.html_content) {
+          setViewerState((current) => {
+            if (current.objectUrl) URL.revokeObjectURL(current.objectUrl);
+            return {
+              objectUrl: null,
+              sourceUrl: null,
+              contentType: 'text/html',
+              name: record.name || 'Document',
+              htmlContent: record.html_content,
+            };
+          });
+          return;
+        }
+
         const loaded = await fetchDocumentObjectUrl(record.url);
+
+        // If the fetched file is HTML, read it as text and use srcdoc to avoid
+        // browsers rendering the blob as plain text source code.
+        let htmlContent: string | null = null;
+        if (loaded.blob.type.includes('html')) {
+          htmlContent = await loaded.blob.text();
+        }
+
         setViewerState((current) => {
           if (current.objectUrl) {
             URL.revokeObjectURL(current.objectUrl);
           }
 
           return {
-            objectUrl: loaded.objectUrl,
+            objectUrl: htmlContent ? null : loaded.objectUrl,
             sourceUrl: loaded.sourceUrl,
             contentType: loaded.blob.type || '',
             name: record.name || 'Document',
+            htmlContent,
           };
         });
       } catch (err) {
@@ -154,13 +189,20 @@ export default function DocumentViewer() {
               Retry
             </button>
           </div>
-        ) : viewerState.objectUrl ? (
+        ) : (viewerState.objectUrl || viewerState.htmlContent) ? (
           <div className="mx-auto flex h-full max-w-5xl flex-col gap-4">
             <div className="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm">
-              {isPdf ? (
+              {isHtml ? (
                 <iframe
                   title={viewerState.name}
-                  src={viewerState.objectUrl}
+                  srcdoc={viewerState.htmlContent ?? documentRecord?.html_content ?? ''}
+                  className="h-[78vh] w-full rounded-2xl bg-slate-50"
+                  sandbox="allow-same-origin"
+                />
+              ) : isPdf ? (
+                <iframe
+                  title={viewerState.name}
+                  src={viewerState.objectUrl!}
                   className="h-[78vh] w-full rounded-2xl bg-slate-50"
                 />
               ) : isImage ? (
@@ -181,7 +223,7 @@ export default function DocumentViewer() {
 
             <div className="flex gap-3">
               <a
-                href={viewerState.objectUrl}
+                href={viewerState.objectUrl ?? (viewerState.htmlContent ? `data:text/html;charset=utf-8,${encodeURIComponent(viewerState.htmlContent)}` : '#')}
                 download={viewerState.name}
                 className="flex-1 rounded-2xl bg-primary px-4 py-3 text-center text-sm font-bold text-white"
               >

@@ -4,7 +4,8 @@ import { X, FileText, ChevronLeft, Search, DollarSign, Save, Loader2, Plus, Tras
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/authContext';
 import { db, DbCompany } from '@/lib/database';
-import { uploadDocument } from '@/lib/storage';
+import { htmlStringToPdfBlob, uploadToAvailableBucket } from '@/lib/pdfService';
+import { buildStoredDocumentUrl } from '@/lib/documentAccess';
 import {
   DocumentTemplate,
   LineItemDefault,
@@ -311,16 +312,14 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
 
     setIsSaving(true);
     try {
-      const blob = new Blob([finalHtml], { type: 'text/html' });
       const contactName = getContactFullName(contact).replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
       const timestamp = new Date().toISOString().slice(0, 10);
-      const fileName = `${selected.name.replace(/\s+/g, '_')}_${contactName}_${timestamp}.html`;
-      const file = new File([blob], fileName, { type: 'text/html' });
+      const fileName = `${selected.name.replace(/\s+/g, '_')}_${contactName}_${timestamp}.pdf`;
 
-      const uploadResult = await uploadDocument(file, profile.company_id, contact.id);
-      if (uploadResult.error || !uploadResult.path) {
-        throw new Error(uploadResult.error || 'Upload failed');
-      }
+      const pdfBlob = await htmlStringToPdfBlob(finalHtml, fileName);
+      const storagePath = `${profile.company_id}/${contact.id}/${fileName}`;
+      const uploaded = await uploadToAvailableBucket(storagePath, pdfBlob, 'application/pdf', profile.company_id);
+      const storedUrl = buildStoredDocumentUrl(uploaded.publicUrl, uploaded.bucket, uploaded.path);
 
       const repName = profile
         ? `${(profile as any).first_name || ''} ${(profile as any).last_name || ''}`.trim()
@@ -331,8 +330,8 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
         contact_id: contact.id,
         name: `${selected.name} — ${getContactFullName(contact)}`,
         type: selected.category === 'estimate' ? 'estimate' : 'other',
-        url: uploadResult.path,
-        size: `${Math.round(blob.size / 1024)} KB`,
+        url: storedUrl,
+        size: `${Math.round(pdfBlob.size / 1024)} KB`,
         uploaded_by: profile?.id || null,
       });
 
