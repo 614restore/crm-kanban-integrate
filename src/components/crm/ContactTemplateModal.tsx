@@ -333,7 +333,7 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
         type: selected.category === 'estimate' ? 'estimate' : 'other',
         url: uploadResult.path,
         size: `${Math.round(blob.size / 1024)} KB`,
-        uploaded_by: repName,
+        uploaded_by: profile?.id || null,
       });
 
       if (!newDbDoc) throw new Error('Failed to create document record');

@@ -324,7 +324,7 @@ export default function RoofrPanel({
         type: 'other',
         url: uploadResult.path,
         size: `${Math.round(fileBlob.size / 1024)} KB`,
-        uploaded_by: 'Roofr',
+        uploaded_by: userId || null,
       });
 
       if (!newDbDoc) throw new Error('Failed to create document record');
