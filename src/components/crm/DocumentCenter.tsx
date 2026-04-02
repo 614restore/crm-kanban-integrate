@@ -348,6 +348,23 @@ export default function DocumentCenter() {
       toast.error('Unable to open document. Check console for details or verify Supabase bucket setup.');
       return;
     }
+
+    // HTML documents may lack text/html content-type in storage — re-serve via blob
+    const looksLikeHtml = url ? /\.html?(#|\?|$)/i.test(url) : false;
+    if (looksLikeHtml) {
+      try {
+        const resp = await fetch(resolved);
+        const html = await resp.text();
+        const blob = new Blob([html], { type: 'text/html' });
+        const blobUrl = URL.createObjectURL(blob);
+        window.open(blobUrl, '_blank', 'noopener,noreferrer');
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 15000);
+        return;
+      } catch (fetchErr) {
+        console.warn('[DocumentCenter] HTML blob fallback failed, opening directly', fetchErr);
+      }
+    }
+
     window.open(resolved, '_blank', 'noopener,noreferrer');
   };
 

@@ -627,6 +627,25 @@ export default function ContactDetail() {
         return;
       }
 
+      // HTML documents stored in Supabase may lack text/html content-type,
+      // causing browsers to display raw markup. Re-serve via blob to fix.
+      const looksLikeHtml = /\.html?(#|\?|$)/i.test(url);
+      if (looksLikeHtml) {
+        try {
+          const resp = await fetch(signedUrl);
+          const html = await resp.text();
+          const blob = new Blob([html], { type: 'text/html' });
+          const blobUrl = URL.createObjectURL(blob);
+          const win = window.open(blobUrl, '_blank', 'noopener,noreferrer');
+          // Revoke after the window has had time to load
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 15000);
+          if (!win) toast.error('Popup blocked — please allow popups for this site.');
+          return;
+        } catch (fetchErr) {
+          console.warn('[ContactDetail] HTML blob fallback failed, opening directly', fetchErr);
+        }
+      }
+
       window.open(signedUrl, '_blank', 'noopener,noreferrer');
     } catch (error) {
       console.error('[ContactDetail] Error opening document:', error);
