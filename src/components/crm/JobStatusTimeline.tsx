@@ -370,8 +370,8 @@ const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({ contact, jobs = [
 
       {/* Confirmation Modal */}
       {showRevertModal && revertTargetStage && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 pb-24">
-          <div className="bg-white rounded-xl w-full max-w-md p-6 max-h-[70vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 p-4 pt-16" style={{ paddingBottom: '120px' }}>
+          <div className="bg-white rounded-xl w-full max-w-md p-6 shadow-2xl">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900">Revert Job Stage?</h3>
               <button
