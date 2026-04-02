@@ -546,8 +546,28 @@ export default function EstimatesView() {
       }
       toast.success(`Estimate emailed to ${contact.email}`);
     } catch (error) {
-      console.error('Error sending estimate:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to send estimate');
+      console.error('EstimatesView: Error sending estimate:', error);
+      
+      // Provide specific error messages to help debug the issue
+      let errorMessage = 'Failed to send estimate';
+      
+      if (error instanceof Error) {
+        if (error.message.includes('timed out')) {
+          errorMessage = 'Email sending timed out - please check your internet connection and try again';
+        } else if (error.message.includes('Email API is not configured')) {
+          errorMessage = 'Email service is not configured properly';
+        } else if (error.message.includes('failed') && error.message.includes('404')) {
+          errorMessage = 'Email service endpoint not found - check deployment';
+        } else if (error.message.includes('401') || error.message.includes('unauthorized')) {
+          errorMessage = 'Authentication failed - please refresh the page and try again';
+        } else if (error.message.includes('Mark estimate as sent')) {
+          errorMessage = 'Failed to mark estimate as sent in database';
+        } else {
+          errorMessage = `Error: ${error.message}`;
+        }
+      }
+      
+      toast.error(errorMessage);
     }
   };
 
