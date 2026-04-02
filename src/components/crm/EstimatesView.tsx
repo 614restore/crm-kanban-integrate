@@ -1545,7 +1545,7 @@ export default function EstimatesView() {
                             <td className="px-4 py-3 text-right text-gray-400 italic" colSpan={2}>Included</td>
                           ) : (
                             <>
-                              <td className="px-4 py-3 text-right text-gray-500">{formatCurrency(item.unitPrice)}</td>
+                              <td className="px-4 py-3 text-right text-gray-500">{formatCurrency(item.unitPrice || item.unit_price || 0)}</td>
                               <td className="px-5 py-3 text-right font-medium text-gray-800">{formatCurrency(item.total)}</td>
                             </>
                           )}
