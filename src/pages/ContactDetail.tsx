@@ -213,11 +213,35 @@ export default function ContactDetail() {
   };
 
   const saveEdit = async () => {
-    if (!editForm?.id) return;
+    if (!editForm?.id || !user?.id) return;
     const statusChanged = editForm.status !== contact?.status;
     const prevStatus: string = contact?.status ?? '';
     const nextStatus: string = editForm.status ?? '';
+    
     try {
+      // Handle status change with proper validation if needed
+      if (statusChanged && contact?.company_id) {
+        const { updateContactStatus } = await import('../lib/statusManager');
+        const statusResult = await updateContactStatus({
+          contactId: editForm.id,
+          newStatus: nextStatus,
+          oldStatus: prevStatus,
+          contactName: contact.name,
+          contactEmail: contact.email,
+          userId: user.id,
+          userEmail: user.email,
+          companyId: contact.company_id,
+          source: 'manual_edit',
+          reason: 'Status updated via contact edit form'
+        });
+        
+        if (!statusResult.success) {
+          alert(`Status change failed: ${statusResult.error}`);
+          return;
+        }
+      }
+      
+      // Update non-status fields
       const parsed = parseContactSchedule(contact?.notes);
       const updates = { ...editForm };
       const numericFields = ['project_value', 'deposit_amount', 'final_payment_amount', 'deductible'];
@@ -229,50 +253,24 @@ export default function ContactDetail() {
         }
       });
       updates.notes = serializeContactSchedule(parsed.schedule, updates.notes || '');
+      
+      // Remove status from updates if we handled it separately
       if (statusChanged) {
-        updates.status_changed_at = new Date().toISOString();
+        delete updates.status;
       }
-      const { error } = await (supabase.from('contacts') as any).update(updates).eq('id', editForm.id);
-      if (error) throw error;
-
-      // Auto-log the stage transition to the timeline
-      if (statusChanged && user?.id) {
-        const from = prevStatus.replace(/_/g, ' ');
-        const to = nextStatus.replace(/_/g, ' ');
-        await (supabase.from('communications') as any).insert({
-          contact_id: editForm.id,
-          company_id: contact?.company_id,
-          type: 'stage_change',
-          content: `Stage updated: ${from} → ${to}`,
-          user_id: user.id,
-          direction: 'outbound',
-        });
-        fetchTimeline();
-
-        // Fire automation events and auto-progression
-        if (contact?.company_id) {
-          fireAutomationEvent('status_changed', contact.company_id, {
-            contactId: editForm.id,
-            contactName: contact.name,
-            contactEmail: contact.email,
-            oldStatus: prevStatus,
-            newStatus: nextStatus,
-          }).catch(console.error);
-
-          handleAutoProgression(
-            editForm.id,
-            nextStatus,
-            user.id,
-            user.email
-          ).catch(console.error);
-        }
+      
+      // Update remaining fields (if any)
+      if (Object.keys(updates).length > 1) { // More than just the 'id' field
+        const { error } = await (supabase.from('contacts') as any).update(updates).eq('id', editForm.id);
+        if (error) throw error;
       }
 
       setIsEditing(false);
       fetchContact();
+      if (statusChanged) fetchTimeline(); // Refresh timeline to show status change
     } catch (err) {
       console.error('Error saving contact:', err);
-      alert('Failed to save contact changes.');
+      alert(`Failed to save contact changes: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   };
 

@@ -214,9 +214,27 @@ async function validateStatusChange(contactId: string, newStatus: string, oldSta
 function validateStatusTransition(fromStatus: string, toStatus: string): string[] {
   const errors: string[] = [];
 
-  // Terminal states shouldn't be changed
-  if (['completed', 'lost', 'cancelled', 'paid'].includes(fromStatus) && fromStatus !== toStatus) {
-    errors.push(`Cannot change status from terminal state: ${fromStatus}`);
+  // Define truly terminal states that cannot be changed
+  const trulyTerminalStates = ['lost', 'cancelled', 'paid'];
+  
+  // Define allowed rollback scenarios for business workflow
+  const allowedRollbacks: Record<string, string[]> = {
+    'completed': ['estimating', 'cleanup', 'build_phase', 'in_progress'], // Can roll back to re-estimate or continue work
+    'invoicing': ['completed', 'cleanup'], // Can roll back from invoicing to fix issues
+    'pending_payment': ['invoicing'], // Can roll back to re-invoice if payment issues
+  };
+
+  // Check for truly terminal states (never allow changes from these)
+  if (trulyTerminalStates.includes(fromStatus) && fromStatus !== toStatus) {
+    errors.push(`Cannot change status from final terminal state: ${fromStatus}`);
+  }
+  
+  // Check for disallowed rollbacks (completed can roll back, but only to specific statuses)
+  if (fromStatus === 'completed' && toStatus !== fromStatus) {
+    const allowedTargets = allowedRollbacks[fromStatus] || [];
+    if (!allowedTargets.includes(toStatus)) {
+      errors.push(`Cannot change status from ${fromStatus} to ${toStatus}. Allowed rollbacks: ${allowedTargets.join(', ')}`);
+    }
   }
 
   // Backwards progression warnings (not blocking)

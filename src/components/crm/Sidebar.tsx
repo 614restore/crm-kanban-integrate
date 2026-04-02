@@ -24,6 +24,7 @@ import {
   Clipboard,
   Package,
   Receipt,
+  FilePlus,
   BarChart,
   Shield,
   AlertCircle,
@@ -47,6 +48,7 @@ const navItems: NavItem[] = [
   { id: 'communications', label: 'Communications', icon: <MessageSquare size={20} /> },
   { id: 'calendar', label: 'Calendar', icon: <Calendar size={20} /> },
   { id: 'documents', label: 'Documents', icon: <FileText size={20} /> },
+  { id: 'document-templates', label: 'Templates', icon: <FilePlus size={20} /> },
   { id: 'financial', label: 'Financial', icon: <DollarSign size={20} />, requiresPermission: 'financials' },
   { id: 'expenses', label: 'Expenses', icon: <Receipt size={20} /> },
   { id: 'suppliers', label: 'Suppliers', icon: <Store size={20} /> },
@@ -139,12 +141,6 @@ export default function Sidebar() {
   });
 
   const handleNavClick = (viewId: ViewType) => {
-    // CRITICAL FIX: Validate company context before navigation
-    if (!state.companyId) {
-      toast.error('Company not loaded. Please refresh and try again.');
-      console.warn('[Sidebar] Navigation blocked - no company_id in state');
-      return;
-    }
     dispatch({ type: 'SET_VIEW', payload: viewId });
   };
 
