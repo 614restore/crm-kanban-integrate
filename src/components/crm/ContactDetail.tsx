@@ -685,14 +685,25 @@ export default function ContactDetail() {
   const handleSave = async () => {
     if (!editedContact) return;
     
+    console.log('ContactDetail: Starting save process for contact:', editedContact.id);
     setIsSaving(true);
+    
+    // Safety timeout to prevent infinite spinner (30 seconds max)
+    const safetyTimeout = setTimeout(() => {
+      console.error('ContactDetail: Save operation exceeded 30 second limit, forcing reset');
+      setIsSaving(false);
+      toast.error('Save operation timed out. Please try again.');
+    }, 30000);
+    
     try {
       if (!effectiveCompanyId) {
+        console.error('ContactDetail: No company context available');
         toast.error('No company context available. Please refresh and sign in again.');
         return;
       }
 
-      const updated = await db.updateContact(editedContact.id, {
+      console.log('ContactDetail: Updating contact with company ID:', effectiveCompanyId);
+      const updateData = {
         first_name: editedContact.firstName,
         last_name: editedContact.lastName,
         email: editedContact.email,
@@ -725,22 +736,38 @@ export default function ContactDetail() {
         is_retail: editedContact.isRetail ?? false,
         retail_notes: editedContact.retailNotes,
         notes: editedContact.notes,
-      });
+      };
 
+      console.log('ContactDetail: Sending update data:', updateData);
+      
+      const updated = await db.updateContact(editedContact.id, updateData);
+      console.log('ContactDetail: Database response:', updated);
 
       if (!updated) {
-        toast.error('Failed to save contact changes');
+        console.error('ContactDetail: Update returned null/undefined');
+        toast.error('Failed to save contact changes - no data returned');
         return;
       }
 
       dispatch({ type: 'UPDATE_CONTACT', payload: { ...editedContact, updatedAt: new Date().toISOString() } });
       setIsEditing(false);
       setEditedContact(null);
-      toast.success('Contact saved');
+      toast.success('Contact saved successfully');
+      console.log('ContactDetail: Save completed successfully');
     } catch (error) {
-      console.error('Error saving contact:', error);
-      toast.error('Failed to save contact');
+      console.error('ContactDetail: Save failed with error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      
+      if (errorMessage.includes('timed out')) {
+        toast.error('Save timed out - please check your connection and try again');
+      } else if (errorMessage.includes('permission')) {
+        toast.error('Permission denied - you may not have access to edit this contact');
+      } else {
+        toast.error(`Failed to save contact: ${errorMessage}`);
+      }
     } finally {
+      clearTimeout(safetyTimeout);
+      console.log('ContactDetail: Save process completed, resetting loading state');
       setIsSaving(false);
     }
   };

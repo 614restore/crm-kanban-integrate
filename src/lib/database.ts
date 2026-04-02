@@ -685,9 +685,10 @@ class DatabaseService {
 
   async updateContact(contactId: string, updates: Partial<DbContact>): Promise<DbContact | null> {
     try {
+      // Increase timeout for mobile-friendly performance (20 seconds)
       const { data, error } = await this.raceTimeout(
         supabase.from('contacts').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', contactId).select().single(),
-        10000, 'updateContact',
+        20000, 'updateContact',
       );
       if (error) { console.error('Error updating contact:', error); throw new Error(error.message || 'Failed to update contact'); }
       return data;
