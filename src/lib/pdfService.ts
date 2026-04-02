@@ -105,3 +105,24 @@ export async function generateAndDownloadPdf(
   const html2pdf = await loadHtml2Pdf();
   await html2pdf().set(buildOptions(filename)).from(htmlElement).save();
 }
+
+/**
+ * Convert an HTML string to a PDF Blob by mounting it off-screen,
+ * running html2pdf, then removing it.
+ */
+export async function htmlStringToPdfBlob(html: string, filename: string): Promise<Blob> {
+  const container = document.createElement('div');
+  container.style.cssText = 'position:fixed;left:-9999px;top:0;width:210mm;background:#fff;';
+  container.innerHTML = html;
+  document.body.appendChild(container);
+  try {
+    const html2pdf = await loadHtml2Pdf();
+    const blob: Blob = await html2pdf()
+      .set(buildOptions(filename))
+      .from(container)
+      .outputPdf('blob');
+    return blob;
+  } finally {
+    document.body.removeChild(container);
+  }
+}

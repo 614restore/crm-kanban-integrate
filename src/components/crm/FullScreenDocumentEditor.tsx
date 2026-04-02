@@ -23,7 +23,8 @@ import { DOCUMENT_CATEGORIES } from '@/lib/documentCategories';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/authContext';
 import { sendEmail } from '@/lib/emailApi';
-import { uploadDocument } from '@/lib/storage';
+import { generateAndDownloadPdf, generateAndUploadPdf, htmlStringToPdfBlob, uploadToAvailableBucket } from '@/lib/pdfService';
+import { buildStoredDocumentUrl } from '@/lib/documentAccess';
 import { supabase } from '@/lib/supabase';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -296,16 +297,9 @@ const FullScreenDocumentEditor: React.FC<FullScreenDocumentEditorProps> = ({
     window.print();
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!printRef.current) return;
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${template.name}</title><style>body{font-family:Arial,sans-serif;padding:40px;max-width:900px;margin:0 auto;color:#111}input,textarea{border:none;border-bottom:1px solid #ccc;background:transparent;outline:none;font-family:inherit;font-size:inherit;color:inherit;width:100%}table{width:100%;border-collapse:collapse}th,td{padding:8px;border:1px solid #ddd;text-align:left}th{background:#f5f5f5}</style></head><body>${printRef.current.innerHTML}</body></html>`;
-    const blob = new Blob([html], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${template.name.replace(/\s+/g, '-')}.html`;
-    a.click();
-    URL.revokeObjectURL(url);
+    await generateAndDownloadPdf(printRef.current, `${template.name.replace(/\s+/g, '-')}.pdf`);
   };
 
   const handleSendToCustomer = async () => {
@@ -325,15 +319,23 @@ const FullScreenDocumentEditor: React.FC<FullScreenDocumentEditorProps> = ({
       const bodyHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${template.name}</title><style>body{font-family:Arial,sans-serif;padding:40px;max-width:900px;margin:0 auto;color:#111}table{width:100%;border-collapse:collapse}th,td{padding:8px;border:1px solid #ddd;text-align:left}th{background:#f5f5f5}</style></head><body>${printRef.current.innerHTML}</body></html>`;
 
       const token = crypto.randomUUID();
-      const htmlFile = new File([new Blob([bodyHtml], { type: 'text/html' })], `${template.name.replace(/\s+/g, '_')}.html`, { type: 'text/html' });
-      const uploadResult = await uploadDocument(htmlFile, profile.company_id, selectedContact?.id);
+      const filename = `${template.name.replace(/\s+/g, '_')}.pdf`;
+      const uploaded = await generateAndUploadPdf(
+        printRef.current,
+        profile.company_id,
+        selectedContact?.id ?? 'shared',
+        token,
+        'template-document',
+        filename
+      );
 
       await supabase.from('documents').insert({
         company_id: profile.company_id,
         contact_id: selectedContact?.id ?? null,
         name: template.name,
         type: 'template-document',
-        url: uploadResult.path || '',
+        url: uploaded.storedUrl,
+        size: uploaded.blob.size,
         html_content: bodyHtml,
         sign_token: token,
         sent_by: profile.id,
