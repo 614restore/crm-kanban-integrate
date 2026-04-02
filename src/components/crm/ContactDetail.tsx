@@ -1696,6 +1696,17 @@ export default function ContactDetail() {
                     <Calendar size={18} className="text-blue-600" />
                     <span className="font-medium text-gray-700">Schedule Appointment</span>
                   </button>
+                  
+                  {/* Mark Inspection Complete - show if contact is in appt_set or inspection status */}
+                  {(contact.status === 'appt_set' || contact.status === 'inspection_scheduled') && (
+                    <button 
+                      onClick={() => handleStatusChange('inspection_completed')} 
+                      className="w-full flex items-center gap-3 px-4 py-3 bg-green-50 hover:bg-green-100 rounded-lg transition-colors text-left"
+                    >
+                      <CheckCircle size={18} className="text-green-600" />
+                      <span className="font-medium text-gray-700">Mark Inspection Complete</span>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

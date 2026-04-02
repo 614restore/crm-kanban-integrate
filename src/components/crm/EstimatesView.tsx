@@ -67,6 +67,8 @@ export default function EstimatesView() {
   const [signerName, setSignerName] = useState('');
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [customerViewEstimate, setCustomerViewEstimate] = useState<Estimate | null>(null);
+  const [showShareModal, setShowShareModal] = useState<Estimate | null>(null);
 
   // Form state
   const [selectedContactId, setSelectedContactId] = useState('');
@@ -942,10 +944,28 @@ export default function EstimatesView() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  {/* Customer Preview Button */}
+                  <button
+                    onClick={() => setCustomerViewEstimate(estimate)}
+                    className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                    title="Customer preview"
+                  >
+                    <Eye size={18} />
+                  </button>
+                  
+                  {/* Share Button */}
+                  <button
+                    onClick={() => setShowShareModal(estimate)}
+                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    title="Share estimate"
+                  >
+                    <Mail size={18} />
+                  </button>
+                  
                   {estimate.status === 'draft' && (
                     <button
                       onClick={() => handleSendEstimate(estimate.id)}
-                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
                       title="Send estimate"
                     >
                       <Send size={18} />
@@ -953,10 +973,10 @@ export default function EstimatesView() {
                   )}
                   <button
                     onClick={() => setViewingEstimate(estimate)}
-                    className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                    title="View estimate"
+                    className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                    title="View estimate details"
                   >
-                    <Eye size={18} />
+                    <FileText size={18} />
                   </button>
                   <button
                     onClick={() => handleOpenModal(estimate)}
@@ -1738,6 +1758,201 @@ export default function EstimatesView() {
                     handleSignEstimate(dataUrl);
                   }}
                 />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Customer View Modal */}
+      {customerViewEstimate && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 bg-gray-50 border-b border-gray-200">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Customer View</h2>
+                <p className="text-sm text-gray-600">This is exactly what your customer will see</p>
+              </div>
+              <button
+                onClick={() => setCustomerViewEstimate(null)}
+                className="text-gray-400 hover:text-gray-600 p-2"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="overflow-y-auto max-h-[calc(90vh-120px)]">
+              <div className="p-8 bg-gray-50">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+                  {/* Company Header */}
+                  <div className="flex justify-between items-start mb-8 pb-6 border-b border-gray-200">
+                    <div>
+                      <h1 className="text-2xl font-bold text-blue-600">Your Company Name</h1>
+                      <div className="text-gray-600 mt-2 space-y-1">
+                        <div>123 Business St, City, ST 12345</div>
+                        <div>(555) 123-4567 • info@yourcompany.com</div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-2xl font-bold text-gray-900">ESTIMATE</div>
+                      <div className="text-gray-600 mt-1">#{customerViewEstimate.estimateNumber}</div>
+                      <div className="text-sm text-gray-500 mt-2">
+                        Valid until: {new Date(customerViewEstimate.validUntil || '').toLocaleDateString()}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Customer Info */}
+                  <div className="mb-8">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Prepared For:</h3>
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="font-semibold text-gray-900">{customerViewEstimate.contactName}</div>
+                      <div className="text-gray-600 mt-1">
+                        {/* Add contact details here if needed */}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Estimate Details */}
+                  <div className="mb-8">
+                    <h3 className="text-xl font-bold text-gray-900 mb-2">{customerViewEstimate.title}</h3>
+                    {customerViewEstimate.description && (
+                      <p className="text-gray-600 mb-6">{customerViewEstimate.description}</p>
+                    )}
+
+                    {/* Line Items */}
+                    {customerViewEstimate.items && customerViewEstimate.items.length > 0 && (
+                      <div className="border border-gray-200 rounded-lg overflow-hidden mb-6">
+                        <table className="w-full">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="text-left px-4 py-3 font-semibold text-gray-900">Description</th>
+                              <th className="text-center px-4 py-3 font-semibold text-gray-900">Qty</th>
+                              <th className="text-right px-4 py-3 font-semibold text-gray-900">Unit Price</th>
+                              <th className="text-right px-4 py-3 font-semibold text-gray-900">Total</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-200">
+                            {customerViewEstimate.items.map((item: any, idx: number) => (
+                              <tr key={idx}>
+                                <td className="px-4 py-3 text-gray-900">{item.description}</td>
+                                <td className="px-4 py-3 text-center text-gray-600">{item.quantity}</td>
+                                <td className="px-4 py-3 text-right text-gray-600">
+                                  ${(item.unitPrice || item.unit_price || 0).toFixed(2)}
+                                </td>
+                                <td className="px-4 py-3 text-right font-semibold text-gray-900">
+                                  ${(item.total || 0).toFixed(2)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+
+                    {/* Totals */}
+                    <div className="flex justify-end">
+                      <div className="w-64">
+                        <div className="flex justify-between py-2 text-gray-600">
+                          <span>Subtotal:</span>
+                          <span>${customerViewEstimate.amount.toFixed(2)}</span>
+                        </div>
+                        {customerViewEstimate.tax > 0 && (
+                          <div className="flex justify-between py-2 text-gray-600">
+                            <span>Tax:</span>
+                            <span>${customerViewEstimate.tax.toFixed(2)}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between py-3 text-xl font-bold text-gray-900 border-t border-gray-200">
+                          <span>Total:</span>
+                          <span className="text-blue-600">${customerViewEstimate.total.toFixed(2)}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Terms and Notes */}
+                    {(customerViewEstimate.terms || customerViewEstimate.notes) && (
+                      <div className="mt-8 pt-6 border-t border-gray-200">
+                        {customerViewEstimate.terms && (
+                          <div className="mb-4">
+                            <h4 className="font-semibold text-gray-900 mb-2">Terms & Conditions:</h4>
+                            <p className="text-gray-700 text-sm leading-relaxed">{customerViewEstimate.terms}</p>
+                          </div>
+                        )}
+                        {customerViewEstimate.notes && (
+                          <div>
+                            <h4 className="font-semibold text-gray-900 mb-2">Notes:</h4>
+                            <p className="text-gray-700 text-sm leading-relaxed">{customerViewEstimate.notes}</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Share Modal */}
+      {showShareModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Share Estimate</h3>
+              <button
+                onClick={() => setShowShareModal(null)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div className="text-center py-6">
+                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Mail className="w-8 h-8 text-blue-600" />
+                </div>
+                <h4 className="text-lg font-semibold text-gray-900 mb-2">Share via Email</h4>
+                <p className="text-gray-600 text-sm">
+                  Send estimate #{showShareModal.estimateNumber} to your customer
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <button
+                  onClick={async () => {
+                    try {
+                      await handleSendEstimate(showShareModal.id);
+                      setShowShareModal(null);
+                      toast.success('Estimate shared successfully!');
+                    } catch (error) {
+                      toast.error('Failed to share estimate');
+                    }
+                  }}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                >
+                  <Send size={18} />
+                  Send to Customer
+                </button>
+
+                <button
+                  onClick={() => {
+                    const url = `${window.location.origin}/estimate/${showShareModal.signToken}`;
+                    navigator.clipboard.writeText(url);
+                    toast.success('Share link copied to clipboard!');
+                    setShowShareModal(null);
+                  }}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
+                >
+                  <Eye size={18} />
+                  Copy Share Link
+                </button>
+              </div>
+
+              <div className="text-xs text-gray-500 text-center">
+                The customer will receive a link to view and sign the estimate
               </div>
             </div>
           </div>
