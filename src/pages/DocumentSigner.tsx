@@ -475,8 +475,6 @@ export default function DocumentSigner() {
         'application/pdf',
         companyId
       );
-        'application/pdf'
-      );
 
       const storedPdfUrl = buildStoredDocumentUrl(generated.publicUrl, generated.bucket, generated.path);
       const storedCustomerSignatureUrl = buildStoredDocumentUrl(

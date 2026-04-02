@@ -44,7 +44,6 @@ export default function SmartInspection() {
       const { data: { publicUrl } } = supabase.storage
         .from('documents')
         .getPublicUrl(uploadResult.path);
-        .getPublicUrl(filePath);
 
       await supabase.from('documents').insert({
         contact_id: id,
