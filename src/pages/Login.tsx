@@ -51,21 +51,24 @@ export default function Login() {
     setForgotLoading(true);
     setError(null);
     try {
-      // Call the temp-password-reset edge function. It generates a temporary
-      // password, emails it to the user, and sets must_change_password = true
-      // in the profile. No redirect link is involved, so it works from any
-      // device or email client without PKCE / cross-context issues.
+      // Temp-password flow only.
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      if (!supabaseUrl || !anonKey) throw new Error('Missing app auth configuration.');
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 12000);
       const res = await fetch(`${supabaseUrl}/functions/v1/temp-password-reset`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'apikey': anonKey },
+        headers: { 'Content-Type': 'application/json', 'apikey': anonKey, 'Authorization': `Bearer ${anonKey}` },
         body: JSON.stringify({ email }),
+        signal: controller.signal,
       });
+      window.clearTimeout(timeout);
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data?.error || 'Failed to send temporary password.');
+        throw new Error(data?.error || 'Unable to send temporary password right now.');
       }
+
       setForgotSent(true);
     } catch (err: any) {
       const msg: string = err?.message || '';
@@ -102,7 +105,7 @@ export default function Login() {
           <div className="bg-emerald-50 border border-emerald-100 text-emerald-700 p-6 rounded-2xl flex flex-col items-center gap-3 text-center">
             <CheckCircle size={32} className="text-emerald-500" />
             <p className="font-bold text-sm">Temporary password sent!</p>
-            <p className="text-xs text-emerald-600">Check your email for a temporary password, then sign in below. You'll be asked to set a new password right away.</p>
+            <p className="text-xs text-emerald-600">Check your email for a temporary password, then sign in below. You’ll be asked to set a new password immediately.</p>
             <button
               type="button"
               onClick={() => { setForgotMode(false); setForgotSent(false); setError(null); }}
@@ -121,7 +124,7 @@ export default function Login() {
               </div>
             )}
             <p className="text-slate-500 text-sm text-center">
-              Enter your email and we'll send you a link to reset your password.
+              Enter your email and we’ll send a temporary password.
             </p>
             <div className="space-y-2">
               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Email Address</label>

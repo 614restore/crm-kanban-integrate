@@ -292,7 +292,7 @@ export default function EagleViewPanel({
         type: 'other',
         url: uploadResult.path,
         size: `${Math.round(pdfBlob.size / 1024)} KB`,
-        uploaded_by: 'EagleView',
+        uploaded_by: userId || null,
       });
 
       if (!newDbDoc) throw new Error('Failed to create document record');

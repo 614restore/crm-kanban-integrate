@@ -8,7 +8,7 @@ createRoot(document.getElementById("root")!).render(
 
 // Hide Capacitor splash screen once React has rendered.
 // capacitor.config.ts sets launchAutoHide: false so we must call this manually.
-// Safe no-op in the browser.
+// Safe to call in any environment — no-ops in the browser.
 window.addEventListener('load', () => {
   const cap = (window as any).Capacitor;
   if (cap?.Plugins?.SplashScreen) {

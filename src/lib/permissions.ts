@@ -283,6 +283,41 @@ export const defaultPermissions: Record<UserRole, Record<PermissionCategory, Per
     communications: 'own',
     settings_configs: 'none',
   },
+  // New limited permission roles
+  canvasser: {
+    users_roles: 'none',
+    contacts_leads: 'own', // Only contacts they created
+    jobs_workflows: 'none',
+    estimates_quotes: 'none',
+    contracts: 'none',
+    scheduling_calendar: 'create', // Can schedule inspections
+    tasks_assignments: 'none',
+    photos_files: 'create', // Can take photos
+    materials_inventory: 'none',
+    invoicing: 'none',
+    payments: 'none',
+    reports_dashboards: 'none',
+    integrations: 'none',
+    communications: 'create', // Can add notes
+    settings_configs: 'none',
+  },
+  field_contractor: {
+    users_roles: 'none',
+    contacts_leads: 'assigned', // Only assigned contacts
+    jobs_workflows: 'assigned', // Only assigned jobs
+    estimates_quotes: 'none',
+    contracts: 'none',
+    scheduling_calendar: 'read',
+    tasks_assignments: 'assigned', // Only assigned tasks
+    photos_files: 'create', // Can upload photos
+    materials_inventory: 'read',
+    invoicing: 'none',
+    payments: 'none',
+    reports_dashboards: 'none',
+    integrations: 'none',
+    communications: 'create', // Can add notes to assigned jobs
+    settings_configs: 'none',
+  },
 };
 
 // Permission category labels for UI

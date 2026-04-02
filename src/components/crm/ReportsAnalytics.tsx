@@ -48,7 +48,6 @@ import { useToast } from '@/hooks/use-toast';
 import { useCRM, useFinancialStats } from '@/lib/crmStore';
 import { formatCurrency, getContactFullName } from '@/lib/crmData';
 import { printDataAsPDF } from '@/lib/exportUtils';
-import { useAuth } from '@/lib/authContext';
 
 interface RevenueData {
   month: string;
@@ -96,7 +95,6 @@ const ReportsAnalytics: React.FC = () => {
   
   const { toast } = useToast();
   const { state } = useCRM();
-  const { profile } = useAuth();
   const financialStats = useFinancialStats();
 
   // Build revenue data from real invoices grouped by month
@@ -150,29 +148,23 @@ const ReportsAnalytics: React.FC = () => {
 
   // Build project data from real projects or contacts in project stages
   const projectData: ProjectData[] = useMemo(() => {
-    // CRITICAL FIX: Filter by company_id
     if (state.projects.length > 0) {
-      return state.projects
-        .filter(p => p.company_id === profile?.company_id)
-        .map((p) => ({
-          id: p.id,
-          name: p.name || 'Unnamed Project',
-          client: p.contactName || '',
-          value: p.estimatedBudget || 0,
-          profit: Math.round((p.estimatedBudget || 0) - (p.actualCost || 0)) || Math.round((p.estimatedBudget || 0) * 0.30),
-          profitMargin: p.estimatedBudget ? Math.round(((p.estimatedBudget - (p.actualCost || 0)) / p.estimatedBudget) * 100) : 30,
-          status: (p.status === 'in_progress' ? 'active' : p.status === 'scheduled' ? 'planning' : p.status) as ProjectData['status'],
-          startDate: p.startDate || p.createdAt,
-          completionDate: p.completedDate || p.endDate,
-          category: p.tags?.[0] || 'General',
-        }));
+      return state.projects.map((p) => ({
+        id: p.id,
+        name: p.name || 'Unnamed Project',
+        client: p.contactName || '',
+        value: p.estimatedBudget || 0,
+        profit: Math.round((p.estimatedBudget || 0) - (p.actualCost || 0)) || Math.round((p.estimatedBudget || 0) * 0.30),
+        profitMargin: p.estimatedBudget ? Math.round(((p.estimatedBudget - (p.actualCost || 0)) / p.estimatedBudget) * 100) : 30,
+        status: (p.status === 'in_progress' ? 'active' : p.status === 'scheduled' ? 'planning' : p.status) as ProjectData['status'],
+        startDate: p.startDate || p.createdAt,
+        completionDate: p.completedDate || p.endDate,
+        category: p.tags?.[0] || 'General',
+      }));
     }
-    // Fallback: derive from contacts (already filtered by company_id in CRM state)
+    // Fallback: derive from contacts
     return state.contacts
-      .filter((c) => 
-        c.company_id === profile?.company_id &&
-        ['in_progress', 'build_phase', 'completed', 'contingency'].includes(c.status)
-      )
+      .filter((c) => ['in_progress', 'build_phase', 'completed', 'contingency'].includes(c.status))
       .map((c) => ({
         id: c.id,
         name: `${getContactFullName(c)} Project`,
@@ -185,23 +177,20 @@ const ReportsAnalytics: React.FC = () => {
         completionDate: c.status === 'completed' ? c.updatedAt : undefined,
         category: c.insuranceCompany ? 'Insurance' : 'Retail',
       }));
-  }, [state.projects, state.contacts, profile?.company_id]);
+  }, [state.projects, state.contacts]);
 
   // Build lead source data from contacts
   const leadSources: LeadData[] = useMemo(() => {
     const sources: Record<string, { leads: number; conversions: number; revenue: number }> = {};
-    // CRITICAL FIX: Filter by company_id
-    state.contacts
-      .filter(c => c.company_id === profile?.company_id)
-      .forEach((c) => {
-        const src = c.leadSource || 'Direct';
-        if (!sources[src]) sources[src] = { leads: 0, conversions: 0, revenue: 0 };
-        sources[src].leads += 1;
-        if (c.status === 'completed' || c.status === 'in_progress' || c.status === 'build_phase') {
-          sources[src].conversions += 1;
-          sources[src].revenue += c.projectValue || 0;
-        }
-      });
+    state.contacts.forEach((c) => {
+      const src = c.leadSource || 'Direct';
+      if (!sources[src]) sources[src] = { leads: 0, conversions: 0, revenue: 0 };
+      sources[src].leads += 1;
+      if (c.status === 'completed' || c.status === 'in_progress' || c.status === 'build_phase') {
+        sources[src].conversions += 1;
+        sources[src].revenue += c.projectValue || 0;
+      }
+    });
     return Object.entries(sources)
       .map(([source, data]) => ({
         source,

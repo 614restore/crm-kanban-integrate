@@ -1,7 +1,7 @@
 // Document Templates for Contractors
 // Pre-built templates for estimates, invoices, contracts, work orders
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   FileText,
   Plus,
@@ -28,7 +28,10 @@ import {
   FolderX,
   ChevronRight,
   X,
-  Save
+  Save,
+  Camera,
+  ScanLine,
+  MapPin
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -47,6 +50,8 @@ import { db, DbCompany } from '@/lib/database';
 import { useCRM } from '@/lib/crmStore';
 import { getContactFullName } from '@/lib/crmData';
 import { getContractorEstimateTemplates } from '@/lib/contractorTemplates';
+import { getLocationAwareContractorTemplates, generateLocationAwareTemplate } from '@/lib/locationAwareTemplates';
+import DocumentScanner from '@/components/documents/DocumentScanner';
 
 interface DocumentTemplate {
   id: string;
@@ -88,6 +93,7 @@ const DocumentTemplates: React.FC = () => {
   const [selectedContactId, setSelectedContactId] = useState<string>('');
   const [editedContent, setEditedContent] = useState<string>('');
   const [manualVars, setManualVars] = useState<Record<string, string>>({});
+  const [showScanner, setShowScanner] = useState(false);
 
   // ── Folder state ────────────────────────────────────────────────────────
   // 'all' = show everything; 'cat:CATEGORY_ID' = system folder; custom string = user folder
@@ -129,7 +135,13 @@ const DocumentTemplates: React.FC = () => {
       if (!profile?.company_id) return;
       try {
         const company = await db.getCompany(profile.company_id);
-        if (company) setCompanyProfile(company);
+        if (company) {
+          setCompanyProfile(company);
+          // Reload templates with location-aware legal verbiage
+          if (company.state) {
+            loadTemplates();
+          }
+        }
       } catch (err) {
         console.warn('[DocumentTemplates] Failed to load company profile:', err);
       }
@@ -206,7 +218,7 @@ const DocumentTemplates: React.FC = () => {
   ];
 
   // Load templates from storage/API
-  const loadTemplates = async () => {
+  const loadTemplates = useCallback(async () => {
     setLoading(true);
     try {
       // Professional document templates with company branding and customer info
@@ -2497,7 +2509,13 @@ const DocumentTemplates: React.FC = () => {
       fileType: 'html'
     }
       ];
-      const allTemplates = [...mockTemplates, ...(getContractorEstimateTemplates() as DocumentTemplate[])];
+      
+      // Get location-aware contractor templates with proper legal verbiage
+      const locationAwareTemplates = companyProfile?.state 
+        ? getLocationAwareContractorTemplates(companyProfile.state)
+        : getContractorEstimateTemplates();
+        
+      const allTemplates = [...mockTemplates, ...(locationAwareTemplates as DocumentTemplate[])];
       setTemplates(allTemplates);
       setFilteredTemplates(allTemplates);
     } catch (error) {
@@ -2510,12 +2528,11 @@ const DocumentTemplates: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [companyProfile?.state]); // Depend on company state for location-aware templates
 
   useEffect(() => {
     loadTemplates();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loadTemplates]);
 
   // Apply filters and search
   useEffect(() => {
@@ -2813,10 +2830,66 @@ const DocumentTemplates: React.FC = () => {
     setEditingTemplate(null);
   };
 
-  // Fill template variables for a specific contact
+  // Fill template variables for a specific contact with location-aware content
   const fillTemplateForContact = (template: DocumentTemplate, contactId: string): string => {
     const contact = crmState.contacts.find(c => c.id === contactId);
     if (!contact) return getPreviewContent(template);
+    
+    // Use location-aware template generation if we have company profile
+    if (companyProfile?.state) {
+      try {
+        const locationAwareContent = generateLocationAwareTemplate(
+          template.content,
+          companyProfile.state,
+          contact.state || companyProfile.state // Office state takes precedence
+        );
+        let content = locationAwareContent;
+        
+        // Apply contact-specific variables
+        const fullName = getContactFullName(contact);
+        const address = [contact.address, contact.city, contact.state, contact.zip].filter(Boolean).join(', ');
+        const overrides: Record<string, string> = {
+          'CUSTOMER_NAME': fullName,
+          'CLIENT_NAME': fullName,
+          'CUSTOMER_PHONE': contact.phone1 || '',
+          'CUSTOMER_EMAIL': contact.email || '',
+          'PROPERTY_ADDRESS': contact.address || '',
+          'PROPERTY_CITY': contact.city || '',
+          'PROPERTY_STATE': contact.state || '',
+          'PROPERTY_ZIP': contact.zip || '',
+          'PROJECT_ADDRESS': address,
+          'BILLING_ADDRESS': contact.address || '',
+          'BILLING_CITY': contact.city || '',
+          'BILLING_STATE': contact.state || '',
+          'BILLING_ZIP': contact.zip || '',
+          'JOB_SITE_ADDRESS': contact.address || '',
+          'JOB_SITE_CITY': contact.city || '',
+          'JOB_SITE_STATE': contact.state || '',
+          'JOB_SITE_ZIP': contact.zip || '',
+          'INSURANCE_COMPANY': (contact as any).insurance_company || '',
+          'POLICY_NUMBER': (contact as any).policy_number || '',
+          'CLAIM_NUMBER': (contact as any).claim_number || '',
+          'CANCELLATION_DEADLINE': (() => {
+            let d = new Date(); let count = 0;
+            while (count < 3) { d = new Date(d.getTime() + 24*60*60*1000); if (d.getDay() !== 0 && d.getDay() !== 6) count++; }
+            return d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+          })(),
+        };
+        
+        // Apply contact overrides
+        Object.entries(overrides).forEach(([key, val]) => {
+          if (val) content = content.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), val);
+        });
+        
+        // Fill remaining company variables
+        content = getPreviewContent({ ...template, content });
+        return content;
+      } catch (err) {
+        console.warn('Failed to generate location-aware template, falling back to default:', err);
+      }
+    }
+    
+    // Fallback to original logic if location-aware generation fails
     let content = template.content;
     const fullName = getContactFullName(contact);
     const address = [contact.address, contact.city, contact.state, contact.zip].filter(Boolean).join(', ');
@@ -2865,9 +2938,22 @@ const DocumentTemplates: React.FC = () => {
     setCustomerEditMode(true);
   };
 
-  // Preview template with sample data
+  // Preview template with sample data and location-aware legal content
   const getPreviewContent = (template: DocumentTemplate) => {
     let content = template.content;
+    
+    // Use location-aware template generation if we have company profile and state
+    if (companyProfile?.state) {
+      try {
+        content = generateLocationAwareTemplate(
+          content,
+          companyProfile.state,
+          companyProfile.state // Use company state for preview
+        );
+      } catch (err) {
+        console.warn('Failed to generate location-aware preview, using original content:', err);
+      }
+    }
     
     // Replace variables with sample data
     const sampleData: Record<string, string> = {
@@ -3110,10 +3196,29 @@ const DocumentTemplates: React.FC = () => {
           <FileText className="w-6 h-6" />
           <h1 className="text-3xl font-bold">Document Templates</h1>
         </div>
-        <Button onClick={openCreateTemplate}>
-          <Plus className="w-4 h-4 mr-2" />
-          New Template
-        </Button>
+        <div className="flex items-center gap-3">
+          {/* Document Scanner */}
+          <DocumentScanner
+            onDocumentUploaded={(document) => {
+              sonnerToast.success(`Document "${document.name}" uploaded successfully`);
+            }}
+            allowedTypes={['pdf', 'jpg', 'jpeg', 'png']}
+            maxFileSizeMB={10}
+          />
+          
+          {/* Location Indicator */}
+          {companyProfile?.state && (
+            <div className="flex items-center gap-1 px-3 py-1 bg-blue-50 text-blue-700 rounded-md text-sm">
+              <MapPin className="w-3 h-3" />
+              <span>{companyProfile.state} Laws Apply</span>
+            </div>
+          )}
+          
+          <Button onClick={openCreateTemplate}>
+            <Plus className="w-4 h-4 mr-2" />
+            New Template
+          </Button>
+        </div>
       </div>
 
       {/* Company logo notice */}
@@ -3371,6 +3476,16 @@ const DocumentTemplates: React.FC = () => {
                         </Badge>
                       )}
                     </div>
+
+                    {/* Legal Compliance Indicator */}
+                    {companyProfile?.state && (template.category === 'contract' || template.category === 'estimate' || template.category === 'invoice') && (
+                      <div className="flex items-center gap-1.5 px-2 py-1 bg-green-50 border border-green-200 rounded-md">
+                        <MapPin className="w-3 h-3 text-green-600" />
+                        <span className="text-[10px] text-green-700 font-medium">
+                          {companyProfile.state} Compliant
+                        </span>
+                      </div>
+                    )}
 
                     {/* Modified + type */}
                     <div className="flex items-center justify-between text-[10px] text-gray-400">

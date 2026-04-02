@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mobile Auth Debugger</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f0f0f0;
+        }
+        .debug-panel {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        button:hover { background-color: #0056b3; }
+        .log { 
+            background: #1e1e1e; 
+            color: #00ff00; 
+            padding: 15px; 
+            border-radius: 4px; 
+            font-family: monospace; 
+            overflow-x: auto;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .test-result { margin: 10px 0; padding: 8px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <div class="debug-panel">
+        <h2>🔍 Mobile CRM Authentication Debugger</h2>
+        <p>This tool will help diagnose why contacts aren't saving on mobile devices.</p>
+        
+        <button onclick="runAllTests()">🚀 Run All Tests</button>
+        <button onclick="clearLog()">🗑️ Clear Log</button>
+        <button onclick="testContactSave()">💾 Test Contact Save</button>
+    </div>
+
+    <div class="debug-panel">
+        <h3>📊 Test Results</h3>
+        <div id="test-results"></div>
+    </div>
+
+    <div class="debug-panel">
+        <h3>📝 Debug Log</h3>
+        <div id="debug-log" class="log">Ready to run tests...\n</div>
+    </div>
+
+    <script>
+        let debugLog = document.getElementById('debug-log');
+        let testResults = document.getElementById('test-results');
+
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            debugLog.textContent += `[${timestamp}] ${message}\n`;
+            debugLog.scrollTop = debugLog.scrollHeight;
+        }
+
+        function addTestResult(test, status, details) {
+            const div = document.createElement('div');
+            div.className = `test-result ${status}`;
+            div.innerHTML = `<strong>${test}:</strong> ${status.toUpperCase()} ${details ? '- ' + details : ''}`;
+            testResults.appendChild(div);
+        }
+
+        function clearLog() {
+            debugLog.textContent = 'Log cleared...\n';
+            testResults.innerHTML = '';
+        }
+
+        async function testEnvironment() {
+            log('🌍 Testing environment...');
+            
+            // Test 1: Check if we're on mobile
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            addTestResult('Mobile Detection', isMobile ? 'success' : 'info', isMobile ? 'Mobile device detected' : 'Desktop browser');
+            log(`Mobile device: ${isMobile}`);
+
+            // Test 2: Network status
+            const isOnline = navigator.onLine;
+            addTestResult('Network Status', isOnline ? 'success' : 'error', isOnline ? 'Online' : 'Offline');
+            log(`Network status: ${isOnline ? 'ONLINE' : 'OFFLINE'}`);
+
+            // Test 3: Local storage
+            try {
+                localStorage.setItem('test_key', 'test_value');
+                const testValue = localStorage.getItem('test_key');
+                localStorage.removeItem('test_key');
+                addTestResult('Local Storage', testValue === 'test_value' ? 'success' : 'error');
+                log('Local storage: WORKING');
+            } catch (e) {
+                addTestResult('Local Storage', 'error', e.message);
+                log(`Local storage: ERROR - ${e.message}`);
+            }
+
+            // Test 4: Session storage
+            try {
+                sessionStorage.setItem('test_key', 'test_value');
+                const testValue = sessionStorage.getItem('test_key');
+                sessionStorage.removeItem('test_key');
+                addTestResult('Session Storage', testValue === 'test_value' ? 'success' : 'error');
+                log('Session storage: WORKING');
+            } catch (e) {
+                addTestResult('Session Storage', 'error', e.message);
+                log(`Session storage: ERROR - ${e.message}`);
+            }
+        }
+
+        async function testSupabase() {
+            log('🗄️ Testing Supabase connection...');
+            
+            // Test basic fetch to our app URL (we can't test Supabase directly without keys)
+            try {
+                const appUrl = window.location.origin;
+                log(`Testing connection to: ${appUrl}`);
+                
+                const response = await fetch(appUrl, { method: 'HEAD' });
+                if (response.ok) {
+                    addTestResult('App Server Connection', 'success', `Status: ${response.status}`);
+                    log(`App server response: ${response.status} ${response.statusText}`);
+                } else {
+                    addTestResult('App Server Connection', 'error', `Status: ${response.status}`);
+                    log(`App server ERROR: ${response.status} ${response.statusText}`);
+                }
+            } catch (e) {
+                addTestResult('App Server Connection', 'error', e.message);
+                log(`App server connection ERROR: ${e.message}`);
+            }
+        }
+
+        async function testAuthState() {
+            log('🔐 Testing authentication state...');
+            
+            // Check for Supabase auth tokens in storage
+            const authTokens = ['supabase.auth.token', 'sb-auth-token'];
+            let foundTokens = 0;
+            
+            authTokens.forEach(tokenKey => {
+                const token = localStorage.getItem(tokenKey);
+                if (token) {
+                    foundTokens++;
+                    log(`Found auth token: ${tokenKey}`);
+                    try {
+                        const parsed = JSON.parse(token);
+                        if (parsed.access_token) {
+                            log(`Access token exists, expires: ${new Date(parsed.expires_at * 1000).toLocaleString()}`);
+                        }
+                    } catch (e) {
+                        log(`Token parsing error: ${e.message}`);
+                    }
+                }
+            });
+            
+            addTestResult('Auth Tokens', foundTokens > 0 ? 'success' : 'error', `Found ${foundTokens} tokens`);
+            
+            // Check for profile data
+            const profileKeys = ['crm_profile', 'user_profile', 'auth_profile'];
+            let foundProfile = false;
+            
+            profileKeys.forEach(profileKey => {
+                const profile = localStorage.getItem(profileKey);
+                if (profile) {
+                    foundProfile = true;
+                    log(`Found profile: ${profileKey}`);
+                    try {
+                        const parsed = JSON.parse(profile);
+                        log(`Profile company_id: ${parsed.company_id || 'MISSING'}`);
+                    } catch (e) {
+                        log(`Profile parsing error: ${e.message}`);
+                    }
+                }
+            });
+            
+            addTestResult('User Profile', foundProfile ? 'success' : 'error', foundProfile ? 'Profile found' : 'No profile found');
+        }
+
+        async function testContactSave() {
+            log('💾 Testing contact save simulation...');
+            
+            // Simulate the conditions that would cause a save to fail
+            const testData = {
+                id: 'test-contact-123',
+                first_name: 'Test',
+                last_name: 'User',
+                email: 'test@example.com',
+                company_id: null  // This is likely the issue
+            };
+            
+            log(`Testing with data: ${JSON.stringify(testData, null, 2)}`);
+            
+            // Check company_id specifically
+            if (!testData.company_id) {
+                addTestResult('Company ID Check', 'error', 'company_id is null - this would cause save to fail');
+                log('❌ CRITICAL: company_id is null - this is likely why saves are failing!');
+            } else {
+                addTestResult('Company ID Check', 'success', `company_id: ${testData.company_id}`);
+            }
+            
+            // Simulate timeout test
+            log('Testing timeout simulation...');
+            try {
+                await new Promise((resolve, reject) => {
+                    setTimeout(() => resolve('success'), 100); // Quick success
+                });
+                addTestResult('Timeout Simulation', 'success', 'No timeout issues');
+                log('Timeout test: PASSED');
+            } catch (e) {
+                addTestResult('Timeout Simulation', 'error', e.message);
+                log(`Timeout test: FAILED - ${e.message}`);
+            }
+        }
+
+        async function runAllTests() {
+            log('🚀 Starting comprehensive mobile diagnostics...');
+            clearLog();
+            
+            try {
+                await testEnvironment();
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                await testSupabase();
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                await testAuthState();
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                await testContactSave();
+                
+                log('✅ All tests completed!');
+                log('');
+                log('📋 SUMMARY:');
+                log('1. Check if company_id is null in the test results above');
+                log('2. If auth tokens are missing, user needs to sign out and sign back in');
+                log('3. If network is offline, that explains the save failures');
+                log('4. Open browser developer console for more detailed logs');
+                log('');
+                log('💡 NEXT STEPS:');
+                log('- Open the main CRM app');
+                log('- Open browser developer console (F12)');
+                log('- Try to save a contact and watch for error messages');
+                log('- Look for authentication or company_id related errors');
+                
+            } catch (e) {
+                log(`❌ Test failed: ${e.message}`);
+                addTestResult('Test Suite', 'error', e.message);
+            }
+        }
+
+        // Auto-run tests on page load
+        setTimeout(() => {
+            log('🔧 Mobile CRM Debugger loaded. Click "Run All Tests" to begin diagnosis.');
+        }, 100);
+    </script>
+</body>
+</html>

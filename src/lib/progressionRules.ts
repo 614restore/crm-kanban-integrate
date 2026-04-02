@@ -75,3 +75,4 @@ export async function checkDownPaymentGate(
   }
   return { allowed: true }
 }
+

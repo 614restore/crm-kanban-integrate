@@ -134,7 +134,6 @@ export default function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
         )}
 
         {/* Mobile header - minimal */}
-        {/* paddingTop: env(safe-area-inset-top) pushes content below the iOS status bar */}
         <header
           className={`bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 sticky top-0 z-30 ${isRefreshing ? 'mt-10' : ''}`}
           style={{ paddingTop: 'env(safe-area-inset-top)' }}

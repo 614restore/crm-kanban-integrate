@@ -183,15 +183,28 @@ export default function InvoiceModal() {
       const invoiceContact = state.contacts.find((c) => c.id === selectedContactId);
       const invoicingPrecursorStatuses = ['signed', 'in_progress', 'build_phase', 'cleanup'];
       if (invoiceContact && invoicingPrecursorStatuses.includes(invoiceContact.status)) {
-        db.updateContact(invoiceContact.id, { status: 'invoicing', status_changed_at: new Date().toISOString() }).catch(() => {});
-        dispatch({ type: 'UPDATE_CONTACT_STATUS', payload: { contactId: invoiceContact.id, status: 'invoicing' } });
-        fireAutomationEvent('contact_status_changed', effectiveCompanyId, {
+        // Use centralized status manager for consistent automation
+        const { updateContactStatus } = await import('../../lib/statusManager');
+        
+        updateContactStatus({
           contactId: invoiceContact.id,
+          newStatus: 'invoicing',
+          oldStatus: invoiceContact.status,
           contactName: newInvoice.contactName,
           contactEmail: invoiceContact.email,
-          oldStatus: invoiceContact.status,
-          newStatus: 'invoicing',
-        }).catch(() => {});
+          userId: user?.id || 'system',
+          userEmail: user?.email || 'system@trussctr.com',
+          companyId: effectiveCompanyId,
+          source: 'invoice_creation',
+          reason: `Invoice created: ${newInvoice.invoiceNumber}`,
+        }).then(result => {
+          if (result.success) {
+            dispatch({
+              type: 'UPDATE_CONTACT_STATUS',
+              payload: { contactId: invoiceContact.id, status: 'invoicing' },
+            });
+          }
+        }).catch(console.error);
       }
 
       fireAutomationEvent('invoice_created', effectiveCompanyId, {

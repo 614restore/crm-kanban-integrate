@@ -46,6 +46,9 @@ export interface DbCompany {
   subscription_ends_at?: string;
   stripe_customer_id?: string;
   stripe_subscription_id?: string;
+  // Limited permission seats tracking
+  limited_seats_total?: number;
+  limited_seats_used?: number;
   created_at: string;
   updated_at: string;
 }
@@ -323,6 +326,19 @@ export interface DbMaterialOrderItem {
   total: number;
 }
 
+export interface DbEstimateItem {
+  id: string;
+  estimate_id: string;
+  company_id: string;
+  description: string;
+  quantity: number;
+  unit_price: number;
+  total: number;
+  order_index: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface DbEstimate {
   id: string;
   company_id: string;
@@ -356,11 +372,14 @@ export interface DbEstimate {
 export interface DbEstimateItem {
   id: string;
   estimate_id: string;
+  company_id: string;
   description: string;
   quantity: number;
-  unit: string;
   unit_price: number;
   total: number;
+  order_index: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface DbProject {
@@ -666,14 +685,28 @@ class DatabaseService {
 
   async updateContact(contactId: string, updates: Partial<DbContact>): Promise<DbContact | null> {
     try {
+      // Extended timeout for mobile-friendly performance (30 seconds)
       const { data, error } = await this.raceTimeout(
         supabase.from('contacts').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', contactId).select().single(),
-        10000, 'updateContact',
+        30000, 'updateContact',
       );
-      if (error) { console.error('Error updating contact:', error); throw new Error(error.message || 'Failed to update contact'); }
+      if (error) { 
+        console.error('Error updating contact:', error); 
+        // Provide more specific error messages
+        if (error.code === 'PGRST116') {
+          throw new Error('Contact not found or permission denied');
+        } else if (error.message.includes('timeout')) {
+          throw new Error('Database timeout - please try again with a better connection');
+        } else {
+          throw new Error(error.message || 'Failed to update contact');
+        }
+      }
       return data;
     } catch (err) {
       console.error('updateContact timed out or failed:', err);
+      if (err instanceof Error && err.message.includes('timed out')) {
+        throw new Error('Contact save timed out - please check your connection and try again');
+      }
       throw err instanceof Error ? err : new Error('Failed to update contact');
     }
   }
@@ -1152,6 +1185,9 @@ class DatabaseService {
     onLeadSourceChange?: (payload: any) => void;
     onBoardChange?: (payload: any) => void;
     onTeamMemberChange?: (payload: any) => void;
+    onEstimateChange?: (payload: any) => void;
+    onProjectChange?: (payload: any) => void;
+    onWorkOrderChange?: (payload: any) => void;
     onStatusChange?: (status: string, error?: Error) => void;
   }) {
     const channel = supabase.channel('all-changes');
@@ -1165,6 +1201,9 @@ class DatabaseService {
       channel.on('postgres_changes', { event: '*', schema: 'public', table: 'kanban_columns' }, callbacks.onBoardChange);
     }
     if (callbacks.onTeamMemberChange) channel.on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: `company_id=eq.${companyId}` }, callbacks.onTeamMemberChange);
+    if (callbacks.onEstimateChange) channel.on('postgres_changes', { event: '*', schema: 'public', table: 'estimates', filter: `company_id=eq.${companyId}` }, callbacks.onEstimateChange);
+    if (callbacks.onProjectChange) channel.on('postgres_changes', { event: '*', schema: 'public', table: 'projects', filter: `company_id=eq.${companyId}` }, callbacks.onProjectChange);
+    if (callbacks.onWorkOrderChange) channel.on('postgres_changes', { event: '*', schema: 'public', table: 'work_orders', filter: `company_id=eq.${companyId}` }, callbacks.onWorkOrderChange);
     return channel.subscribe((status, error) => { if (callbacks.onStatusChange) callbacks.onStatusChange(status, error || undefined); });
   }
 
@@ -1327,6 +1366,117 @@ class DatabaseService {
 
   async markEstimateDeclined(estimateId: string): Promise<DbEstimate | null> {
     return this.updateEstimate(estimateId, { status: 'declined', declined_at: new Date().toISOString() });
+  }
+
+  async getEstimate(estimateId: string): Promise<DbEstimate | null> {
+    const { data, error } = await supabase
+      .from('estimates')
+      .select('*')
+      .eq('id', estimateId)
+      .single();
+    if (error) { console.error('Error fetching estimate:', error); return null; }
+    return data;
+  }
+
+  // Estimate Items operations
+  async getEstimateItems(estimateId: string): Promise<DbEstimateItem[]> {
+    const { data, error } = await supabase
+      .from('estimate_items')
+      .select('*')
+      .eq('estimate_id', estimateId)
+      .order('order_index');
+    if (error) { console.error('Error fetching estimate items:', error); return []; }
+    return data || [];
+  }
+
+  async createEstimateItem(item: Partial<DbEstimateItem>): Promise<DbEstimateItem | null> {
+    assertCompanyId(item.company_id, 'createEstimateItem');
+    const { data, error } = await supabase
+      .from('estimate_items')
+      .insert(item)
+      .select()
+      .single();
+    if (error) { console.error('Error creating estimate item:', error); return null; }
+    return data;
+  }
+
+  async updateEstimateItem(itemId: string, updates: Partial<DbEstimateItem>): Promise<DbEstimateItem | null> {
+    const { data, error } = await supabase
+      .from('estimate_items')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', itemId)
+      .select()
+      .single();
+    if (error) { console.error('Error updating estimate item:', error); return null; }
+    return data;
+  }
+
+  async deleteEstimateItem(itemId: string): Promise<boolean> {
+    const { error } = await supabase.from('estimate_items').delete().eq('id', itemId);
+    if (error) { console.error('Error deleting estimate item:', error); return false; }
+    return true;
+  }
+
+  async getEstimateWithItems(estimateId: string): Promise<{ estimate: DbEstimate; items: DbEstimateItem[] } | null> {
+    const [estimate, items] = await Promise.all([
+      this.getEstimate(estimateId),
+      this.getEstimateItems(estimateId)
+    ]);
+    
+    if (!estimate) return null;
+    return { estimate, items };
+  }
+
+  // Convert estimate to invoice (NEW)
+  async createInvoiceFromEstimate(estimateId: string): Promise<DbInvoice | null> {
+    try {
+      const estimateData = await this.getEstimateWithItems(estimateId);
+      if (!estimateData) {
+        throw new Error('Estimate not found');
+      }
+
+      const { estimate, items } = estimateData;
+      
+      // Create invoice with estimate data and items
+      const invoiceItems = items.map(item => ({
+        description: item.description,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        total: item.total,
+        order_index: item.order_index
+      }));
+
+      const invoice = await this.createInvoice({
+        company_id: estimate.company_id,
+        contact_id: estimate.contact_id,
+        invoice_number: `INV-${Date.now()}`, // Generate unique invoice number
+        title: estimate.title,
+        description: estimate.description,
+        status: 'draft',
+        subtotal: estimate.subtotal,
+        tax: estimate.tax,
+        total: estimate.total,
+        due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
+        notes: estimate.notes,
+        terms: estimate.terms,
+        created_by: estimate.created_by
+      }, invoiceItems);
+
+      if (!invoice) {
+        throw new Error('Failed to create invoice');
+      }
+
+      // Mark estimate as converted
+      await this.updateEstimate(estimateId, { 
+        status: 'converted',
+        notes: estimate.notes ? `${estimate.notes}\n\nConverted to invoice ${invoice.invoice_number}` : `Converted to invoice ${invoice.invoice_number}`
+      });
+
+      return invoice;
+    } catch (error) {
+      console.error('Error converting estimate to invoice:', error);
+      return null;
+    }
   }
 
   // Project operations
@@ -1629,6 +1779,309 @@ class DatabaseService {
     if (error) { console.error('Error fetching signed change orders:', error); return []; }
     return data || [];
   }
+}
+
+// ===============================
+// TIME TRACKING OPERATIONS
+// ===============================
+
+export interface DbTimeEntry {
+  id: string;
+  work_order_id: string;
+  company_id: string;
+  user_id?: string;
+  description: string;
+  start_time: string;
+  end_time?: string;
+  duration_minutes?: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function createTimeEntry(entry: {
+  work_order_id: string;
+  company_id: string;
+  description: string;
+  start_time: string;
+  is_active: boolean;
+}): Promise<DbTimeEntry> {
+  const { data, error } = await supabase
+    .from('time_entries')
+    .insert([entry])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('[DB] Create time entry error:', error);
+    throw new Error(`Failed to create time entry: ${error.message}`);
+  }
+
+  return data;
+}
+
+export async function updateTimeEntry(entryId: string, updates: {
+  end_time?: string;
+  is_active?: boolean;
+}): Promise<void> {
+  const { error } = await supabase
+    .from('time_entries')
+    .update({
+      ...updates,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', entryId);
+
+  if (error) {
+    console.error('[DB] Update time entry error:', error);
+    throw new Error(`Failed to update time entry: ${error.message}`);
+  }
+}
+
+export async function getTimeEntries(workOrderId: string): Promise<DbTimeEntry[]> {
+  const { data, error } = await supabase
+    .from('time_entries')
+    .select('*')
+    .eq('work_order_id', workOrderId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('[DB] Get time entries error:', error);
+    throw new Error(`Failed to get time entries: ${error.message}`);
+  }
+
+  return data || [];
+}
+
+export async function deleteTimeEntry(entryId: string): Promise<void> {
+  const { error } = await supabase
+    .from('time_entries')
+    .delete()
+    .eq('id', entryId);
+
+  if (error) {
+    console.error('[DB] Delete time entry error:', error);
+    throw new Error(`Failed to delete time entry: ${error.message}`);
+  }
+}
+
+// ===============================
+// LIMITED ROLE SYSTEM OPERATIONS
+// ===============================
+
+export interface DbCustomerAssignment {
+  id: string;
+  company_id: string;
+  user_id: string;
+  contact_id: string;
+  assigned_by?: string;
+  assigned_at: string;
+  notes?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LimitedAccountInfo {
+  id: string;
+  email: string;
+  full_name: string;
+  role: 'canvasser' | 'field_contractor';
+  is_active: boolean;
+  account_expires_at?: string;
+  status: 'active' | 'inactive' | 'expired' | 'expiring_soon';
+  assigned_customers_count: number;
+  created_at: string;
+  created_by_name?: string;
+}
+
+export async function createDirectAccount(accountData: {
+  email: string;
+  password: string;
+  first_name: string;
+  last_name?: string;
+  role: 'canvasser' | 'field_contractor';
+  company_id: string;
+  expires_at?: string;
+  created_by: string;
+}): Promise<{ success: boolean; user?: any; error?: string }> {
+  try {
+    // Check seat availability first
+    const canAssign = await checkCanAssignLimitedRole(accountData.company_id, accountData.role);
+    if (!canAssign) {
+      return { success: false, error: 'No available limited permission seats' };
+    }
+
+    // Create the user in Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      email: accountData.email,
+      password: accountData.password,
+      email_confirm: true,
+      user_metadata: {
+        first_name: accountData.first_name,
+        last_name: accountData.last_name || '',
+        created_by: accountData.created_by,
+        created_directly: true
+      }
+    });
+
+    if (authError) {
+      console.error('[DB] Create auth user error:', authError);
+      return { success: false, error: authError.message };
+    }
+
+    // Create the profile
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .insert({
+        id: authData.user.id,
+        email: accountData.email,
+        first_name: accountData.first_name,
+        last_name: accountData.last_name || '',
+        role: accountData.role,
+        company_id: accountData.company_id,
+        is_active: true,
+        is_limited_account: true,
+        created_directly: true,
+        account_expires_at: accountData.expires_at,
+        must_change_password: false
+      });
+
+    if (profileError) {
+      console.error('[DB] Create profile error:', profileError);
+      // Clean up the auth user if profile creation fails
+      await supabase.auth.admin.deleteUser(authData.user.id);
+      return { success: false, error: profileError.message };
+    }
+
+    return { success: true, user: authData.user };
+  } catch (error) {
+    console.error('[DB] Create direct account error:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
+export async function getLimitedAccounts(companyId: string): Promise<LimitedAccountInfo[]> {
+  const { data, error } = await supabase
+    .from('limited_accounts_view')
+    .select('*')
+    .eq('company_id', companyId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('[DB] Get limited accounts error:', error);
+    throw new Error(`Failed to get limited accounts: ${error.message}`);
+  }
+
+  return data || [];
+}
+
+export async function updateLimitedAccount(userId: string, updates: {
+  is_active?: boolean;
+  account_expires_at?: string;
+  role?: 'canvasser' | 'field_contractor';
+}): Promise<void> {
+  const { error } = await supabase
+    .from('profiles')
+    .update({
+      ...updates,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', userId)
+    .eq('is_limited_account', true);
+
+  if (error) {
+    console.error('[DB] Update limited account error:', error);
+    throw new Error(`Failed to update limited account: ${error.message}`);
+  }
+}
+
+export async function assignCustomerToUser(assignment: {
+  user_id: string;
+  contact_id: string;
+  company_id: string;
+  assigned_by: string;
+  notes?: string;
+}): Promise<DbCustomerAssignment> {
+  const { data, error } = await supabase
+    .from('customer_assignments')
+    .insert([assignment])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('[DB] Create customer assignment error:', error);
+    throw new Error(`Failed to assign customer: ${error.message}`);
+  }
+
+  return data;
+}
+
+export async function getCustomerAssignments(userId: string): Promise<DbCustomerAssignment[]> {
+  const { data, error } = await supabase
+    .from('customer_assignments')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('is_active', true)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('[DB] Get customer assignments error:', error);
+    throw new Error(`Failed to get customer assignments: ${error.message}`);
+  }
+
+  return data || [];
+}
+
+export async function removeCustomerAssignment(userId: string, contactId: string): Promise<void> {
+  const { error } = await supabase
+    .from('customer_assignments')
+    .update({ 
+      is_active: false, 
+      updated_at: new Date().toISOString() 
+    })
+    .eq('user_id', userId)
+    .eq('contact_id', contactId);
+
+  if (error) {
+    console.error('[DB] Remove customer assignment error:', error);
+    throw new Error(`Failed to remove customer assignment: ${error.message}`);
+  }
+}
+
+export async function getLimitedSeatUsage(companyId: string): Promise<{
+  total: number;
+  used: number;
+  available: number;
+}> {
+  const { data, error } = await supabase
+    .from('companies')
+    .select('limited_seats_total, limited_seats_used')
+    .eq('id', companyId)
+    .single();
+
+  if (error) {
+    console.error('[DB] Get limited seat usage error:', error);
+    throw new Error(`Failed to get seat usage: ${error.message}`);
+  }
+
+  const total = data?.limited_seats_total || 5;
+  const used = data?.limited_seats_used || 0;
+
+  return {
+    total,
+    used,
+    available: total - used
+  };
+}
+
+export async function checkCanAssignLimitedRole(companyId: string, role: string): Promise<boolean> {
+  if (!['canvasser', 'field_contractor'].includes(role)) {
+    return true; // Not a limited role
+  }
+
+  const usage = await getLimitedSeatUsage(companyId);
+  return usage.available > 0;
 }
 
 export const db = new DatabaseService();

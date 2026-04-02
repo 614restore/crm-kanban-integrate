@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/authContext';
 import {
@@ -13,18 +13,105 @@ import {
 } from 'lucide-react';
 
 export default function UpdatePassword() {
-    const { user, loading: authLoading, clearPasswordReset } = useAuth();
+    const { user, profile, loading: authLoading, updateProfile } = useAuth();
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [sessionCheckLoading, setSessionCheckLoading] = useState(true);
+    const [sessionReady, setSessionReady] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const initializeRecoverySession = async () => {
+            setSessionCheckLoading(true);
+            setError(null);
+
+            try {
+                const url = new URL(window.location.href);
+                const query = url.searchParams;
+                const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+
+                const code = query.get('code');
+                const tokenHash = query.get('token_hash') || hash.get('token_hash');
+                const recoveryType = query.get('type') || hash.get('type');
+                const accessToken = hash.get('access_token');
+                const refreshToken = hash.get('refresh_token');
+
+                if (code) {
+                    const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+                    if (exchangeError) throw exchangeError;
+                } else if (tokenHash && recoveryType === 'recovery') {
+                    const { error: verifyError } = await supabase.auth.verifyOtp({
+                        type: 'recovery',
+                        token_hash: tokenHash,
+                    });
+                    if (verifyError) throw verifyError;
+                } else if (accessToken && refreshToken) {
+                    const { error: setSessionError } = await supabase.auth.setSession({
+                        access_token: accessToken,
+                        refresh_token: refreshToken,
+                    });
+                    if (setSessionError) throw setSessionError;
+                }
+
+                let { data: { session } } = await supabase.auth.getSession();
+
+                if (!session && (code || tokenHash || accessToken)) {
+                    for (let attempt = 0; attempt < 3; attempt += 1) {
+                        await new Promise((resolve) => setTimeout(resolve, 250));
+                        const current = await supabase.auth.getSession();
+                        session = current.data.session;
+                        if (session) break;
+                    }
+                }
+
+                if (!session) {
+                    if (!cancelled) {
+                        setSessionReady(false);
+                        setError('No valid reset session found. Please request a new password reset link.');
+                    }
+                    return;
+                }
+
+                if (!cancelled) {
+                    setSessionReady(true);
+                }
+
+                if (code || tokenHash || accessToken || window.location.hash.includes('access_token=')) {
+                    window.history.replaceState({}, '', window.location.pathname);
+                }
+            } catch (err: any) {
+                if (!cancelled) {
+                    setSessionReady(false);
+                    setError(err?.message || 'Unable to verify reset session. Please request a new reset link.');
+                }
+            } finally {
+                if (!cancelled) {
+                    setSessionCheckLoading(false);
+                }
+            }
+        };
+
+        initializeRecoverySession();
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null);
         setSuccess(null);
+
+        if (!sessionReady) {
+            setError('No valid reset session found. Please request a new password reset link.');
+            return;
+        }
 
         if (password !== confirmPassword) {
             setError('Passwords do not match.');
@@ -37,37 +124,40 @@ export default function UpdatePassword() {
 
         setLoading(true);
         try {
-            const { data: { session } } = await supabase.auth.getSession();
+            const { error: updateUserError } = await supabase.auth.updateUser({ password });
+            if (updateUserError) {
+                const message = updateUserError.message?.toLowerCase() || '';
+                const requiresServerFallback =
+                    message.includes('secure password') ||
+                    message.includes('reauthentication') ||
+                    message.includes('reauth');
+                const isForcedTempPasswordFlow = profile?.must_change_password === true;
+                if (!requiresServerFallback || !isForcedTempPasswordFlow) {
+                    throw updateUserError;
+                }
 
-            if (!session?.access_token) {
-                setError('No active session. Please log in again.');
-                setLoading(false);
-                return;
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session?.access_token) throw new Error('No active session. Please sign in again.');
+
+                const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+                const res = await fetch(`${supabaseUrl}/functions/v1/confirm-password-change`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${session.access_token}`,
+                        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+                    },
+                    body: JSON.stringify({ password }),
+                });
+                if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    throw new Error(data?.error || 'Failed to update password.');
+                }
             }
 
-            // Use confirm-password-change edge function — works for both the
-            // temp-password flow (must_change_password flag) and Supabase
-            // recovery links. Also clears must_change_password in the profile.
-            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-            const res = await fetch(`${supabaseUrl}/functions/v1/confirm-password-change`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${session.access_token}`,
-                    'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-                },
-                body: JSON.stringify({ password }),
-            });
-
-            if (!res.ok) {
-                const data = await res.json().catch(() => ({}));
-                setError(data?.error || 'Failed to update password. Please try again.');
-            } else {
-                setSuccess('Password updated successfully!');
-                try { sessionStorage.removeItem('pending_password_reset'); } catch (e) { console.warn('[UpdatePassword] sessionStorage cleanup failed:', e); }
-                // Clear in-memory reset state — AuthGate re-renders immediately to CRMApp
-                setTimeout(() => { clearPasswordReset(); }, 1500);
-            }
+            await updateProfile({ must_change_password: false });
+            setSuccess('Password updated! Taking you to the app…');
+            setTimeout(() => { window.location.reload(); }, 1500);
         } catch (err: any) {
             setError(err.message || 'Failed to update password. Please try again.');
         } finally {
@@ -155,10 +245,16 @@ export default function UpdatePassword() {
 
                             <button
                                 type="submit"
-                                disabled={loading || !user}
+                                disabled={loading || sessionCheckLoading || !sessionReady}
                                 className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed mt-2 shadow-sm"
                             >
-                                {loading ? <Loader2 className="animate-spin" size={20} /> : <><ArrowRight size={18} />Set Password</>}
+                                {loading ? (
+                                    <Loader2 className="animate-spin" size={20} />
+                                ) : sessionCheckLoading ? (
+                                    <><Loader2 className="animate-spin" size={18} />Verifying reset link…</>
+                                ) : (
+                                    <><ArrowRight size={18} />Set Password</>
+                                )}
                             </button>
                         </form>
                     )}

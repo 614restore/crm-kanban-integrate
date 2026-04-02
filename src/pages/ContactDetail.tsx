@@ -13,6 +13,7 @@ import { CustomerStatus } from '../types/supabase';
 import { formatPhone, formatCurrency } from '../lib/utils';
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { buildDocumentDisplayUrl, buildStoredDocumentUrl } from '../lib/documentAccess';
+import { secureUpload } from '../lib/storageUtils';
 import { parseContactSchedule, serializeContactSchedule, updateScheduleMilestone, type ContactMilestone, type ContactMilestoneId } from '../lib/contactSchedule';
 import { getInspectionPhotoStorageMode, type InspectionPhotoStorageMode } from '../lib/photoPreferences';
 import { getNextPipelineStageLabel, getPipelineStageLabel } from '../lib/pipelineStages';
@@ -292,17 +293,14 @@ export default function ContactDetail() {
       const isImage = file.type.startsWith('image/');
       const fileExt = file.name.split('.').pop();
       const fileName = `${Math.random()}.${fileExt}`;
-      const filePath = `${id}/${fileName}`;
       const bucket = isImage ? 'projectceo-photos' : 'documents';
-      const { error: uploadError } = await supabase.storage.from(bucket).upload(filePath, file);
-      if (uploadError) throw uploadError;
-      const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(filePath);
+      const uploadResult = await secureUpload(bucket, id, file, fileName);
       const { error: dbError } = await supabase.from('documents').insert({
         contact_id: id,
         company_id: contact.company_id,
         name: file.name,
         type: isImage ? 'photo' : 'document',
-        url: buildStoredDocumentUrl(publicUrl, bucket, filePath),
+        url: buildStoredDocumentUrl(uploadResult.publicUrl, bucket, uploadResult.path),
         size: file.size,
         uploaded_by: user?.id ?? 'unknown',
       } as any);
@@ -321,17 +319,14 @@ export default function ContactDetail() {
       const isImage = file.type.startsWith('image/');
       const fileExt = file.name.split('.').pop();
       const fileName = `${Math.random()}.${fileExt}`;
-      const filePath = `${id}/${fileName}`;
       const bucket = isImage ? 'projectceo-photos' : 'documents';
-      const { error: uploadError } = await supabase.storage.from(bucket).upload(filePath, file);
-      if (uploadError) throw uploadError;
-      const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(filePath);
+      const uploadResult = await secureUpload(bucket, id, file, fileName);
       const { error: dbError } = await supabase.from('documents').insert({
         contact_id: id,
         company_id: contact.company_id,
         name: label,
         type: docType as any,
-        url: buildStoredDocumentUrl(publicUrl, bucket, filePath),
+        url: buildStoredDocumentUrl(uploadResult.publicUrl, bucket, uploadResult.path),
         size: file.size,
         uploaded_by: user?.id ?? 'unknown',
       } as any);
@@ -1064,14 +1059,8 @@ function InspectionTab({ contact, userId, onDocumentsChanged }: { contact: any; 
     if (!contact?.id || !userId) return;
     const ext = (originalName?.split('.').pop() || blob.type.split('/').pop() || 'jpg').toLowerCase();
     const fileName = `${activeElevation}_${Date.now()}.${ext}`;
-    const filePath = `${contact.id}/${fileName}`;
-    const { error: uploadError } = await supabase.storage
-      .from('projectceo-photos')
-      .upload(filePath, blob, { contentType: blob.type || 'image/jpeg' });
-    if (uploadError) throw uploadError;
-    const { data: { publicUrl } } = supabase.storage.from('projectceo-photos').getPublicUrl(filePath);
-    const { data: signedData } = await supabase.storage.from('projectceo-photos').createSignedUrl(filePath, 60 * 60);
-    let displayUrl = signedData?.signedUrl || publicUrl;
+    const uploadResult = await secureUpload('projectceo-photos', contact.id, blob, fileName, blob.type || 'image/jpeg');
+    let displayUrl = uploadResult.signedUrl || uploadResult.publicUrl;
     try {
       const resp = await fetch(displayUrl);
       if (resp.ok) {
@@ -1177,17 +1166,14 @@ function InspectionTab({ contact, userId, onDocumentsChanged }: { contact: any; 
     if (!blob) return;
     try {
       const fileName = `${photos[markupIndex].elevation}_markup_${Date.now()}.jpg`;
-      const filePath = `${contact.id}/${fileName}`;
-      const { error: uploadError } = await supabase.storage.from('projectceo-photos').upload(filePath, blob);
-      if (uploadError) throw uploadError;
-      const { data: { publicUrl } } = supabase.storage.from('projectceo-photos').getPublicUrl(filePath);
+      const uploadResult = await secureUpload('projectceo-photos', contact.id, blob, fileName);
       const displayUrl = URL.createObjectURL(blob);
       const { error: dbError } = await supabase.from('documents').insert({
         contact_id: contact.id,
         company_id: contact.company_id,
         name: `${photos[markupIndex].elevation} Markup`,
         type: 'photo',
-        url: publicUrl,
+        url: uploadResult.publicUrl,
         size: blob.size,
         uploaded_by: userId,
       } as any);

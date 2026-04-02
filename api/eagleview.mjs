@@ -149,38 +149,89 @@ export default async function handler(req, res) {
 }
 
 // ── NOAA weather proxy (free, no credentials) ─────────────────────────────────
+// Flow: zip → lat/lon (zippopotam.us) → NOAA /points → forecast zone + county
+//       → NOAA /alerts/active?zone=… → filter storm-damage events
+const NOAA_HEADERS = {
+  'User-Agent': 'TrussCTR-CRM/1.0 (support@trussctr.com)',
+  Accept: 'application/geo+json',
+};
+
+const STORM_KEYWORDS = [
+  'tornado', 'severe thunderstorm', 'hail', 'wind', 'hurricane',
+  'tropical storm', 'winter storm', 'ice storm', 'flash flood', 'blizzard',
+];
+
 async function noaaWeather(zipCode, res) {
   try {
-    const geoRes = await fetch(`https://api.weather.gov/points/${zipCode}`);
+    // Step 1 — zip → lat/lon
+    const geoRes = await fetch(
+      `https://api.zippopotam.us/us/${encodeURIComponent(zipCode.trim())}`,
+    );
     if (!geoRes.ok) {
-      return res.status(200).json({ alerts: [], hasActiveStorm: false });
+      return res.status(200).json({ alerts: [], hasActiveStorm: false, error: 'Unknown zip code' });
+    }
+    const geoData = await geoRes.json();
+    const place = geoData.places?.[0];
+    if (!place) return res.status(200).json({ alerts: [], hasActiveStorm: false });
+
+    const lat = parseFloat(place.latitude).toFixed(4);
+    const lon = parseFloat(place.longitude).toFixed(4);
+    const locationLabel = `${place['place name']}, ${place['state abbreviation']}`;
+
+    // Step 2 — lat/lon → NOAA forecast zone + county
+    const pointsRes = await fetch(
+      `https://api.weather.gov/points/${lat},${lon}`,
+      { headers: NOAA_HEADERS },
+    );
+    if (!pointsRes.ok) {
+      return res.status(200).json({ alerts: [], hasActiveStorm: false, location: locationLabel });
+    }
+    const pointsData = await pointsRes.json();
+
+    const forecastZoneUrl = pointsData.properties?.forecastZone || '';
+    const countyUrl       = pointsData.properties?.county || '';
+    const zoneId   = forecastZoneUrl.split('/').pop();
+    const countyId = countyUrl.split('/').pop();
+    const zones    = [zoneId, countyId].filter(Boolean);
+
+    if (!zones.length) {
+      return res.status(200).json({ alerts: [], hasActiveStorm: false, location: locationLabel });
     }
 
-    const geoData = await geoRes.json();
-    const alertsUrl = geoData.properties?.forecastZone?.replace('/zones/', '/alerts/active/zone/');
-    if (!alertsUrl) return res.status(200).json({ alerts: [], hasActiveStorm: false });
-
-    const alertsRes = await fetch(alertsUrl);
-    if (!alertsRes.ok) return res.status(200).json({ alerts: [], hasActiveStorm: false });
-
+    // Step 3 — active alerts for forecast zone + county
+    const alertsRes = await fetch(
+      `https://api.weather.gov/alerts/active?zone=${zones.join(',')}`,
+      { headers: NOAA_HEADERS },
+    );
+    if (!alertsRes.ok) {
+      return res.status(200).json({ alerts: [], hasActiveStorm: false, location: locationLabel });
+    }
     const alertsData = await alertsRes.json();
+
+    // Step 4 — keep only storm-damage-relevant events
     const severe = (alertsData.features || []).filter(a => {
       const event = (a.properties?.event || '').toLowerCase();
-      return event.includes('tornado') || event.includes('severe thunderstorm') ||
-             event.includes('hail') || event.includes('wind');
+      return STORM_KEYWORDS.some(kw => event.includes(kw));
     });
 
     return res.status(200).json({
       alerts: severe.map(a => ({
-        type: a.properties.event,
-        severity: a.properties.severity,
+        type:        a.properties.event,
+        severity:    a.properties.severity,
+        urgency:     a.properties.urgency,
+        certainty:   a.properties.certainty,
+        headline:    a.properties.headline,
         description: a.properties.description,
-        onset: a.properties.onset,
-        expires: a.properties.expires,
+        instruction: a.properties.instruction || null,
+        areaDesc:    a.properties.areaDesc,
+        onset:       a.properties.onset,
+        expires:     a.properties.expires,
       })),
       hasActiveStorm: severe.length > 0,
+      location: locationLabel,
     });
-  } catch {
+  } catch (err) {
+    console.error('NOAA weather error:', err);
     return res.status(200).json({ alerts: [], hasActiveStorm: false });
   }
 }

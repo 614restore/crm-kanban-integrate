@@ -881,6 +881,10 @@ const roleHierarchy: Record<UserRole, number> = {
   sales_rep: 4,
   field_tech: 3,
   subcontractor: 2,
+  // Limited permission roles (same tier)
+  canvasser: 1,
+  field_contractor: 1,
+  // Legacy roles (for backward compatibility)
   manager: 8,
   sales: 4,
   production: 8,
@@ -908,6 +912,8 @@ export function getAssignableRoles(actorRole: UserRole): UserRole[] {
     'field_tech',
     'office_staff',
     'subcontractor',
+    'canvasser',
+    'field_contractor',
   ];
   return activeRoles.filter((role) => canAssignRole(actorRole, role));
 }

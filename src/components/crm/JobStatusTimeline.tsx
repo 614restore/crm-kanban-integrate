@@ -1,5 +1,5 @@
-import React from 'react';
-import { CustomerStatus, Contact, Job } from '@/lib/crmData';
+import React, { useState } from 'react';
+import { CustomerStatus, Contact, Job, statusLabels } from '@/lib/crmData';
 import { 
   CheckCircle, 
   Clock, 
@@ -12,7 +12,11 @@ import {
   AlertCircle,
   Eye,
   Mail,
-  Phone
+  Phone,
+  Shield,
+  ArrowLeft,
+  Circle,
+  X
 } from 'lucide-react';
 
 interface JobStatusTimelineProps {
@@ -30,18 +34,22 @@ const statusSteps: {
   icon: React.ComponentType<any>;
   color: string;
 }[] = [
-  { status: 'prospect', label: 'Prospect', description: 'Initial lead identified', icon: Eye, color: 'gray' },
-  { status: 'lead', label: 'Lead', description: 'Contact established', icon: Phone, color: 'blue' },
-  { status: 'appt_set', label: 'Appointment Set', description: 'Inspection scheduled', icon: Calendar, color: 'purple' },
-  { status: 'inspection_completed', label: 'Inspection Complete', description: 'Property assessment done', icon: MapPin, color: 'indigo' },
-  { status: 'estimate_sent', label: 'Estimate Sent', description: 'Quote provided to customer', icon: Mail, color: 'cyan' },
-  { status: 'contingency', label: 'Contingency', description: 'Insurance claim pending', icon: FileText, color: 'yellow' },
-  { status: 'signed', label: 'Contract Signed', description: 'Work authorized', icon: CheckCircle, color: 'green' },
-  { status: 'in_progress', label: 'Work in Progress', description: 'Project underway', icon: Wrench, color: 'orange' },
-  { status: 'build_phase', label: 'Build Phase', description: 'Construction/repairs active', icon: Package, color: 'red' },
-  { status: 'cleanup', label: 'Cleanup', description: 'Final site preparation', icon: CheckCircle, color: 'teal' },
-  { status: 'invoicing', label: 'Invoicing', description: 'Final billing prepared', icon: DollarSign, color: 'green' },
-  { status: 'completed', label: 'Completed', description: 'Project finished successfully', icon: CheckCircle, color: 'emerald' },
+  { status: 'prospect', label: statusLabels.prospect, description: 'Initial lead identified', icon: Eye, color: 'gray' },
+  { status: 'lead', label: statusLabels.lead, description: 'Contact established', icon: Phone, color: 'blue' },
+  { status: 'appt_set', label: statusLabels.appt_set, description: 'Inspection scheduled', icon: Calendar, color: 'purple' },
+  { status: 'inspection_completed', label: statusLabels.inspection_completed, description: 'Property assessment done', icon: MapPin, color: 'indigo' },
+  { status: 'estimating', label: statusLabels.estimating, description: 'Preparing quote for customer', icon: FileText, color: 'sky' },
+  { status: 'estimate_sent', label: statusLabels.estimate_sent, description: 'Quote provided to customer', icon: Mail, color: 'cyan' },
+  { status: 'contingency', label: statusLabels.contingency, description: 'Follow-up and negotiation phase', icon: AlertCircle, color: 'yellow' },
+  { status: 'approved', label: statusLabels.approved, description: 'Insurance approval received', icon: Shield, color: 'teal' },
+  { status: 'signed', label: statusLabels.signed, description: 'Work authorized by customer', icon: CheckCircle, color: 'green' },
+  { status: 'ordering_material', label: statusLabels.ordering_material, description: 'Materials being ordered', icon: Package, color: 'amber' },
+  { status: 'in_progress', label: statusLabels.in_progress, description: 'Project underway', icon: Wrench, color: 'orange' },
+  { status: 'build_phase', label: statusLabels.build_phase, description: 'Construction/repairs active', icon: Package, color: 'red' },
+  { status: 'cleanup', label: statusLabels.cleanup, description: 'Final site preparation', icon: CheckCircle, color: 'pink' },
+  { status: 'invoicing', label: statusLabels.invoicing, description: 'Final billing prepared', icon: DollarSign, color: 'rose' },
+  { status: 'pending_payment', label: statusLabels.pending_payment, description: 'Awaiting final payment', icon: DollarSign, color: 'amber' },
+  { status: 'completed', label: statusLabels.completed, description: 'Project finished successfully', icon: CheckCircle, color: 'emerald' },
 ];
 
 function normalizePipelineStatus(rawStatus: string | undefined | null): CustomerStatus | undefined {
@@ -60,6 +68,9 @@ function normalizePipelineStatus(rawStatus: string | undefined | null): Customer
 }
 
 const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({ contact, jobs = [], onStatusChange, onScheduleInspection, onSendEstimate }) => {
+  const [showRevertModal, setShowRevertModal] = useState(false);
+  const [revertTargetStage, setRevertTargetStage] = useState<CustomerStatus | null>(null);
+  
   const normalizedStatus = normalizePipelineStatus(contact.status);
   const currentStatusIndex = statusSteps.findIndex(step => step.status === normalizedStatus);
   
@@ -72,6 +83,27 @@ const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({ contact, jobs = [
   const getLineColor = (index: number) => {
     if (index < currentStatusIndex) return 'bg-green-600';
     return 'bg-gray-300';
+  };
+
+  const handleStageClick = (status: CustomerStatus, index: number) => {
+    // Only allow reverting to past stages
+    if (index < currentStatusIndex) {
+      setRevertTargetStage(status);
+      setShowRevertModal(true);
+    }
+  };
+
+  const handleRevertConfirm = () => {
+    if (revertTargetStage && onStatusChange) {
+      onStatusChange(revertTargetStage);
+    }
+    setShowRevertModal(false);
+    setRevertTargetStage(null);
+  };
+
+  const handleRevertCancel = () => {
+    setShowRevertModal(false);
+    setRevertTargetStage(null);
   };
 
   return (
@@ -256,6 +288,129 @@ const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({ contact, jobs = [
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Pipeline Stages - Interactive for mobile */}
+      <div className="bg-white rounded-lg border border-gray-200 p-4 mb-safe">
+        <h3 className="text-lg font-semibold text-gray-900 mb-2">Pipeline Stages</h3>
+        <p className="text-sm text-gray-600 mb-4">TAP ANY PAST STAGE TO REVERT</p>
+        
+        <div className="space-y-2">
+          {statusSteps.map((step, index) => {
+            const isCompleted = index < currentStatusIndex;
+            const isCurrent = index === currentStatusIndex;
+            const isPending = index > currentStatusIndex;
+            
+            return (
+              <div
+                key={step.status}
+                onClick={() => handleStageClick(step.status, index)}
+                className={`
+                  flex items-center gap-3 p-3 rounded-lg border-2 transition-all
+                  ${isCurrent ? 
+                    'border-blue-500 bg-blue-50' : 
+                    isCompleted ? 
+                      'border-green-200 bg-green-50 cursor-pointer hover:bg-green-100' : 
+                      'border-gray-200 bg-gray-50'
+                  }
+                  ${isCompleted ? 'active:scale-95' : ''}
+                `}
+              >
+                {/* Stage Icon */}
+                <div className={`
+                  w-6 h-6 rounded-full flex items-center justify-center border-2
+                  ${isCurrent ? 
+                    'border-blue-500 bg-blue-500' : 
+                    isCompleted ? 
+                      'border-green-500 bg-green-500' : 
+                      'border-gray-300 bg-white'
+                  }
+                `}>
+                  {isCompleted ? (
+                    <CheckCircle className="w-4 h-4 text-white" />
+                  ) : isCurrent ? (
+                    <Circle className="w-3 h-3 text-white fill-current" />
+                  ) : (
+                    <Circle className="w-3 h-3 text-gray-400" />
+                  )}
+                </div>
+                
+                {/* Stage Details */}
+                <div className="flex-1">
+                  <div className={`font-medium ${
+                    isCurrent ? 'text-blue-900' : 
+                    isCompleted ? 'text-green-900' : 
+                    'text-gray-600'
+                  }`}>
+                    {step.label}
+                  </div>
+                  {isCompleted && (
+                    <div className="text-xs text-green-600 font-medium">
+                      Tap to revert
+                    </div>
+                  )}
+                  {isCurrent && (
+                    <div className="text-xs text-blue-600 font-medium">
+                      Current stage
+                    </div>
+                  )}
+                  {isPending && (
+                    <div className="text-xs text-gray-500">
+                      Pending
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Confirmation Modal */}
+      {showRevertModal && revertTargetStage && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 p-4 pt-16" style={{ paddingBottom: '120px' }}>
+          <div className="bg-white rounded-xl w-full max-w-md p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Revert Job Stage?</h3>
+              <button
+                onClick={handleRevertCancel}
+                className="p-2 hover:bg-gray-100 rounded-full"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <p className="text-gray-600">
+                Are you sure you want to revert this contact back to:
+              </p>
+              
+              <div className="bg-gray-50 rounded-lg p-3 border">
+                <div className="font-medium text-gray-900">
+                  {statusSteps.find(s => s.status === revertTargetStage)?.label}
+                </div>
+                <div className="text-sm text-gray-600">
+                  {statusSteps.find(s => s.status === revertTargetStage)?.description}
+                </div>
+              </div>
+              
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={handleRevertCancel}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleRevertConfirm}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                >
+                  Revert Stage
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

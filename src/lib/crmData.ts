@@ -34,6 +34,8 @@ export type UserRole =
   | 'field_tech'
   | 'office_staff'
   | 'subcontractor'
+  | 'canvasser'
+  | 'field_contractor'
   // Legacy roles for backward compatibility
   | 'manager'
   | 'sales'

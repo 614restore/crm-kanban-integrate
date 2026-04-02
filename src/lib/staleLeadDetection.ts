@@ -104,9 +104,13 @@ export async function notifyOwnersOfStaleContacts(companyId: string, staleContac
   if (staleContacts.length === 0) return;
   
   try {
-    // Get all owners/admins for the company
+    // Get all owners/admins/managers for the company
     const teamMembers = await db.getTeamMembers(companyId);
-    const owners = teamMembers.filter(tm => tm.role === 'owner' || tm.role === 'admin');
+    const owners = teamMembers.filter(tm => 
+      tm.role === 'owner' || 
+      tm.role === 'admin' || 
+      tm.role === 'manager'
+    );
     
     // Group stale contacts by assigned user
     const staleByUser = new Map<string, StaleContact[]>();

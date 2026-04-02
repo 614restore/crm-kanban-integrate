@@ -61,6 +61,15 @@ export interface FullScreenDocumentEditorProps {
   contacts: any[];
   initialContactId?: string;
   initialContent?: string;
+  initialEstimateItems?: Array<{
+    id?: string;
+    description: string;
+    quantity: number;
+    unit?: string;
+    unitPrice: number;
+    unit_price?: number; // Support both formats
+    total: number;
+  }>;
 }
 
 interface LineItem {
@@ -208,6 +217,7 @@ const FullScreenDocumentEditor: React.FC<FullScreenDocumentEditorProps> = ({
   companyProfile,
   contacts,
   initialContactId = '',
+  initialEstimateItems = [],
 }) => {
   const { toast } = useToast();
   const { profile } = useAuth();
@@ -240,7 +250,21 @@ const FullScreenDocumentEditor: React.FC<FullScreenDocumentEditorProps> = ({
   }, []);
 
   // ── Line items ──
-  const [lineItems, setLineItems] = useState<LineItem[]>([newLineItem(), newLineItem(), newLineItem()]);
+  const [lineItems, setLineItems] = useState<LineItem[]>(() => {
+    // If we have initial estimate items, convert them to LineItem format
+    if (initialEstimateItems && initialEstimateItems.length > 0) {
+      return initialEstimateItems.map(item => ({
+        id: item.id || crypto.randomUUID(),
+        description: item.description,
+        qty: String(item.quantity || 0),
+        unit: item.unit || 'ea',
+        unitPrice: `$${(item.unitPrice || item.unit_price || 0).toFixed(2)}`,
+        total: `$${(item.total || 0).toFixed(2)}`
+      }));
+    }
+    // Otherwise start with 3 empty items
+    return [newLineItem(), newLineItem(), newLineItem()];
+  });
 
   const updateLineItem = useCallback((id: string, field: keyof LineItem, value: string) => {
     setLineItems(prev => prev.map(item => {
