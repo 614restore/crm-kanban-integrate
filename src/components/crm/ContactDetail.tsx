@@ -729,7 +729,7 @@ export default function ContactDetail() {
           state: editedContact.state,
           zip: editedContact.zip,
           lead_source: editedContact.leadSource,
-          assigned_to: editedContact.assignedTo,
+          assigned_to: editedContact.assignedTo || null,
           tags: editedContact.tags || [],
           // Project / Financial fields — critical for pipeline board dollar totals
           project_type: editedContact.projectType,
