@@ -111,7 +111,8 @@ export default function AuthPage() {
       if (mode === 'login') {
         const { error } = await signIn(email, password);
         if (error) {
-          const msg = error.message || '';
+          const msg = (error.message || '').trim();
+          console.error('[Auth] Login error:', msg, error);
           if (isTokenError(msg)) {
             try {
               await supabase.auth.signOut({ scope: 'local' });
@@ -123,9 +124,12 @@ export default function AuthPage() {
             msg.toLowerCase().includes('load failed') ||
             msg.toLowerCase().includes('failed to fetch') ||
             msg.toLowerCase().includes('networkerror') ||
-            msg.toLowerCase().includes('fetch')
+            msg.toLowerCase().includes('network') ||
+            msg.toLowerCase().includes('fetch') ||
+            msg.toLowerCase().includes('abort') ||
+            msg === ''
           ) {
-            setError('Unable to reach the server. Check your internet connection and try again.');
+            setError('Connection failed. Please check your internet and try again. If the problem persists, try closing private browsing mode.');
           } else {
             setError(msg || 'Failed to sign in. Please check your credentials.');
           }
