@@ -353,7 +353,12 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
       onClose();
     } catch (err: any) {
       console.error('[ContactTemplateModal] Save error:', err);
-      toast.error(err?.message || 'Failed to save document. Please try again.');
+      const msg = err?.message || '';
+      if (msg.toLowerCase().includes('import') || msg.toLowerCase().includes('module') || msg.toLowerCase().includes('load failed')) {
+        toast.error('PDF generator failed to load. Please refresh the page and try again.');
+      } else {
+        toast.error(msg || 'Failed to save document. Please try again.');
+      }
     } finally {
       setIsSaving(false);
     }

@@ -15,13 +15,20 @@ let loadPromise: Promise<Html2PdfFn> | null = null;
 function loadHtml2Pdf(): Promise<Html2PdfFn> {
   if (loadPromise) return loadPromise;
 
-  loadPromise = import('html2pdf.js').then((module: any) => {
-    const html2pdf = module?.default || module;
-    if (!html2pdf) {
-      throw new Error('html2pdf.js failed to load from local bundle');
-    }
-    return html2pdf as Html2PdfFn;
-  });
+  loadPromise = import('html2pdf.js')
+    .catch(() => {
+      // First attempt failed (stale service worker cache / chunk hash mismatch).
+      // Clear the cached promise and retry once — this forces a fresh network fetch.
+      loadPromise = null;
+      return import('html2pdf.js');
+    })
+    .then((module: any) => {
+      const html2pdf = module?.default || module;
+      if (!html2pdf) {
+        throw new Error('html2pdf.js failed to load from local bundle');
+      }
+      return html2pdf as Html2PdfFn;
+    });
 
   return loadPromise;
 }
