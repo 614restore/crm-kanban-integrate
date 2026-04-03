@@ -275,30 +275,6 @@ export interface DbNotification {
   updated_at: string;
 }
 
-export interface DbNotificationPreference {
-  id?: string;
-  company_id: string;
-  user_id: string;
-  email_enabled: boolean;
-  sms_enabled: boolean;
-  push_enabled: boolean;
-  hail_alerts_enabled: boolean;
-  wind_alerts_enabled: boolean;
-  appointment_alerts_enabled: boolean;
-  lead_assignment_alerts_enabled: boolean;
-  mention_alerts_enabled: boolean;
-  min_hail_size_inches: number;
-  min_wind_speed_mph: number;
-  min_severity: string;
-  quiet_hours_start: string | null;
-  quiet_hours_end: string | null;
-  max_alerts_per_day?: number;
-  service_area_zip_codes: string[];
-  service_area_radius_miles?: number;
-  created_at?: string;
-  updated_at?: string;
-}
-
 export interface DbSupplier {
   id: string;
   company_id: string;
@@ -1783,58 +1759,6 @@ class DatabaseService {
     const { error } = await supabase.from('notifications').delete().eq('id', notificationId);
     if (error) { console.error('Error deleting notification:', error); return false; }
     return true;
-  }
-
-  // === Notification Preferences Methods ===
-
-  async getUserNotificationPreferences(
-    companyId: string,
-    userId: string
-  ): Promise<DbNotificationPreference | null> {
-    assertCompanyId(companyId, 'getUserNotificationPreferences');
-    if (this.inDemoMode()) return null;
-    try {
-      const { data, error } = await this.raceTimeout(
-        supabase
-          .from('notification_preferences')
-          .select('*')
-          .eq('company_id', companyId)
-          .eq('user_id', userId)
-          .maybeSingle(),
-        10000,
-        'getUserNotificationPreferences'
-      );
-      if (error) {
-        console.error('Error fetching notification preferences:', error);
-        return null;
-      }
-      return data;
-    } catch (err) {
-      console.error('getUserNotificationPreferences timed out or failed:', err);
-      return null;
-    }
-  }
-
-  async saveUserNotificationPreferences(
-    prefs: DbNotificationPreference
-  ): Promise<boolean> {
-    assertCompanyId(prefs.company_id, 'saveUserNotificationPreferences');
-    if (this.inDemoMode()) return true;
-    try {
-      const { error } = await this.raceTimeout(
-        supabase.from('notification_preferences').upsert(prefs),
-        10000,
-        'saveUserNotificationPreferences'
-      );
-      if (error) {
-        console.error('Error saving notification preferences:', error);
-        return false;
-      }
-      return true;
-    } catch (err) {
-      console.error('saveUserNotificationPreferences timed out or failed:', err);
-      return false;
-    }
   }
 
   // Expense operations

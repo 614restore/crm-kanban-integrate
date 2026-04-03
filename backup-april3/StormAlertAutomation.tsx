@@ -3,7 +3,6 @@ import { Cloud, AlertTriangle, Send, Users, MapPin, Clock, CheckCircle, Info } f
 import { Contact } from '@/lib/crmData';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/authContext';
-import { supabase } from '@/lib/supabase';
 
 interface WeatherAlert {
   type: string;
@@ -45,7 +44,7 @@ const URGENCY_LABEL: Record<string, string> = {
 };
 
 export function StormAlertAutomation({ contacts, onSendAlerts }: StormAlertProps) {
-  const { session, profile, user } = useAuth();
+  const { session } = useAuth();
   const [activeAlerts, setActiveAlerts]       = useState<WeatherAlert[]>([]);
   const [affectedZipCodes, setAffectedZipCodes] = useState<string[]>([]);
   const [zipLocations, setZipLocations]       = useState<Record<string, string>>({});
@@ -63,44 +62,9 @@ export function StormAlertAutomation({ contacts, onSendAlerts }: StormAlertProps
     setIsChecking(true);
 
     try {
-      // Load user preferences
-      let minSeverityLevel = 2; // Default: moderate
-      let serviceAreaZips: string[] = [];
-      
-      if (profile?.company_id && user?.id) {
-        const { data: prefs } = await supabase
-          .from('notification_preferences')
-          .select('*')
-          .eq('company_id', profile.company_id)
-          .eq('user_id', user.id)
-          .maybeSingle();
-        
-        if (prefs) {
-          // Map severity to numeric level
-          const severityOrder: Record<string, number> = { 
-            minor: 1, 
-            moderate: 2, 
-            severe: 3, 
-            extreme: 4 
-          };
-          minSeverityLevel = severityOrder[prefs.min_severity] || 2;
-          serviceAreaZips = prefs.service_area_zip_codes || [];
-        }
-      }
-
-      // Get zip codes to check
-      let zipCodes = [...new Set(contacts.map(c => c.zip).filter(Boolean))];
-      
-      // Filter by service area if configured
-      if (serviceAreaZips.length > 0) {
-        zipCodes = zipCodes.filter(zip => serviceAreaZips.includes(zip));
-      }
-      
+      const zipCodes = [...new Set(contacts.map(c => c.zip).filter(Boolean))];
       if (!zipCodes.length) {
-        toast.info(serviceAreaZips.length > 0 
-          ? 'No contacts in your configured service area' 
-          : 'No zip codes found in your contacts'
-        );
+        toast.info('No zip codes found in your contacts');
         setIsChecking(false);
         return;
       }
@@ -122,30 +86,10 @@ export function StormAlertAutomation({ contacts, onSendAlerts }: StormAlertProps
         })
       );
 
-      // Filter alerts by severity threshold
-      const severityOrder: Record<string, number> = { 
-        minor: 1, 
-        moderate: 2, 
-        severe: 3, 
-        extreme: 4 
-      };
-      
-      const filteredResults = results.map(result => ({
-        ...result,
-        alerts: result.alerts.filter(alert => {
-          const alertSeverityLevel = severityOrder[alert.severity?.toLowerCase()] || 1;
-          return alertSeverityLevel >= minSeverityLevel;
-        }),
-        hasStorm: result.alerts.some(alert => {
-          const alertSeverityLevel = severityOrder[alert.severity?.toLowerCase()] || 1;
-          return alertSeverityLevel >= minSeverityLevel;
-        })
-      }));
-
-      const stormZips = filteredResults.filter(r => r.hasStorm).map(r => r.zip);
-      const allAlerts = filteredResults.flatMap(r => r.alerts);
+      const stormZips = results.filter(r => r.hasStorm).map(r => r.zip);
+      const allAlerts = results.flatMap(r => r.alerts);
       const locMap: Record<string, string> = {};
-      filteredResults.forEach(r => { if (r.location) locMap[r.zip] = r.location; });
+      results.forEach(r => { if (r.location) locMap[r.zip] = r.location; });
 
       setAffectedZipCodes(stormZips);
       setActiveAlerts(allAlerts);

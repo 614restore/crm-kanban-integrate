@@ -21,6 +21,7 @@ import { useCRM } from '@/lib/crmStore';
 import IntegrationsSettings from './IntegrationsSettings';
 import CompanyTeamSettings from './CompanyTeamSettings';
 import BillingSettingsPage from './BillingSettings';
+import { NotificationPreferences } from './NotificationPreferences';
 
 // Main Settings Component with Navigation
 const MainSettings: React.FC = () => {
@@ -46,7 +47,7 @@ const MainSettings: React.FC = () => {
       title: 'Notifications',
       description: 'Email alerts, SMS notifications, and preferences',
       icon: Bell,
-      component: NotificationSettings
+      component: NotificationPreferences
     },
     {
       id: 'appearance',
@@ -74,24 +75,21 @@ const MainSettings: React.FC = () => {
       title: 'Communication',
       description: 'Email templates, SMS settings, and automation',
       icon: Mail,
-      component: CommunicationSettings,
-      comingSoon: true,
+      component: CommunicationSettings
     },
     {
       id: 'calendar',
       title: 'Calendar',
       description: 'Scheduling, availability, and calendar sync',
       icon: Calendar,
-      component: CalendarSettings,
-      comingSoon: true,
+      component: CalendarSettings
     },
     {
       id: 'documents',
       title: 'Documents',
       description: 'Templates, contracts, and document automation',
       icon: FileText,
-      component: DocumentSettings,
-      comingSoon: true,
+      component: DocumentSettings
     },
     {
       id: 'billing',
@@ -105,16 +103,14 @@ const MainSettings: React.FC = () => {
       title: 'Reporting',
       description: 'Dashboard configuration and report settings',
       icon: BarChart3,
-      component: ReportingSettings,
-      comingSoon: true,
+      component: ReportingSettings
     },
     {
       id: 'support',
       title: 'Help & Support',
       description: 'Documentation, tutorials, and support contacts',
       icon: HelpCircle,
-      component: SupportSettings,
-      comingSoon: true,
+      component: SupportSettings
     }
   ];
 

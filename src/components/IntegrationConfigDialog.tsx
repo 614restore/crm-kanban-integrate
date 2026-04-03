@@ -76,6 +76,20 @@ const INTEGRATION_CONFIGS: Record<string, Array<{
       help: 'Use Production for live hail data. Sandbox for testing only.',
     },
   ],
+  roofr: [
+    { field: 'apiKey', label: 'API Key', type: 'password', required: true, placeholder: 'Your Roofr API key', help: 'Get your API key at app.roofr.com → Settings → Integrations' },
+    {
+      field: 'environment',
+      label: 'Environment',
+      type: 'select',
+      required: true,
+      options: [
+        { label: 'Production', value: 'production' },
+        { label: 'Sandbox', value: 'sandbox' },
+      ],
+      help: 'Use Production for live aerial reports. Sandbox for testing only.',
+    },
+  ],
   sendgrid: [
     { field: 'apiKey', label: 'API Key', type: 'password', required: true, placeholder: 'SG.xxxxxxxx', help: 'Create an API key at app.sendgrid.com → Settings → API Keys. Requires "Mail Send" permission.' },
     { field: 'fromEmail', label: 'From Email Address', type: 'text', required: true, placeholder: 'noreply@yourcompany.com', help: 'Must be a verified sender in your SendGrid account.' },
