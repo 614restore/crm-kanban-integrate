@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useFormDraft } from '@/lib/useFormDraft';
 import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
 import { sendEmail } from '@/lib/emailApi';
 import { fireAutomationEvent } from '@/lib/automationEngine';
+import { logActivity } from '@/lib/activityLogger';
 import { Estimate, EstimateItem, Contact } from '@/lib/crmData';
 import { exportEstimatesToExcel } from '@/lib/exportUtils';
 import { SignaturePad } from './SignaturePad';
@@ -58,6 +60,8 @@ function StatusBadge({ status }: { status: Estimate['status'] }) {
 export default function EstimatesView() {
   const { state, dispatch } = useCRM();
   const { profile } = useAuth();
+  // Owners and managers can edit viewed/locked estimates — they just create an audit trail
+  const canOverrideLock = ['owner', 'admin', 'sales_manager'].includes(profile?.role || '');
   const [searchQuery, setSearchQuery] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingEstimate, setEditingEstimate] = useState<Estimate | null>(null);
@@ -82,6 +86,15 @@ export default function EstimatesView() {
   const [notes, setNotes] = useState('');
   const [terms, setTerms] = useState('');
   const [taxRate, setTaxRate] = useState(0);
+
+  // Auto-save draft to localStorage (new records only)
+  const estDraftKey = `estimate_draft_${profile?.company_id || 'unknown'}`;
+  const estDraftData = useMemo(() => ({
+    selectedContactId, title, estimateNumber, validityDate, items, notes, terms, taxRate,
+  }), [selectedContactId, title, estimateNumber, validityDate, items, notes, terms, taxRate]);
+  const { loadDraft: loadEstDraft, clearDraft: clearEstDraft } = useFormDraft(
+    estDraftKey, estDraftData, { enabled: showModal && !editingEstimate }
+  );
 
   // Load estimates when company is available (handles slow auth)
   useEffect(() => {
@@ -193,10 +206,23 @@ export default function EstimatesView() {
 
   const handleOpenModal = (estimate?: Estimate) => {
     if (estimate) {
-      // Check if estimate has been viewed by customer
-      if (estimate.viewedAt) {
-        toast.error('Cannot edit estimate - customer has already viewed it. Create a change order instead.');
+      // Estimates are locked after the customer has viewed them.
+      // Owners/managers can still edit but the change is auto-logged.
+      if (estimate.viewedAt && !canOverrideLock) {
+        toast.error('Cannot edit estimate — customer has already viewed it. Create a change order instead.');
         return;
+      }
+      if (estimate.viewedAt && canOverrideLock) {
+        toast.info('Note: customer has already viewed this estimate. Your edit will be logged.');
+        const contact = state.contacts.find(c => c.id === estimate.contactId);
+        if (contact && profile?.company_id) {
+          logActivity({
+            contactId: estimate.contactId,
+            companyId: profile.company_id,
+            userId: profile.id,
+            content: `✏️ Estimate "${estimate.title}" edited by ${profile.role} after customer had viewed it`,
+          }).catch(() => {});
+        }
       }
       
       setEditingEstimate(estimate);
@@ -209,14 +235,28 @@ export default function EstimatesView() {
       setTerms(estimate.terms || '');
       setTaxRate(estimate.amount > 0 ? (estimate.tax / estimate.amount) * 100 : 0);
     } else {
-      // Generate estimate number
-      const nextNumber = `EST-${Date.now().toString().slice(-6)}`;
-      setEstimateNumber(nextNumber);
-      
-      // Set default validity (30 days from now)
-      const defaultDate = new Date();
-      defaultDate.setDate(defaultDate.getDate() + 30);
-      setValidityDate(defaultDate.toISOString().split('T')[0]);
+      const draft = loadEstDraft();
+      if (draft) {
+        setSelectedContactId(draft.selectedContactId || '');
+        setTitle(draft.title || '');
+        setEstimateNumber(draft.estimateNumber || `EST-${Date.now().toString().slice(-6)}`);
+        setValidityDate(draft.validityDate || (() => {
+          const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().split('T')[0];
+        })());
+        setItems(draft.items?.length ? draft.items : [
+          { id: crypto.randomUUID(), description: '', quantity: 1, unit: 'ea', unitPrice: 0, total: 0, hidePrice: false }
+        ]);
+        setNotes(draft.notes || '');
+        setTerms(draft.terms || '');
+        setTaxRate(draft.taxRate || 0);
+        toast.info('Draft restored — your previous estimate was recovered.');
+      } else {
+        const nextNumber = `EST-${Date.now().toString().slice(-6)}`;
+        setEstimateNumber(nextNumber);
+        const defaultDate = new Date();
+        defaultDate.setDate(defaultDate.getDate() + 30);
+        setValidityDate(defaultDate.toISOString().split('T')[0]);
+      }
     }
     setShowModal(true);
   };
@@ -231,6 +271,7 @@ export default function EstimatesView() {
   };
 
   const handleCloseModal = () => {
+    clearEstDraft();
     setShowModal(false);
     setEditingEstimate(null);
     setSelectedContactId('');
@@ -307,6 +348,15 @@ export default function EstimatesView() {
         );
         if (created) {
           dispatch({ type: 'ADD_ESTIMATE', payload: mapDbEstimateToApp(created) });
+          // Auto-log estimate creation
+          if (selectedContactId && profile?.company_id) {
+            logActivity({
+              contactId: selectedContactId,
+              companyId: profile.company_id,
+              userId: profile.id,
+              content: `📄 Estimate created: "${title}" — $${(estimateData.total ?? 0).toLocaleString()}`,
+            }).catch(() => {});
+          }
           toast.success('Estimate created');
           handleCloseModal();
         } else {
@@ -561,6 +611,15 @@ export default function EstimatesView() {
           }).catch(() => {});
         }
       }
+      // Auto-log estimate sent
+      if (c && profile?.company_id) {
+        logActivity({
+          contactId: c.id,
+          companyId: profile.company_id,
+          userId: profile.id,
+          content: `📧 Estimate sent: "${updated.title}" emailed to ${contact.email} — $${Number(updated.total || 0).toLocaleString()}`,
+        }).catch(() => {});
+      }
       toast.success(`Estimate emailed to ${contact.email}`);
     } catch (error) {
       console.error('EstimatesView: Error sending estimate:', error);
@@ -681,6 +740,15 @@ export default function EstimatesView() {
               updatedAt: new Date().toISOString(),
             },
           });
+        }
+        // Auto-log signature
+        if (updated.contact_id && profile.company_id) {
+          logActivity({
+            contactId: updated.contact_id,
+            companyId: profile.company_id,
+            userId: profile.id,
+            content: `✍️ Estimate signed: "${updated.title}" signed by ${name} — $${Number(updated.total || 0).toLocaleString()}`,
+          }).catch(() => {});
         }
         const dbEstimate = { ...updated, company_id: profile.company_id } as any;
         const project = await db.createProjectFromEstimate(dbEstimate, profile.id);
@@ -1066,19 +1134,21 @@ export default function EstimatesView() {
                     <FileText size={18} />
                   </button>
                   <button
-                    onClick={() => {
-                      if (estimate.viewedAt) {
-                        toast.info('Customer has viewed this estimate. Use "Create Change Order" to make modifications.');
-                      } else {
-                        handleOpenModal(estimate);
-                      }
-                    }}
+                    onClick={() => handleOpenModal(estimate)}
                     className={`p-2 rounded-lg transition-colors ${
-                      estimate.viewedAt 
-                        ? 'text-gray-400 cursor-not-allowed' 
+                      estimate.viewedAt && !canOverrideLock
+                        ? 'text-gray-400 cursor-not-allowed'
+                        : estimate.viewedAt && canOverrideLock
+                        ? 'text-amber-500 hover:bg-amber-50'
                         : 'text-gray-600 hover:bg-gray-100'
                     }`}
-                    title={estimate.viewedAt ? 'Cannot edit - Customer has viewed' : 'Edit'}
+                    title={
+                      estimate.viewedAt && !canOverrideLock
+                        ? 'Cannot edit — customer has viewed (create a change order)'
+                        : estimate.viewedAt && canOverrideLock
+                        ? 'Edit (owner/manager override — will be logged)'
+                        : 'Edit'
+                    }
                   >
                     <Edit2 size={18} />
                   </button>
@@ -1760,23 +1830,27 @@ export default function EstimatesView() {
             <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50 rounded-b-xl">
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => { 
-                    setViewingEstimate(null); 
-                    if (viewingEstimate?.viewedAt) {
-                      toast.info('Customer has viewed this estimate. Use "Create Change Order" to make modifications.');
-                    } else {
-                      handleOpenModal(viewingEstimate); 
-                    }
+                  onClick={() => {
+                    setViewingEstimate(null);
+                    handleOpenModal(viewingEstimate ?? undefined);
                   }}
                   className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition-colors text-sm ${
-                    viewingEstimate?.viewedAt
+                    viewingEstimate?.viewedAt && !canOverrideLock
                       ? 'text-gray-400 border-gray-200 cursor-not-allowed'
+                      : viewingEstimate?.viewedAt && canOverrideLock
+                      ? 'text-amber-600 border-amber-300 hover:bg-amber-50'
                       : 'text-gray-700 border-gray-300 hover:bg-white'
                   }`}
-                  title={viewingEstimate?.viewedAt ? 'Cannot edit - Customer has viewed' : 'Edit'}
+                  title={
+                    viewingEstimate?.viewedAt && !canOverrideLock
+                      ? 'Cannot edit — customer has viewed'
+                      : viewingEstimate?.viewedAt && canOverrideLock
+                      ? 'Edit (owner override — will be logged)'
+                      : 'Edit'
+                  }
                 >
                   <Edit2 size={16} />
-                  {viewingEstimate?.viewedAt ? 'Viewed by Customer' : 'Edit'}
+                  {viewingEstimate?.viewedAt && !canOverrideLock ? 'Viewed — Locked' : 'Edit'}
                 </button>
                 
                 {/* Show Change Order button only for viewed estimates */}

@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
+import { useFormDraft } from '@/lib/useFormDraft';
 import { db } from '@/lib/database';
 import { MaterialOrder, MaterialOrderItem } from '@/lib/crmData';
 import { exportMaterialOrdersToExcel } from '@/lib/exportUtils';
 import { uploadDocument, getDocumentSignedUrl } from '@/lib/storage';
-import { VendorInvoiceMatching } from './VendorInvoiceMatching';
 import {
   Package,
   Plus,
@@ -148,6 +148,19 @@ export default function MaterialOrdersView() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [items, setItems] = useState<MaterialOrder['items']>([]);
 
+  // Auto-save draft to localStorage (new records only)
+  const matDraftKey = `material_order_draft_${profile?.company_id || 'unknown'}`;
+  const matDraftData = useMemo(() => ({
+    orderNumber, selectedSupplierId, selectedContactId, selectedJobId,
+    selectedProjectId, status, orderDate, expectedDeliveryDate,
+    tax, shipping, notes, items,
+  }), [orderNumber, selectedSupplierId, selectedContactId, selectedJobId,
+    selectedProjectId, status, orderDate, expectedDeliveryDate,
+    tax, shipping, notes, items]);
+  const { loadDraft: loadMatDraft, clearDraft: clearMatDraft } = useFormDraft(
+    matDraftKey, matDraftData, { enabled: showModal && !editingOrder }
+  );
+
   // Load material orders on mount
   useEffect(() => {
     loadMaterialOrders();
@@ -208,15 +221,37 @@ export default function MaterialOrdersView() {
       setAttachments(order.attachments || []);
       setItems(order.items || []);
     } else {
-      // Generate order number
-      const nextNumber = `MO-${Date.now().toString().slice(-6)}`;
-      setOrderNumber(nextNumber);
-      setOrderDate(new Date().toISOString().split('T')[0]);
+      const draft = loadMatDraft();
+      if (draft) {
+        setOrderNumber(draft.orderNumber || `MO-${Date.now().toString().slice(-6)}`);
+        setSelectedSupplierId(draft.selectedSupplierId || '');
+        setSelectedContactId(draft.selectedContactId || '');
+        setSelectedJobId(draft.selectedJobId || '');
+        setSelectedProjectId(draft.selectedProjectId || '');
+        setStatus(draft.status || 'pending');
+        setOrderDate(draft.orderDate || new Date().toISOString().split('T')[0]);
+        setExpectedDeliveryDate(draft.expectedDeliveryDate || '');
+        setTax(draft.tax || '0');
+        setShipping(draft.shipping || '0');
+        setNotes(draft.notes || '');
+        const restoredItems = draft.items || [];
+        setItems(restoredItems);
+        if (restoredItems.length > 0) {
+          const sub = restoredItems.reduce((s: number, i: any) => s + (i.total || 0), 0);
+          setSubtotal(sub.toFixed(2));
+          setTotal((sub + parseFloat(draft.tax || '0') + parseFloat(draft.shipping || '0')).toFixed(2));
+        }
+        toast.info('Draft restored — your previous material order was recovered.');
+      } else {
+        setOrderNumber(`MO-${Date.now().toString().slice(-6)}`);
+        setOrderDate(new Date().toISOString().split('T')[0]);
+      }
     }
     setShowModal(true);
   };
 
   const handleCloseModal = () => {
+    clearMatDraft();
     setShowModal(false);
     setEditingOrder(null);
     setOrderNumber('');
@@ -751,13 +786,6 @@ export default function MaterialOrdersView() {
                 <div className="mt-4 pt-4 border-t border-gray-100">
                   <p className="text-xs text-gray-500 mb-1">Notes</p>
                   <p className="text-sm text-gray-700">{order.notes}</p>
-                </div>
-              )}
-
-              {/* Vendor Invoice Matching */}
-              {(order.status === 'delivered' || order.status === 'confirmed') && (
-                <div className="mt-4 pt-4 border-t border-gray-100">
-                  <VendorInvoiceMatching materialOrder={order} />
                 </div>
               )}
 

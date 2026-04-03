@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
+import { useFormDraft } from '@/lib/useFormDraft';
 import { db } from '@/lib/database';
 import { WorkOrder } from '@/lib/crmData';
 import { exportWorkOrdersToExcel } from '@/lib/exportUtils';
@@ -106,6 +107,21 @@ export default function WorkOrdersView() {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Auto-save draft to localStorage (new records only)
+  const draftKey = `work_order_draft_${profile?.company_id || 'unknown'}`;
+  const workOrderDraftData = useMemo(() => ({
+    workOrderNumber, title, selectedProjectId, selectedContactId,
+    description, status, priority, scheduledDate, assignedTo,
+    estimatedHours, actualHours, laborCost, materialCost,
+    address, city, workOrderState, zip, notes,
+  }), [workOrderNumber, title, selectedProjectId, selectedContactId,
+    description, status, priority, scheduledDate, assignedTo,
+    estimatedHours, actualHours, laborCost, materialCost,
+    address, city, workOrderState, zip, notes]);
+  const { loadDraft: loadWorkOrderDraft, clearDraft: clearWorkOrderDraft } = useFormDraft(
+    draftKey, workOrderDraftData, { enabled: showModal && !editingWorkOrder }
+  );
+
   // Load work orders when company is available (handles slow auth)
   useEffect(() => {
     if (profile?.company_id) loadWorkOrders();
@@ -194,14 +210,37 @@ export default function WorkOrdersView() {
       setNotes(workOrder.notes || '');
       setAttachments(workOrder.attachments || []);
     } else {
-      // Generate work order number for new work orders only
-      const nextNumber = `WO-${Date.now().toString().slice(-6)}`;
-      setWorkOrderNumber(nextNumber);
+      // Restore draft if one exists
+      const draft = loadWorkOrderDraft();
+      if (draft) {
+        setWorkOrderNumber(draft.workOrderNumber || `WO-${Date.now().toString().slice(-6)}`);
+        setTitle(draft.title || '');
+        setSelectedProjectId(draft.selectedProjectId || '');
+        setSelectedContactId(draft.selectedContactId || '');
+        setDescription(draft.description || '');
+        setStatus(draft.status || 'scheduled');
+        setPriority(draft.priority || 'medium');
+        setScheduledDate(draft.scheduledDate || '');
+        setAssignedTo(draft.assignedTo || []);
+        setEstimatedHours(draft.estimatedHours || '');
+        setActualHours(draft.actualHours || '');
+        setLaborCost(draft.laborCost || '0');
+        setMaterialCost(draft.materialCost || '0');
+        setAddress(draft.address || '');
+        setCity(draft.city || '');
+        setWorkOrderState(draft.workOrderState || '');
+        setZip(draft.zip || '');
+        setNotes(draft.notes || '');
+        toast.info('Draft restored — your previous work order was recovered.');
+      } else {
+        setWorkOrderNumber(`WO-${Date.now().toString().slice(-6)}`);
+      }
     }
     setShowModal(true);
   };
 
   const handleCloseModal = () => {
+    clearWorkOrderDraft();
     setShowModal(false);
     setEditingWorkOrder(null);
     setWorkOrderNumber('');

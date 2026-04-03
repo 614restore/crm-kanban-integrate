@@ -1,5 +1,6 @@
 // ContactTemplateModal — Redesigned with proper cost breakdown editor
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef, useLayoutEffect } from 'react';
+import { useFormDraft } from '@/lib/useFormDraft';
 import { X, FileText, ChevronLeft, Search, DollarSign, Save, Loader2, Plus, Trash2, Calculator } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/authContext';
@@ -132,6 +133,34 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
   const [depositAmount, setDepositAmount] = useState('');
   const initCompanyProfileRef = useRef<DbCompany | null>(null);
   const initProfileRef = useRef(profile);
+
+  // Auto-save draft
+  const tmplDraftKey = selected
+    ? `template_draft_${contact.id}_${selected.id}`
+    : `template_draft_${contact.id}_none`;
+  const tmplDraftData = useMemo(() => ({ fieldValues, lineItems, taxRate, depositAmount, selectedId: selected?.id }),
+    [fieldValues, lineItems, taxRate, depositAmount, selected?.id]);
+  const { loadDraft: loadTmplDraft, clearDraft: clearTmplDraft } = useFormDraft(
+    tmplDraftKey, tmplDraftData, { enabled: !!selected }
+  );
+
+  // Restore draft when a template is selected
+  const restoredForRef = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    if (!selected) return;
+    if (restoredForRef.current === selected.id) return;
+    restoredForRef.current = selected.id;
+    const draft = loadTmplDraft();
+    if (draft && draft.selectedId === selected.id) {
+      if (Object.keys(draft.fieldValues || {}).length > 0) setFieldValues(draft.fieldValues);
+      if ((draft.lineItems || []).length > 0) setLineItems(draft.lineItems);
+      if (draft.taxRate) setTaxRate(draft.taxRate);
+      if (draft.depositAmount) setDepositAmount(draft.depositAmount);
+      // use a timeout so the toast fires after render
+      setTimeout(() => { toast.info('Draft restored — your previous template was recovered.'); }, 0);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected?.id]);
 
   // Load company profile
   useEffect(() => {
@@ -348,6 +377,7 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
         size: newDbDoc.size || '',
       };
 
+      clearTmplDraft();
       onDocumentSaved(frontendDoc);
       toast.success(`"${selected.name}" saved to ${getContactFullName(contact)}'s documents`);
       onClose();
