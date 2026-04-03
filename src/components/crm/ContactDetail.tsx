@@ -47,6 +47,7 @@ import {
   validateMentions,
 } from '@/lib/mentions';
 import { uploadDocument, validateDocumentFile, formatFileSize, getDocumentSignedUrl, isHttpUrl, isSupabaseStorageUrl } from '@/lib/storage';
+import { logActivity } from '@/lib/activityLogger';
 import { toast } from 'sonner';
 import {
   Contact,
@@ -100,6 +101,10 @@ import {
   CloudLightning,
   Wind,
   RefreshCw,
+  Camera,
+  Folder,
+  FolderOpen,
+  Image,
 } from 'lucide-react';
 
 type TabType = 'overview' | 'timeline' | 'documents' | 'financial' | 'projects' | 'jobStatus' | 'survey' | 'insurance';
@@ -227,6 +232,8 @@ export default function ContactDetail() {
   const [mentionSuggestions, setMentionSuggestions] = useState<ReturnType<typeof getMentionTargets>>([]);
   const [isUploadingDocument, setIsUploadingDocument] = useState(false);
   const [contactDocuments, setContactDocuments] = useState<Document[]>([]);
+  const [salesFolderOpen, setSalesFolderOpen] = useState(true);
+  const [fieldFolderOpen, setFieldFolderOpen] = useState(true);
   const [weatherAlerts, setWeatherAlerts] = useState<{
     alerts: Array<{
       type: string; severity: string; urgency: string; certainty: string;
@@ -765,6 +772,25 @@ export default function ContactDetail() {
         }
 
         dispatch({ type: 'UPDATE_CONTACT', payload: { ...editedContact, updatedAt: new Date().toISOString() } });
+        // Auto-log contact field changes
+        if (effectiveCompanyId && contact) {
+          const changedFields: string[] = [];
+          if (editedContact.firstName !== contact.firstName || editedContact.lastName !== contact.lastName) changedFields.push('name');
+          if (editedContact.email !== contact.email) changedFields.push('email');
+          if (editedContact.phone1 !== contact.phone1) changedFields.push('phone');
+          if (editedContact.address !== contact.address || editedContact.city !== contact.city) changedFields.push('address');
+          if (editedContact.insuranceCompany !== contact.insuranceCompany) changedFields.push('insurance company');
+          if (editedContact.claimNumber !== contact.claimNumber) changedFields.push('claim number');
+          if (editedContact.projectValue !== contact.projectValue) changedFields.push('project value');
+          if (editedContact.notes !== contact.notes) changedFields.push('notes');
+          const summary = changedFields.length > 0 ? changedFields.join(', ') : 'details';
+          logActivity({
+            contactId: editedContact.id,
+            companyId: effectiveCompanyId,
+            userId: profile?.id,
+            content: `👤 Contact updated: ${summary} edited`,
+          }).catch(() => {});
+        }
         setIsEditing(false);
         setEditedContact(null);
         toast.success('Contact saved successfully');
@@ -1993,96 +2019,139 @@ export default function ContactDetail() {
             </div>
 
             {/* ── Uploaded Files ── */}
-            <div className="bg-white rounded-xl border border-gray-200">
-              <input
-                ref={documentInputRef}
-                type="file"
-                className="hidden"
-                onChange={handleUploadDocument}
-                disabled={isUploadingDocument}
-              />
-              <div className="p-6 border-b border-gray-200 flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900">Uploaded Files</h3>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setShowTemplateModal(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                  >
-                    <FileText size={18} />
-                    Use Template
-                  </button>
-                  <button
-                    onClick={() => documentInputRef.current?.click()}
-                    disabled={isUploadingDocument}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isUploadingDocument ? <Loader2 size={18} className="animate-spin" /> : <Upload size={18} />}
-                    {isUploadingDocument ? 'Uploading...' : 'Upload Document'}
-                  </button>
+            {(() => {
+              const FIELD_ROLES = new Set(['subcontractor','canvasser','field_tech','field_contractor','production_manager','project_manager']);
+              const getRoleForUploader = (uploadedBy: string) => {
+                const member = state.teamMembers.find(tm => tm.id === uploadedBy);
+                return member?.role ?? null;
+              };
+              const photos = contactDocuments.filter(d => d.type === 'photo');
+              const nonPhotoDocs = contactDocuments.filter(d => d.type !== 'photo');
+              const salesPhotos = photos.filter(d => {
+                const role = getRoleForUploader(d.uploadedBy);
+                return role === null || !FIELD_ROLES.has(role);
+              });
+              const fieldPhotos = photos.filter(d => {
+                const role = getRoleForUploader(d.uploadedBy);
+                return role !== null && FIELD_ROLES.has(role);
+              });
+
+              const DocRow = ({ doc }: { doc: Document }) => (
+                <div key={doc.id} className="p-4 flex items-center justify-between hover:bg-gray-50">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                      <FileText size={20} className="text-gray-500" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">{doc.name}</p>
+                      <p className="text-sm text-gray-500">
+                        {doc.size} • Uploaded {formatDate(doc.uploadedAt)} by {doc.uploadedBy}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => handleOpenDocument(doc.url, doc.name)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="View"><Eye size={18} className="text-gray-500" /></button>
+                    <button onClick={() => handleOpenDocument(doc.url, doc.name)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="Download"><Download size={18} className="text-gray-500" /></button>
+                    <button onClick={() => handleDeleteDocument(doc.id)} className="p-2 hover:bg-red-100 rounded-lg transition-colors" title="Delete"><Trash2 size={18} className="text-red-500" /></button>
+                  </div>
                 </div>
-              </div>
-              <div className="divide-y divide-gray-100">
-                {contactDocuments.map((doc) => (
-                  <div key={doc.id} className="p-4 flex items-center justify-between hover:bg-gray-50">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                        <FileText size={20} className="text-gray-500" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900">{doc.name}</p>
-                        <p className="text-sm text-gray-500">
-                          {doc.size} • Uploaded {formatDate(doc.uploadedAt)} by {doc.uploadedBy}
-                        </p>
-                      </div>
-                    </div>
+              );
+
+              const PhotoThumbnail = ({ doc }: { doc: Document }) => (
+                <div key={doc.id} className="relative group">
+                  <div className="aspect-square rounded-lg overflow-hidden bg-gray-100 border border-gray-200">
+                    <img
+                      src={doc.url}
+                      alt={doc.name}
+                      className="w-full h-full object-cover"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
+                  </div>
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-2">
+                    <button onClick={() => handleOpenDocument(doc.url, doc.name)} className="p-1.5 bg-white rounded-md" title="View"><Eye size={14} className="text-gray-700" /></button>
+                    <button onClick={() => handleDeleteDocument(doc.id)} className="p-1.5 bg-white rounded-md" title="Delete"><Trash2 size={14} className="text-red-500" /></button>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1 truncate">{doc.name}</p>
+                </div>
+              );
+
+              return (
+                <div className="bg-white rounded-xl border border-gray-200">
+                  <input ref={documentInputRef} type="file" className="hidden" onChange={handleUploadDocument} disabled={isUploadingDocument} />
+                  <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-gray-900">Uploaded Files</h3>
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleOpenDocument(doc.url, doc.name)}
-                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                        title="View document"
-                      >
-                        <Eye size={18} className="text-gray-500" />
+                      <button onClick={() => setShowTemplateModal(true)} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                        <FileText size={18} />Use Template
                       </button>
-                      <button
-                        onClick={() => handleOpenDocument(doc.url, doc.name)}
-                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                        title="Download document"
-                      >
-                        <Download size={18} className="text-gray-500" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteDocument(doc.id)}
-                        className="p-2 hover:bg-red-100 rounded-lg transition-colors"
-                        title="Delete document"
-                      >
-                        <Trash2 size={18} className="text-red-500" />
+                      <button onClick={() => documentInputRef.current?.click()} disabled={isUploadingDocument} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        {isUploadingDocument ? <Loader2 size={18} className="animate-spin" /> : <Upload size={18} />}
+                        {isUploadingDocument ? 'Uploading...' : 'Upload'}
                       </button>
                     </div>
                   </div>
-                ))}
-                {contactDocuments.length === 0 && (
-                  <div className="p-12 text-center text-gray-500">
-                    <FileText size={32} className="mx-auto mb-2 opacity-50" />
-                    <p>No uploaded files yet</p>
-                    <div className="flex items-center justify-center gap-3 mt-4">
-                      <button
-                        onClick={() => setShowTemplateModal(true)}
-                        className="text-green-600 hover:text-green-700 text-sm font-medium"
-                      >
-                        Use a template
-                      </button>
-                      <span className="text-gray-300">|</span>
-                      <button
-                        onClick={() => documentInputRef.current?.click()}
-                        className="text-blue-600 hover:text-blue-700 text-sm font-medium"
-                      >
-                        Upload a file
-                      </button>
+
+                  {/* ── Photos section with folders ── */}
+                  {photos.length > 0 && (
+                    <div className="border-b border-gray-100">
+                      {/* Sales Team Photos folder */}
+                      {salesPhotos.length > 0 && (
+                        <div>
+                          <button
+                            onClick={() => setSalesFolderOpen(o => !o)}
+                            className="w-full flex items-center gap-3 px-5 py-3 bg-blue-50 hover:bg-blue-100 transition-colors"
+                          >
+                            {salesFolderOpen ? <FolderOpen size={18} className="text-blue-600" /> : <Folder size={18} className="text-blue-600" />}
+                            <span className="font-medium text-blue-800 text-sm">Sales Team Photos</span>
+                            <span className="ml-auto text-xs text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">{salesPhotos.length}</span>
+                          </button>
+                          {salesFolderOpen && (
+                            <div className="p-4 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
+                              {salesPhotos.map(doc => <PhotoThumbnail key={doc.id} doc={doc} />)}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Field / Crew Photos folder */}
+                      {fieldPhotos.length > 0 && (
+                        <div>
+                          <button
+                            onClick={() => setFieldFolderOpen(o => !o)}
+                            className="w-full flex items-center gap-3 px-5 py-3 bg-orange-50 hover:bg-orange-100 transition-colors"
+                          >
+                            {fieldFolderOpen ? <FolderOpen size={18} className="text-orange-600" /> : <Folder size={18} className="text-orange-600" />}
+                            <span className="font-medium text-orange-800 text-sm">Field / Crew Photos</span>
+                            <span className="ml-auto text-xs text-orange-600 bg-orange-100 px-2 py-0.5 rounded-full">{fieldPhotos.length}</span>
+                          </button>
+                          {fieldFolderOpen && (
+                            <div className="p-4 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
+                              {fieldPhotos.map(doc => <PhotoThumbnail key={doc.id} doc={doc} />)}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
+                  )}
+
+                  {/* ── Non-photo documents ── */}
+                  <div className="divide-y divide-gray-100">
+                    {nonPhotoDocs.map((doc) => <DocRow key={doc.id} doc={doc} />)}
+                    {contactDocuments.length === 0 && (
+                      <div className="p-12 text-center text-gray-500">
+                        <FileText size={32} className="mx-auto mb-2 opacity-50" />
+                        <p>No uploaded files yet</p>
+                        <div className="flex items-center justify-center gap-3 mt-4">
+                          <button onClick={() => setShowTemplateModal(true)} className="text-green-600 hover:text-green-700 text-sm font-medium">Use a template</button>
+                          <span className="text-gray-300">|</span>
+                          <button onClick={() => documentInputRef.current?.click()} className="text-blue-600 hover:text-blue-700 text-sm font-medium">Upload a file</button>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            </div>
+                </div>
+              );
+            })()}
           </div>
         )}
 
