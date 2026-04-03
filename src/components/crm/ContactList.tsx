@@ -34,6 +34,7 @@ import {
   ArrowUpDown,
   Archive,
   ArchiveRestore,
+  FileText,
 } from 'lucide-react';
 
 type SortField = 'name' | 'status' | 'createdAt' | 'projectValue';
@@ -206,29 +207,16 @@ export default function ContactList() {
     }
 
     let imported = 0;
+    let skipped = 0;
+    
     for (let i = 1; i < lines.length; i += 1) {
       const cols = lines[i].split(',').map((c) => c.trim().replace(/^"|"$/g, ''));
       const firstName = cols[firstNameIdx] || '';
       const lastName = cols[lastNameIdx] || '';
-      if (!firstName || !lastName) continue;
-
-      const newContact: Contact = {
-        id: `c-import-${Date.now()}-${i}`,
-        firstName,
-        lastName,
-        email: cols[index('email')] || '',
-        phone1: cols[index('phone')] || '',
-        address: '',
-        city: cols[index('city')] || '',
-        state: cols[index('state')] || '',
-        zip: '',
-        status: (cols[index('status')] as any) || 'lead',
-        leadSource: 'Import',
-        assignedTo: state.currentUser?.id || '',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        tags: [],
-      };
+      if (!firstName || !lastName) {
+        skipped++;
+        continue;
+      }
 
       if (!state.companyId) {
         toast.error('No company selected. Import requires an active company workspace.');
@@ -238,26 +226,40 @@ export default function ContactList() {
       try {
         await db.createContact({
           company_id: state.companyId,
-          first_name: newContact.firstName,
-          last_name: newContact.lastName,
-          email: newContact.email || undefined,
-          phone1: newContact.phone1 || undefined,
-          city: newContact.city || undefined,
-          state: newContact.state || undefined,
-          status: newContact.status,
-          lead_source: newContact.leadSource,
-          assigned_to: newContact.assignedTo || undefined,
+          first_name: firstName,
+          last_name: lastName,
+          email: cols[index('email')] || undefined,
+          phone1: cols[index('phone1')] || cols[index('phone')] || undefined,
+          phone2: cols[index('phone2')] || undefined,
+          address: cols[index('address')] || undefined,
+          city: cols[index('city')] || undefined,
+          state: cols[index('state')] || undefined,
+          zip: cols[index('zip')] || undefined,
+          status: (cols[index('status')] as any) || 'lead',
+          lead_source: cols[index('lead_source')] || 'Import',
+          assigned_to: state.currentUser?.id || undefined,
+          insurance_company: cols[index('insurance_company')] || undefined,
+          policy_number: cols[index('policy_number')] || undefined,
+          claim_number: cols[index('claim_number')] || undefined,
+          project_type: cols[index('project_type')] || undefined,
           tags: [],
         });
         imported += 1;
       } catch (err) {
         console.error('Failed to import contact:', err);
-        toast.error(`Failed to import contact: ${newContact.firstName} ${newContact.lastName}`);
+        skipped++;
         continue;
       }
     }
 
-    toast.success(`Imported ${imported} contacts`);
+    if (imported > 0) {
+      toast.success(`✅ Imported ${imported} contact${imported !== 1 ? 's' : ''}${skipped > 0 ? ` (${skipped} skipped)` : ''}`);
+      // Refresh contact list
+      dispatch({ type: 'SET_CONTACTS', payload: await db.getContacts(state.companyId) });
+    } else {
+      toast.error(`Failed to import contacts. ${skipped} rows were skipped.`);
+    }
+    
     e.target.value = '';
   };
 
@@ -278,6 +280,23 @@ export default function ContactList() {
       console.error('Error exporting contacts:', error);
       toast.error('Failed to export contacts');
     }
+  };
+
+  const downloadCsvTemplate = () => {
+    const template = `first_name,last_name,email,phone1,phone2,address,city,state,zip,status,lead_source,insurance_company,policy_number,claim_number,project_type
+John,Doe,john@example.com,555-1234,,123 Main St,Denver,CO,80206,Lead,Referral,,,,"Roofing"
+Jane,Smith,jane@example.com,555-9999,555-8888,456 Oak Ave,Boulder,CO,80301,Prospect,Website,State Farm,POL123,CLM456,"Siding, Windows"`;
+    
+    const blob = new Blob([template], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'contacts_import_template.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success('CSV template downloaded - Open in Excel and fill with your data');
   };
 
   return (
@@ -307,20 +326,34 @@ export default function ContactList() {
               <Archive size={18} />
               {showArchived ? 'Active Contacts' : 'Archived'}
             </button>
-            <button
-              onClick={handleExportContacts}
-              className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              <Download size={18} />
-              <span className="text-sm font-medium">Export</span>
-            </button>
-            <button
-              onClick={() => importInputRef.current?.click()}
-              className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              <Upload size={18} />
-              <span className="text-sm font-medium">Import</span>
-            </button>
+            <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg border border-gray-200">
+              <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Data</span>
+              <div className="h-4 w-px bg-gray-300" />
+              <button
+                onClick={handleExportContacts}
+                className="flex items-center gap-1.5 px-2 py-1 text-gray-700 hover:bg-white rounded transition-colors"
+                title="Export contacts to Excel"
+              >
+                <Download size={16} />
+                <span className="text-sm font-medium">Export</span>
+              </button>
+              <button
+                onClick={() => importInputRef.current?.click()}
+                className="flex items-center gap-1.5 px-2 py-1 text-gray-700 hover:bg-white rounded transition-colors"
+                title="Import contacts from CSV"
+              >
+                <Upload size={16} />
+                <span className="text-sm font-medium">Import CSV</span>
+              </button>
+              <button
+                onClick={downloadCsvTemplate}
+                className="flex items-center gap-1.5 px-2 py-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                title="Download CSV template with example data"
+              >
+                <FileText size={16} />
+                <span className="text-sm font-medium">Template</span>
+              </button>
+            </div>
             <button
               onClick={() => dispatch({ type: 'TOGGLE_QUICK_ADD' })}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
