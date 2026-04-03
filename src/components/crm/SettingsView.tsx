@@ -384,8 +384,18 @@ export default function SettingsView() {
           return;
         }
 
-        // getCompany already has internal 5-s timeouts per path + cache fallback
-        const company = await withTimeout(db.getCompany(companyId), 15000, 'Load company profile');
+        // getCompany already has internal 5-s timeouts per path + cache fallback.
+        // On normal (non-incognito) page loads the Supabase token may still be
+        // refreshing, so retry with backoff if the first attempt returns null.
+        let company = await withTimeout(db.getCompany(companyId), 15000, 'Load company profile');
+        if (!company && !cancelled) {
+          for (const delay of [1000, 2000]) {
+            await new Promise(r => setTimeout(r, delay));
+            if (cancelled) break;
+            company = await withTimeout(db.getCompany(companyId), 15000, 'Load company profile (retry)');
+            if (company) break;
+          }
+        }
         
         
         if (company && !cancelled) {
