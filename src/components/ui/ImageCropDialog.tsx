@@ -95,12 +95,11 @@ export default function ImageCropDialog({
   aspectRatio,
   title = 'Crop Image',
 }: ImageCropDialogProps) {
-  // Logo crops (no fixed aspect ratio) start zoomed out so the full logo is
-  // visible immediately. Avatar/profile crops (aspectRatio=1) start at 1x.
-  const initialZoom = aspectRatio === undefined ? 0.4 : 1;
-  // When no aspect ratio is provided (logo), default to 3:1 landscape so a
-  // visible crop frame exists and the user can pan the image behind it.
-  const effectiveAspect = aspectRatio !== undefined ? aspectRatio : 3 / 1;
+  // All crops start at 1x so the image is immediately visible and centred.
+  const initialZoom = 1;
+  // Default to 1:1 (square) for logos — matches how they're displayed in the
+  // sidebar and on documents. Callers can override with aspectRatio prop.
+  const effectiveAspect = aspectRatio !== undefined ? aspectRatio : 1;
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(initialZoom);
   const [rotation, setRotation] = useState(0);
