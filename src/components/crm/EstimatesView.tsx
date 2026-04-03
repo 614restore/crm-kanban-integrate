@@ -61,7 +61,11 @@ export default function EstimatesView() {
   const { state, dispatch } = useCRM();
   const { profile } = useAuth();
   // Owners and managers can edit viewed/locked estimates — they just create an audit trail
-  const canOverrideLock = ['owner', 'admin', 'sales_manager'].includes(profile?.role || '');
+  const userRole = state.currentUser?.role || profile?.role || 'owner';
+  const canOverrideLock = ['owner', 'admin', 'sales_manager'].includes(userRole);
+  // Roles that can see ALL estimates; everyone else only sees their own
+  const canSeeAllEstimates = ['owner', 'admin', 'sales_manager', 'production_manager', 'manager', 'office_staff'].includes(userRole);
+  const currentUserId = state.currentUser?.id || profile?.id;
   const [searchQuery, setSearchQuery] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingEstimate, setEditingEstimate] = useState<Estimate | null>(null);
@@ -837,12 +841,21 @@ export default function EstimatesView() {
     }
   };
 
-  // Filter estimates
+  // Filter estimates — sales reps only see estimates for contacts assigned to
+  // them or estimates they created. Managers/owners/admins see everything.
   const filteredEstimates = state.estimates.filter((estimate) => {
+    // Role-based visibility: restrict non-manager roles to their own work
+    if (!canSeeAllEstimates && currentUserId) {
+      const contact = state.contacts.find(c => c.id === estimate.contactId);
+      const isAssignedContact = contact?.assignedTo === currentUserId;
+      const isCreator = estimate.createdBy === currentUserId || estimate.createdBy === profile?.id;
+      if (!isAssignedContact && !isCreator) return false;
+    }
+
     const contact = state.contacts.find(c => c.id === estimate.contactId);
     const contactName = contact ? `${contact.firstName} ${contact.lastName}`.toLowerCase() : '';
     const query = searchQuery.toLowerCase();
-    
+
     return (
       estimate.title.toLowerCase().includes(query) ||
       estimate.estimateNumber.toLowerCase().includes(query) ||
