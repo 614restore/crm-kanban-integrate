@@ -416,11 +416,14 @@ export default function ContactDetail() {
           {TABS.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
-            const inspectionDone = tab.id === 'inspection' && ['inspection_complete', 'inspected', 'estimate_sent', 'approved', 'scheduled', 'in_progress', 'completed', 'paid'].includes(contact.status);
+            const inspectionDone = tab.id === 'inspection' && ['inspection_complete', 'inspection_completed', 'inspected', 'estimate_sent', 'estimating', 'contingency', 'approved', 'signed_won', 'signed', 'scheduled', 'ordering_material', 'in_progress', 'build_phase', 'cleanup', 'invoicing', 'pending_payment', 'completed', 'paid', 'retail'].includes(contact.status);
+            const inspectionColor = tab.id === 'inspection' && !isActive
+              ? (inspectionDone ? 'text-emerald-600' : 'text-rose-500')
+              : '';
             return (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`py-4 flex items-center gap-2 border-b-2 transition-all ${isActive ? 'border-accent text-accent' : 'border-transparent text-slate-400'}`}>
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`py-4 flex items-center gap-2 border-b-2 transition-all ${isActive ? 'border-accent text-accent' : `border-transparent ${inspectionColor || 'text-slate-400'}`}`}>
                 <Icon size={18} />
-                <span className={`text-sm font-bold whitespace-nowrap ${tab.id === 'inspection' ? (inspectionDone ? 'text-emerald-600' : 'text-rose-500') : ''}`}>{tab.label}</span>
+                <span className="text-sm font-bold whitespace-nowrap">{tab.label}</span>
               </button>
             );
           })}
