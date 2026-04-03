@@ -1,8 +1,5 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/lib/authContext';
-import { nudgeUserAboutStaleContact } from '@/lib/staleLeadDetection';
-import { toast } from 'sonner';
 
 interface PriorityRow {
   id: string;
@@ -29,7 +26,6 @@ const borderColor = (row: PriorityRow) => {
 const badgeLabel = (row: PriorityRow) => {
   if (row.concern === 'payment') return { label: 'OVERDUE', color: 'bg-red-100 text-red-700' };
   if (row.status === 'estimate_viewed') return { label: 'CALL NOW', color: 'bg-green-100 text-green-700 animate-pulse' };
-  if (row.status === 'estimating') return { label: 'ESTIMATING', color: 'bg-sky-100 text-sky-700' };
   if (row.status === 'estimate_sent') return { label: 'STALE ESTIMATE', color: 'bg-amber-100 text-amber-700' };
   return { label: 'NO TOUCH', color: 'bg-amber-100 text-amber-700' };
 };
@@ -37,7 +33,6 @@ const badgeLabel = (row: PriorityRow) => {
 const recommendedAction = (row: PriorityRow) => {
   if (row.concern === 'payment') return 'Send payment reminder';
   if (row.status === 'estimate_viewed') return 'Call now — they just looked';
-  if (row.status === 'estimating') return 'Build and send the estimate';
   if (row.status === 'estimate_sent') return 'Follow up on estimate';
   return 'Make first contact';
 };
@@ -46,7 +41,6 @@ export default function OwnerPriorityBoard() {
   const [rows, setRows] = useState<PriorityRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [nudging, setNudging] = useState<string | null>(null);
-  const { profile } = useAuth();
 
   useEffect(() => {
     fetchPriority();
@@ -63,37 +57,11 @@ export default function OwnerPriorityBoard() {
   }
 
   async function handleNudge(row: PriorityRow) {
-    if (!profile?.company_id || !profile?.id) return;
-
-    if (!row.assigned_to) {
-      toast.warning('No assigned rep', {
-        description: `${row.first_name} ${row.last_name} has no assigned team member to nudge.`,
-      });
-      return;
-    }
-
     setNudging(row.id);
-    try {
-      const nudgedByName = [profile.first_name, profile.last_name].filter(Boolean).join(' ') || 'Owner';
-      const success = await nudgeUserAboutStaleContact(
-        profile.company_id,
-        row.id,
-        row.assigned_to,
-        profile.id,
-        nudgedByName,
-      );
-      if (success) {
-        toast.success('Nudge sent', {
-          description: `Reminder sent to your rep about ${row.first_name} ${row.last_name}.`,
-        });
-      } else {
-        toast.error('Nudge failed', { description: 'Could not send the reminder. Please try again.' });
-      }
-    } catch {
-      toast.error('Nudge failed', { description: 'Could not send the reminder. Please try again.' });
-    } finally {
-      setNudging(null);
-    }
+    // Placeholder — wire to Resend edge function when ready
+    await new Promise(r => setTimeout(r, 800));
+    alert(`Nudge sent to ${row.first_name} ${row.last_name}`);
+    setNudging(null);
   }
 
   async function handleMoveStage(row: PriorityRow, newStatus: string) {
@@ -179,7 +147,6 @@ export default function OwnerPriorityBoard() {
               >
                 <option value="" disabled>Move Stage →</option>
                 <option value="contacted">Contacted</option>
-                <option value="estimating">Estimating</option>
                 <option value="estimate_sent">Estimate Sent</option>
                 <option value="estimate_viewed">Estimate Viewed</option>
                 <option value="signed">Signed</option>
