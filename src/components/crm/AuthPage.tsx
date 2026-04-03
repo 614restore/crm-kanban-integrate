@@ -111,15 +111,23 @@ export default function AuthPage() {
       if (mode === 'login') {
         const { error } = await signIn(email, password);
         if (error) {
-          if (isTokenError(error.message)) {
+          const msg = error.message || '';
+          if (isTokenError(msg)) {
             try {
               await supabase.auth.signOut({ scope: 'local' });
             } catch (signOutError) {
               console.warn('Failed to clear local auth session after token error:', signOutError);
             }
             setError('Your previous session expired. Please try signing in again.');
+          } else if (
+            msg.toLowerCase().includes('load failed') ||
+            msg.toLowerCase().includes('failed to fetch') ||
+            msg.toLowerCase().includes('networkerror') ||
+            msg.toLowerCase().includes('fetch')
+          ) {
+            setError('Unable to reach the server. Check your internet connection and try again.');
           } else {
-            setError(error.message || 'Failed to sign in. Please check your credentials.');
+            setError(msg || 'Failed to sign in. Please check your credentials.');
           }
         }
       } else if (mode === 'signup') {

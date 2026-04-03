@@ -34,8 +34,10 @@ const supabase = createClient(
       persistSession: true,
       detectSessionInUrl: true,
       storage: typeof window !== 'undefined' ? window.localStorage : undefined,
-      storageKey: 'sb-auth-token',
-      flowType: 'pkce',
+      // Use implicit flow for direct single-request token response.
+      // PKCE flow requires a two-step code exchange that can fail mid-flight
+      // in Safari/iOS WebKit (manifests as "Load failed" on sign-in).
+      flowType: 'implicit',
     },
     global: {
       headers: {
