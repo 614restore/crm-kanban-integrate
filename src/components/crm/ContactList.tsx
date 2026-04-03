@@ -47,8 +47,8 @@ export default function ContactList() {
   const importInputRef = useRef<HTMLInputElement>(null);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
-  const [sortField, setSortField] = useState<SortField>('createdAt');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [sortField, setSortField] = useState<SortField>('name');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [showBulkActions, setShowBulkActions] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [archivedContacts, setArchivedContacts] = useState<Contact[]>([]);
@@ -57,9 +57,18 @@ export default function ContactList() {
   const sortedContacts = [...filteredContacts].sort((a, b) => {
     let comparison = 0;
     switch (sortField) {
-      case 'name':
-        comparison = getContactFullName(a).localeCompare(getContactFullName(b));
+      case 'name': {
+        // Sort by last name first, then first name
+        const aLast = (a.lastName || '').toLowerCase();
+        const bLast = (b.lastName || '').toLowerCase();
+        comparison = aLast.localeCompare(bLast);
+        if (comparison === 0) {
+          const aFirst = (a.firstName || '').toLowerCase();
+          const bFirst = (b.firstName || '').toLowerCase();
+          comparison = aFirst.localeCompare(bFirst);
+        }
         break;
+      }
       case 'status':
         comparison = a.status.localeCompare(b.status);
         break;

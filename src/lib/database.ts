@@ -661,7 +661,9 @@ class DatabaseService {
     assertCompanyId(companyId, 'getContacts');
     if (this.inDemoMode()) return [];
     const { data, error } = await supabase
-      .from('contacts').select('*').eq('company_id', companyId).order('created_at', { ascending: false });
+      .from('contacts').select('*').eq('company_id', companyId)
+      .or('is_archived.eq.false,is_archived.is.null')
+      .order('last_name', { ascending: true });
     if (error) { console.error('Error fetching contacts:', error); return []; }
     return data || [];
   }
