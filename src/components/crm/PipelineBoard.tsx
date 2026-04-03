@@ -87,7 +87,7 @@ const UNIFIED_SALES_STAGES: Array<{
   { status: 'supplement_filed',    title: 'Supplement Filed',          color: '#0e7490', stageType: 'insurance' },
   { status: 'estimating',          title: 'Estimating',                color: '#f59e0b', stageType: 'shared'    },
   { status: 'estimate_sent',       title: 'Estimate Sent',             color: '#f97316', stageType: 'shared'    },
-  { status: 'contingency',         title: 'Follow-up / Negotiation',   color: '#a855f7', stageType: 'retail'    },
+  { status: 'contingency',         title: 'Contingency',               color: '#a855f7', stageType: 'insurance' },
   { status: 'approved',            title: 'Approved / Final Scope',    color: '#14b8a6', stageType: 'insurance' },
   { status: 'signed',              title: 'Signed / Won',              color: '#22c55e', stageType: 'shared'    },
   { status: 'ordering_material',   title: 'Ordering Material',         color: '#10b981', stageType: 'shared'    },
@@ -111,8 +111,8 @@ const STAGE_TYPE_STYLES = {
 function getContactPipelineType(contact: Contact): 'retail' | 'insurance' | 'shared' {
   if (contact.isRetail) return 'retail';
   if (contact.claimNumber || contact.insuranceCompany || contact.policyNumber) return 'insurance';
-  const INSURANCE_STATUSES = new Set(['claim_filed', 'adjuster_scheduled', 'inspection_completed', 'supplement_filed', 'approved']);
-  const RETAIL_STATUSES    = new Set(['retail', 'contingency']);
+  const INSURANCE_STATUSES = new Set(['claim_filed', 'adjuster_scheduled', 'inspection_completed', 'supplement_filed', 'approved', 'contingency']);
+  const RETAIL_STATUSES    = new Set(['retail']);
   if (INSURANCE_STATUSES.has(contact.status)) return 'insurance';
   if (RETAIL_STATUSES.has(contact.status))    return 'retail';
   return 'shared';

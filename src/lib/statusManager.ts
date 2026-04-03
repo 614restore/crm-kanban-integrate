@@ -20,7 +20,7 @@ const VALID_CONTACT_STATUSES = {
   'inspection_completed': { label: 'Inspection Completed', type: 'sales' },
   'estimating': { label: 'Estimating', type: 'sales' },
   'estimate_sent': { label: 'Estimate Sent', type: 'sales' },
-  'contingency': { label: 'Contingency', type: 'sales' },
+  'contingency': { label: 'Contingency', type: 'insurance' },
   'signed': { label: 'Signed', type: 'sales' },
   'retail': { label: 'Retail', type: 'sales' },
   
@@ -261,8 +261,8 @@ function validateStatusTransition(fromStatus: string, toStatus: string): string[
 function validateContactTypeCompatibility(contact: any, newStatus: string): string[] {
   const warnings: string[] = [];
 
-  const insuranceOnlyStatuses = ['claim_filed', 'adjuster_scheduled', 'supplement_filed', 'approved'];
-  const retailOnlyStatuses = ['contingency'];
+  const insuranceOnlyStatuses = ['claim_filed', 'adjuster_scheduled', 'supplement_filed', 'approved', 'contingency'];
+  const retailOnlyStatuses: string[] = [];
 
   const isInsurance = contact.claim_number || contact.insurance_company;
   const isRetail = contact.is_retail || (!contact.claim_number && !contact.insurance_company);

@@ -63,7 +63,7 @@ export default function Dashboard() {
 
   // Get urgent items (pending payments, overdue, etc.)
   const urgentItems = state.contacts.filter(
-    (c) => c.status === 'pending_payment' || (c.status === 'contingency' && c.insuranceCompany)
+    (c) => c.status === 'pending_payment' || c.status === 'contingency'
   );
 
   // Top performers

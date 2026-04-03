@@ -32,7 +32,7 @@ const PIPELINE_STAGES: PipelineStage[] = [
 
 // Map insurance-specific statuses to equivalent pipeline stages
 const STATUS_MAPPING: Record<string, CustomerStatus> = {
-  'retail': 'contingency',  // Retail lead maps to follow-up stage
+  'retail': 'estimate_sent',  // Retail lead maps to estimate stage
   'claim_filed': 'appt_set', // Insurance claim filed ~ appointment stage
   'adjuster_scheduled': 'inspection_completed', // Adjuster visit ~ inspection done
   'supplement_filed': 'estimating', // Supplement ~ creating estimate
