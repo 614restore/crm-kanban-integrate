@@ -76,9 +76,17 @@ class ServiceWorkerManager {
         });
       });
 
+      // Track whether the page was already under SW control before this registration.
+      // First-time registration (incognito, fresh tab) has no previous controller,
+      // so we must NOT reload — that causes the blank-screen loop in private browsing.
+      // Only reload when there was already a controller (= genuine SW update).
+      const hadPreviousController = !!navigator.serviceWorker.controller;
+
       // Handle controller change (after user accepts update)
       navigator.serviceWorker.addEventListener('controllerchange', () => {
-        window.location.reload();
+        if (hadPreviousController) {
+          window.location.reload();
+        }
       });
 
       // Initial state notification
