@@ -84,7 +84,14 @@ export default function FinancialDashboard() {
       {
         heading: 'Financial KPIs',
         rows: [
+          { Metric: 'Total Collected', Value: formatCurrency(financialStats.totalCollected) },
+          { Metric: 'Total Outstanding', Value: formatCurrency(financialStats.totalOutstanding) },
           { Metric: 'Total Revenue', Value: formatCurrency(financialStats.totalRevenue) },
+          { Metric: 'Estimates Sent (count)', Value: String(financialStats.estimatesSentCount) },
+          { Metric: 'Estimates Sent (value)', Value: formatCurrency(financialStats.estimatesSentTotal) },
+          { Metric: 'Estimates Signed (count)', Value: String(financialStats.acceptedEstimatesCount) },
+          { Metric: 'Estimates Signed (value)', Value: formatCurrency(financialStats.acceptedEstimatesTotal) },
+          { Metric: 'Total Lost (value)', Value: formatCurrency(financialStats.lostSalesValue) },
           { Metric: 'Outstanding Invoices', Value: formatCurrency(financialStats.outstandingInvoices) },
           { Metric: 'Overdue Invoices', Value: formatCurrency(financialStats.overdueInvoices) },
           { Metric: 'Paid Invoices', Value: formatCurrency(financialStats.paidInvoices) },
@@ -350,35 +357,13 @@ export default function FinancialDashboard() {
             <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
               <DollarSign className="text-green-600" size={24} />
             </div>
-            {financialStats.paidInvoices > 0 && (
-              <span className="flex items-center gap-1 text-green-600 text-sm font-medium">
-                <TrendingUp size={16} />
-                Paid
-              </span>
-            )}
+            <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">Collected</span>
           </div>
           <p className="text-3xl font-bold text-gray-900 mt-4">
-            {formatCurrency(financialStats.totalRevenue)}
+            {formatCurrency(financialStats.totalCollected)}
           </p>
-          <p className="text-gray-500 text-sm mt-1">Total Revenue</p>
-        </div>
-
-        <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-              <CreditCard className="text-blue-600" size={24} />
-            </div>
-            {financialStats.acceptedEstimatesTotal > 0 && (
-              <span className="flex items-center gap-1 text-blue-600 text-sm font-medium">
-                <FileText size={16} />
-                Signed
-              </span>
-            )}
-          </div>
-          <p className="text-3xl font-bold text-gray-900 mt-4">
-            {formatCurrency(financialStats.depositsCollected)}
-          </p>
-          <p className="text-gray-500 text-sm mt-1">Deposits Collected</p>
+          <p className="text-gray-500 text-sm mt-1">Total Collected</p>
+          <p className="text-xs text-gray-400 mt-0.5">Deposits + payments received</p>
         </div>
 
         <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
@@ -386,35 +371,41 @@ export default function FinancialDashboard() {
             <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center">
               <Clock className="text-amber-600" size={24} />
             </div>
-            {financialStats.pendingPayments > 0 && (
-              <span className="flex items-center gap-1 text-amber-600 text-sm font-medium">
-                <TrendingDown size={16} />
-                Pending
-              </span>
-            )}
+            <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded-full">Outstanding</span>
           </div>
           <p className="text-3xl font-bold text-gray-900 mt-4">
-            {formatCurrency(financialStats.pendingPayments)}
+            {formatCurrency(financialStats.totalOutstanding)}
           </p>
-          <p className="text-gray-500 text-sm mt-1">Pending Payments</p>
+          <p className="text-gray-500 text-sm mt-1">Total Outstanding</p>
+          <p className="text-xs text-gray-400 mt-0.5">Pending + overdue invoices</p>
+        </div>
+
+        <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+              <Send className="text-blue-600" size={24} />
+            </div>
+            <span className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded-full">{financialStats.estimatesSentCount} sent</span>
+          </div>
+          <p className="text-3xl font-bold text-gray-900 mt-4">
+            {formatCurrency(financialStats.estimatesSentTotal)}
+          </p>
+          <p className="text-gray-500 text-sm mt-1">Estimates Sent</p>
+          <p className="text-xs text-gray-400 mt-0.5">{financialStats.acceptedEstimatesCount} signed · {financialStats.pendingEstimatesCount} pending</p>
         </div>
 
         <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
           <div className="flex items-center justify-between">
             <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
-              <AlertCircle className="text-red-600" size={24} />
+              <XCircle className="text-red-600" size={24} />
             </div>
-            {invoiceTotals.overdue > 0 && (
-              <span className="flex items-center gap-1 text-red-600 text-sm font-medium">
-                <AlertCircle size={16} />
-                Overdue
-              </span>
-            )}
+            <span className="text-xs font-medium text-red-600 bg-red-50 px-2 py-1 rounded-full">{financialStats.lostDealsCount} lost</span>
           </div>
           <p className="text-3xl font-bold text-gray-900 mt-4">
-            {formatCurrency(invoiceTotals.overdue)}
+            {formatCurrency(financialStats.lostSalesValue)}
           </p>
-          <p className="text-gray-500 text-sm mt-1">Overdue Invoices</p>
+          <p className="text-gray-500 text-sm mt-1">Total Lost</p>
+          <p className="text-xs text-gray-400 mt-0.5">Value of lost deals</p>
         </div>
       </div>
 
@@ -474,30 +465,36 @@ export default function FinancialDashboard() {
       </div>
 
       {/* Estimates Summary */}
-      {(financialStats.acceptedEstimatesTotal > 0 || financialStats.pendingEstimatesTotal > 0) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {financialStats.estimatesSentCount > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 flex items-center gap-4">
+            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0">
+              <Send className="text-blue-600" size={24} />
+            </div>
+            <div>
+              <p className="text-sm text-blue-700 font-medium">Total Estimates Sent</p>
+              <p className="text-2xl font-bold text-gray-900">{formatCurrency(financialStats.estimatesSentTotal)}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{financialStats.estimatesSentCount} estimate(s) sent</p>
+            </div>
+          </div>
           <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5 flex items-center gap-4">
             <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center flex-shrink-0">
               <CheckCircle className="text-emerald-600" size={24} />
             </div>
             <div>
-              <p className="text-sm text-emerald-700 font-medium">Accepted / Signed Estimates</p>
+              <p className="text-sm text-emerald-700 font-medium">Total Signed</p>
               <p className="text-2xl font-bold text-gray-900">{formatCurrency(financialStats.acceptedEstimatesTotal)}</p>
-              <p className="text-xs text-gray-500 mt-0.5">
-                {state.estimates.filter(e => e.status === 'accepted').length} estimate(s) signed
-              </p>
+              <p className="text-xs text-gray-500 mt-0.5">{financialStats.acceptedEstimatesCount} estimate(s) signed</p>
             </div>
           </div>
           <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-5 flex items-center gap-4">
             <div className="w-12 h-12 bg-yellow-100 rounded-xl flex items-center justify-center flex-shrink-0">
-              <Send className="text-yellow-600" size={24} />
+              <Clock className="text-yellow-600" size={24} />
             </div>
             <div>
-              <p className="text-sm text-yellow-700 font-medium">Pending Estimates (Sent / Viewed)</p>
+              <p className="text-sm text-yellow-700 font-medium">Awaiting Response</p>
               <p className="text-2xl font-bold text-gray-900">{formatCurrency(financialStats.pendingEstimatesTotal)}</p>
-              <p className="text-xs text-gray-500 mt-0.5">
-                {state.estimates.filter(e => e.status === 'sent' || e.status === 'viewed').length} estimate(s) awaiting response
-              </p>
+              <p className="text-xs text-gray-500 mt-0.5">{financialStats.pendingEstimatesCount} estimate(s) pending</p>
             </div>
           </div>
         </div>

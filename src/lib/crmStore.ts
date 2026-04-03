@@ -1,5 +1,6 @@
 // CRM State Management using React Context
 import { createContext, useContext } from 'react';
+import { isSoldStatus, isLostStatus } from './statusDefinitions';
 import type {
   Contact,
   TeamMember,
@@ -727,6 +728,10 @@ export function useFinancialStats() {
     // ── Deposits & payments ───────────────────────────────────────────────────
     depositsCollected: 0,
     pendingPayments: 0,
+    /** Total collected = deposits + final payments received + paid invoices */
+    totalCollected: 0,
+    /** Total outstanding = pending final payments + outstanding/overdue invoices */
+    totalOutstanding: 0,
 
     // ── Invoices ─────────────────────────────────────────────────────────────
     paidInvoices: 0,
@@ -734,8 +739,18 @@ export function useFinancialStats() {
     overdueInvoices: 0,
 
     // ── Estimates ────────────────────────────────────────────────────────────
+    /** Dollar value of estimates with status accepted/signed */
     acceptedEstimatesTotal: 0,
+    /** Count of accepted/signed estimates */
+    acceptedEstimatesCount: 0,
+    /** Dollar value of estimates sent (sent + viewed, awaiting response) */
     pendingEstimatesTotal: 0,
+    /** Count of sent/viewed estimates */
+    pendingEstimatesCount: 0,
+    /** Dollar value of ALL estimates ever sent (sent + viewed + accepted + declined) */
+    estimatesSentTotal: 0,
+    /** Count of ALL estimates ever sent */
+    estimatesSentCount: 0,
 
     // ── Costs ────────────────────────────────────────────────────────────────
     deliveredMaterialCost: 0,
@@ -746,9 +761,9 @@ export function useFinancialStats() {
     // ── Pipeline ─────────────────────────────────────────────────────────────
     /** Number of active leads (not won/lost/closed) */
     leadsGenerated: 0,
-    /** Total project value of won/completed deals */
+    /** Total project value of sold deals (all SOLD_STATUSES) */
     dealsClosed: 0,
-    /** Number of won/completed deals */
+    /** Number of sold deals */
     dealsClosedCount: 0,
     /** Total project value of lost deals */
     lostSalesValue: 0,
@@ -781,18 +796,14 @@ export function useFinancialStats() {
       stats.pendingPayments += c.finalPaymentAmount;
     }
 
-    // Pipeline / sales metrics
-    const closedStatuses = ['won', 'completed', 'paid'];
-    const lostStatuses = ['lost'];
-    const activeStatuses = ['won', 'lost', 'closed', 'completed', 'paid'];
-
-    if (closedStatuses.includes(c.status)) {
+    // Pipeline / sales metrics — use centralized status definitions
+    if (isSoldStatus(c.status)) {
       stats.dealsClosed += c.projectValue || 0;
       stats.dealsClosedCount += 1;
-    } else if (lostStatuses.includes(c.status)) {
+    } else if (isLostStatus(c.status)) {
       stats.lostSalesValue += c.projectValue || 0;
       stats.lostDealsCount += 1;
-    } else if (!activeStatuses.includes(c.status)) {
+    } else {
       stats.leadsGenerated += 1;
     }
   });
@@ -814,12 +825,30 @@ export function useFinancialStats() {
   });
 
   stats.totalRevenue = stats.contactRevenue + stats.invoiceRevenue;
+  stats.totalCollected = stats.depositsCollected + stats.paidInvoices +
+    // add final payment balance not already in paidInvoices
+    state.contacts.reduce((sum, c) => {
+      if (c.finalPaymentPaid && c.finalPaymentAmount && !contactsWithPaidFinalPayment.has(c.id)) {
+        return sum + c.finalPaymentAmount;
+      }
+      return sum;
+    }, 0);
+  stats.totalOutstanding = stats.pendingPayments + stats.outstandingInvoices + stats.overdueInvoices;
 
   state.estimates.forEach((est) => {
     if (est.status === 'accepted') {
       stats.acceptedEstimatesTotal += est.total;
+      stats.acceptedEstimatesCount += 1;
+      stats.estimatesSentTotal += est.total;
+      stats.estimatesSentCount += 1;
     } else if (est.status === 'sent' || est.status === 'viewed') {
       stats.pendingEstimatesTotal += est.total;
+      stats.pendingEstimatesCount += 1;
+      stats.estimatesSentTotal += est.total;
+      stats.estimatesSentCount += 1;
+    } else if (est.status === 'declined') {
+      stats.estimatesSentTotal += est.total;
+      stats.estimatesSentCount += 1;
     }
   });
 
