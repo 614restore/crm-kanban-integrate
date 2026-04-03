@@ -1,5 +1,6 @@
 // CRM State Management using React Context
 import { createContext, useContext } from 'react';
+import { isSoldStatus, isLostStatus } from './statusDefinitions';
 import type {
   Contact,
   TeamMember,
@@ -754,6 +755,22 @@ export function useFinancialStats() {
     lostSalesValue: 0,
     /** Number of lost deals */
     lostDealsCount: 0,
+
+    // ── Collected / Outstanding ───────────────────────────────────────────────
+    /** All money actually received: deposits + final payments + paid invoices */
+    totalCollected: 0,
+    /** All money owed but not yet received: pending final payments + outstanding/overdue invoices */
+    totalOutstanding: 0,
+
+    // ── Estimates tracking ────────────────────────────────────────────────────
+    /** Total dollar value of all estimates ever sent */
+    estimatesSentTotal: 0,
+    /** Number of estimates sent (all statuses) */
+    estimatesSentCount: 0,
+    /** Number of accepted/signed estimates */
+    acceptedEstimatesCount: 0,
+    /** Number of estimates awaiting response */
+    pendingEstimatesCount: 0,
   };
 
   // Build a set of contact IDs that already have a fully-paid final payment so
@@ -782,17 +799,13 @@ export function useFinancialStats() {
     }
 
     // Pipeline / sales metrics
-    const closedStatuses = ['won', 'completed', 'paid'];
-    const lostStatuses = ['lost'];
-    const activeStatuses = ['won', 'lost', 'closed', 'completed', 'paid'];
-
-    if (closedStatuses.includes(c.status)) {
+    if (isSoldStatus(c.status)) {
       stats.dealsClosed += c.projectValue || 0;
       stats.dealsClosedCount += 1;
-    } else if (lostStatuses.includes(c.status)) {
+    } else if (isLostStatus(c.status)) {
       stats.lostSalesValue += c.projectValue || 0;
       stats.lostDealsCount += 1;
-    } else if (!activeStatuses.includes(c.status)) {
+    } else {
       stats.leadsGenerated += 1;
     }
   });
@@ -814,12 +827,20 @@ export function useFinancialStats() {
   });
 
   stats.totalRevenue = stats.contactRevenue + stats.invoiceRevenue;
+  stats.totalCollected = stats.depositsCollected + stats.paidInvoices;
+  stats.totalOutstanding = stats.pendingPayments + stats.outstandingInvoices + stats.overdueInvoices;
 
   state.estimates.forEach((est) => {
+    // Count all sent estimates regardless of outcome
+    stats.estimatesSentCount += 1;
+    stats.estimatesSentTotal += est.total || 0;
+
     if (est.status === 'accepted') {
       stats.acceptedEstimatesTotal += est.total;
+      stats.acceptedEstimatesCount += 1;
     } else if (est.status === 'sent' || est.status === 'viewed') {
       stats.pendingEstimatesTotal += est.total;
+      stats.pendingEstimatesCount += 1;
     }
   });
 

@@ -368,17 +368,17 @@ export default function FinancialDashboard() {
             <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
               <CreditCard className="text-blue-600" size={24} />
             </div>
-            {financialStats.acceptedEstimatesTotal > 0 && (
+            {financialStats.totalCollected > 0 && (
               <span className="flex items-center gap-1 text-blue-600 text-sm font-medium">
-                <FileText size={16} />
-                Signed
+                <TrendingUp size={16} />
+                Collected
               </span>
             )}
           </div>
           <p className="text-3xl font-bold text-gray-900 mt-4">
-            {formatCurrency(financialStats.depositsCollected)}
+            {formatCurrency(financialStats.totalCollected)}
           </p>
-          <p className="text-gray-500 text-sm mt-1">Deposits Collected</p>
+          <p className="text-gray-500 text-sm mt-1">Total Collected</p>
         </div>
 
         <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
@@ -386,17 +386,17 @@ export default function FinancialDashboard() {
             <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center">
               <Clock className="text-amber-600" size={24} />
             </div>
-            {financialStats.pendingPayments > 0 && (
+            {financialStats.totalOutstanding > 0 && (
               <span className="flex items-center gap-1 text-amber-600 text-sm font-medium">
                 <TrendingDown size={16} />
-                Pending
+                Owed
               </span>
             )}
           </div>
           <p className="text-3xl font-bold text-gray-900 mt-4">
-            {formatCurrency(financialStats.pendingPayments)}
+            {formatCurrency(financialStats.totalOutstanding)}
           </p>
-          <p className="text-gray-500 text-sm mt-1">Pending Payments</p>
+          <p className="text-gray-500 text-sm mt-1">Total Outstanding</p>
         </div>
 
         <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
@@ -474,17 +474,29 @@ export default function FinancialDashboard() {
       </div>
 
       {/* Estimates Summary */}
-      {(financialStats.acceptedEstimatesTotal > 0 || financialStats.pendingEstimatesTotal > 0) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {financialStats.estimatesSentCount > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 flex items-center gap-4">
+            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0">
+              <FileText className="text-blue-600" size={24} />
+            </div>
+            <div>
+              <p className="text-sm text-blue-700 font-medium">Total Estimates Sent</p>
+              <p className="text-2xl font-bold text-gray-900">{formatCurrency(financialStats.estimatesSentTotal)}</p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {financialStats.estimatesSentCount} estimate(s) sent
+              </p>
+            </div>
+          </div>
           <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5 flex items-center gap-4">
             <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center flex-shrink-0">
               <CheckCircle className="text-emerald-600" size={24} />
             </div>
             <div>
-              <p className="text-sm text-emerald-700 font-medium">Accepted / Signed Estimates</p>
+              <p className="text-sm text-emerald-700 font-medium">Total Signed</p>
               <p className="text-2xl font-bold text-gray-900">{formatCurrency(financialStats.acceptedEstimatesTotal)}</p>
               <p className="text-xs text-gray-500 mt-0.5">
-                {state.estimates.filter(e => e.status === 'accepted').length} estimate(s) signed
+                {financialStats.acceptedEstimatesCount} estimate(s) signed
               </p>
             </div>
           </div>
@@ -493,10 +505,10 @@ export default function FinancialDashboard() {
               <Send className="text-yellow-600" size={24} />
             </div>
             <div>
-              <p className="text-sm text-yellow-700 font-medium">Pending Estimates (Sent / Viewed)</p>
+              <p className="text-sm text-yellow-700 font-medium">Awaiting Response</p>
               <p className="text-2xl font-bold text-gray-900">{formatCurrency(financialStats.pendingEstimatesTotal)}</p>
               <p className="text-xs text-gray-500 mt-0.5">
-                {state.estimates.filter(e => e.status === 'sent' || e.status === 'viewed').length} estimate(s) awaiting response
+                {financialStats.pendingEstimatesCount} estimate(s) pending
               </p>
             </div>
           </div>
