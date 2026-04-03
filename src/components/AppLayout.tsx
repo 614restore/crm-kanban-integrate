@@ -1017,7 +1017,7 @@ useEffect(() => {
     if (authLoading) return;
 
     const timer = window.setTimeout(() => {
-      console.warn('Initial CRM data load timed out after 15 s; showing app shell with empty data.');
+      console.warn('Initial CRM data load timed out after 45 s; showing app shell with empty data.');
       dispatch({
         type: 'INITIALIZE_DATA',
         payload: {
@@ -1037,7 +1037,7 @@ useEffect(() => {
           companyGoals: [],
         },
       });
-    }, 15000);
+    }, 45000);
 
     return () => window.clearTimeout(timer);
   }, [state.isLoading, state.isInitialized, authLoading]);

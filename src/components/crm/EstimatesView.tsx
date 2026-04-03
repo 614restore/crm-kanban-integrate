@@ -517,13 +517,23 @@ export default function EstimatesView() {
       
       console.log('EstimatesView: Email sent successfully');
 
-      // Sync contact status
+      // Sync contact status — await so failures surface instead of silently reverting on next reload
       const c = state.contacts.find(x => x.id === updated.contact_id);
       if (c) {
-        db.updateContact(c.id, {
-          status: 'estimate_sent',
-          status_changed_at: new Date().toISOString(),
-        }).catch((err) => console.error('Failed to persist estimate_sent status:', err));
+        const { updateContactStatus } = await import('../../lib/statusManager');
+        await updateContactStatus({
+          contactId: c.id,
+          newStatus: 'estimate_sent',
+          oldStatus: c.status,
+          contactName: `${c.firstName} ${c.lastName}`.trim(),
+          contactEmail: c.email || '',
+          userId: user?.id || 'system',
+          userEmail: user?.email || 'system@trussctr.com',
+          companyId: profile?.company_id || c.companyId || '',
+          source: 'estimate_email_sent',
+          reason: 'Estimate emailed to customer',
+          skipProgression: true,
+        }).catch((err: unknown) => console.error('Failed to persist estimate_sent status:', err));
         dispatch({
           type: 'UPDATE_CONTACT',
           payload: {

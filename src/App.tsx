@@ -81,21 +81,13 @@ const App = () => {
   useEffect(() => {
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible') {
-        try {
-          const { data, error } = await supabase.auth.getSession();
-          
-          // Only sign out if there's definitively no session (not just an error)
-          // Errors could be temporary network issues - let auth context handle them
-          if (!data?.session && !error) {
-            await supabase.auth.signOut();
-          } else if (data?.session && !error) {
-            // Valid session - refresh queries to get latest data
-            queryClient.invalidateQueries();
-          }
-          // If there's an error, do nothing - authContext will handle via onAuthStateChange
-        } catch (err) {
-          console.warn('[App] Session check failed on visibility change:', err);
-          // Don't sign out on error - could be temporary network issue
+        const { data, error } = await supabase.auth.getSession();
+        // Only invalidate TanStack queries when we have a confirmed live session.
+        // Never call signOut here — network errors on NANO plan look identical to
+        // auth errors and would silently sign the user out on every tab switch.
+        // Session expiry is handled by onAuthStateChange in AuthContext.
+        if (!error && data.session) {
+          queryClient.invalidateQueries();
         }
       }
     };
