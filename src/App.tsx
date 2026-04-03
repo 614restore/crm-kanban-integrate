@@ -25,8 +25,8 @@ import { supabase } from '@/lib/supabase';
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 5,
-      refetchOnWindowFocus: true,
+      staleTime: 1000 * 60 * 15,
+      refetchOnWindowFocus: false,
       retry: 1,
     },
   },
@@ -81,13 +81,12 @@ const App = () => {
   useEffect(() => {
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible') {
-        const { data, error } = await supabase.auth.getSession();
-        // Only invalidate TanStack queries when we have a confirmed live session.
-        // Never call signOut here — network errors on NANO plan look identical to
-        // auth errors and would silently sign the user out on every tab switch.
-        // Session expiry is handled by onAuthStateChange in AuthContext.
-        if (!error && data.session) {
-          queryClient.invalidateQueries();
+        // Only sign out on a genuine auth error — do NOT invalidate queries here.
+        // AppLayout handles data refresh after long idle periods (>5 min).
+        // Invalidating on every tab switch caused the app to blank out and reload.
+        const { error } = await supabase.auth.getSession();
+        if (error) {
+          await supabase.auth.signOut();
         }
       }
     };
