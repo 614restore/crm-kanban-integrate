@@ -1,4 +1,4 @@
-import ExcelJS from 'exceljs';
+import * as XLSX from 'xlsx';
 import {
   Invoice,
   Contact,
@@ -136,8 +136,8 @@ export function exportToQuickBooks(invoices: Invoice[]) {
     downloadCsv(csvContent, `QBO_Import_${new Date().toISOString().split('T')[0]}.csv`);
 }
 
-async function writeAndDownload(workbook: ExcelJS.Workbook, filename: string) {
-  const buffer = await workbook.xlsx.writeBuffer();
+function writeAndDownload(workbook: XLSX.WorkBook, filename: string) {
+  const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -147,16 +147,14 @@ async function writeAndDownload(workbook: ExcelJS.Workbook, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-function addSheet(workbook: ExcelJS.Workbook, sheetName: string, data: Record<string, string | number>[]) {
+function addSheet(workbook: XLSX.WorkBook, sheetName: string, data: Record<string, string | number>[]) {
   if (data.length === 0) return;
-  const ws = workbook.addWorksheet(sheetName);
-  const keys = Object.keys(data[0]);
-  ws.columns = keys.map(key => ({ header: key, key, width: 18 }));
-  ws.addRows(data);
+  const ws = XLSX.utils.json_to_sheet(data);
+  XLSX.utils.book_append_sheet(workbook, ws, sheetName);
 }
 
 // Export contacts to Excel
-export async function exportContactsToExcel(contacts: Contact[], filename = 'contacts.xlsx') {
+export function exportContactsToExcel(contacts: Contact[], filename = 'contacts.xlsx') {
   const data = contacts.map(contact => ({
     'First Name': contact.firstName,
     'Last Name': contact.lastName,
@@ -178,13 +176,13 @@ export async function exportContactsToExcel(contacts: Contact[], filename = 'con
     'Project Value': contact.projectValue || '',
     'Created At': new Date(contact.createdAt).toLocaleDateString(),
   }));
-  const workbook = new ExcelJS.Workbook();
+  const workbook = XLSX.utils.book_new();
   addSheet(workbook, 'Contacts', data);
-  await writeAndDownload(workbook, filename);
+  writeAndDownload(workbook, filename);
 }
 
 // Export projects to Excel
-export async function exportProjectsToExcel(projects: Project[], filename = 'projects.xlsx') {
+export function exportProjectsToExcel(projects: Project[], filename = 'projects.xlsx') {
   const data = projects.map(project => ({
     'Project Number': project.projectNumber,
     'Name': project.name,
@@ -204,13 +202,13 @@ export async function exportProjectsToExcel(projects: Project[], filename = 'pro
     'Project Manager': project.projectManagerName || '',
     'Created At': new Date(project.createdAt).toLocaleDateString(),
   }));
-  const workbook = new ExcelJS.Workbook();
+  const workbook = XLSX.utils.book_new();
   addSheet(workbook, 'Projects', data);
-  await writeAndDownload(workbook, filename);
+  writeAndDownload(workbook, filename);
 }
 
 // Export work orders to Excel
-export async function exportWorkOrdersToExcel(workOrders: WorkOrder[], filename = 'work-orders.xlsx') {
+export function exportWorkOrdersToExcel(workOrders: WorkOrder[], filename = 'work-orders.xlsx') {
   const data = workOrders.map(wo => ({
     'Work Order #': wo.workOrderNumber,
     'Title': wo.title,
@@ -245,13 +243,13 @@ export async function exportWorkOrdersToExcel(workOrders: WorkOrder[], filename 
     'State': wo.state || '',
     'Signed By': wo.signedBy || '',
   }));
-  const workbook = new ExcelJS.Workbook();
+  const workbook = XLSX.utils.book_new();
   addSheet(workbook, 'Work Orders', data);
-  await writeAndDownload(workbook, filename);
+  writeAndDownload(workbook, filename);
 }
 
 // Export material orders to Excel
-export async function exportMaterialOrdersToExcel(orders: MaterialOrder[], filename = 'material-orders.xlsx') {
+export function exportMaterialOrdersToExcel(orders: MaterialOrder[], filename = 'material-orders.xlsx') {
   const data = orders.map(order => ({
     'Order Number': order.orderNumber,
     'Supplier': order.supplierName,
@@ -262,13 +260,13 @@ export async function exportMaterialOrdersToExcel(orders: MaterialOrder[], filen
     'Actual Delivery': order.actualDeliveryDate || '',
     'Total Amount': order.totalAmount,
   }));
-  const workbook = new ExcelJS.Workbook();
+  const workbook = XLSX.utils.book_new();
   addSheet(workbook, 'Material Orders', data);
-  await writeAndDownload(workbook, filename);
+  writeAndDownload(workbook, filename);
 }
 
 // Export estimates to Excel
-export async function exportEstimatesToExcel(estimates: Estimate[], filename = 'estimates.xlsx') {
+export function exportEstimatesToExcel(estimates: Estimate[], filename = 'estimates.xlsx') {
   const data = estimates.map(estimate => ({
     'Estimate Number': estimate.estimateNumber,
     'Customer': estimate.customerName,
@@ -280,13 +278,13 @@ export async function exportEstimatesToExcel(estimates: Estimate[], filename = '
     'Created Date': new Date(estimate.createdDate).toLocaleDateString(),
     'Sent At': estimate.sentAt ? new Date(estimate.sentAt).toLocaleDateString() : '',
   }));
-  const workbook = new ExcelJS.Workbook();
+  const workbook = XLSX.utils.book_new();
   addSheet(workbook, 'Estimates', data);
-  await writeAndDownload(workbook, filename);
+  writeAndDownload(workbook, filename);
 }
 
 // Export suppliers to Excel
-export async function exportSuppliersToExcel(suppliers: Supplier[], filename = 'suppliers.xlsx') {
+export function exportSuppliersToExcel(suppliers: Supplier[], filename = 'suppliers.xlsx') {
   const data = suppliers.map(supplier => ({
     'Supplier Name': supplier.name,
     'Contact Name': supplier.contactName || '',
@@ -296,13 +294,13 @@ export async function exportSuppliersToExcel(suppliers: Supplier[], filename = '
     'State': supplier.state || '',
     'Category': supplier.category || '',
   }));
-  const workbook = new ExcelJS.Workbook();
+  const workbook = XLSX.utils.book_new();
   addSheet(workbook, 'Suppliers', data);
-  await writeAndDownload(workbook, filename);
+  writeAndDownload(workbook, filename);
 }
 
 // Export ALL data to Excel (multiple sheets)
-export async function exportAllData(
+export function exportAllData(
   contacts: Contact[],
   projects: Project[],
   workOrders: WorkOrder[],
@@ -313,7 +311,7 @@ export async function exportAllData(
   appointments: Appointment[],
   filename = 'crm-all-data.xlsx'
 ) {
-  const workbook = new ExcelJS.Workbook();
+  const workbook = XLSX.utils.book_new();
 
   addSheet(workbook, 'Contacts', contacts.map(c => ({
     'First Name': c.firstName, 'Last Name': c.lastName, 'Email': c.email,
@@ -358,7 +356,7 @@ export async function exportAllData(
     'Customer': a.contactName, 'Title': a.title, 'Date': a.date, 'Status': a.status,
   })));
 
-  await writeAndDownload(workbook, filename);
+  writeAndDownload(workbook, filename);
 }
 
 /**
@@ -479,13 +477,13 @@ export function printDataAsPDF(
 }
 
 // Export financial data only
-export async function exportFinancialData(
+export function exportFinancialData(
   invoices: Invoice[],
   estimates: Estimate[],
   projects: Project[],
   filename = 'crm-financial-data.xlsx'
 ) {
-  const workbook = new ExcelJS.Workbook();
+  const workbook = XLSX.utils.book_new();
 
   addSheet(workbook, 'Invoices', invoices.map(i => ({
     'Customer': i.contactName, 'Amount': i.amount, 'Status': i.status,
@@ -505,5 +503,5 @@ export async function exportFinancialData(
     'Variance': (p.estimatedBudget || 0) - (p.actualCost || 0), 'Status': p.status,
   })));
 
-  await writeAndDownload(workbook, filename);
+  writeAndDownload(workbook, filename);
 }
