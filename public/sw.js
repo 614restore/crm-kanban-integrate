@@ -19,10 +19,11 @@ self.addEventListener('install', (event) => {
         return cache.addAll(urlsToCache);
       })
   );
-  // Do NOT call self.skipWaiting() here — let the update wait until the user
-  // explicitly clicks "Update Now" (or all tabs are closed).
-  // Calling skipWaiting() unconditionally during install caused an immediate
-  // controllerchange → reload loop in incognito / fresh-tab scenarios.
+  // skipWaiting ensures the new SW takes over immediately on update so stale
+  // cached chunks are never served after a new deployment.
+  // The controllerchange reload in serviceWorker.ts is guarded by
+  // hadPreviousController so first-time installs (incognito) never reload.
+  self.skipWaiting();
 });
 
 // Activate event - cleanup old caches
