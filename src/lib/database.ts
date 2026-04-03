@@ -625,7 +625,10 @@ class DatabaseService {
         }),
         5000, 'update_my_company RPC'
       );
-      if (!rpcError && rpcData) return rpcData as DbCompany;
+      if (!rpcError && rpcData) {
+        this.setCachedCompany(companyId, rpcData as DbCompany);
+        return rpcData as DbCompany;
+      }
       if (rpcError) console.warn('[Database] update_my_company RPC failed, falling back:', rpcError.message);
     } catch {
       console.warn('[Database] update RPC timed-out or not available, using direct query');
@@ -636,6 +639,7 @@ class DatabaseService {
         5000, 'updateCompany direct'
       );
       if (error) { console.error('Error updating company:', error); return null; }
+      this.setCachedCompany(companyId, data);
       return data;
     } catch (err) { console.error('updateCompany timed out or failed:', err); return null; }
   }
