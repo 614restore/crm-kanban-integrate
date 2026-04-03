@@ -156,7 +156,7 @@ function detectSmtpProvider(host: string) {
   return null;
 }
 
-type SettingsTab = 'company' | 'profile' | 'integrations' | 'ai-assistant' | 'notifications' | 'security' | 'billing' | 'customer-billing' | 'api' | 'features' | 'document-templates';
+type SettingsTab = 'company' | 'profile' | 'integrations' | 'ai-assistant' | 'notifications' | 'security' | 'billing' | 'customer-billing' | 'api' | 'features' | 'document-templates' | 'pipeline' | 'guidebook';
 
 interface CompanyFormData {
   name: string;
@@ -1417,6 +1417,8 @@ export default function SettingsView() {
     { id: 'company', label: 'Company', icon: <Building2 size={18} /> },
     { id: 'profile', label: 'My Profile', icon: <User size={18} /> },
     { id: 'features', label: 'Feature Toggles', icon: <ToggleLeft size={18} /> },
+    { id: 'pipeline', label: 'Pipeline Triggers', icon: <Target size={18} /> },
+    { id: 'guidebook', label: 'User Guidebook', icon: <HelpCircle size={18} /> },
     { id: 'integrations', label: 'Integrations', icon: <Link size={18} /> },
     { id: 'ai-assistant', label: 'AI Assistant', icon: <Zap size={18} /> },
     { id: 'notifications', label: 'Notifications', icon: <Bell size={18} /> },
@@ -2595,6 +2597,223 @@ export default function SettingsView() {
         {activeTab === 'document-templates' && (
           <div className="w-full">
             <DocumentTemplates />
+          </div>
+        )}
+
+        {/* ── Pipeline Triggers ── */}
+        {activeTab === 'pipeline' && (
+          <div className="max-w-4xl space-y-8">
+            <div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Pipeline Auto-Progression</h3>
+              <p className="text-sm text-gray-500 mb-6">
+                When a contact moves to a stage, the system can automatically advance it to the next stage based on the rules below. Manual-only stages require you to drag the card or change the status yourself.
+              </p>
+
+              {/* Sales Pipeline */}
+              <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+                <h4 className="font-semibold text-gray-800 mb-4 flex items-center gap-2"><Target size={16} className="text-blue-600" /> Sales Pipeline</h4>
+                <div className="space-y-2">
+                  {[
+                    { from: 'New Lead', to: 'Contacted', trigger: 'First communication logged', auto: true },
+                    { from: 'Contacted', to: 'Appointment Set', trigger: 'Appointment created for contact', auto: false, note: 'Triggered when you schedule an inspection' },
+                    { from: 'Appointment Set', to: 'Inspection Completed', trigger: 'Appointment marked complete', auto: true },
+                    { from: 'Inspection Completed', to: 'Estimating', trigger: 'Automatic after inspection', auto: true },
+                    { from: 'Estimating', to: 'Estimate Sent', trigger: 'Estimate emailed to customer', auto: true },
+                    { from: 'Estimate Sent', to: 'Contingency', trigger: 'Delayed 3 seconds (follow-up phase)', auto: true },
+                    { from: 'Contingency', to: 'Approved', trigger: 'Customer or insurance approves', auto: false, note: 'Requires manual confirmation' },
+                    { from: 'Approved', to: 'Signed', trigger: 'Customer signs contract/estimate', auto: false, note: 'Requires manual confirmation' },
+                  ].map((rule, i) => (
+                    <div key={i} className={`flex items-center gap-3 p-3 rounded-lg text-sm ${rule.auto ? 'bg-green-50 border border-green-100' : 'bg-amber-50 border border-amber-100'}`}>
+                      <span className="font-medium text-gray-700 min-w-[160px]">{rule.from}</span>
+                      <span className="text-gray-400">&#8594;</span>
+                      <span className="font-medium text-gray-700 min-w-[160px]">{rule.to}</span>
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${rule.auto ? 'bg-green-200 text-green-800' : 'bg-amber-200 text-amber-800'}`}>
+                        {rule.auto ? 'Auto' : 'Manual'}
+                      </span>
+                      <span className="text-gray-500 text-xs flex-1">{rule.trigger}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Production Pipeline */}
+              <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+                <h4 className="font-semibold text-gray-800 mb-4 flex items-center gap-2"><Target size={16} className="text-indigo-600" /> Production Pipeline</h4>
+                <div className="space-y-2">
+                  {[
+                    { from: 'Signed', to: 'Ordering Material', trigger: 'Contract signed, auto-moves to production', auto: true },
+                    { from: 'Ordering Material', to: 'In Progress', trigger: 'Materials arrive, work begins', auto: true },
+                    { from: 'In Progress', to: 'Build Phase', trigger: 'Active construction begins', auto: true },
+                    { from: 'Build Phase', to: 'Cleanup', trigger: 'Delayed 3 seconds for review', auto: true },
+                    { from: 'Cleanup', to: 'Completed', trigger: 'Delayed 3 seconds for review', auto: true },
+                  ].map((rule, i) => (
+                    <div key={i} className="flex items-center gap-3 p-3 rounded-lg text-sm bg-green-50 border border-green-100">
+                      <span className="font-medium text-gray-700 min-w-[160px]">{rule.from}</span>
+                      <span className="text-gray-400">&#8594;</span>
+                      <span className="font-medium text-gray-700 min-w-[160px]">{rule.to}</span>
+                      <span className="px-2 py-0.5 rounded text-xs font-medium bg-green-200 text-green-800">Auto</span>
+                      <span className="text-gray-500 text-xs flex-1">{rule.trigger}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Billing Pipeline */}
+              <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+                <h4 className="font-semibold text-gray-800 mb-4 flex items-center gap-2"><DollarSign size={16} className="text-emerald-600" /> Billing Pipeline</h4>
+                <div className="space-y-2">
+                  {[
+                    { from: 'Completed', to: 'Invoicing', trigger: 'Job completed, invoice generated', auto: true },
+                    { from: 'Invoicing', to: 'Pending Payment', trigger: 'Invoice sent to customer', auto: true },
+                    { from: 'Pending Payment', to: 'Paid', trigger: 'Payment received', auto: false, note: 'Triggered by payment confirmation' },
+                  ].map((rule, i) => (
+                    <div key={i} className={`flex items-center gap-3 p-3 rounded-lg text-sm ${rule.auto !== false ? 'bg-green-50 border border-green-100' : 'bg-amber-50 border border-amber-100'}`}>
+                      <span className="font-medium text-gray-700 min-w-[160px]">{rule.from}</span>
+                      <span className="text-gray-400">&#8594;</span>
+                      <span className="font-medium text-gray-700 min-w-[160px]">{rule.to}</span>
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${rule.auto !== false ? 'bg-green-200 text-green-800' : 'bg-amber-200 text-amber-800'}`}>
+                        {rule.auto !== false ? 'Auto' : 'Manual'}
+                      </span>
+                      <span className="text-gray-500 text-xs flex-1">{rule.trigger}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-blue-50 rounded-xl border border-blue-100 p-4">
+                <h4 className="font-semibold text-blue-800 mb-2 text-sm">How it works</h4>
+                <ul className="text-sm text-blue-700 space-y-1 list-disc list-inside">
+                  <li><strong>Auto</strong> stages advance automatically when their trigger event occurs (e.g., estimate sent, appointment completed)</li>
+                  <li><strong>Manual</strong> stages require you to drag the card on the pipeline board or change the status yourself</li>
+                  <li>Delayed transitions (3-second delay) give you a brief window to review before advancing</li>
+                  <li>You can always manually drag contacts to any stage, regardless of auto-progression rules</li>
+                  <li>Auto-progression never skips stages — it always moves to the next stage in order</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── User Guidebook ── */}
+        {activeTab === 'guidebook' && (
+          <div className="max-w-4xl space-y-6">
+            <div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">User Guidebook</h3>
+              <p className="text-sm text-gray-500 mb-6">Quick reference for how the main features of TrussCTR work.</p>
+            </div>
+
+            {/* Pipeline & Contacts */}
+            <details className="bg-white rounded-xl border border-gray-200 overflow-hidden group">
+              <summary className="flex items-center gap-3 p-5 cursor-pointer font-semibold text-gray-800 hover:bg-gray-50 transition-colors">
+                <Target size={18} className="text-blue-600 flex-shrink-0" />
+                Pipeline & Contact Management
+              </summary>
+              <div className="px-5 pb-5 text-sm text-gray-600 space-y-3 border-t border-gray-100 pt-4">
+                <p><strong>Pipeline Boards:</strong> Your contacts flow through 4 boards — Retail Sales, Insurance Sales, Production, and Billing. Each board has columns representing stages.</p>
+                <p><strong>Moving Contacts:</strong> Drag a contact card to a new column, or open the contact and change the status. Auto-progression rules (see Pipeline Triggers tab) will advance cards automatically when events occur.</p>
+                <p><strong>Adding Contacts:</strong> Click the <strong>+ Quick Add</strong> button in the top bar or the <strong>+ New Contact</strong> button in the Contacts view.</p>
+                <p><strong>Archiving:</strong> In the Contacts list, click the archive icon on a contact row. Archived contacts are hidden from all views but can be restored from the "Show Archived" section.</p>
+                <p><strong>Sorting:</strong> Contacts default to alphabetical by last name (A-Z). Click column headers to sort by name, status, date, or project value.</p>
+              </div>
+            </details>
+
+            {/* Estimates & Documents */}
+            <details className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <summary className="flex items-center gap-3 p-5 cursor-pointer font-semibold text-gray-800 hover:bg-gray-50 transition-colors">
+                <FileText size={18} className="text-emerald-600 flex-shrink-0" />
+                Estimates & Documents
+              </summary>
+              <div className="px-5 pb-5 text-sm text-gray-600 space-y-3 border-t border-gray-100 pt-4">
+                <p><strong>Creating Estimates:</strong> Go to Estimates, click <strong>+ New Estimate</strong>, select a contact, and add line items. You can use templates to pre-fill common items.</p>
+                <p><strong>Sending:</strong> Click <strong>Send</strong> on an estimate to email it to the customer. They receive a link to view and sign it online — no account needed.</p>
+                <p><strong>Tracking:</strong> When a customer opens the estimate, you get a notification and the status changes to "Viewed." When they sign, status becomes "Accepted" and you get notified again.</p>
+                <p><strong>Documents & Templates:</strong> Create reusable document templates (contracts, change orders, etc.) from the Document Templates section. Templates can be filled per-contact and sent for e-signature.</p>
+                <p><strong>PDF Generation:</strong> All documents and estimates are automatically generated and stored as PDFs when saved or signed.</p>
+                <p><strong>Auto-Save:</strong> When filling out a new estimate, work order, material order, or document template, your progress is automatically saved to your browser. If you close the tab or something crashes, your data will be restored next time you open the form.</p>
+              </div>
+            </details>
+
+            {/* Financial Dashboard */}
+            <details className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <summary className="flex items-center gap-3 p-5 cursor-pointer font-semibold text-gray-800 hover:bg-gray-50 transition-colors">
+                <DollarSign size={18} className="text-green-600 flex-shrink-0" />
+                Financial Dashboard & Analytics
+              </summary>
+              <div className="px-5 pb-5 text-sm text-gray-600 space-y-3 border-t border-gray-100 pt-4">
+                <p><strong>KPI Cards:</strong> The dashboard shows total revenue, total collected, total outstanding, estimates sent, estimates signed, and estimates lost — all calculated from real data.</p>
+                <p><strong>Revenue Tracking:</strong> Revenue is calculated from all contacts in "sold" statuses (signed, in_progress, build_phase, completed, paid, etc.). Lost revenue counts contacts in lost/cancelled statuses.</p>
+                <p><strong>Profit Per Job:</strong> Each project has a Job Costing card showing estimated vs. actual costs, with real-time alerts ("In the RED" vs. "On Track").</p>
+                <p><strong>Reports:</strong> The Reports & Analytics view shows profitability charts, top profitable projects, pipeline conversion rates, and revenue by source.</p>
+                <p><strong>CSV Export:</strong> Click the Export button on the Financial Dashboard to download all metrics as a spreadsheet.</p>
+              </div>
+            </details>
+
+            {/* Work Orders & Material Orders */}
+            <details className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <summary className="flex items-center gap-3 p-5 cursor-pointer font-semibold text-gray-800 hover:bg-gray-50 transition-colors">
+                <Settings size={18} className="text-orange-600 flex-shrink-0" />
+                Work Orders & Material Orders
+              </summary>
+              <div className="px-5 pb-5 text-sm text-gray-600 space-y-3 border-t border-gray-100 pt-4">
+                <p><strong>Work Orders:</strong> Create detailed work orders for jobs, assign them to team members, and track their status. Each work order is linked to a contact/project.</p>
+                <p><strong>Material Orders:</strong> Track material procurement per job with line items, quantities, and costs. Material costs feed into the job costing and profit calculations.</p>
+                <p><strong>Auto-Save:</strong> Both work orders and material orders auto-save your progress while you are filling them out. Drafts are restored automatically if you close the form.</p>
+              </div>
+            </details>
+
+            {/* Automations */}
+            <details className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <summary className="flex items-center gap-3 p-5 cursor-pointer font-semibold text-gray-800 hover:bg-gray-50 transition-colors">
+                <Zap size={18} className="text-purple-600 flex-shrink-0" />
+                Automations
+              </summary>
+              <div className="px-5 pb-5 text-sm text-gray-600 space-y-3 border-t border-gray-100 pt-4">
+                <p><strong>How They Work:</strong> Automations fire when a trigger event occurs (e.g., status change, lead inactive for 48 hours). They can send notifications, emails, update statuses, or reassign contacts.</p>
+                <p><strong>Creating:</strong> Go to Automations, click <strong>+ New Automation</strong>. Choose a trigger event and an action. You can customize the email/notification message body.</p>
+                <p><strong>Stale Lead Detection:</strong> Set up a "Stale Lead Alert" automation with a time threshold (24h, 48h, 72h, 1 week). You will be notified when leads go inactive past the threshold.</p>
+                <p><strong>Pipeline Triggers:</strong> Auto-progression (see Pipeline Triggers tab) handles stage-to-stage movement. Automations handle notifications and side-effects at each stage.</p>
+              </div>
+            </details>
+
+            {/* Communication & Calendar */}
+            <details className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <summary className="flex items-center gap-3 p-5 cursor-pointer font-semibold text-gray-800 hover:bg-gray-50 transition-colors">
+                <Calendar size={18} className="text-cyan-600 flex-shrink-0" />
+                Communication & Calendar
+              </summary>
+              <div className="px-5 pb-5 text-sm text-gray-600 space-y-3 border-t border-gray-100 pt-4">
+                <p><strong>Communication Hub:</strong> View all emails, calls, and notes for all contacts in one timeline. Filter by type or contact.</p>
+                <p><strong>Email:</strong> Send emails directly from a contact's detail page or the Communication Hub. Sent emails are logged to the contact's timeline automatically.</p>
+                <p><strong>Calendar:</strong> Schedule appointments and inspections. When an inspection is scheduled, the contact's pipeline status can auto-advance to "Appointment Set."</p>
+                <p><strong>Notifications:</strong> In-app notifications appear in the bell icon. You also receive email notifications for key events (document signed, estimate viewed, etc.).</p>
+              </div>
+            </details>
+
+            {/* Team & Security */}
+            <details className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <summary className="flex items-center gap-3 p-5 cursor-pointer font-semibold text-gray-800 hover:bg-gray-50 transition-colors">
+                <Users size={18} className="text-indigo-600 flex-shrink-0" />
+                Team & Security
+              </summary>
+              <div className="px-5 pb-5 text-sm text-gray-600 space-y-3 border-t border-gray-100 pt-4">
+                <p><strong>Inviting Team Members:</strong> Go to Team, click <strong>Invite</strong>, enter their email and role. They will receive an email with a link to create their account.</p>
+                <p><strong>Roles:</strong> Owner (full access), Admin (manage team + settings), Sales (contacts + pipeline), and Project Manager (production + work orders).</p>
+                <p><strong>Permissions:</strong> Each role has specific permissions. Only Owners and Admins can access billing, security settings, and team management.</p>
+              </div>
+            </details>
+
+            {/* Tips & Tricks */}
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-100 p-5">
+              <h4 className="font-semibold text-blue-800 mb-3">Tips & Tricks</h4>
+              <ul className="text-sm text-blue-700 space-y-2 list-disc list-inside">
+                <li>Use keyboard shortcut <kbd className="px-1.5 py-0.5 bg-white rounded border text-xs">Ctrl+K</kbd> to open Quick Search from anywhere in the app</li>
+                <li>Drag contacts between pipeline columns to change their status instantly</li>
+                <li>Click a contact's name anywhere in the app to jump to their detail page</li>
+                <li>Set up a "Stale Lead Alert" automation to never miss a follow-up</li>
+                <li>Export financial data to CSV for use in Excel or your accounting software</li>
+                <li>Use the AI Assistant to draft emails, summarize contact history, or get suggestions</li>
+              </ul>
+            </div>
           </div>
         )}
       </div>
