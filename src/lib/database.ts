@@ -674,6 +674,76 @@ class DatabaseService {
     return data;
   }
 
+  async findDuplicateContacts(
+    companyId: string,
+    firstName: string,
+    lastName: string,
+    email?: string,
+    phone?: string
+  ): Promise<DbContact[]> {
+    assertCompanyId(companyId, 'findDuplicateContacts');
+    
+    try {
+      // Search for potential duplicates by name, email, or phone
+      let query = supabase
+        .from('contacts')
+        .select('*')
+        .eq('company_id', companyId)
+        .neq('is_archived', true);
+
+      // Build OR conditions for matching
+      const conditions: string[] = [];
+      
+      // Exact name match (case-insensitive)
+      if (firstName && lastName) {
+        query = query.or(
+          `and(first_name.ilike.${firstName},last_name.ilike.${lastName})`
+        );
+      }
+      
+      // Email match (if provided and not empty)
+      if (email && email.trim() !== '') {
+        const { data: emailMatches } = await supabase
+          .from('contacts')
+          .select('*')
+          .eq('company_id', companyId)
+          .neq('is_archived', true)
+          .ilike('email', email);
+        
+        if (emailMatches && emailMatches.length > 0) {
+          return emailMatches;
+        }
+      }
+      
+      // Phone match (if provided and not empty)
+      if (phone && phone.trim() !== '') {
+        const cleanPhone = phone.replace(/\D/g, ''); // Remove non-digits
+        const { data: phoneMatches } = await supabase
+          .from('contacts')
+          .select('*')
+          .eq('company_id', companyId)
+          .neq('is_archived', true)
+          .or(`phone1.ilike.%${cleanPhone}%,phone2.ilike.%${cleanPhone}%`);
+        
+        if (phoneMatches && phoneMatches.length > 0) {
+          return phoneMatches;
+        }
+      }
+
+      const { data, error } = await query.limit(10);
+      
+      if (error) {
+        console.error('Error finding duplicate contacts:', error);
+        return [];
+      }
+      
+      return data || [];
+    } catch (err) {
+      console.error('findDuplicateContacts failed:', err);
+      return [];
+    }
+  }
+
   async createContact(contact: Partial<DbContact>): Promise<DbContact | null> {
     assertCompanyId(contact.company_id, 'createContact');
     try {

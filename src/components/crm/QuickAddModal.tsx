@@ -2,13 +2,14 @@ import React, { useState } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { supabase } from '@/lib/supabase';
-import { db } from '@/lib/database';
+import { db, type DbContact } from '@/lib/database';
 import { ensureUserHasCompany } from '@/lib/setupCompany';
 import { Contact, defaultLeadSources, CustomerStatus } from '@/lib/crmData';
 import { formatPhoneNumber } from '@/lib/utils';
 import { X, User, Phone, Mail, MapPin, DollarSign, Tag, Shield, Building, Loader2, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
 import { fireAutomationEvent } from '@/lib/automationEngine';
+import DuplicateContactDialog from './DuplicateContactDialog';
 
 type FormStep = 'basic' | 'project' | 'insurance' | 'appointment';
 
@@ -17,6 +18,8 @@ export default function QuickAddModal() {
   const { profile, user } = useAuth();
   const [currentStep, setCurrentStep] = useState<FormStep>('basic');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [duplicates, setDuplicates] = useState<DbContact[]>([]);
+  const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -162,34 +165,57 @@ export default function QuickAddModal() {
     setScheduleAppt(false);
   };
 
-  const handleSubmit = async () => {
-    setIsSubmitting(true);
+  const handleViewContact = (contactId: string) => {
+    // Close dialogs and navigate to contact
+    setShowDuplicateDialog(false);
+    handleClose();
+    dispatch({ type: 'SET_SELECTED_CONTACT', payload: contactId });
+  };
 
+  const handleCreateAnyway = async () => {
+    setShowDuplicateDialog(false);
+    await saveContact(true); // Force create despite duplicates
+  };
+
+  const checkForDuplicates = async (companyId: string): Promise<boolean> => {
     try {
-      // Validate required fields
-      if (!formData.firstName || !formData.lastName || !formData.phone1) {
-        throw new Error('Please fill in all required fields (First Name, Last Name, and Phone)');
-      }
+      const foundDuplicates = await db.findDuplicateContacts(
+        companyId,
+        formData.firstName.trim(),
+        formData.lastName.trim(),
+        formData.email.trim(),
+        formData.phone1.trim()
+      );
 
-      // Validate email format if provided
-      if (formData.email && formData.email.trim() !== '') {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(formData.email)) {
-          throw new Error('Please enter a valid email address');
-        }
+      if (foundDuplicates.length > 0) {
+        setDuplicates(foundDuplicates);
+        setShowDuplicateDialog(true);
+        return true; // Found duplicates
       }
+      return false; // No duplicates
+    } catch (err) {
+      console.error('Error checking for duplicates:', err);
+      return false; // On error, allow creation
+    }
+  };
 
+  const saveContact = async (skipDuplicateCheck = false) => {
+    try {
       // Use company_id from auth profile (preferred) or CRM state (populated by AppLayout).
-      // Both are set before the user can interact, so either should be available.
       const finalCompanyId = profile?.company_id || state.companyId;
 
       if (!finalCompanyId) {
-        // Profile loaded but company_id is genuinely absent — don't hang for 30 s.
-        // Show a clear message so the user can refresh rather than waiting.
         throw new Error('Your account is still loading. Please wait a moment and try again, or refresh the page.');
       }
 
-      // If user has a company, save to database with increased timeout
+      // Check for duplicates unless explicitly skipped
+      if (!skipDuplicateCheck) {
+        const hasDuplicates = await checkForDuplicates(finalCompanyId);
+        if (hasDuplicates) {
+          return; // Stop here, user will choose action from dialog
+        }
+      }
+
       // Ensure contact is always assigned - default to current user if not specified
       const assignedTo = formData.assignedTo || profile?.id || user?.id;
       
@@ -207,7 +233,7 @@ export default function QuickAddModal() {
           zip: formData.zip || undefined,
           status: formData.status,
           lead_source: formData.leadSource,
-          assigned_to: assignedTo, // Always assign to someone
+          assigned_to: assignedTo,
           tags: [],
           project_type: formData.projectType || undefined,
           project_value: formData.projectValue ? parseFloat(formData.projectValue) : undefined,
@@ -221,7 +247,7 @@ export default function QuickAddModal() {
           deductible: formData.deductible ? parseFloat(formData.deductible) : undefined,
           notes: formData.notes || undefined,
         }),
-        45000, // Increased from 15s to 45s for slow connections
+        45000,
         'Create contact'
       );
 
@@ -828,6 +854,15 @@ export default function QuickAddModal() {
           </div>
         </div>
       </div>
+
+      {/* Duplicate Contact Dialog */}
+      <DuplicateContactDialog
+        isOpen={showDuplicateDialog}
+        duplicates={duplicates}
+        onClose={() => setShowDuplicateDialog(false)}
+        onCreateAnyway={handleCreateAnyway}
+        onViewContact={handleViewContact}
+      />
     </div>
   );
 }
