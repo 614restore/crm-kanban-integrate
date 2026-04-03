@@ -41,7 +41,7 @@ import {
   Loader2,
 } from 'lucide-react';
 
-type CommFilter = 'all' | 'email' | 'sms' | 'call' | 'note' | 'insurance';
+type CommFilter = 'all' | 'email' | 'sms' | 'call' | 'note' | 'insurance' | 'activity';
 
 // Communication templates for quick responses
 const communicationTemplates = [
@@ -282,6 +282,7 @@ export default function CommunicationHub() {
   const { state, dispatch } = useCRM();
   const { profile, session } = useAuth();
   const [filter, setFilter] = useState<CommFilter>('all');
+  const [hideAuto, setHideAuto] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedComm, setSelectedComm] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
@@ -340,12 +341,16 @@ export default function CommunicationHub() {
   // Filter communications
   const filteredCommunications = sortedCommunications.filter((comm) => {
     const matchesFilter = filter === 'all' || comm.type === filter;
+    // When hideAuto is on, exclude auto-logged activity notes (but keep if filter is explicitly 'activity')
+    const matchesAutoFilter = filter === 'activity'
+      ? comm.isAuto === true
+      : !hideAuto || !comm.isAuto;
     const matchesSearch =
       searchQuery === '' ||
       comm.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
       getContactFullName(comm.contact).toLowerCase().includes(searchQuery.toLowerCase()) ||
       (comm.subject && comm.subject.toLowerCase().includes(searchQuery.toLowerCase()));
-    return matchesFilter && matchesSearch;
+    return matchesFilter && matchesAutoFilter && matchesSearch;
   });
 
   const getTypeIcon = (type: string) => {
@@ -385,6 +390,7 @@ export default function CommunicationHub() {
     { id: 'call', label: 'Calls', icon: <Phone size={16} /> },
     { id: 'insurance', label: 'Insurance', icon: <Shield size={16} /> },
     { id: 'note', label: 'Notes', icon: <FileText size={16} /> },
+    { id: 'activity', label: 'Activity', icon: <Zap size={16} /> },
   ];
 
   const selectedCommData = selectedComm

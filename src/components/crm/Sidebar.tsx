@@ -109,20 +109,7 @@ export default function Sidebar() {
     }
     try {
       setIsLoadingCompany(true);
-      let company = await db.getCompany(profile.company_id);
-
-      // On page reload the Supabase token may still be refreshing when this
-      // fires, causing the first query to fail silently.  Retry a couple of
-      // times with backoff so the company info still appears without a manual
-      // refresh.
-      if (!company) {
-        for (const delay of [1000, 2000]) {
-          await new Promise(r => setTimeout(r, delay));
-          company = await db.getCompany(profile.company_id);
-          if (company) break;
-        }
-      }
-
+      const company = await db.getCompany(profile.company_id);
       if (!company) {
         console.warn('[Sidebar] No company data returned for ID:', profile.company_id);
         setCompanyName('My Company');

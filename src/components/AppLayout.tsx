@@ -298,7 +298,8 @@ function dbCommunicationToAppCommunication(dbCommunication: any, fallbackUserNam
     content: dbCommunication.content,
     timestamp: dbCommunication.created_at,
     userId: dbCommunication.user_id || '',
-    userName: fallbackUserName,
+    userName: dbCommunication.is_auto ? 'System' : fallbackUserName,
+    isAuto: dbCommunication.is_auto || false,
   };
 }
 

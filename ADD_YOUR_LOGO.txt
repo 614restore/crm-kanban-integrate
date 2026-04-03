@@ -14,7 +14,7 @@ Option A - Drag & Drop (Easiest):
   1. Open Finder
   2. Navigate to: Documents/GitHub/crm-kanban-integrate/public/
   3. Drag your logo file into this folder
-  4. Rename it to: trussctr-logo.png
+                                                                                        4. Rename it to: trussctr-logo.png
 
 Option B - Terminal Command:
   Open Terminal and run:

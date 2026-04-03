@@ -34,7 +34,6 @@ import {
   ArrowUpDown,
   Archive,
   ArchiveRestore,
-  Users,
 } from 'lucide-react';
 
 type SortField = 'name' | 'status' | 'createdAt' | 'projectValue';
@@ -47,8 +46,8 @@ export default function ContactList() {
   const importInputRef = useRef<HTMLInputElement>(null);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
-  const [sortField, setSortField] = useState<SortField>('name');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [sortField, setSortField] = useState<SortField>('createdAt');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [showBulkActions, setShowBulkActions] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [archivedContacts, setArchivedContacts] = useState<Contact[]>([]);
@@ -57,18 +56,9 @@ export default function ContactList() {
   const sortedContacts = [...filteredContacts].sort((a, b) => {
     let comparison = 0;
     switch (sortField) {
-      case 'name': {
-        // Sort by last name first, then first name
-        const aLast = (a.lastName || '').toLowerCase();
-        const bLast = (b.lastName || '').toLowerCase();
-        comparison = aLast.localeCompare(bLast);
-        if (comparison === 0) {
-          const aFirst = (a.firstName || '').toLowerCase();
-          const bFirst = (b.firstName || '').toLowerCase();
-          comparison = aFirst.localeCompare(bFirst);
-        }
+      case 'name':
+        comparison = getContactFullName(a).localeCompare(getContactFullName(b));
         break;
-      }
       case 'status':
         comparison = a.status.localeCompare(b.status);
         break;
@@ -83,95 +73,38 @@ export default function ContactList() {
   });
 
   // Load archived contacts from Supabase
-  const [loadingArchived, setLoadingArchived] = useState(false);
-  const [archiveOperationInProgress, setArchiveOperationInProgress] = useState<string | null>(null);
-
   const loadArchivedContacts = useCallback(async () => {
     if (!profile?.company_id) return;
-    
-    setLoadingArchived(true);
-    try {
-      const { data, error } = await supabase
-        .from('contacts')
-        .select('*')
-        .eq('company_id', profile.company_id)
-        .eq('is_archived', true)
-        .order('archived_at', { ascending: false });
-      
-      if (error) {
-        console.error('Failed to load archived contacts:', error);
-        toast.error('Failed to load archived contacts');
-        return;
-      }
-      
-      if (data) setArchivedContacts(data as unknown as Contact[]);
-    } catch (err) {
-      console.error('Unexpected error loading archived contacts:', err);
-      toast.error('Failed to load archived contacts');
-    } finally {
-      setLoadingArchived(false);
-    }
+    const { data } = await supabase
+      .from('contacts')
+      .select('*')
+      .eq('company_id', profile.company_id)
+      .eq('is_archived', true)
+      .order('archived_at', { ascending: false });
+    if (data) setArchivedContacts(data as unknown as Contact[]);
   }, [profile?.company_id]);
 
   useEffect(() => { if (showArchived) loadArchivedContacts(); }, [showArchived, loadArchivedContacts]);
 
   const handleArchiveContact = async (contactId: string) => {
     if (!confirm('Archive this contact? They will be hidden from the active list but can be restored.')) return;
-    if (archiveOperationInProgress) {
-      toast.error('Another archive operation is in progress');
-      return;
-    }
-    
-    setArchiveOperationInProgress(contactId);
-    try {
-      const { error } = await supabase
-        .from('contacts')
-        .update({ is_archived: true, archived_at: new Date().toISOString() })
-        .eq('id', contactId);
-      
-      if (error) { 
-        console.error('Archive failed:', error);
-        toast.error('Failed to archive contact'); 
-        return; 
-      }
-      
-      dispatch({ type: 'DELETE_CONTACT', payload: contactId });
-      toast.success('Contact archived');
-    } catch (err) {
-      console.error('Unexpected archive error:', err);
-      toast.error('Failed to archive contact');
-    } finally {
-      setArchiveOperationInProgress(null);
-    }
+    const { error } = await supabase
+      .from('contacts')
+      .update({ is_archived: true, archived_at: new Date().toISOString() })
+      .eq('id', contactId);
+    if (error) { toast.error('Failed to archive contact'); return; }
+    dispatch({ type: 'DELETE_CONTACT', payload: contactId });
+    toast.success('Contact archived');
   };
 
   const handleRestoreContact = async (contactId: string) => {
-    if (archiveOperationInProgress) {
-      toast.error('Another restore operation is in progress');
-      return;
-    }
-    
-    setArchiveOperationInProgress(contactId);
-    try {
-      const { error } = await supabase
-        .from('contacts')
-        .update({ is_archived: false, archived_at: null })
-        .eq('id', contactId);
-      
-      if (error) { 
-        console.error('Restore failed:', error);
-        toast.error('Failed to restore contact'); 
-        return; 
-      }
-      
-      setArchivedContacts(prev => prev.filter(c => c.id !== contactId));
-      toast.success('Contact restored — refresh Contacts to see them');
-    } catch (err) {
-      console.error('Unexpected restore error:', err);
-      toast.error('Failed to restore contact');
-    } finally {
-      setArchiveOperationInProgress(null);
-    }
+    const { error } = await supabase
+      .from('contacts')
+      .update({ is_archived: false, archived_at: null })
+      .eq('id', contactId);
+    if (error) { toast.error('Failed to restore contact'); return; }
+    setArchivedContacts(prev => prev.filter(c => c.id !== contactId));
+    toast.success('Contact restored — refresh Contacts to see them');
   };
 
   const handleExportArchived = () => {
@@ -586,28 +519,10 @@ export default function ContactList() {
             {sortedContacts.length === 0 && (
               <div className="p-12 text-center">
                 <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  {state.contacts.length === 0
-                    ? <Users size={24} className="text-gray-400" />
-                    : <Search size={24} className="text-gray-400" />}
+                  <Search size={24} className="text-gray-400" />
                 </div>
-                {state.contacts.length === 0 ? (
-                  <>
-                    <h3 className="text-lg font-medium text-gray-900 mb-1">No contacts yet</h3>
-                    <p className="text-gray-500 mb-4">Add your first contact to get started.</p>
-                    <button
-                      onClick={() => dispatch({ type: 'TOGGLE_QUICK_ADD' })}
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-                    >
-                      <Plus size={16} />
-                      Add First Contact
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <h3 className="text-lg font-medium text-gray-900 mb-1">No contacts found</h3>
-                    <p className="text-gray-500">Try adjusting your search or filter criteria</p>
-                  </>
-                )}
+                <h3 className="text-lg font-medium text-gray-900 mb-1">No contacts found</h3>
+                <p className="text-gray-500">Try adjusting your search or filter criteria</p>
               </div>
             )}
           </div>
