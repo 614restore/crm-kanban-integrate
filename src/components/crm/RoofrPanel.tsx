@@ -1,17 +1,20 @@
 // RoofrPanel — order aerial roof measurement reports via Roofr for a customer
 // property, poll for completion, display measurements inline, and save the
 // report to the customer's document library.
+// ENHANCED: Now includes PDF upload & auto-estimate generation
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Ruler, Loader2, Settings, CheckCircle, AlertTriangle,
-  FileText, Download, RefreshCw, Clock, ExternalLink,
+  FileText, Download, RefreshCw, Clock, ExternalLink, Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { db } from '@/lib/database';
-import { RoofrIntegration, RoofrReport } from '@/lib/integrations/roofr';
+import { RoofrIntegration as RoofrAPI, RoofrReport } from '@/lib/integrations/roofr';
+import { RoofrIntegration as RoofrUploadComponent } from './RoofrIntegration';
 import { uploadDocument } from '@/lib/storage';
 import { Document } from '@/lib/crmData';
+import type { RoofrMeasurements } from '@/lib/roofrParser';
 
 interface Props {
   address: string;
@@ -495,6 +498,56 @@ export default function RoofrPanel({
           {order.status === 'processing' && (
             <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-lg p-3 text-sm text-blue-700">
               <Clock size={16} className="mt-0.5 shrink-0" />
+              Report is processing. This usually takes 24–48 hours. Check back or click <strong>Check Status</strong> to refresh.
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {/* PDF Upload Section */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <Sparkles size={18} className="text-blue-600" />
+              <h4 className="font-semibold text-gray-900">Upload Roofr PDF</h4>
+            </div>
+            <RoofrUploadComponent 
+              contact={{
+                id: contactId,
+                firstName: contactName?.split(' ')[0] || '',
+                lastName: contactName?.split(' ').slice(1).join(' ') || '',
+              } as any}
+              onEstimateGenerated={(lineItems, measurements) => {
+                // Store measurements in order state for display
+                persistOrder({
+                  reportId: `UPLOADED-${Date.now()}`,
+                  address: fullAddress,
+                  reportType: 'premium',
+                  orderedAt: new Date().toISOString(),
+                  status: 'completed',
+                  statusMessage: 'Uploaded from PDF',
+                  measurements: measurements,
+                });
+                toast.success('Measurements extracted! Navigate to Estimates to create a quote.');
+              }}
+            />
+          </div>
+
+          {/* OR Divider */}
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-200"></div>
+            </div>
+            <div className="relative flex justify-center text-xs">
+              <span className="bg-white px-2 text-gray-500">OR</span>
+            </div>
+          </div>
+
+          {/* Order New Report Section */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <Ruler size={18} className="text-green-600" />
+              <h4 className="font-semibold text-gray-900">Order New Report</h4>
+            </div>
               Roofr is processing your report. Most reports complete in 15–30 minutes.
             </div>
           )}
