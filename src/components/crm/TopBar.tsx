@@ -33,9 +33,29 @@ export default function TopBar() {
 
   useEffect(() => {
     if (!state.companyId) return;
-    db.getNotifications(state.companyId).then((rows) => {
+    db.getNotifications(state.companyId).then(async (rows) => {
       const userId = profile?.id;
-      setDbNotifications(rows.filter((n) => !n.user_id || n.user_id === userId));
+      const filtered = rows.filter((n) => !n.user_id || n.user_id === userId);
+
+      // Auto-dismiss stale "unassigned_contacts" notifications if all contacts are now assigned
+      const staleUnassigned = filtered.filter((n) => n.related_type === 'unassigned_contacts' && !n.read);
+      if (staleUnassigned.length > 0) {
+        const contacts = await db.getContacts(state.companyId!);
+        const stillUnassigned = contacts.filter(
+          (c) => !['won', 'lost', 'closed', 'completed'].includes((c.status || '').toLowerCase())
+            && (!c.assigned_to || c.assigned_to === '')
+        );
+        if (stillUnassigned.length === 0) {
+          // All contacts are assigned — dismiss stale notifications silently
+          await Promise.all(staleUnassigned.map((n) => db.markNotificationRead(n.id)));
+          setDbNotifications(filtered.map((n) =>
+            n.related_type === 'unassigned_contacts' ? { ...n, read: true } : n
+          ));
+          return;
+        }
+      }
+
+      setDbNotifications(filtered);
     });
   }, [state.companyId, profile?.id]);
 

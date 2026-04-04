@@ -312,27 +312,43 @@ export async function detectAndNotifyUnassignedContacts(companyId: string): Prom
       return !contact.assigned_to || contact.assigned_to === '';
     });
     
+    // Dismiss any stale unassigned-contacts notifications if all are now assigned
     if (unassignedContacts.length === 0) {
-      console.log('[UnassignedContacts] No unassigned contacts found');
+      console.log('[UnassignedContacts] No unassigned contacts found — dismissing stale notifications');
+      const { error: notifError } = await supabase
+        .from('notifications')
+        .update({ read: true, updated_at: new Date().toISOString() })
+        .eq('company_id', companyId)
+        .eq('related_type', 'unassigned_contacts')
+        .eq('read', false);
+      if (notifError) console.warn('[UnassignedContacts] Could not dismiss old notifications:', notifError.message);
       return { unassignedCount: 0, notified: false };
     }
-    
+
     console.log(`[UnassignedContacts] Found ${unassignedContacts.length} unassigned contact(s)`);
-    
+
     // Get all owners/admins for the company
     const teamMembers = await db.getTeamMembers(companyId);
-    const admins = teamMembers.filter(tm => 
-      tm.role === 'owner' || 
-      tm.role === 'admin' || 
+    const admins = teamMembers.filter(tm =>
+      tm.role === 'owner' ||
+      tm.role === 'admin' ||
       tm.role === 'manager'
     );
-    
+
     if (admins.length === 0) {
       console.warn('[UnassignedContacts] No admins found to notify');
       return { unassignedCount: unassignedContacts.length, notified: false };
     }
-    
-    // Create notification for each admin
+
+    // Delete any existing unread unassigned-contacts notifications first to avoid duplicates
+    await supabase
+      .from('notifications')
+      .delete()
+      .eq('company_id', companyId)
+      .eq('related_type', 'unassigned_contacts')
+      .eq('read', false);
+
+    // Create one fresh notification per admin
     for (const admin of admins) {
       await db.createNotification({
         company_id: companyId,
