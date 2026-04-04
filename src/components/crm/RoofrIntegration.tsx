@@ -4,7 +4,7 @@
 import React, { useState } from 'react';
 import { toast } from 'sonner';
 import { FileUp, Loader2, CheckCircle, AlertCircle, FileText, Download } from 'lucide-react';
-import { parseRoofrPDF, validateMeasurements, type RoofrMeasurements } from '@/lib/roofrParser';
+import type { RoofrMeasurements } from '@/lib/roofrParser';
 import { generateEstimateFromMeasurements, generateEstimateSummary, formatEstimateForCustomer } from '@/lib/roofrEstimateGenerator';
 import { Contact } from '@/lib/crmData';
 
@@ -32,7 +32,8 @@ export function RoofrIntegration({ contact, onEstimateGenerated }: RoofrIntegrat
     toast.info('Parsing Roofr measurement report...');
 
     try {
-      // Step 1: Parse PDF
+      // Step 1: Parse PDF — lazy-load pdfjs-dist so it doesn't block app startup
+      const { parseRoofrPDF, validateMeasurements } = await import('@/lib/roofrParser');
       const parsedMeasurements = await parseRoofrPDF(file);
       setMeasurements(parsedMeasurements);
 
