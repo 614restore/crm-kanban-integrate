@@ -3,13 +3,10 @@
 // Built against real Roofr PDF format (verified Apr 2026)
 
 import * as pdfjsLib from 'pdfjs-dist';
-// Use Vite's new URL() pattern to bundle the ESM worker as an asset.
-// pdfjs v4 ships pdf.worker.min.mjs (ES module) — must use .mjs, not .js.
+// Serve the pdfjs v4 ESM worker from public/ — no CDN, no Vite bundling, no MIME issues.
+// The file is committed at public/pdf.worker.min.mjs (pdfjs-dist 4.2.67).
 if (typeof window !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-    'pdfjs-dist/build/pdf.worker.min.mjs',
-    import.meta.url
-  ).toString();
+  pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 }
 
 export interface RoofrMeasurements {
