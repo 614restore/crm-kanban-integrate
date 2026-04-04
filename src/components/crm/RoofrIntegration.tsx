@@ -1,0 +1,387 @@
+// Roofr Integration Component
+// Handles PDF upload, measurement parsing, and estimate generation
+
+import React, { useState } from 'react';
+import { toast } from 'sonner';
+import { FileUp, Loader2, CheckCircle, AlertCircle, FileText, Download } from 'lucide-react';
+import type { RoofrMeasurements, MultiStructureResult, StructureMeasurements } from '@/lib/roofrParser';
+import { generateEstimateFromMeasurements, generateEstimateSummary, formatEstimateForCustomer } from '@/lib/roofrEstimateGenerator';
+import { Contact } from '@/lib/crmData';
+
+interface RoofrIntegrationProps {
+  contact: Contact;
+  onEstimateGenerated?: (lineItems: any[], measurements: RoofrMeasurements, multiStructureResult?: MultiStructureResult) => void;
+}
+
+export function RoofrIntegration({ contact, onEstimateGenerated }: RoofrIntegrationProps) {
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [measurements, setMeasurements] = useState<RoofrMeasurements | null>(null);
+  const [multiStructureResult, setMultiStructureResult] = useState<MultiStructureResult | null>(null);
+  const [selectedStructure, setSelectedStructure] = useState<number>(0); // 0 = combined, 1+ = individual structures
+  const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
+  const [estimateSummary, setEstimateSummary] = useState<any>(null);
+  
+  // Detect mobile devices - PDF.js doesn't work reliably on iOS
+  const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'application/pdf') {
+      toast.error('Please upload a PDF file');
+      return;
+    }
+
+    setIsProcessing(true);
+    toast.info('Parsing Roofr measurement report...');
+    setMeasurements(null);
+    setMultiStructureResult(null);
+    setSelectedStructure(0);
+    setValidationWarnings([]);
+    setEstimateSummary(null);
+
+    try {
+      // Step 1: Parse PDF with multi-structure support
+      const { parseRoofrPDFWithStructures, validateMeasurements } = await import('@/lib/roofrParser');
+      const result = await parseRoofrPDFWithStructures(file);
+      
+      // Store full result
+      setMultiStructureResult(result);
+      setMeasurements(result.combinedMeasurements);
+
+      // Step 2: Validate measurements
+      const validation = validateMeasurements(result.combinedMeasurements);
+      setValidationWarnings(validation.warnings);
+
+      if (validation.warnings.length > 0) {
+        toast.warning('Measurements extracted with warnings - please review');
+      } else if (result.hasMultipleStructures) {
+        toast.success(`Found ${result.structures.length} structures! Use selector to view each.`);
+      } else {
+        toast.success('Measurements extracted successfully!');
+      }
+
+      // Step 3: Generate estimate from combined measurements
+      const lineItems = generateEstimateFromMeasurements(result.combinedMeasurements);
+      const summary = generateEstimateSummary(result.combinedMeasurements, lineItems);
+      setEstimateSummary(summary);
+
+      // Step 4: Notify parent component — pass full multi-structure result so
+      // the parent can store per-structure measurements instead of combined only
+      if (onEstimateGenerated) {
+        onEstimateGenerated(
+          lineItems,
+          result.combinedMeasurements,
+          result.hasMultipleStructures ? result : undefined,
+        );
+      }
+
+      toast.success(`Estimate generated: $${summary.totalCost.toLocaleString()}`);
+    } catch (error) {
+      console.error('Failed to process Roofr PDF:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to parse PDF');
+    } finally {
+      setIsProcessing(false);
+      // Reset file input
+      event.target.value = '';
+    }
+  };
+
+  const handleStructureChange = (structureIndex: number) => {
+    if (!multiStructureResult) return;
+    
+    setSelectedStructure(structureIndex);
+    
+    // Update measurements based on selection
+    if (structureIndex === 0) {
+      // Combined view
+      setMeasurements(multiStructureResult.combinedMeasurements);
+      const estimate = generateEstimateFromMeasurements(multiStructureResult.combinedMeasurements);
+      const summary = generateEstimateSummary(multiStructureResult.combinedMeasurements, estimate);
+      setEstimateSummary(summary);
+    } else {
+      // Individual structure
+      const structure = multiStructureResult.structures[structureIndex - 1];
+      setMeasurements(structure.measurements);
+      const estimate = generateEstimateFromMeasurements(structure.measurements);
+      const summary = generateEstimateSummary(structure.measurements, estimate);
+      setEstimateSummary(summary);
+    }
+  };
+
+  const downloadEstimate = () => {
+    if (!measurements || !estimateSummary) return;
+
+    const lineItems = generateEstimateFromMeasurements(measurements);
+    const formatted = formatEstimateForCustomer(lineItems, true);
+
+    const blob = new Blob([formatted], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `estimate-${contact.firstName}-${contact.lastName}-${new Date().toISOString().split('T')[0]}.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    toast.success('Estimate downloaded');
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Mobile Notice or Upload Section */}
+      {isMobile ? (
+        <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 bg-gray-50">
+          <div className="flex flex-col items-center gap-3 text-center">
+            <FileUp className="w-8 h-8 text-gray-400" />
+            <div>
+              <h3 className="font-semibold text-gray-900">PDF Upload Available on Desktop</h3>
+              <p className="text-sm text-gray-500 mt-1">
+                Upload Roofr PDFs from your computer or use the "Order New Report" option below
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 hover:border-blue-400 transition-colors">
+          <div className="flex flex-col items-center gap-3">
+            <FileUp className="w-8 h-8 text-gray-400" />
+            <div className="text-center">
+              <h3 className="font-semibold text-gray-900">Upload Roofr Measurement Report</h3>
+              <p className="text-sm text-gray-500 mt-1">
+                Upload a PDF to auto-generate an estimate
+              </p>
+            </div>
+            
+            <label className="relative cursor-pointer">
+              <input
+                type="file"
+                accept=".pdf"
+                onChange={handleFileUpload}
+                disabled={isProcessing}
+                className="hidden"
+              />
+              <div className={`
+                px-4 py-2 rounded-lg font-medium transition-colors
+                ${isProcessing 
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                  : 'bg-blue-600 text-white hover:bg-blue-700'
+                }
+              `}>
+                {isProcessing ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Processing...
+                  </span>
+                ) : (
+                  'Select PDF File'
+                )}
+              </div>
+            </label>
+          </div>
+        </div>
+      )}
+
+      {/* Validation Warnings */}
+      {validationWarnings.length > 0 && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <h4 className="font-medium text-yellow-900">Validation Warnings</h4>
+              <ul className="mt-2 space-y-1 text-sm text-yellow-800">
+                {validationWarnings.map((warning, index) => (
+                  <li key={index}>• {warning}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Structure Selector - shown when multiple structures detected */}
+      {multiStructureResult && multiStructureResult.hasMultipleStructures && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <div className="flex-1">
+              <h4 className="font-semibold text-blue-900 mb-2">
+                Multiple Structures Detected! 🏘️
+              </h4>
+              <p className="text-sm text-blue-700 mb-3">
+                This PDF contains {multiStructureResult.structures.length} structures. 
+                Select which one to view or use "All Combined" for total.
+              </p>
+              
+              {/* Structure Selector Dropdown */}
+              <select
+                value={selectedStructure}
+                onChange={(e) => handleStructureChange(Number(e.target.value))}
+                className="w-full px-3 py-2 border border-blue-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value={0}>
+                  All Combined ({multiStructureResult.combinedMeasurements.totalSquares.toFixed(1)} sq)
+                </option>
+                {multiStructureResult.structures.map((structure, index) => (
+                  <option key={index + 1} value={index + 1}>
+                    {structure.structureName} ({structure.measurements.totalSquares.toFixed(1)} sq)
+                  </option>
+                ))}
+              </select>
+              
+              {selectedStructure > 0 && (
+                <p className="text-xs text-blue-600 mt-2">
+                  💡 Viewing: {multiStructureResult.structures[selectedStructure - 1].structureName}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Measurements Display */}
+      {measurements && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <h4 className="font-medium text-green-900">Measurements Extracted</h4>
+              <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                <div>
+                  <span className="text-gray-600">Total Squares:</span>
+                  <span className="ml-2 font-medium text-gray-900">
+                    {measurements.totalSquares.toFixed(1)} SQ
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Square Feet:</span>
+                  <span className="ml-2 font-medium text-gray-900">
+                    {measurements.totalSqFt.toLocaleString()} sq ft
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Ridge Length:</span>
+                  <span className="ml-2 font-medium text-gray-900">
+                    {measurements.ridgeLength > 0 ? `${measurements.ridgeLength.toFixed(0)} LF` : '—'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Valley Length:</span>
+                  <span className="ml-2 font-medium text-gray-900">
+                    {measurements.valleyLength > 0 ? `${measurements.valleyLength.toFixed(0)} LF` : '—'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Hip Length:</span>
+                  <span className="ml-2 font-medium text-gray-900">
+                    {measurements.hipLength > 0 ? `${measurements.hipLength.toFixed(0)} LF` : '—'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Eave Length:</span>
+                  <span className="ml-2 font-medium text-gray-900">
+                    {measurements.eaveLength > 0 ? `${measurements.eaveLength.toFixed(0)} LF` : '—'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Rake Length:</span>
+                  <span className="ml-2 font-medium text-gray-900">
+                    {measurements.rakeLength > 0 ? `${measurements.rakeLength.toFixed(0)} LF` : '—'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Pitch:</span>
+                  <span className="ml-2 font-medium text-gray-900">
+                    {measurements.predominantPitch}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Facets:</span>
+                  <span className="ml-2 font-medium text-gray-900">
+                    {measurements.facetCount > 0 ? measurements.facetCount : '—'}
+                  </span>
+                </div>
+                {measurements.address && (
+                  <div className="col-span-2">
+                    <span className="text-gray-600">Address:</span>
+                    <span className="ml-2 font-medium text-gray-900">
+                      {measurements.address}
+                    </span>
+                  </div>
+                )}
+              </div>
+              
+              {/* Note about console logs for debugging */}
+              <div className="mt-3 pt-3 border-t border-green-200">
+                <p className="text-xs text-green-700">
+                  💡 <strong>Tip:</strong> Open browser console (F12) to see detailed extraction logs if values are missing.
+                </p>
+                {!multiStructureResult?.hasMultipleStructures && (
+                  <p className="text-xs text-green-700 mt-1">
+                    📋 <strong>Multiple structures in PDF?</strong> The system will automatically detect and separate them!
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Estimate Summary */}
+      {estimateSummary && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-start justify-between">
+            <div className="flex items-start gap-3 flex-1">
+              <FileText className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <h4 className="font-medium text-blue-900">Estimate Generated</h4>
+                <div className="mt-3 space-y-2 text-sm">
+                  <div>
+                    <span className="text-gray-600">Roof Size:</span>
+                    <span className="ml-2 font-medium text-gray-900">
+                      {estimateSummary.roofSize}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Complexity:</span>
+                    <span className="ml-2 font-medium text-gray-900">
+                      {estimateSummary.complexity}
+                    </span>
+                  </div>
+                  <div className="pt-2 border-t border-blue-200">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Materials:</span>
+                      <span className="font-medium text-gray-900">
+                        ${estimateSummary.materialsCost.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between mt-1">
+                      <span className="text-gray-600">Labor:</span>
+                      <span className="font-medium text-gray-900">
+                        ${estimateSummary.laborCost.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between mt-2 pt-2 border-t border-blue-300">
+                      <span className="font-semibold text-blue-900">Total:</span>
+                      <span className="font-semibold text-blue-900 text-lg">
+                        ${estimateSummary.totalCost.toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={downloadEstimate}
+              className="ml-4 p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
+              title="Download estimate"
+            >
+              <Download className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
