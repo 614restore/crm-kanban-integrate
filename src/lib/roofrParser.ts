@@ -2,11 +2,10 @@
 // Extracts roof measurements from Roofr measurement report PDFs
 
 import * as pdfjsLib from 'pdfjs-dist';
-// Bundle the worker locally — avoids CDN CORS/MIME failures entirely
-import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.js?url';
-
+// Worker is copied to public/ via the prebuild npm script.
+// This avoids CDN CORS/MIME failures and Rollup node_modules ?url limitations.
 if (typeof window !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+  pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
 }
 
 export interface RoofrMeasurements {
