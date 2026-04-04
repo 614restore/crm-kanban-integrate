@@ -5,6 +5,7 @@ import { useCRM, useFilteredContacts } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { toast } from 'sonner';
 import { exportContactsToExcel } from '@/lib/exportUtils';
+import { offlineCache } from '@/lib/offlineCache';
 import {
   Contact,
   statusLabels,

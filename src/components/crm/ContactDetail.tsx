@@ -1095,13 +1095,13 @@ export default function ContactDetail() {
                   >
                     {statusLabels[contact.status]}
                   </span>
-                  {contact.inspectionCompleted && (
+                  {(contact.inspectionCompleted ?? (contact as any).inspection_completed) && (
                     <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium flex items-center gap-1">
                       <CheckCircle size={14} />
                       Inspection Complete
                     </span>
                   )}
-                  {contact.inspectionScheduled && !contact.inspectionCompleted && (
+                  {(contact.inspectionScheduled ?? (contact as any).inspection_scheduled) && !(contact.inspectionCompleted ?? (contact as any).inspection_completed) && (
                     <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-medium flex items-center gap-1">
                       <Clock size={14} />
                       Inspection Scheduled
@@ -1193,6 +1193,36 @@ export default function ContactDetail() {
               <div className="bg-white rounded-xl border border-gray-200 p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Contact Information</h3>
                 <div className="grid grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-500 mb-1">First Name</label>
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        value={currentData.firstName || ''}
+                        onChange={(e) =>
+                          setEditedContact({ ...currentData, firstName: e.target.value })
+                        }
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                      />
+                    ) : (
+                      <span className="text-gray-900">{contact.firstName || '-'}</span>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-500 mb-1">Last Name</label>
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        value={currentData.lastName || ''}
+                        onChange={(e) =>
+                          setEditedContact({ ...currentData, lastName: e.target.value })
+                        }
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                      />
+                    ) : (
+                      <span className="text-gray-900">{contact.lastName || '-'}</span>
+                    )}
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-500 mb-1">Email</label>
                     {isEditing ? (
@@ -1597,8 +1627,8 @@ export default function ContactDetail() {
               {/* Pipeline Stage Tracker */}
               <PipelineStageTracker
                 currentStatus={contact.status}
-                statusChangedAt={contact.statusChangedAt}
-                inspectionCompleted={contact.inspectionCompleted}
+                statusChangedAt={contact.statusChangedAt ?? (contact as any).status_changed_at}
+                inspectionCompleted={contact.inspectionCompleted ?? (contact as any).inspection_completed}
               />
 
               {/* Project Pricing Card */}

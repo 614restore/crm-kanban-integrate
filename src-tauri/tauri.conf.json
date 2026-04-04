@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "TrussCTR",
+  "productName": "614restore-crm",
   "version": "0.1.0",
-  "identifier": "com.trussctr.app",
+  "identifier": "com.614restore.crm",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:8080",
@@ -12,18 +12,15 @@
   "app": {
     "windows": [
       {
-        "title": "TrussCTR — Contractor CRM",
+        "title": "614restore-crm",
         "width": 1400,
         "height": 900,
-        "minWidth": 1024,
-        "minHeight": 768,
         "resizable": true,
-        "fullscreen": false,
-        "center": true
+        "fullscreen": false
       }
     ],
     "security": {
-      "csp": "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://cdnjs.cloudflare.com https://*.stripe.com; img-src 'self' data: blob: https:; media-src 'self' blob: https:; font-src 'self' data: https:; frame-src https:;"
+      "csp": "default-src 'self'; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://checkout.stripe.com; img-src 'self' data: blob: https:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
     }
   },
   "bundle": {

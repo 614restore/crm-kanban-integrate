@@ -86,10 +86,11 @@ const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({ contact, jobs = [
   };
 
   const handleStageClick = (status: CustomerStatus, index: number) => {
-    // Only allow reverting to past stages
     if (index < currentStatusIndex) {
       setRevertTargetStage(status);
       setShowRevertModal(true);
+    } else if (index > currentStatusIndex && onStatusChange) {
+      onStatusChange(status);
     }
   };
 
@@ -180,9 +181,12 @@ const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({ contact, jobs = [
                 )}
                 
                 {/* Step Item */}
-                <div className="flex items-start gap-4 pb-8">
+                <div
+                  className={`flex items-start gap-4 pb-8 ${index > currentStatusIndex && onStatusChange ? 'cursor-pointer hover:opacity-80' : ''}`}
+                  onClick={() => handleStageClick(step.status, index)}
+                >
                   {/* Icon */}
-                  <div 
+                  <div
                     className={`w-12 h-12 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${getStatusColor(index)}`}
                   >
                     {isCompleted ? (
