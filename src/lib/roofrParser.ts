@@ -6,7 +6,8 @@ import * as pdfjsLib from 'pdfjs-dist';
 // Configure worker — use CDN for reliability in production
 if (typeof window !== 'undefined') {
   // Use the same version as installed package (3.11.174)
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.mjs`;
+  // Use .js instead of .mjs to avoid module import errors
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js`;
 }
 
 export interface RoofrMeasurements {
