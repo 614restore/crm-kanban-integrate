@@ -685,7 +685,12 @@ export default function ContactDetail() {
   };
 
   const handleEdit = () => {
-    setEditedContact({ ...contact });
+    // Explicitly copy all fields including firstName/lastName to ensure they're editable
+    setEditedContact({
+      ...contact,
+      firstName: contact.firstName || '',
+      lastName: contact.lastName || '',
+    });
     setIsEditing(true);
   };
 

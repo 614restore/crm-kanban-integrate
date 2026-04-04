@@ -18,6 +18,9 @@ export function RoofrIntegration({ contact, onEstimateGenerated }: RoofrIntegrat
   const [measurements, setMeasurements] = useState<RoofrMeasurements | null>(null);
   const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
   const [estimateSummary, setEstimateSummary] = useState<any>(null);
+  
+  // Detect mobile devices - PDF.js doesn't work reliably on iOS
+  const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -89,44 +92,58 @@ export function RoofrIntegration({ contact, onEstimateGenerated }: RoofrIntegrat
 
   return (
     <div className="space-y-4">
-      {/* Upload Section */}
-      <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 hover:border-blue-400 transition-colors">
-        <div className="flex flex-col items-center gap-3">
-          <FileUp className="w-8 h-8 text-gray-400" />
-          <div className="text-center">
-            <h3 className="font-semibold text-gray-900">Upload Roofr Measurement Report</h3>
-            <p className="text-sm text-gray-500 mt-1">
-              Upload a PDF to auto-generate an estimate
-            </p>
-          </div>
-          
-          <label className="relative cursor-pointer">
-            <input
-              type="file"
-              accept=".pdf"
-              onChange={handleFileUpload}
-              disabled={isProcessing}
-              className="hidden"
-            />
-            <div className={`
-              px-4 py-2 rounded-lg font-medium transition-colors
-              ${isProcessing 
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-                : 'bg-blue-600 text-white hover:bg-blue-700'
-              }
-            `}>
-              {isProcessing ? (
-                <span className="flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Processing...
-                </span>
-              ) : (
-                'Select PDF File'
-              )}
+      {/* Mobile Notice or Upload Section */}
+      {isMobile ? (
+        <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 bg-gray-50">
+          <div className="flex flex-col items-center gap-3 text-center">
+            <FileUp className="w-8 h-8 text-gray-400" />
+            <div>
+              <h3 className="font-semibold text-gray-900">PDF Upload Available on Desktop</h3>
+              <p className="text-sm text-gray-500 mt-1">
+                Upload Roofr PDFs from your computer or use the "Order New Report" option below
+              </p>
             </div>
-          </label>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 hover:border-blue-400 transition-colors">
+          <div className="flex flex-col items-center gap-3">
+            <FileUp className="w-8 h-8 text-gray-400" />
+            <div className="text-center">
+              <h3 className="font-semibold text-gray-900">Upload Roofr Measurement Report</h3>
+              <p className="text-sm text-gray-500 mt-1">
+                Upload a PDF to auto-generate an estimate
+              </p>
+            </div>
+            
+            <label className="relative cursor-pointer">
+              <input
+                type="file"
+                accept=".pdf"
+                onChange={handleFileUpload}
+                disabled={isProcessing}
+                className="hidden"
+              />
+              <div className={`
+                px-4 py-2 rounded-lg font-medium transition-colors
+                ${isProcessing 
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                  : 'bg-blue-600 text-white hover:bg-blue-700'
+                }
+              `}>
+                {isProcessing ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Processing...
+                  </span>
+                ) : (
+                  'Select PDF File'
+                )}
+              </div>
+            </label>
+          </div>
+        </div>
+      )}
 
       {/* Validation Warnings */}
       {validationWarnings.length > 0 && (
