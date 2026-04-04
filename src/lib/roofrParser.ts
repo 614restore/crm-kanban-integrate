@@ -315,17 +315,25 @@ function detectStructures(fullText: string): StructureBlock[] {
     /(primary|secondary|additional)\s+structure/gi
   ];
   
-  // Try to find structure markers
+  // Try to find structure markers.
+  // Deduplicate by canonical name so that a label like "Structure 1" appearing
+  // many times in measurement rows only produces ONE split point (its first occurrence).
   let foundMarkers: Array<{ index: number; name: string }> = [];
-  
+
   for (const pattern of structurePatterns) {
     const matches = [...fullText.matchAll(pattern)];
-    if (matches.length > 1) {
-      // Found multiple structures!
-      foundMarkers = matches.map(match => ({
-        index: match.index || 0,
-        name: match[0]
-      }));
+    const seen = new Set<string>();
+    const unique: Array<{ index: number; name: string }> = [];
+    for (const match of matches) {
+      const key = match[0].trim().toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        unique.push({ index: match.index ?? 0, name: match[0] });
+      }
+    }
+    if (unique.length > 1) {
+      // Found multiple distinct structure headers
+      foundMarkers = unique;
       console.log(`[RoofrParser] Found ${foundMarkers.length} structure markers:`, foundMarkers.map(m => m.name));
       break;
     }
