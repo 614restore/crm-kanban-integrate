@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from '@/lib/authContext';
 import { PermissionProvider } from '@/lib/permissions/PermissionProvider';
 import { db, DbCompany } from '@/lib/database';
 import { supabase } from '@/lib/supabase';
+import { toast } from 'sonner';
 import {
   defaultBoards,
   defaultLeadSources,
@@ -28,7 +29,7 @@ import QuickAddModal from './crm/QuickAddModal';
 import InvoiceModal from './crm/InvoiceModal';
 import ResponsiveLayout from './mobile/ResponsiveLayout';
 import { useIsMobile } from '@/hooks/useMediaQuery';
-import { Building2, Loader2, Zap, X, Tag } from 'lucide-react';
+import { Building2, Loader2, Zap, X, Tag, WifiOff } from 'lucide-react';
 
 // Lazy load all CRM view components for better code splitting
 const Dashboard = lazy(() => import('./crm/Dashboard'));
@@ -59,7 +60,7 @@ const CommissionPayrollView = lazy(() => import('./crm/CommissionPayrollView'));
 
 // --- LocalStorage data cache (stale-while-revalidate) ---
 const DATA_CACHE_KEY = 'crm_app_data_v1';
-const DATA_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours — cache survives page refreshes throughout the day
+const DATA_CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days — cache persists even with infrequent usage
 
 function readDataCache(companyId: string): Record<string, unknown> | null {
   try {
@@ -454,11 +455,35 @@ function TrialBanner({ companyId }: { companyId: string | null }) {
   return null;
 }
 
+// Connection status banner shown when WebSocket fails
+function ConnectionStatusBanner({ show, onDismiss }: { show: boolean; onDismiss: () => void }) {
+  if (!show) return null;
+
+  return (
+    <div className="flex items-center justify-between gap-3 bg-orange-600 px-4 py-2 text-sm text-white">
+      <div className="flex items-center gap-2 min-w-0">
+        <WifiOff className="w-4 h-4 flex-shrink-0" />
+        <span className="truncate">
+          <strong>Connection unstable</strong> — Using offline mode with auto-sync every 20 seconds. Your data is safe.
+        </span>
+      </div>
+      <button
+        onClick={onDismiss}
+        className="flex-shrink-0 p-1 rounded hover:bg-white/20 transition-colors"
+        aria-label="Dismiss"
+      >
+        <X className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+}
+
 // CRM App (authenticated view)
 function CRMApp() {
   const { profile, user, loading: authLoading } = useAuth();
   const [state, dispatch] = useReducer(crmReducer, initialState);
   const [subscriptionBlocked, setSubscriptionBlocked] = useState(false);
+  const [connectionUnstable, setConnectionUnstable] = useState(false);
   useEffect(() => {
     try { localStorage.setItem('crm_current_view', state.currentView); } catch (e) { console.warn('[AppLayout] localStorage write failed (private browsing?):', e); }
   }, [state.currentView]);
@@ -470,7 +495,8 @@ function CRMApp() {
 
   // Race a DB fetch against a per-query timeout; resolves to fallback on timeout instead of
   // blocking the whole Promise.all. Prevents a single slow Supabase query from stalling the UI.
-  const withFetchTimeout = <T,>(p: Promise<T>, fallback: T, ms = 7000): Promise<T> =>
+  // Increased from 7s to 12s to handle Supabase cold starts better.
+  const withFetchTimeout = <T,>(p: Promise<T>, fallback: T, ms = 12000): Promise<T> =>
     Promise.race([p, new Promise<T>(resolve => setTimeout(() => resolve(fallback), ms))]);
 
   // Load data from database
@@ -817,6 +843,13 @@ function CRMApp() {
         freshPayload.estimates.length + freshPayload.workOrders.length;
       if (loadedFromCache && totalEntities === 0) {
         console.warn('[loadData] Fresh fetch returned empty — keeping cached data to avoid data loss.');
+        if (!silent) {
+          // Show warning banner that we're using cached data
+          toast.warning('Using cached data - connection issues detected', {
+            description: 'Your data is safe. We\'ll keep trying to reconnect.',
+            duration: 5000,
+          });
+        }
         return;
       }
 
@@ -827,28 +860,56 @@ function CRMApp() {
 
     } catch (error) {
       console.error('Error loading CRM data:', error);
-      // If we already showed cached data, leave it intact — showing empty state
-      // after a failed refresh would wipe out data the user can see perfectly well.
+      // NEVER show empty state if we have cached data — always preserve user's data
       if (!loadedFromCache) {
-        dispatch({
-          type: 'INITIALIZE_DATA',
-          payload: {
-            contacts: [],
-            appointments: [],
-            invoices: [],
-            boards: defaultBoards,
-            leadSources: defaultLeadSources,
-            automations: [],
-            teamMembers: [],
-            suppliers: [],
-            materialOrders: [],
-            estimates: [],
-            projects: [],
-            workOrders: [],
-            documentTemplates: [],
-            companyGoals: [],
-          },
-        });
+        // Last resort: try one more time to read from cache
+        const emergencyCache = readDataCache(profile.company_id);
+        if (emergencyCache) {
+          console.warn('[loadData] Using emergency cache fallback after error');
+          dispatch({ type: 'INITIALIZE_DATA', payload: emergencyCache as any });
+          if (!silent) {
+            toast.error('Connection error - showing saved data', {
+              description: 'Check your internet connection. Your data is safe.',
+              duration: 8000,
+            });
+          }
+        } else {
+          // Truly no data anywhere - show empty state but warn user
+          dispatch({
+            type: 'INITIALIZE_DATA',
+            payload: {
+              contacts: [],
+              appointments: [],
+              invoices: [],
+              boards: defaultBoards,
+              leadSources: defaultLeadSources,
+              automations: [],
+              teamMembers: [],
+              suppliers: [],
+              materialOrders: [],
+              estimates: [],
+              projects: [],
+              workOrders: [],
+              documentTemplates: [],
+              companyGoals: [],
+            },
+          });
+          if (!silent) {
+            toast.error('Unable to load data', {
+              description: 'Check your connection and try refreshing the page.',
+              duration: 10000,
+            });
+          }
+        }
+      } else {
+        // We already showed cached data - just log the error silently
+        console.warn('[loadData] Fresh fetch failed but cached data already displayed');
+        if (!silent) {
+          toast.warning('Connection issues detected', {
+            description: 'Using cached data. Will retry automatically.',
+            duration: 4000,
+          });
+        }
       }
     }
   }, [profile?.company_id, authLoading]);
@@ -926,7 +987,13 @@ function CRMApp() {
       onStatusChange: (status, error) => {
         if ((status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') && !realtimeFailedRef.current) {
           realtimeFailedRef.current = true;
+          setConnectionUnstable(true);
           console.warn('Realtime unavailable; continuing with periodic reload fallback.', { status, error });
+          // Show user-facing notification
+          toast.warning('Connection unstable', {
+            description: 'Using offline mode with automatic sync every 20 seconds.',
+            duration: 6000,
+          });
           // Remove the channel entirely to stop Supabase from retrying the WebSocket connection.
           if (realtimeChannelRef.current) {
             db.unsubscribe(realtimeChannelRef.current);
@@ -934,6 +1001,13 @@ function CRMApp() {
           }
         } else if (status === 'SUBSCRIBED') {
           realtimeFailedRef.current = false;
+          if (connectionUnstable) {
+            setConnectionUnstable(false);
+            toast.success('Connection restored', {
+              description: 'Real-time updates are working again.',
+              duration: 3000,
+            });
+          }
         }
       },
     });
@@ -1204,6 +1278,12 @@ useEffect(() => {
           <div className="hidden md:block">
             <TopBar />
           </div>
+
+          {/* Connection status banner (shown when WebSocket fails) */}
+          <ConnectionStatusBanner 
+            show={connectionUnstable} 
+            onDismiss={() => setConnectionUnstable(false)} 
+          />
 
           {/* Trial banner (shown when trial ends within 7 days) */}
           <TrialBanner companyId={profile?.company_id ?? state.companyId ?? null} />
