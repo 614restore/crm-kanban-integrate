@@ -1,5 +1,6 @@
 // Roofr PDF Parser
 // Extracts roof measurements from Roofr measurement report PDFs
+// Built against real Roofr PDF format (verified Apr 2026)
 
 import * as pdfjsLib from 'pdfjs-dist';
 // Worker is copied to public/ via the prebuild npm script.
@@ -19,7 +20,6 @@ export interface RoofrMeasurements {
   flashingLength: number;
   predominantPitch: string;
   facetCount: number;
-  // Additional fields
   wallFlashing?: number;
   stepFlashing?: number;
   chimneySides?: number;
@@ -39,289 +39,186 @@ export interface MultiStructureResult {
 }
 
 /**
- * Parse a Roofr PDF with multi-structure support
- * Returns individual structures plus combined totals
+ * Convert "Xft Yin" (or "Xft") to decimal feet.
+ * e.g. "47ft 0in" → 47.0, "143ft 3in" → 143.25, "26ft 5in" → 26.42
  */
-export async function parseRoofrPDFWithStructures(file: File): Promise<MultiStructureResult> {
-  try {
-    // Read file as ArrayBuffer
-    const arrayBuffer = await file.arrayBuffer();
-    
-    // Load PDF document with worker fallback
-    const loadingTask = pdfjsLib.getDocument({ 
-      data: arrayBuffer,
-      // Disable worker as fallback if CDN fails (slower but works)
-      useWorkerFetch: false,
-      isEvalSupported: false,
-      useSystemFonts: true
-    });
-    const pdf = await loadingTask.promise;
-    
-    console.log(`[RoofrParser] PDF loaded: ${pdf.numPages} pages`);
-    
-    // Extract text from all pages
-    let fullText = '';
-    for (let i = 1; i <= Math.min(pdf.numPages, 5); i++) {
-      const page = await pdf.getPage(i);
-      const textContent = await page.getTextContent();
-      const pageText = textContent.items
-        .map((item: any) => item.str)
-        .join(' ');
-      fullText += pageText + '\n';
-    }
-    
-    console.log('[RoofrParser] Extracted text length:', fullText.length);
-    console.log('[RoofrParser] First 500 chars:', fullText.substring(0, 500));
-    
-    // Detect and split structures
-    const structureBlocks = detectStructures(fullText);
-    
-    if (structureBlocks.length > 1) {
-      console.log(`[RoofrParser] Detected ${structureBlocks.length} structures`);
-      
-      // Parse each structure separately
-      const structures: StructureMeasurements[] = structureBlocks.map((block, index) => ({
-        structureName: block.name,
-        structureIndex: index + 1,
-        measurements: extractMeasurements(block.text)
-      }));
-      
-      // Calculate combined totals
-      const combinedMeasurements = combineStructures(structures);
-      
-      return {
-        hasMultipleStructures: true,
-        combinedMeasurements,
-        structures
-      };
-    } else {
-      // Single structure - just parse normally
-      const measurements = extractMeasurements(fullText);
-      
-      return {
-        hasMultipleStructures: false,
-        combinedMeasurements: measurements,
-        structures: [{
-          structureName: 'Main Structure',
-          structureIndex: 1,
-          measurements
-        }]
-      };
-    }
-  } catch (error) {
-    console.error('[RoofrParser] Failed to parse PDF:', error);
-    throw new Error(`Failed to parse Roofr PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
-  }
+function parseFeetInches(raw: string): number {
+  const m = raw.match(/([\d.]+)\s*ft(?:\s*([\d.]+)\s*in)?/i);
+  if (!m) return 0;
+  const feet = parseFloat(m[1]);
+  const inches = m[2] ? parseFloat(m[2]) / 12 : 0;
+  return feet + inches;
 }
 
 /**
- * Original single-structure parser (backward compatibility)
+ * Extract a ft/in measurement from text using the first matching regex.
+ * The regex must capture the "Xft Yin" portion in group 1.
  */
-export async function parseRoofrPDF(file: File): Promise<RoofrMeasurements> {
-  const result = await parseRoofrPDFWithStructures(file);
-  return result.combinedMeasurements;
-}
-
-/**
- * Extract measurements from text using regex patterns
- */
-function extractMeasurements(text: string): RoofrMeasurements {
-  // Normalize text for easier parsing
-  const normalized = text.replace(/\s+/g, ' ').toLowerCase();
-  
-  // Helper to extract numeric value with better pattern matching
-  const extract = (patterns: RegExp[], fieldName: string): number => {
-    for (const pattern of patterns) {
-      const match = normalized.match(pattern);
-      if (match && match[1]) {
-        const value = match[1].replace(/,/g, '');
-        const num = parseFloat(value);
-        if (!isNaN(num) && num > 0) {
-          console.log(`[RoofrParser] Found ${fieldName}: ${num} (pattern: ${pattern.source})`);
-          return num;
-        }
+function extractFt(text: string, patterns: RegExp[], fieldName: string): number {
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      const val = parseFeetInches(match[1]);
+      if (val >= 0) {
+        console.log(`[RoofrParser] ${fieldName}: ${val.toFixed(2)} ft`);
+        return val;
       }
     }
-    console.warn(`[RoofrParser] Could not extract ${fieldName} from text`);
-    return 0;
-  };
-  
-  // Helper to extract pitch
-  const extractPitch = (): string => {
-    const pitchMatch = text.match(/(?:pitch|slope)[:\s]+([\d]+\s*\/\s*[\d]+)/i);
-    if (pitchMatch) return pitchMatch[1].trim();
-    
-    const ratioMatch = text.match(/([\d]+)\s*:\s*([\d]+)/);
-    if (ratioMatch) return `${ratioMatch[1]}/${ratioMatch[2]}`;
-    
-    return '—';
-  };
-  
-  // Extract address
-  const extractAddress = (): string | undefined => {
-    const addressMatch = text.match(/(?:property address|address)[:\s]+([^\n]+)/i);
-    return addressMatch?.[1]?.trim();
-  };
-  
-  // Multiple patterns for each field to handle different Roofr PDF formats
-  const patterns = {
-    totalSquares: [
-      /(?:total\s+squares?)[:\s]+([\d,.]+)/i,
-      /(?:roofing\s+squares?)[:\s]+([\d,.]+)/i,
-      /(?:squares?)[:\s]+([\d,.]+)/i,
-    ],
-    totalSqFt: [
-      /(?:total\s+(?:square\s*feet|sq\.?\s*ft\.?))[:\s]+([\d,]+)/i,
-      /(?:total\s+area)[:\s]+([\d,]+)/i,
-      /(?:area)[:\s]+([\d,]+)\s*(?:sq\.?\s*ft\.?|square\s*feet)/i,
-    ],
-    ridgeLength: [
-      /(?:ridge\s+length)[:\s]+([\d,.]+)/i,
-      /(?:ridge\s+linear)[:\s]+([\d,.]+)/i,
-      /(?:ridge)[:\s]+([\d,.]+)\s*(?:ft|lf|linear|feet)/i,
-      /(?:ridges?)[:\s]+([\d,.]+)/i,
-    ],
-    hipLength: [
-      /(?:hip\s+length)[:\s]+([\d,.]+)/i,
-      /(?:hip\s+linear)[:\s]+([\d,.]+)/i,
-      /(?:hips?)[:\s]+([\d,.]+)\s*(?:ft|lf|linear|feet)/i,
-    ],
-    valleyLength: [
-      /(?:valley\s+length)[:\s]+([\d,.]+)/i,
-      /(?:valley\s+linear)[:\s]+([\d,.]+)/i,
-      /(?:valleys?)[:\s]+([\d,.]+)\s*(?:ft|lf|linear|feet)/i,
-    ],
-    eaveLength: [
-      /(?:eave\s+length)[:\s]+([\d,.]+)/i,
-      /(?:eave\s+linear)[:\s]+([\d,.]+)/i,
-      /(?:eaves?)[:\s]+([\d,.]+)\s*(?:ft|lf|linear|feet)/i,
-      /(?:perimeter)[:\s]+([\d,.]+)/i,
-    ],
-    rakeLength: [
-      /(?:rake\s+length)[:\s]+([\d,.]+)/i,
-      /(?:rake\s+linear)[:\s]+([\d,.]+)/i,
-      /(?:rakes?)[:\s]+([\d,.]+)\s*(?:ft|lf|linear|feet)/i,
-    ],
-    flashingLength: [
-      /(?:flashing\s+length)[:\s]+([\d,.]+)/i,
-      /(?:flashing\s+linear)[:\s]+([\d,.]+)/i,
-      /(?:flashing)[:\s]+([\d,.]+)\s*(?:ft|lf|linear|feet)/i,
-    ],
-    facetCount: [
-      /(?:facets?)[:\s]+([\d]+)/i,
-      /(?:planes?)[:\s]+([\d]+)/i,
-      /(?:sections?)[:\s]+([\d]+)/i,
-      /(?:roof\s+planes?)[:\s]+([\d]+)/i,
-      /(?:number\s+of\s+facets?)[:\s]+([\d]+)/i,
-    ],
-    wallFlashing: [
-      /(?:wall\s+flashing)[:\s]+([\d,.]+)/i,
-    ],
-    stepFlashing: [
-      /(?:step\s+flashing)[:\s]+([\d,.]+)/i,
-    ],
-  };
-  
-  // Extract all measurements with new multi-pattern approach
-  const measurements: RoofrMeasurements = {
-    totalSquares: extract(patterns.totalSquares, 'totalSquares'),
-    totalSqFt: extract(patterns.totalSqFt, 'totalSqFt'),
-    ridgeLength: extract(patterns.ridgeLength, 'ridgeLength'),
-    hipLength: extract(patterns.hipLength, 'hipLength'),
-    valleyLength: extract(patterns.valleyLength, 'valleyLength'),
-    eaveLength: extract(patterns.eaveLength, 'eaveLength'),
-    rakeLength: extract(patterns.rakeLength, 'rakeLength'),
-    flashingLength: extract(patterns.flashingLength, 'flashingLength'),
-    predominantPitch: extractPitch(),
-    facetCount: extract(patterns.facetCount, 'facetCount'),
-    wallFlashing: extract(patterns.wallFlashing, 'wallFlashing') || undefined,
-    stepFlashing: extract(patterns.stepFlashing, 'stepFlashing') || undefined,
-    address: extractAddress(),
-  };
-  
-  // Validate we got something useful
-  if (measurements.totalSquares === 0 && measurements.totalSqFt === 0) {
+  }
+  console.warn(`[RoofrParser] Could not extract ${fieldName}`);
+  return 0;
+}
+
+/**
+ * Extract a plain numeric value from text using the first matching regex.
+ */
+function extractNum(text: string, patterns: RegExp[], fieldName: string): number {
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      const num = parseFloat(match[1].replace(/,/g, ''));
+      if (!isNaN(num) && num >= 0) {
+        console.log(`[RoofrParser] ${fieldName}: ${num}`);
+        return num;
+      }
+    }
+  }
+  console.warn(`[RoofrParser] Could not extract ${fieldName}`);
+  return 0;
+}
+
+/**
+ * Parse all measurements out of a block of Roofr PDF text.
+ * Handles real Roofr format:
+ *   "Total ridges 47ft 0in"  /  "Ridges: 47ft 0in"
+ *   "Total roof area 1066 sqft"
+ *   "Predominant pitch 6/12"
+ */
+function extractMeasurements(text: string): RoofrMeasurements {
+  // Preserve original capitalisation for ft/in patterns but collapse whitespace
+  const t = text.replace(/\s+/g, ' ');
+
+  // ── sq ft ──────────────────────────────────────────────────────────────────
+  const totalSqFt = extractNum(t, [
+    /total\s+roof\s+area\s+([\d,]+)\s*sqft/i,
+    /total\s+pitched\s+area\s+([\d,]+)\s*sqft/i,
+    /total\s+area\s+([\d,]+)\s*sqft/i,
+    /(?:total\s+(?:square\s*feet|sq\.?\s*ft\.?))[:\s]+([\d,]+)/i,
+    /([\d,]{3,})\s*sqft/i,  // bare "1411 sqft"
+  ], 'totalSqFt');
+
+  // ── linear measurements (ft/in format) ────────────────────────────────────
+  // Patterns cover both:
+  //   "Total ridges 47ft 0in"  (structure summary pages)
+  //   "Ridges: 47ft 0in"       (length measurement report page)
+  const ridgeLength = extractFt(t, [
+    /total\s+ridges?\s+([\d.]+ft(?:\s*[\d.]+in)?)/i,
+    /ridges?\s*:\s*([\d.]+ft(?:\s*[\d.]+in)?)/i,
+    /(?:ridge\s+length)[:\s]+([\d,.]+)/i,
+  ], 'ridgeLength');
+
+  const hipLength = extractFt(t, [
+    /total\s+hips?\s+([\d.]+ft(?:\s*[\d.]+in)?)/i,
+    /hips?\s*:\s*([\d.]+ft(?:\s*[\d.]+in)?)/i,
+  ], 'hipLength');
+
+  const valleyLength = extractFt(t, [
+    /total\s+valleys?\s+([\d.]+ft(?:\s*[\d.]+in)?)/i,
+    /valleys?\s*:\s*([\d.]+ft(?:\s*[\d.]+in)?)/i,
+  ], 'valleyLength');
+
+  const eaveLength = extractFt(t, [
+    /total\s+eaves?\s+([\d.]+ft(?:\s*[\d.]+in)?)/i,
+    /eaves?\s*:\s*([\d.]+ft(?:\s*[\d.]+in)?)/i,
+  ], 'eaveLength');
+
+  const rakeLength = extractFt(t, [
+    /total\s+rakes?\s+([\d.]+ft(?:\s*[\d.]+in)?)/i,
+    /rakes?\s*:\s*([\d.]+ft(?:\s*[\d.]+in)?)/i,
+  ], 'rakeLength');
+
+  const wallFlashing = extractFt(t, [
+    /total\s+wall\s+flashing\s+([\d.]+ft(?:\s*[\d.]+in)?)/i,
+    /wall\s+flashing\s*:\s*([\d.]+ft(?:\s*[\d.]+in)?)/i,
+  ], 'wallFlashing') || undefined;
+
+  const stepFlashing = extractFt(t, [
+    /total\s+step\s+flashing\s+([\d.]+ft(?:\s*[\d.]+in)?)/i,
+    /step\s+flashing\s*:\s*([\d.]+ft(?:\s*[\d.]+in)?)/i,
+  ], 'stepFlashing') || undefined;
+
+  // Use wall flashing as the primary "flashing length" field
+  const flashingLength = wallFlashing ?? 0;
+
+  // ── facets ─────────────────────────────────────────────────────────────────
+  const facetCount = extractNum(t, [
+    /total\s+roof\s+facets?\s+([\d]+)/i,
+    /([\d]+)\s+facets/i,
+  ], 'facetCount');
+
+  // ── pitch ──────────────────────────────────────────────────────────────────
+  const pitchMatch = t.match(/predominant\s+pitch[:\s]*([\d]+\/[\d]+)/i);
+  const predominantPitch = pitchMatch ? pitchMatch[1] : '—';
+
+  // ── address ────────────────────────────────────────────────────────────────
+  const addressMatch = t.match(/(\d+\s+[\w .]+(?:avenue|ave|street|st|road|rd|drive|dr|blvd|lane|ln|court|ct|way|circle|cir)[,\s]+[\w\s]+,\s*[A-Z]{2}\s*[\d]{5})/i);
+  const address = addressMatch ? addressMatch[1].trim() : undefined;
+
+  // ── squares ────────────────────────────────────────────────────────────────
+  // Roofr doesn't print "X squares" directly; derive from sqft (1 square = 100 sqft)
+  const totalSquares = totalSqFt > 0 ? parseFloat((totalSqFt / 100).toFixed(2)) : 0;
+
+  if (totalSquares === 0 && totalSqFt === 0) {
     throw new Error('No valid measurements found in PDF. Please ensure this is a Roofr measurement report.');
   }
-  
-  // Calculate squares from sq ft if missing
-  if (measurements.totalSquares === 0 && measurements.totalSqFt > 0) {
-    measurements.totalSquares = measurements.totalSqFt / 100;
-  }
-  
-  // Calculate sq ft from squares if missing
-  if (measurements.totalSqFt === 0 && measurements.totalSquares > 0) {
-    measurements.totalSqFt = measurements.totalSquares * 100;
-  }
-  
-  return measurements;
-}
 
-/**
- * Validate measurements are reasonable for a roof
- */
-export function validateMeasurements(measurements: RoofrMeasurements): {
-  valid: boolean;
-  warnings: string[];
-} {
-  const warnings: string[] = [];
-  
-  // Check for unreasonably small roofs
-  if (measurements.totalSquares < 5) {
-    warnings.push('Total squares seems unusually small (< 5 squares)');
-  }
-  
-  // Check for unreasonably large roofs
-  if (measurements.totalSquares > 200) {
-    warnings.push('Total squares seems unusually large (> 200 squares)');
-  }
-  
-  // Check for missing critical measurements
-  if (measurements.ridgeLength === 0) {
-    warnings.push('Ridge length is 0 - this may affect material calculations');
-  }
-  
-  if (measurements.eaveLength === 0) {
-    warnings.push('Eave length is 0 - drip edge calculations may be inaccurate');
-  }
-  
   return {
-    valid: warnings.length === 0,
-    warnings,
+    totalSquares,
+    totalSqFt,
+    ridgeLength,
+    hipLength,
+    valleyLength,
+    eaveLength,
+    rakeLength,
+    flashingLength,
+    predominantPitch,
+    facetCount,
+    wallFlashing,
+    stepFlashing,
+    address,
   };
 }
 
-/**
- * Detect structure boundaries in Roofr PDF text
- * Returns array of {name, text} for each structure found
- */
+// ─── Structure detection ─────────────────────────────────────────────────────
+
 interface StructureBlock {
   name: string;
   text: string;
 }
 
+/**
+ * Detect per-structure sections in the full PDF text.
+ * Roofr uses headings like "Structure #1 summary" / "Structure #2 summary".
+ */
 function detectStructures(fullText: string): StructureBlock[] {
-  const structures: StructureBlock[] = [];
-  
-  // Common patterns for structure headers in Roofr PDFs:
-  // "Structure 1", "Structure 2"
-  // "Building 1", "Building 2"
-  // "Main House", "Garage", "Detached Garage"
-  // "Primary Structure", "Secondary Structure"
-  
   const structurePatterns = [
-    /(?:structure|building)\s+(\d+)/gi,
+    // Primary Roofr format: "Structure #1 summary"
+    /structure\s*#\s*(\d+)\s+summary/gi,
+    // Generic fallback: "Structure 1", "Building 1"
+    /(?:structure|building)\s+#?\s*(\d+)/gi,
+    // Named structures: "Main House", "Garage", etc.
     /(main\s+house|garage|detached\s+garage|shed|barn|carport)/gi,
-    /(primary|secondary|additional)\s+structure/gi
+    /(primary|secondary|additional)\s+structure/gi,
   ];
-  
-  // Try to find structure markers.
-  // Deduplicate by canonical name so that a label like "Structure 1" appearing
-  // many times in measurement rows only produces ONE split point (its first occurrence).
+
   let foundMarkers: Array<{ index: number; name: string }> = [];
 
   for (const pattern of structurePatterns) {
     const matches = [...fullText.matchAll(pattern)];
+
+    // Deduplicate: only keep the FIRST occurrence of each unique name.
+    // Without this, a label that repeats in measurement rows creates dozens of
+    // bogus split points.
     const seen = new Set<string>();
     const unique: Array<{ index: number; name: string }> = [];
     for (const match of matches) {
@@ -331,53 +228,38 @@ function detectStructures(fullText: string): StructureBlock[] {
         unique.push({ index: match.index ?? 0, name: match[0] });
       }
     }
+
     if (unique.length > 1) {
-      // Found multiple distinct structure headers
       foundMarkers = unique;
       console.log(`[RoofrParser] Found ${foundMarkers.length} structure markers:`, foundMarkers.map(m => m.name));
       break;
     }
   }
-  
+
   if (foundMarkers.length > 1) {
-    // Split text at each marker
-    for (let i = 0; i < foundMarkers.length; i++) {
-      const start = foundMarkers[i].index;
-      const end = i < foundMarkers.length - 1 ? foundMarkers[i + 1].index : fullText.length;
-      const structureText = fullText.substring(start, end);
-      
-      structures.push({
-        name: formatStructureName(foundMarkers[i].name),
-        text: structureText
-      });
-    }
-  } else {
-    // No structure markers found - treat as single structure
-    structures.push({
-      name: 'Main Structure',
-      text: fullText
-    });
+    return foundMarkers.map((marker, i) => ({
+      name: formatStructureName(marker.name),
+      text: fullText.substring(
+        marker.index,
+        i < foundMarkers.length - 1 ? foundMarkers[i + 1].index : fullText.length
+      ),
+    }));
   }
-  
-  return structures;
+
+  // Single structure
+  return [{ name: 'Main Structure', text: fullText }];
 }
 
-/**
- * Format structure name for display
- */
 function formatStructureName(rawName: string): string {
-  const normalized = rawName.trim();
-  
-  // Capitalize first letter of each word
-  return normalized
+  return rawName
+    .trim()
     .split(/\s+/)
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
     .join(' ');
 }
 
-/**
- * Combine measurements from multiple structures
- */
+// ─── Combine ─────────────────────────────────────────────────────────────────
+
 function combineStructures(structures: StructureMeasurements[]): RoofrMeasurements {
   const combined: RoofrMeasurements = {
     totalSquares: 0,
@@ -393,37 +275,110 @@ function combineStructures(structures: StructureMeasurements[]): RoofrMeasuremen
     wallFlashing: 0,
     stepFlashing: 0,
     chimneySides: 0,
-    address: ''
+    address: '',
   };
-  
-  // Sum all numeric fields
-  for (const structure of structures) {
-    const m = structure.measurements;
-    combined.totalSquares += m.totalSquares;
-    combined.totalSqFt += m.totalSqFt;
-    combined.ridgeLength += m.ridgeLength;
-    combined.hipLength += m.hipLength;
-    combined.valleyLength += m.valleyLength;
-    combined.eaveLength += m.eaveLength;
-    combined.rakeLength += m.rakeLength;
+
+  for (const { measurements: m } of structures) {
+    combined.totalSquares  += m.totalSquares;
+    combined.totalSqFt     += m.totalSqFt;
+    combined.ridgeLength   += m.ridgeLength;
+    combined.hipLength     += m.hipLength;
+    combined.valleyLength  += m.valleyLength;
+    combined.eaveLength    += m.eaveLength;
+    combined.rakeLength    += m.rakeLength;
     combined.flashingLength += m.flashingLength;
-    combined.facetCount += m.facetCount;
-    combined.wallFlashing = (combined.wallFlashing || 0) + (m.wallFlashing || 0);
-    combined.stepFlashing = (combined.stepFlashing || 0) + (m.stepFlashing || 0);
-    combined.chimneySides = (combined.chimneySides || 0) + (m.chimneySides || 0);
-    
-    // Take first non-empty pitch
-    if (!combined.predominantPitch && m.predominantPitch) {
-      combined.predominantPitch = m.predominantPitch;
-    }
-    
-    // Take first address
-    if (!combined.address && m.address) {
-      combined.address = m.address;
-    }
+    combined.facetCount    += m.facetCount;
+    combined.wallFlashing  = (combined.wallFlashing ?? 0) + (m.wallFlashing ?? 0);
+    combined.stepFlashing  = (combined.stepFlashing ?? 0) + (m.stepFlashing ?? 0);
+    combined.chimneySides  = (combined.chimneySides ?? 0) + (m.chimneySides ?? 0);
+    if (!combined.predominantPitch && m.predominantPitch) combined.predominantPitch = m.predominantPitch;
+    if (!combined.address && m.address) combined.address = m.address;
   }
-  
+
+  combined.totalSquares = parseFloat(combined.totalSquares.toFixed(2));
   console.log('[RoofrParser] Combined measurements from', structures.length, 'structures');
-  
   return combined;
+}
+
+// ─── Public API ───────────────────────────────────────────────────────────────
+
+/**
+ * Parse a Roofr PDF with multi-structure support.
+ */
+export async function parseRoofrPDFWithStructures(file: File): Promise<MultiStructureResult> {
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+
+    const loadingTask = pdfjsLib.getDocument({
+      data: arrayBuffer,
+      useWorkerFetch: false,
+      isEvalSupported: false,
+      useSystemFonts: true,
+    });
+    const pdf = await loadingTask.promise;
+    console.log(`[RoofrParser] PDF loaded: ${pdf.numPages} pages`);
+
+    // Read ALL pages — Roofr puts structure summaries on pages 6-7+
+    let fullText = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+      const pageText = (textContent.items as { str: string }[])
+        .map(item => item.str)
+        .join(' ');
+      fullText += pageText + '\n';
+    }
+
+    console.log('[RoofrParser] Extracted text length:', fullText.length);
+    console.log('[RoofrParser] First 300 chars:', fullText.substring(0, 300));
+
+    const structureBlocks = detectStructures(fullText);
+
+    if (structureBlocks.length > 1) {
+      const structures: StructureMeasurements[] = structureBlocks.map((block, index) => ({
+        structureName: block.name,
+        structureIndex: index + 1,
+        measurements: extractMeasurements(block.text),
+      }));
+
+      return {
+        hasMultipleStructures: true,
+        combinedMeasurements: combineStructures(structures),
+        structures,
+      };
+    }
+
+    const measurements = extractMeasurements(fullText);
+    return {
+      hasMultipleStructures: false,
+      combinedMeasurements: measurements,
+      structures: [{ structureName: 'Main Structure', structureIndex: 1, measurements }],
+    };
+  } catch (error) {
+    console.error('[RoofrParser] Failed to parse PDF:', error);
+    throw new Error(`Failed to parse Roofr PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+/**
+ * Original single-structure parser (backward compatibility).
+ */
+export async function parseRoofrPDF(file: File): Promise<RoofrMeasurements> {
+  const result = await parseRoofrPDFWithStructures(file);
+  return result.combinedMeasurements;
+}
+
+/**
+ * Validate measurements are reasonable for a roof.
+ */
+export function validateMeasurements(measurements: RoofrMeasurements): {
+  valid: boolean;
+  warnings: string[];
+} {
+  const warnings: string[] = [];
+  if (measurements.totalSquares < 5) warnings.push('Total squares seems unusually small (< 5 squares)');
+  if (measurements.totalSquares > 200) warnings.push('Total squares seems unusually large (> 200 squares)');
+  if (measurements.ridgeLength === 0) warnings.push('Ridge length is 0 — this may affect material calculations');
+  if (measurements.eaveLength === 0) warnings.push('Eave length is 0 — drip edge calculations may be inaccurate');
+  return { valid: warnings.length === 0, warnings };
 }
