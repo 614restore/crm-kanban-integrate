@@ -3,10 +3,17 @@
 // Built against real Roofr PDF format (verified Apr 2026)
 
 import * as pdfjsLib from 'pdfjs-dist';
-// Worker is copied to public/ via the prebuild npm script.
-// This avoids CDN CORS/MIME failures and Rollup node_modules ?url limitations.
+// Use Vite's new URL() pattern — bundles the worker as an asset automatically.
+// Falls back to the static /pdf.worker.min.js (committed to public/) if needed.
 if (typeof window !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
+  try {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+      'pdfjs-dist/build/pdf.worker.min.js',
+      import.meta.url
+    ).toString();
+  } catch {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
+  }
 }
 
 export interface RoofrMeasurements {

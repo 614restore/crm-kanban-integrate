@@ -25,8 +25,8 @@ import { supabase } from '@/lib/supabase';
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 15,
-      refetchOnWindowFocus: false,
+      staleTime: 1000 * 60 * 5,
+      refetchOnWindowFocus: true,
       retry: 1,
     },
   },
@@ -81,12 +81,11 @@ const App = () => {
   useEffect(() => {
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible') {
-        // Only sign out on a genuine auth error — do NOT invalidate queries here.
-        // AppLayout handles data refresh after long idle periods (>5 min).
-        // Invalidating on every tab switch caused the app to blank out and reload.
         const { error } = await supabase.auth.getSession();
         if (error) {
           await supabase.auth.signOut();
+        } else {
+          queryClient.invalidateQueries();
         }
       }
     };
