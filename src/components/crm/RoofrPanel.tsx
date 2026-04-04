@@ -548,56 +548,51 @@ export default function RoofrPanel({
               <Ruler size={18} className="text-green-600" />
               <h4 className="font-semibold text-gray-900">Order New Report</h4>
             </div>
-              Roofr is processing your report. Most reports complete in 15–30 minutes.
-            </div>
-          )}
-        </div>
-      ) : (
-        /* New order form */
-        <div className="space-y-4">
-          {!address && (
-            <div className="flex items-start gap-2 bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-700">
-              <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-              No address saved for this customer — add their property address in the Overview tab first.
-            </div>
-          )}
+            
+            {!address && (
+              <div className="flex items-start gap-2 bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-700 mb-4">
+                <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+                No address saved for this customer — add their property address in the Overview tab first.
+              </div>
+            )}
 
-          <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1.5">Report Type</label>
-            <div className="flex gap-3">
-              {(['standard', 'premium'] as const).map((type) => (
-                <button
-                  key={type}
-                  onClick={() => setReportType(type)}
-                  className={`flex-1 p-3 border-2 rounded-xl text-sm font-medium transition-colors ${
-                    reportType === type
-                      ? 'border-green-500 bg-green-50 text-green-700'
-                      : 'border-gray-200 hover:border-gray-300 text-gray-600'
-                  }`}
-                >
-                  <div className="font-semibold capitalize">{type}</div>
-                  <div className="text-xs mt-0.5 font-normal opacity-75">
-                    {type === 'standard'
-                      ? 'Key measurements & pitch'
-                      : 'Full detail with 3D imagery'}
-                  </div>
-                </button>
-              ))}
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1.5">Report Type</label>
+              <div className="flex gap-3">
+                {(['standard', 'premium'] as const).map((type) => (
+                  <button
+                    key={type}
+                    onClick={() => setReportType(type)}
+                    className={`flex-1 p-3 border-2 rounded-xl text-sm font-medium transition-colors ${
+                      reportType === type
+                        ? 'border-green-500 bg-green-50 text-green-700'
+                        : 'border-gray-200 hover:border-gray-300 text-gray-600'
+                    }`}
+                  >
+                    <div className="font-semibold capitalize">{type}</div>
+                    <div className="text-xs mt-0.5 font-normal opacity-75">
+                      {type === 'standard'
+                        ? 'Key measurements & pitch'
+                        : 'Full detail with 3D imagery'}
+                    </div>
+                  </button>
+                ))}
+              </div>
             </div>
+
+            <button
+              onClick={handleOrderReport}
+              disabled={loading || !address}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white text-sm font-semibold rounded-xl hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors mt-4"
+            >
+              {loading ? <Loader2 size={16} className="animate-spin" /> : <Ruler size={16} />}
+              {loading ? 'Ordering…' : `Order ${reportType.charAt(0).toUpperCase() + reportType.slice(1)} Report`}
+            </button>
+
+            <p className="text-xs text-gray-400 text-center mt-3">
+              Roofr uses aerial imagery to measure this customer's roof instantly.
+            </p>
           </div>
-
-          <button
-            onClick={handleOrderReport}
-            disabled={loading || !address}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white text-sm font-semibold rounded-xl hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {loading ? <Loader2 size={16} className="animate-spin" /> : <Ruler size={16} />}
-            {loading ? 'Ordering…' : `Order ${reportType.charAt(0).toUpperCase() + reportType.slice(1)} Report`}
-          </button>
-
-          <p className="text-xs text-gray-400 text-center">
-            Roofr uses aerial imagery to measure this customer's roof instantly.
-          </p>
         </div>
       )}
 
