@@ -2092,23 +2092,36 @@ export default function ContactDetail() {
                 </div>
               );
 
-              const PhotoThumbnail = ({ doc }: { doc: Document }) => (
-                <div key={doc.id} className="relative group">
-                  <div className="aspect-square rounded-lg overflow-hidden bg-gray-100 border border-gray-200">
-                    <img
-                      src={doc.url}
-                      alt={doc.name}
-                      className="w-full h-full object-cover"
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                    />
+              const PhotoThumbnail = ({ doc }: { doc: Document }) => {
+                const [thumbUrl, setThumbUrl] = useState<string | null>(null);
+                useEffect(() => {
+                  getDocumentSignedUrl(doc.url, 3600).then(url => {
+                    if (url) setThumbUrl(url);
+                  });
+                }, [doc.url]);
+                return (
+                  <div key={doc.id} className="relative group">
+                    <div className="aspect-square rounded-lg overflow-hidden bg-gray-100 border border-gray-200 flex items-center justify-center">
+                      {thumbUrl ? (
+                        <img
+                          src={thumbUrl}
+                          alt={doc.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <FileText size={24} className="text-gray-300" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-2">
+                      <button onClick={() => handleOpenDocument(doc.url, doc.name)} className="p-1.5 bg-white rounded-md" title="View"><Eye size={14} className="text-gray-700" /></button>
+                      <button onClick={() => handleDeleteDocument(doc.id)} className="p-1.5 bg-white rounded-md" title="Delete"><Trash2 size={14} className="text-red-500" /></button>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1 truncate">{doc.name}</p>
                   </div>
-                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-2">
-                    <button onClick={() => handleOpenDocument(doc.url, doc.name)} className="p-1.5 bg-white rounded-md" title="View"><Eye size={14} className="text-gray-700" /></button>
-                    <button onClick={() => handleDeleteDocument(doc.id)} className="p-1.5 bg-white rounded-md" title="Delete"><Trash2 size={14} className="text-red-500" /></button>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1 truncate">{doc.name}</p>
-                </div>
-              );
+                );
+              };
 
               return (
                 <div className="bg-white rounded-xl border border-gray-200">
