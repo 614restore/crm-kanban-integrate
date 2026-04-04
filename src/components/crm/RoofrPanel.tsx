@@ -362,10 +362,33 @@ export default function RoofrPanel({
           <Ruler size={20} className="text-green-600" />
           <h3 className="text-lg font-semibold text-gray-900">Roofr Measurement Reports</h3>
         </div>
-        <div className="flex items-start gap-2 bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-500">
+        <div className="flex items-start gap-2 bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-500 mb-4">
           <Settings size={16} className="mt-0.5 shrink-0" />
-          <span>Roofr is not connected. Add your API key in <strong>Settings → Integrations</strong>.</span>
+          <span>Roofr API not connected — ordering disabled. Add your key in <strong>Settings → Integrations</strong> to order reports. You can still upload a PDF below.</span>
         </div>
+        <div className="flex items-center gap-2 mb-3">
+          <Sparkles size={18} className="text-blue-600" />
+          <h4 className="font-semibold text-gray-900">Upload Roofr PDF</h4>
+        </div>
+        <RoofrUploadComponent
+          contact={{
+            id: contactId,
+            firstName: contactName?.split(' ')[0] || '',
+            lastName: contactName?.split(' ').slice(1).join(' ') || '',
+          } as any}
+          onEstimateGenerated={(lineItems, measurements) => {
+            persistOrder({
+              reportId: `UPLOADED-${Date.now()}`,
+              address: fullAddress,
+              reportType: 'premium',
+              orderedAt: new Date().toISOString(),
+              status: 'completed',
+              statusMessage: 'Uploaded from PDF',
+              measurements: measurements,
+            });
+            toast.success('Measurements extracted! Navigate to Estimates to create a quote.');
+          }}
+        />
       </div>
     );
   }
