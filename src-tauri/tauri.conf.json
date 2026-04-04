@@ -23,7 +23,7 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://cdnjs.cloudflare.com https://*.stripe.com; img-src 'self' data: blob: https:; media-src 'self' blob: https:; font-src 'self' data: https:; frame-src https:;"
     }
   },
   "bundle": {
