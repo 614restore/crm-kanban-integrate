@@ -27,10 +27,23 @@ export interface RoofrMeasurements {
   address?: string;
 }
 
+export interface StructureMeasurements {
+  structureName: string;
+  structureIndex: number;
+  measurements: RoofrMeasurements;
+}
+
+export interface MultiStructureResult {
+  hasMultipleStructures: boolean;
+  combinedMeasurements: RoofrMeasurements;
+  structures: StructureMeasurements[];
+}
+
 /**
- * Parse a Roofr PDF report and extract measurements
+ * Parse a Roofr PDF with multi-structure support
+ * Returns individual structures plus combined totals
  */
-export async function parseRoofrPDF(file: File): Promise<RoofrMeasurements> {
+export async function parseRoofrPDFWithStructures(file: File): Promise<MultiStructureResult> {
   try {
     // Read file as ArrayBuffer
     const arrayBuffer = await file.arrayBuffer();
@@ -53,17 +66,55 @@ export async function parseRoofrPDF(file: File): Promise<RoofrMeasurements> {
     }
     
     console.log('[RoofrParser] Extracted text length:', fullText.length);
+    console.log('[RoofrParser] First 500 chars:', fullText.substring(0, 500));
     
-    // Parse measurements using regex patterns
-    const measurements = extractMeasurements(fullText);
+    // Detect and split structures
+    const structureBlocks = detectStructures(fullText);
     
-    console.log('[RoofrParser] Extracted measurements:', measurements);
-    
-    return measurements;
+    if (structureBlocks.length > 1) {
+      console.log(`[RoofrParser] Detected ${structureBlocks.length} structures`);
+      
+      // Parse each structure separately
+      const structures: StructureMeasurements[] = structureBlocks.map((block, index) => ({
+        structureName: block.name,
+        structureIndex: index + 1,
+        measurements: extractMeasurements(block.text)
+      }));
+      
+      // Calculate combined totals
+      const combinedMeasurements = combineStructures(structures);
+      
+      return {
+        hasMultipleStructures: true,
+        combinedMeasurements,
+        structures
+      };
+    } else {
+      // Single structure - just parse normally
+      const measurements = extractMeasurements(fullText);
+      
+      return {
+        hasMultipleStructures: false,
+        combinedMeasurements: measurements,
+        structures: [{
+          structureName: 'Main Structure',
+          structureIndex: 1,
+          measurements
+        }]
+      };
+    }
   } catch (error) {
     console.error('[RoofrParser] Failed to parse PDF:', error);
     throw new Error(`Failed to parse Roofr PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
+}
+
+/**
+ * Original single-structure parser (backward compatibility)
+ */
+export async function parseRoofrPDF(file: File): Promise<RoofrMeasurements> {
+  const result = await parseRoofrPDFWithStructures(file);
+  return result.combinedMeasurements;
 }
 
 /**
@@ -233,4 +284,133 @@ export function validateMeasurements(measurements: RoofrMeasurements): {
     valid: warnings.length === 0,
     warnings,
   };
+}
+
+/**
+ * Detect structure boundaries in Roofr PDF text
+ * Returns array of {name, text} for each structure found
+ */
+interface StructureBlock {
+  name: string;
+  text: string;
+}
+
+function detectStructures(fullText: string): StructureBlock[] {
+  const structures: StructureBlock[] = [];
+  
+  // Common patterns for structure headers in Roofr PDFs:
+  // "Structure 1", "Structure 2"
+  // "Building 1", "Building 2"
+  // "Main House", "Garage", "Detached Garage"
+  // "Primary Structure", "Secondary Structure"
+  
+  const structurePatterns = [
+    /(?:structure|building)\s+(\d+)/gi,
+    /(main\s+house|garage|detached\s+garage|shed|barn|carport)/gi,
+    /(primary|secondary|additional)\s+structure/gi
+  ];
+  
+  // Try to find structure markers
+  let foundMarkers: Array<{ index: number; name: string }> = [];
+  
+  for (const pattern of structurePatterns) {
+    const matches = [...fullText.matchAll(pattern)];
+    if (matches.length > 1) {
+      // Found multiple structures!
+      foundMarkers = matches.map(match => ({
+        index: match.index || 0,
+        name: match[0]
+      }));
+      console.log(`[RoofrParser] Found ${foundMarkers.length} structure markers:`, foundMarkers.map(m => m.name));
+      break;
+    }
+  }
+  
+  if (foundMarkers.length > 1) {
+    // Split text at each marker
+    for (let i = 0; i < foundMarkers.length; i++) {
+      const start = foundMarkers[i].index;
+      const end = i < foundMarkers.length - 1 ? foundMarkers[i + 1].index : fullText.length;
+      const structureText = fullText.substring(start, end);
+      
+      structures.push({
+        name: formatStructureName(foundMarkers[i].name),
+        text: structureText
+      });
+    }
+  } else {
+    // No structure markers found - treat as single structure
+    structures.push({
+      name: 'Main Structure',
+      text: fullText
+    });
+  }
+  
+  return structures;
+}
+
+/**
+ * Format structure name for display
+ */
+function formatStructureName(rawName: string): string {
+  const normalized = rawName.trim();
+  
+  // Capitalize first letter of each word
+  return normalized
+    .split(/\s+/)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
+
+/**
+ * Combine measurements from multiple structures
+ */
+function combineStructures(structures: StructureMeasurements[]): RoofrMeasurements {
+  const combined: RoofrMeasurements = {
+    totalSquares: 0,
+    totalSqFt: 0,
+    ridgeLength: 0,
+    hipLength: 0,
+    valleyLength: 0,
+    eaveLength: 0,
+    rakeLength: 0,
+    flashingLength: 0,
+    predominantPitch: '',
+    facetCount: 0,
+    wallFlashing: 0,
+    stepFlashing: 0,
+    chimneySides: 0,
+    address: ''
+  };
+  
+  // Sum all numeric fields
+  for (const structure of structures) {
+    const m = structure.measurements;
+    combined.totalSquares += m.totalSquares;
+    combined.totalSqFt += m.totalSqFt;
+    combined.ridgeLength += m.ridgeLength;
+    combined.hipLength += m.hipLength;
+    combined.valleyLength += m.valleyLength;
+    combined.eaveLength += m.eaveLength;
+    combined.rakeLength += m.rakeLength;
+    combined.flashingLength += m.flashingLength;
+    combined.facetCount += m.facetCount;
+    combined.wallFlashing = (combined.wallFlashing || 0) + (m.wallFlashing || 0);
+    combined.stepFlashing = (combined.stepFlashing || 0) + (m.stepFlashing || 0);
+    combined.chimneySides = (combined.chimneySides || 0) + (m.chimneySides || 0);
+    
+    // Take first non-empty pitch
+    if (!combined.predominantPitch && m.predominantPitch) {
+      combined.predominantPitch = m.predominantPitch;
+    }
+    
+    // Take first address
+    if (!combined.address && m.address) {
+      combined.address = m.address;
+    }
+  }
+  
+  console.log('[RoofrParser] Combined measurements from', structures.length, 'structures');
+  
+  return combined;
 }

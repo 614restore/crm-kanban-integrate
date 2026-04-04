@@ -4,7 +4,7 @@
 import React, { useState } from 'react';
 import { toast } from 'sonner';
 import { FileUp, Loader2, CheckCircle, AlertCircle, FileText, Download } from 'lucide-react';
-import type { RoofrMeasurements } from '@/lib/roofrParser';
+import type { RoofrMeasurements, MultiStructureResult, StructureMeasurements } from '@/lib/roofrParser';
 import { generateEstimateFromMeasurements, generateEstimateSummary, formatEstimateForCustomer } from '@/lib/roofrEstimateGenerator';
 import { Contact } from '@/lib/crmData';
 
@@ -16,6 +16,8 @@ interface RoofrIntegrationProps {
 export function RoofrIntegration({ contact, onEstimateGenerated }: RoofrIntegrationProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [measurements, setMeasurements] = useState<RoofrMeasurements | null>(null);
+  const [multiStructureResult, setMultiStructureResult] = useState<MultiStructureResult | null>(null);
+  const [selectedStructure, setSelectedStructure] = useState<number>(0); // 0 = combined, 1+ = individual structures
   const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
   const [estimateSummary, setEstimateSummary] = useState<any>(null);
   
@@ -33,31 +35,41 @@ export function RoofrIntegration({ contact, onEstimateGenerated }: RoofrIntegrat
 
     setIsProcessing(true);
     toast.info('Parsing Roofr measurement report...');
+    setMeasurements(null);
+    setMultiStructureResult(null);
+    setSelectedStructure(0);
+    setValidationWarnings([]);
+    setEstimateSummary(null);
 
     try {
-      // Step 1: Parse PDF — lazy-load pdfjs-dist so it doesn't block app startup
-      const { parseRoofrPDF, validateMeasurements } = await import('@/lib/roofrParser');
-      const parsedMeasurements = await parseRoofrPDF(file);
-      setMeasurements(parsedMeasurements);
+      // Step 1: Parse PDF with multi-structure support
+      const { parseRoofrPDFWithStructures, validateMeasurements } = await import('@/lib/roofrParser');
+      const result = await parseRoofrPDFWithStructures(file);
+      
+      // Store full result
+      setMultiStructureResult(result);
+      setMeasurements(result.combinedMeasurements);
 
       // Step 2: Validate measurements
-      const validation = validateMeasurements(parsedMeasurements);
+      const validation = validateMeasurements(result.combinedMeasurements);
       setValidationWarnings(validation.warnings);
 
       if (validation.warnings.length > 0) {
         toast.warning('Measurements extracted with warnings - please review');
+      } else if (result.hasMultipleStructures) {
+        toast.success(`Found ${result.structures.length} structures! Use selector to view each.`);
       } else {
         toast.success('Measurements extracted successfully!');
       }
 
-      // Step 3: Generate estimate
-      const lineItems = generateEstimateFromMeasurements(parsedMeasurements);
-      const summary = generateEstimateSummary(parsedMeasurements, lineItems);
+      // Step 3: Generate estimate from combined measurements
+      const lineItems = generateEstimateFromMeasurements(result.combinedMeasurements);
+      const summary = generateEstimateSummary(result.combinedMeasurements, lineItems);
       setEstimateSummary(summary);
 
       // Step 4: Notify parent component
       if (onEstimateGenerated) {
-        onEstimateGenerated(lineItems, parsedMeasurements);
+        onEstimateGenerated(lineItems, result.combinedMeasurements);
       }
 
       toast.success(`Estimate generated: $${summary.totalCost.toLocaleString()}`);
@@ -68,6 +80,28 @@ export function RoofrIntegration({ contact, onEstimateGenerated }: RoofrIntegrat
       setIsProcessing(false);
       // Reset file input
       event.target.value = '';
+    }
+  };
+
+  const handleStructureChange = (structureIndex: number) => {
+    if (!multiStructureResult) return;
+    
+    setSelectedStructure(structureIndex);
+    
+    // Update measurements based on selection
+    if (structureIndex === 0) {
+      // Combined view
+      setMeasurements(multiStructureResult.combinedMeasurements);
+      const estimate = generateEstimateFromMeasurements(multiStructureResult.combinedMeasurements);
+      const summary = generateEstimateSummary(multiStructureResult.combinedMeasurements, estimate);
+      setEstimateSummary(summary);
+    } else {
+      // Individual structure
+      const structure = multiStructureResult.structures[structureIndex - 1];
+      setMeasurements(structure.measurements);
+      const estimate = generateEstimateFromMeasurements(structure.measurements);
+      const summary = generateEstimateSummary(structure.measurements, estimate);
+      setEstimateSummary(summary);
     }
   };
 
@@ -161,6 +195,45 @@ export function RoofrIntegration({ contact, onEstimateGenerated }: RoofrIntegrat
           </div>
         </div>
       )}
+      
+      {/* Structure Selector - shown when multiple structures detected */}
+      {multiStructureResult && multiStructureResult.hasMultipleStructures && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <div className="flex-1">
+              <h4 className="font-semibold text-blue-900 mb-2">
+                Multiple Structures Detected! 🏘️
+              </h4>
+              <p className="text-sm text-blue-700 mb-3">
+                This PDF contains {multiStructureResult.structures.length} structures. 
+                Select which one to view or use "All Combined" for total.
+              </p>
+              
+              {/* Structure Selector Dropdown */}
+              <select
+                value={selectedStructure}
+                onChange={(e) => handleStructureChange(Number(e.target.value))}
+                className="w-full px-3 py-2 border border-blue-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value={0}>
+                  All Combined ({multiStructureResult.combinedMeasurements.totalSquares.toFixed(1)} sq)
+                </option>
+                {multiStructureResult.structures.map((structure, index) => (
+                  <option key={index + 1} value={index + 1}>
+                    {structure.structureName} ({structure.measurements.totalSquares.toFixed(1)} sq)
+                  </option>
+                ))}
+              </select>
+              
+              {selectedStructure > 0 && (
+                <p className="text-xs text-blue-600 mt-2">
+                  💡 Viewing: {multiStructureResult.structures[selectedStructure - 1].structureName}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Measurements Display */}
       {measurements && (
@@ -239,10 +312,11 @@ export function RoofrIntegration({ contact, onEstimateGenerated }: RoofrIntegrat
                 <p className="text-xs text-green-700">
                   💡 <strong>Tip:</strong> Open browser console (F12) to see detailed extraction logs if values are missing.
                 </p>
-                <p className="text-xs text-green-700 mt-1">
-                  📋 <strong>Multiple structures?</strong> Currently showing combined measurements. 
-                  To separate main house from garage/shed, you may need to manually adjust values.
-                </p>
+                {!multiStructureResult?.hasMultipleStructures && (
+                  <p className="text-xs text-green-700 mt-1">
+                    📋 <strong>Multiple structures in PDF?</strong> The system will automatically detect and separate them!
+                  </p>
+                )}
               </div>
             </div>
           </div>
