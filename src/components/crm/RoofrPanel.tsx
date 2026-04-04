@@ -14,7 +14,7 @@ import { RoofrIntegration as RoofrAPI, RoofrReport } from '@/lib/integrations/ro
 import { RoofrIntegration as RoofrUploadComponent } from './RoofrIntegration';
 import { uploadDocument } from '@/lib/storage';
 import { Document } from '@/lib/crmData';
-import type { RoofrMeasurements } from '@/lib/roofrParser';
+import type { RoofrMeasurements, StructureMeasurements } from '@/lib/roofrParser';
 
 interface Props {
   address: string;
@@ -39,6 +39,8 @@ interface StoredOrder {
   statusMessage?: string;
   downloadUrl?: string;
   measurements?: RoofrReport['measurements'];
+  /** Per-structure breakdowns from a multi-structure Roofr PDF */
+  structures?: StructureMeasurements[];
 }
 
 const STATUS_LABEL: Record<OrderStatus, string> = {
@@ -376,17 +378,24 @@ export default function RoofrPanel({
             firstName: contactName?.split(' ')[0] || '',
             lastName: contactName?.split(' ').slice(1).join(' ') || '',
           } as any}
-          onEstimateGenerated={(lineItems, measurements) => {
+          onEstimateGenerated={(lineItems, measurements, multiResult) => {
             persistOrder({
               reportId: `UPLOADED-${Date.now()}`,
               address: fullAddress,
               reportType: 'premium',
               orderedAt: new Date().toISOString(),
               status: 'completed',
-              statusMessage: 'Uploaded from PDF',
+              statusMessage: multiResult?.hasMultipleStructures
+                ? `${multiResult.structures.length} structures detected`
+                : 'Uploaded from PDF',
               measurements: measurements,
+              structures: multiResult?.structures,
             });
-            toast.success('Measurements extracted! Navigate to Estimates to create a quote.');
+            if (multiResult?.hasMultipleStructures) {
+              toast.success(`Found ${multiResult.structures.length} structures! See measurements below.`);
+            } else {
+              toast.success('Measurements extracted! Navigate to Estimates to create a quote.');
+            }
           }}
         />
       </div>
@@ -439,7 +448,39 @@ export default function RoofrPanel({
             )}
 
             {/* Measurements inline when available */}
-            {order.measurements && (
+            {order.structures && order.structures.length > 1 ? (
+              /* ── Multi-structure: show each structure separately ── */
+              <div className="mt-3 mb-3 space-y-4">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Roof Measurements by Structure</p>
+                {order.structures.map((structure) => (
+                  <div key={structure.structureIndex} className="border border-blue-100 rounded-lg p-3 bg-blue-50/40">
+                    <p className="text-xs font-bold text-blue-800 mb-2">
+                      {structure.structureName} &nbsp;·&nbsp; {structure.measurements.totalSquares.toFixed(1)} SQ
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { label: 'Total Squares', value: `${structure.measurements.totalSquares.toFixed(1)} sq` },
+                        { label: 'Total Area', value: `${structure.measurements.totalSqFt.toLocaleString()} sq ft` },
+                        { label: 'Predominant Pitch', value: structure.measurements.predominantPitch || '—' },
+                        { label: 'Facets', value: structure.measurements.facetCount > 0 ? String(structure.measurements.facetCount) : '—' },
+                        { label: 'Ridge', value: structure.measurements.ridgeLength > 0 ? `${structure.measurements.ridgeLength.toFixed(0)} LF` : '—' },
+                        { label: 'Hip', value: structure.measurements.hipLength > 0 ? `${structure.measurements.hipLength.toFixed(0)} LF` : '—' },
+                        { label: 'Valley', value: structure.measurements.valleyLength > 0 ? `${structure.measurements.valleyLength.toFixed(0)} LF` : '—' },
+                        { label: 'Eave', value: structure.measurements.eaveLength > 0 ? `${structure.measurements.eaveLength.toFixed(0)} LF` : '—' },
+                        { label: 'Rake', value: structure.measurements.rakeLength > 0 ? `${structure.measurements.rakeLength.toFixed(0)} LF` : '—' },
+                        { label: 'Flashing', value: structure.measurements.flashingLength > 0 ? `${structure.measurements.flashingLength.toFixed(0)} LF` : '—' },
+                      ].map(({ label, value }) => (
+                        <div key={label} className="bg-white border border-blue-100 rounded-lg px-3 py-2">
+                          <p className="text-xs text-gray-400">{label}</p>
+                          <p className="text-sm font-semibold text-gray-800">{value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : order.measurements ? (
+              /* ── Single structure / API-ordered report ── */
               <div className="mt-3 mb-3">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Roof Measurements</p>
                 <div className="grid grid-cols-2 gap-2">
@@ -462,7 +503,7 @@ export default function RoofrPanel({
                   ))}
                 </div>
               </div>
-            )}
+            ) : null}
 
             <div className="flex flex-wrap gap-2 mt-3">
               {order.status !== 'completed' && order.status !== 'failed' && (
@@ -539,18 +580,24 @@ export default function RoofrPanel({
                 firstName: contactName?.split(' ')[0] || '',
                 lastName: contactName?.split(' ').slice(1).join(' ') || '',
               } as any}
-              onEstimateGenerated={(lineItems, measurements) => {
-                // Store measurements in order state for display
+              onEstimateGenerated={(lineItems, measurements, multiResult) => {
                 persistOrder({
                   reportId: `UPLOADED-${Date.now()}`,
                   address: fullAddress,
                   reportType: 'premium',
                   orderedAt: new Date().toISOString(),
                   status: 'completed',
-                  statusMessage: 'Uploaded from PDF',
+                  statusMessage: multiResult?.hasMultipleStructures
+                    ? `${multiResult.structures.length} structures detected`
+                    : 'Uploaded from PDF',
                   measurements: measurements,
+                  structures: multiResult?.structures,
                 });
-                toast.success('Measurements extracted! Navigate to Estimates to create a quote.');
+                if (multiResult?.hasMultipleStructures) {
+                  toast.success(`Found ${multiResult.structures.length} structures! See measurements below.`);
+                } else {
+                  toast.success('Measurements extracted! Navigate to Estimates to create a quote.');
+                }
               }}
             />
           </div>

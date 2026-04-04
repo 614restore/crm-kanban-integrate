@@ -10,7 +10,7 @@ import { Contact } from '@/lib/crmData';
 
 interface RoofrIntegrationProps {
   contact: Contact;
-  onEstimateGenerated?: (lineItems: any[], measurements: RoofrMeasurements) => void;
+  onEstimateGenerated?: (lineItems: any[], measurements: RoofrMeasurements, multiStructureResult?: MultiStructureResult) => void;
 }
 
 export function RoofrIntegration({ contact, onEstimateGenerated }: RoofrIntegrationProps) {
@@ -67,9 +67,14 @@ export function RoofrIntegration({ contact, onEstimateGenerated }: RoofrIntegrat
       const summary = generateEstimateSummary(result.combinedMeasurements, lineItems);
       setEstimateSummary(summary);
 
-      // Step 4: Notify parent component
+      // Step 4: Notify parent component — pass full multi-structure result so
+      // the parent can store per-structure measurements instead of combined only
       if (onEstimateGenerated) {
-        onEstimateGenerated(lineItems, result.combinedMeasurements);
+        onEstimateGenerated(
+          lineItems,
+          result.combinedMeasurements,
+          result.hasMultipleStructures ? result : undefined,
+        );
       }
 
       toast.success(`Estimate generated: $${summary.totalCost.toLocaleString()}`);
