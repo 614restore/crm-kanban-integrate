@@ -3,12 +3,10 @@
 
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Configure worker — use local bundle to avoid CDN blocks (e.g. Tauri CSP)
+// Configure worker — use CDN for reliability in production
 if (typeof window !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-    'pdfjs-dist/build/pdf.worker.min.mjs',
-    import.meta.url
-  ).toString();
+  // Use the same version as installed package (3.11.174)
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.mjs`;
 }
 
 export interface RoofrMeasurements {
