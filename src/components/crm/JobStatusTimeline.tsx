@@ -86,10 +86,11 @@ const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({ contact, jobs = [
   };
 
   const handleStageClick = (status: CustomerStatus, index: number) => {
-    // Only allow reverting to past stages
     if (index < currentStatusIndex) {
       setRevertTargetStage(status);
       setShowRevertModal(true);
+    } else if (index > currentStatusIndex && onStatusChange) {
+      onStatusChange(status);
     }
   };
 
@@ -180,9 +181,12 @@ const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({ contact, jobs = [
                 )}
                 
                 {/* Step Item */}
-                <div className="flex items-start gap-4 pb-8">
+                <div
+                  className={`flex items-start gap-4 pb-8 ${index > currentStatusIndex && onStatusChange ? 'cursor-pointer hover:opacity-80' : ''}`}
+                  onClick={() => handleStageClick(step.status, index)}
+                >
                   {/* Icon */}
-                  <div 
+                  <div
                     className={`w-12 h-12 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${getStatusColor(index)}`}
                   >
                     {isCompleted ? (
@@ -295,36 +299,39 @@ const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({ contact, jobs = [
       {/* Pipeline Stages - Interactive for mobile */}
       <div className="bg-white rounded-lg border border-gray-200 p-4 mb-safe">
         <h3 className="text-lg font-semibold text-gray-900 mb-2">Pipeline Stages</h3>
-        <p className="text-sm text-gray-600 mb-4">TAP ANY PAST STAGE TO REVERT</p>
-        
+        <p className="text-sm text-gray-600 mb-4">
+          {currentStatusIndex > 0
+            ? 'Tap a future stage to advance · Tap a past stage to revert'
+            : 'Tap any stage below to advance this contact'}
+        </p>
+
         <div className="space-y-2">
           {statusSteps.map((step, index) => {
             const isCompleted = index < currentStatusIndex;
             const isCurrent = index === currentStatusIndex;
             const isPending = index > currentStatusIndex;
-            
+
             return (
               <div
                 key={step.status}
                 onClick={() => handleStageClick(step.status, index)}
                 className={`
-                  flex items-center gap-3 p-3 rounded-lg border-2 transition-all
-                  ${isCurrent ? 
-                    'border-blue-500 bg-blue-50' : 
-                    isCompleted ? 
-                      'border-green-200 bg-green-50 cursor-pointer hover:bg-green-100' : 
-                      'border-gray-200 bg-gray-50'
+                  flex items-center gap-3 p-3 rounded-lg border-2 transition-all cursor-pointer active:scale-95
+                  ${isCurrent ?
+                    'border-blue-500 bg-blue-50 hover:bg-blue-100' :
+                    isCompleted ?
+                      'border-green-200 bg-green-50 hover:bg-green-100' :
+                      'border-gray-200 bg-gray-50 hover:bg-gray-100'
                   }
-                  ${isCompleted ? 'active:scale-95' : ''}
                 `}
               >
                 {/* Stage Icon */}
                 <div className={`
                   w-6 h-6 rounded-full flex items-center justify-center border-2
-                  ${isCurrent ? 
-                    'border-blue-500 bg-blue-500' : 
-                    isCompleted ? 
-                      'border-green-500 bg-green-500' : 
+                  ${isCurrent ?
+                    'border-blue-500 bg-blue-500' :
+                    isCompleted ?
+                      'border-green-500 bg-green-500' :
                       'border-gray-300 bg-white'
                   }
                 `}>
@@ -336,30 +343,24 @@ const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({ contact, jobs = [
                     <Circle className="w-3 h-3 text-gray-400" />
                   )}
                 </div>
-                
+
                 {/* Stage Details */}
                 <div className="flex-1">
                   <div className={`font-medium ${
-                    isCurrent ? 'text-blue-900' : 
-                    isCompleted ? 'text-green-900' : 
+                    isCurrent ? 'text-blue-900' :
+                    isCompleted ? 'text-green-900' :
                     'text-gray-600'
                   }`}>
                     {step.label}
                   </div>
                   {isCompleted && (
-                    <div className="text-xs text-green-600 font-medium">
-                      Tap to revert
-                    </div>
+                    <div className="text-xs text-green-600 font-medium">Tap to revert</div>
                   )}
                   {isCurrent && (
-                    <div className="text-xs text-blue-600 font-medium">
-                      Current stage
-                    </div>
+                    <div className="text-xs text-blue-600 font-medium">Current stage</div>
                   )}
                   {isPending && (
-                    <div className="text-xs text-gray-500">
-                      Pending
-                    </div>
+                    <div className="text-xs text-blue-500 font-medium">Tap to advance</div>
                   )}
                 </div>
               </div>

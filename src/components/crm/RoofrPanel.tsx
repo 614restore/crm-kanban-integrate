@@ -1,17 +1,20 @@
 // RoofrPanel — order aerial roof measurement reports via Roofr for a customer
 // property, poll for completion, display measurements inline, and save the
 // report to the customer's document library.
+// ENHANCED: Now includes PDF upload & auto-estimate generation
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Ruler, Loader2, Settings, CheckCircle, AlertTriangle,
-  FileText, Download, RefreshCw, Clock, ExternalLink,
+  FileText, Download, RefreshCw, Clock, ExternalLink, Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { db } from '@/lib/database';
-import { RoofrIntegration, RoofrReport } from '@/lib/integrations/roofr';
+import { RoofrIntegration as RoofrAPI, RoofrReport } from '@/lib/integrations/roofr';
+import { RoofrIntegration as RoofrUploadComponent } from './RoofrIntegration';
 import { uploadDocument } from '@/lib/storage';
 import { Document } from '@/lib/crmData';
+import type { RoofrMeasurements } from '@/lib/roofrParser';
 
 interface Props {
   address: string;
@@ -359,10 +362,33 @@ export default function RoofrPanel({
           <Ruler size={20} className="text-green-600" />
           <h3 className="text-lg font-semibold text-gray-900">Roofr Measurement Reports</h3>
         </div>
-        <div className="flex items-start gap-2 bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-500">
+        <div className="flex items-start gap-2 bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-500 mb-4">
           <Settings size={16} className="mt-0.5 shrink-0" />
-          <span>Roofr is not connected. Add your API key in <strong>Settings → Integrations</strong>.</span>
+          <span>Roofr API not connected — ordering disabled. Add your key in <strong>Settings → Integrations</strong> to order reports. You can still upload a PDF below.</span>
         </div>
+        <div className="flex items-center gap-2 mb-3">
+          <Sparkles size={18} className="text-blue-600" />
+          <h4 className="font-semibold text-gray-900">Upload Roofr PDF</h4>
+        </div>
+        <RoofrUploadComponent
+          contact={{
+            id: contactId,
+            firstName: contactName?.split(' ')[0] || '',
+            lastName: contactName?.split(' ').slice(1).join(' ') || '',
+          } as any}
+          onEstimateGenerated={(lineItems, measurements) => {
+            persistOrder({
+              reportId: `UPLOADED-${Date.now()}`,
+              address: fullAddress,
+              reportType: 'premium',
+              orderedAt: new Date().toISOString(),
+              status: 'completed',
+              statusMessage: 'Uploaded from PDF',
+              measurements: measurements,
+            });
+            toast.success('Measurements extracted! Navigate to Estimates to create a quote.');
+          }}
+        />
       </div>
     );
   }
@@ -495,56 +521,101 @@ export default function RoofrPanel({
           {order.status === 'processing' && (
             <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-lg p-3 text-sm text-blue-700">
               <Clock size={16} className="mt-0.5 shrink-0" />
-              Roofr is processing your report. Most reports complete in 15–30 minutes.
+              Report is processing. This usually takes 24–48 hours. Check back or click <strong>Check Status</strong> to refresh.
             </div>
           )}
         </div>
       ) : (
-        /* New order form */
-        <div className="space-y-4">
-          {!address && (
-            <div className="flex items-start gap-2 bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-700">
-              <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-              No address saved for this customer — add their property address in the Overview tab first.
-            </div>
-          )}
-
+        <div className="space-y-6">
+          {/* PDF Upload Section */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1.5">Report Type</label>
-            <div className="flex gap-3">
-              {(['standard', 'premium'] as const).map((type) => (
-                <button
-                  key={type}
-                  onClick={() => setReportType(type)}
-                  className={`flex-1 p-3 border-2 rounded-xl text-sm font-medium transition-colors ${
-                    reportType === type
-                      ? 'border-green-500 bg-green-50 text-green-700'
-                      : 'border-gray-200 hover:border-gray-300 text-gray-600'
-                  }`}
-                >
-                  <div className="font-semibold capitalize">{type}</div>
-                  <div className="text-xs mt-0.5 font-normal opacity-75">
-                    {type === 'standard'
-                      ? 'Key measurements & pitch'
-                      : 'Full detail with 3D imagery'}
-                  </div>
-                </button>
-              ))}
+            <div className="flex items-center gap-2 mb-3">
+              <Sparkles size={18} className="text-blue-600" />
+              <h4 className="font-semibold text-gray-900">Upload Roofr PDF</h4>
+            </div>
+            <RoofrUploadComponent 
+              contact={{
+                id: contactId,
+                firstName: contactName?.split(' ')[0] || '',
+                lastName: contactName?.split(' ').slice(1).join(' ') || '',
+              } as any}
+              onEstimateGenerated={(lineItems, measurements) => {
+                // Store measurements in order state for display
+                persistOrder({
+                  reportId: `UPLOADED-${Date.now()}`,
+                  address: fullAddress,
+                  reportType: 'premium',
+                  orderedAt: new Date().toISOString(),
+                  status: 'completed',
+                  statusMessage: 'Uploaded from PDF',
+                  measurements: measurements,
+                });
+                toast.success('Measurements extracted! Navigate to Estimates to create a quote.');
+              }}
+            />
+          </div>
+
+          {/* OR Divider */}
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-200"></div>
+            </div>
+            <div className="relative flex justify-center text-xs">
+              <span className="bg-white px-2 text-gray-500">OR</span>
             </div>
           </div>
 
-          <button
-            onClick={handleOrderReport}
-            disabled={loading || !address}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white text-sm font-semibold rounded-xl hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {loading ? <Loader2 size={16} className="animate-spin" /> : <Ruler size={16} />}
-            {loading ? 'Ordering…' : `Order ${reportType.charAt(0).toUpperCase() + reportType.slice(1)} Report`}
-          </button>
+          {/* Order New Report Section */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <Ruler size={18} className="text-green-600" />
+              <h4 className="font-semibold text-gray-900">Order New Report</h4>
+            </div>
+            
+            {!address && (
+              <div className="flex items-start gap-2 bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-700 mb-4">
+                <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+                No address saved for this customer — add their property address in the Overview tab first.
+              </div>
+            )}
 
-          <p className="text-xs text-gray-400 text-center">
-            Roofr uses aerial imagery to measure this customer's roof instantly.
-          </p>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1.5">Report Type</label>
+              <div className="flex gap-3">
+                {(['standard', 'premium'] as const).map((type) => (
+                  <button
+                    key={type}
+                    onClick={() => setReportType(type)}
+                    className={`flex-1 p-3 border-2 rounded-xl text-sm font-medium transition-colors ${
+                      reportType === type
+                        ? 'border-green-500 bg-green-50 text-green-700'
+                        : 'border-gray-200 hover:border-gray-300 text-gray-600'
+                    }`}
+                  >
+                    <div className="font-semibold capitalize">{type}</div>
+                    <div className="text-xs mt-0.5 font-normal opacity-75">
+                      {type === 'standard'
+                        ? 'Key measurements & pitch'
+                        : 'Full detail with 3D imagery'}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <button
+              onClick={handleOrderReport}
+              disabled={loading || !address}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white text-sm font-semibold rounded-xl hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors mt-4"
+            >
+              {loading ? <Loader2 size={16} className="animate-spin" /> : <Ruler size={16} />}
+              {loading ? 'Ordering…' : `Order ${reportType.charAt(0).toUpperCase() + reportType.slice(1)} Report`}
+            </button>
+
+            <p className="text-xs text-gray-400 text-center mt-3">
+              Roofr uses aerial imagery to measure this customer's roof instantly.
+            </p>
+          </div>
         </div>
       )}
 

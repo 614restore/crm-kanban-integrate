@@ -30,12 +30,38 @@ const PIPELINE_STAGES: PipelineStage[] = [
   { status: 'completed', label: 'Completed', order: 16 },
 ];
 
-// Map insurance-specific statuses to equivalent pipeline stages
+// Map ALL status variants to canonical pipeline stages.
+// This handles legacy DB values, alternate spellings, and insurance-specific statuses.
 const STATUS_MAPPING: Record<string, CustomerStatus> = {
-  'retail': 'estimate_sent',  // Retail lead maps to estimate stage
-  'claim_filed': 'appt_set', // Insurance claim filed ~ appointment stage
-  'adjuster_scheduled': 'inspection_completed', // Adjuster visit ~ inspection done
-  'supplement_filed': 'estimating', // Supplement ~ creating estimate
+  // Lead variants
+  'new_lead':             'prospect',
+  'contacted':            'lead',
+
+  // Appointment variants
+  'appointment_set':      'appt_set',
+  'inspection_scheduled': 'appt_set',
+
+  // Inspection variants - ENHANCED with more mappings
+  'inspection_complete':  'inspection_completed',
+  'inspection_completed': 'inspection_completed',
+  'inspected':            'inspection_completed',
+  'inspection done':      'inspection_completed',
+  'inspection_done':      'inspection_completed',
+
+  // Estimate / signed variants
+  'estimate_sent':        'estimate_sent',
+  'signed_won':           'signed',
+  'signed':               'signed',
+
+  // Insurance-specific stages
+  'retail':               'estimate_sent',
+  'claim_filed':          'appt_set',
+  'adjuster_scheduled':   'inspection_completed',
+  'supplement_filed':     'estimating',
+
+  // End-state variants
+  'paid':                 'completed',
+  'payment_received':     'completed',
 };
 
 interface PipelineStageTrackerProps {
@@ -57,10 +83,16 @@ export function PipelineStageTracker({ currentStatus, statusChangedAt, inspectio
   // Find current stage index
   let currentStageIndex = PIPELINE_STAGES.findIndex(stage => stage.status === effectiveStatus);
   
-  // CRITICAL FIX: If status not found in pipeline, default to first stage instead of -1
+  // If status not found in pipeline, guess best stage from keywords
   if (currentStageIndex === -1) {
-    console.warn(`[PipelineStageTracker] Status "${currentStatus}" (effective: "${effectiveStatus}") not found in pipeline stages. Defaulting to first stage.`);
-    currentStageIndex = 0; // Default to "New Lead" instead of breaking the UI
+    const statusLower = effectiveStatus.toLowerCase();
+    if (statusLower.includes('inspection') && statusLower.includes('complet')) {
+      currentStageIndex = 3;
+    } else if (statusLower.includes('estimat')) {
+      currentStageIndex = 4;
+    } else {
+      currentStageIndex = 0;
+    }
   }
   
   // Handle special statuses
