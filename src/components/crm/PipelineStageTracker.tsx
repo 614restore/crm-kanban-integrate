@@ -30,12 +30,34 @@ const PIPELINE_STAGES: PipelineStage[] = [
   { status: 'completed', label: 'Completed', order: 16 },
 ];
 
-// Map insurance-specific statuses to equivalent pipeline stages
+// Map ALL status variants to canonical pipeline stages.
+// This handles legacy DB values, alternate spellings, and insurance-specific statuses.
 const STATUS_MAPPING: Record<string, CustomerStatus> = {
-  'retail': 'estimate_sent',  // Retail lead maps to estimate stage
-  'claim_filed': 'appt_set', // Insurance claim filed ~ appointment stage
-  'adjuster_scheduled': 'inspection_completed', // Adjuster visit ~ inspection done
-  'supplement_filed': 'estimating', // Supplement ~ creating estimate
+  // Lead variants
+  'new_lead':             'prospect',
+  'contacted':            'lead',
+
+  // Appointment variants
+  'appointment_set':      'appt_set',
+  'inspection_scheduled': 'appt_set',
+
+  // Inspection variants
+  'inspection_complete':  'inspection_completed',
+  'inspection_completed': 'inspection_completed',
+  'inspected':            'inspection_completed',
+
+  // Estimate / signed variants
+  'estimate_sent':        'estimate_sent',
+  'signed_won':           'signed',
+
+  // Insurance-specific stages
+  'retail':               'estimate_sent',
+  'claim_filed':          'appt_set',
+  'adjuster_scheduled':   'inspection_completed',
+  'supplement_filed':     'estimating',
+
+  // End-state variants
+  'paid':                 'completed',
 };
 
 interface PipelineStageTrackerProps {
