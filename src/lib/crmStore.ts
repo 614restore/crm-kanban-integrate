@@ -131,6 +131,7 @@ export type CRMAction =
   | { type: 'SET_APPOINTMENTS'; payload: Appointment[] }
   | { type: 'ADD_INVOICE'; payload: Invoice }
   | { type: 'UPDATE_INVOICE'; payload: Invoice }
+  | { type: 'DELETE_INVOICE'; payload: string }
   | { type: 'SET_INVOICES'; payload: Invoice[] }
   | { type: 'ADD_TEAM_MEMBER'; payload: TeamMember }
   | { type: 'UPDATE_TEAM_MEMBER'; payload: TeamMember }
@@ -369,9 +370,12 @@ export function crmReducer(state: CRMState, action: CRMAction): CRMState {
         ),
       };
     
+    case 'DELETE_INVOICE':
+      return { ...state, invoices: state.invoices.filter((i) => i.id !== action.payload) };
+
     case 'SET_INVOICES':
       return { ...state, invoices: action.payload };
-    
+
     case 'ADD_SUPPLIER':
       return { ...state, suppliers: [...state.suppliers, action.payload] };
     

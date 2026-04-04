@@ -492,6 +492,11 @@ function CRMApp() {
   const isReloadingRef = useRef(false);
   const queuedReloadRef = useRef(false);
   const lastHiddenAtRef = useRef<number>(0);
+  // Always-current snapshot of state for use inside realtime handler closures.
+  // Handlers are created once (on company_id), so without this ref they'd hold
+  // stale state (e.g. an empty contacts array for contactName lookups).
+  const stateRef = useRef(state);
+  useEffect(() => { stateRef.current = state; }, [state]);
 
   // Race a DB fetch against a per-query timeout; resolves to fallback on timeout instead of
   // blocking the whole Promise.all. Prevents a single slow Supabase query from stalling the UI.
@@ -965,24 +970,57 @@ function CRMApp() {
         }
       },
       onAppointmentChange: (payload) => {
-        // Reload appointments to get contact names
-        requestSoftReload();
+        if (payload.eventType === 'DELETE') {
+          dispatch({ type: 'DELETE_APPOINTMENT', payload: payload.old.id });
+        } else {
+          const contacts = stateRef.current.contacts;
+          const apt = dbAppointmentToAppAppointment(payload.new, contacts);
+          dispatch({ type: payload.eventType === 'INSERT' ? 'ADD_APPOINTMENT' : 'UPDATE_APPOINTMENT', payload: apt });
+        }
       },
       onInvoiceChange: (payload) => {
-        // Reload invoices to get contact names
-        requestSoftReload();
+        if (payload.eventType === 'DELETE') {
+          dispatch({ type: 'DELETE_INVOICE', payload: payload.old.id });
+        } else {
+          const contacts = stateRef.current.contacts;
+          const inv = dbInvoiceToAppInvoice(payload.new, contacts);
+          dispatch({ type: payload.eventType === 'INSERT' ? 'ADD_INVOICE' : 'UPDATE_INVOICE', payload: inv });
+        }
       },
-      onCommunicationChange: (payload) => {
+      onCommunicationChange: () => {
+        // Communications are embedded in contact objects — a targeted soft reload
+        // is still needed here, but it's rate-limited by isReloadingRef/queuedReloadRef.
         requestSoftReload();
       },
       onLeadSourceChange: () => {
         requestSoftReload();
       },
       onBoardChange: () => {
+        // Board changes involve column structures — soft reload is still needed.
         requestSoftReload();
       },
-      onTeamMemberChange: () => {
-        requestSoftReload();
+      onTeamMemberChange: (payload) => {
+        if (payload.eventType === 'DELETE') {
+          requestSoftReload(); // rare; reload to clean up references
+        } else {
+          const tm = payload.new;
+          const teamMember: TeamMember = {
+            id: tm.id,
+            name: `${tm.first_name || ''} ${tm.last_name || ''}`.trim() || tm.email,
+            email: tm.email,
+            role: (tm.role || 'sales') as any,
+            avatar: tm.avatar_url || buildFallbackAvatar(tm.first_name, tm.last_name, tm.email),
+            phone: tm.phone || '',
+            department: tm.department || 'General',
+            isActive: tm.is_active,
+            commission_rate: tm.commission_rate,
+            commission_rate_self_gen: tm.commission_rate_self_gen,
+            commission_rate_company: tm.commission_rate_company,
+            commission_rate_custom: tm.commission_rate_custom,
+            member_type: tm.member_type,
+          };
+          dispatch({ type: payload.eventType === 'INSERT' ? 'ADD_TEAM_MEMBER' : 'UPDATE_TEAM_MEMBER', payload: teamMember });
+        }
       },
       onStatusChange: (status, error) => {
         if ((status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') && !realtimeFailedRef.current) {
