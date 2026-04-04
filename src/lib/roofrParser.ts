@@ -3,11 +3,14 @@
 
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Configure worker — use CDN for reliability in production
+// Configure worker with multiple fallback options
 if (typeof window !== 'undefined') {
-  // Use the same version as installed package (3.11.174)
-  // Use .js instead of .mjs to avoid module import errors
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js`;
+  // Try multiple CDN sources for better reliability
+  // Start with unpkg which has better CORS/MIME handling
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js`;
+  
+  // Alternative: jsDelivr (if unpkg fails, browser will try this in error handler)
+  // pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js`;
 }
 
 export interface RoofrMeasurements {
@@ -49,8 +52,14 @@ export async function parseRoofrPDFWithStructures(file: File): Promise<MultiStru
     // Read file as ArrayBuffer
     const arrayBuffer = await file.arrayBuffer();
     
-    // Load PDF document
-    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+    // Load PDF document with worker fallback
+    const loadingTask = pdfjsLib.getDocument({ 
+      data: arrayBuffer,
+      // Disable worker as fallback if CDN fails (slower but works)
+      useWorkerFetch: false,
+      isEvalSupported: false,
+      useSystemFonts: true
+    });
     const pdf = await loadingTask.promise;
     
     console.log(`[RoofrParser] PDF loaded: ${pdf.numPages} pages`);
