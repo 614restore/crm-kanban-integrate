@@ -73,12 +73,21 @@ function extractMeasurements(text: string): RoofrMeasurements {
   // Normalize text for easier parsing
   const normalized = text.replace(/\s+/g, ' ').toLowerCase();
   
-  // Helper to extract numeric value
-  const extract = (pattern: RegExp): number => {
-    const match = normalized.match(pattern);
-    if (!match) return 0;
-    const value = match[1].replace(/,/g, '');
-    return parseFloat(value) || 0;
+  // Helper to extract numeric value with better pattern matching
+  const extract = (patterns: RegExp[], fieldName: string): number => {
+    for (const pattern of patterns) {
+      const match = normalized.match(pattern);
+      if (match && match[1]) {
+        const value = match[1].replace(/,/g, '');
+        const num = parseFloat(value);
+        if (!isNaN(num) && num > 0) {
+          console.log(`[RoofrParser] Found ${fieldName}: ${num} (pattern: ${pattern.source})`);
+          return num;
+        }
+      }
+    }
+    console.warn(`[RoofrParser] Could not extract ${fieldName} from text`);
+    return 0;
   };
   
   // Helper to extract pitch
@@ -98,35 +107,79 @@ function extractMeasurements(text: string): RoofrMeasurements {
     return addressMatch?.[1]?.trim();
   };
   
-  // Common Roofr PDF patterns
+  // Multiple patterns for each field to handle different Roofr PDF formats
   const patterns = {
-    totalSquares: /(?:total squares?|roofing squares?)[:\s]+([\d,.]+)/i,
-    totalSqFt: /(?:total (?:square feet|sq\.?\s*ft\.?)|area)[:\s]+([\d,]+)/i,
-    ridgeLength: /(?:ridge (?:length|linear)|ridge)[:\s]+([\d,.]+)/i,
-    hipLength: /(?:hip (?:length|linear)|hips?)[:\s]+([\d,.]+)/i,
-    valleyLength: /(?:valley (?:length|linear)|valleys?)[:\s]+([\d,.]+)/i,
-    eaveLength: /(?:eave (?:length|linear)|eaves?|perimeter)[:\s]+([\d,.]+)/i,
-    rakeLength: /(?:rake (?:length|linear)|rakes?)[:\s]+([\d,.]+)/i,
-    flashingLength: /(?:flashing (?:length|linear)|flashing)[:\s]+([\d,.]+)/i,
-    facetCount: /(?:facets?|planes?|sections?)[:\s]+([\d]+)/i,
-    wallFlashing: /(?:wall flashing)[:\s]+([\d,.]+)/i,
-    stepFlashing: /(?:step flashing)[:\s]+([\d,.]+)/i,
+    totalSquares: [
+      /(?:total\s+squares?)[:\s]+([\d,.]+)/i,
+      /(?:roofing\s+squares?)[:\s]+([\d,.]+)/i,
+      /(?:squares?)[:\s]+([\d,.]+)/i,
+    ],
+    totalSqFt: [
+      /(?:total\s+(?:square\s*feet|sq\.?\s*ft\.?))[:\s]+([\d,]+)/i,
+      /(?:total\s+area)[:\s]+([\d,]+)/i,
+      /(?:area)[:\s]+([\d,]+)\s*(?:sq\.?\s*ft\.?|square\s*feet)/i,
+    ],
+    ridgeLength: [
+      /(?:ridge\s+length)[:\s]+([\d,.]+)/i,
+      /(?:ridge\s+linear)[:\s]+([\d,.]+)/i,
+      /(?:ridge)[:\s]+([\d,.]+)\s*(?:ft|lf|linear|feet)/i,
+      /(?:ridges?)[:\s]+([\d,.]+)/i,
+    ],
+    hipLength: [
+      /(?:hip\s+length)[:\s]+([\d,.]+)/i,
+      /(?:hip\s+linear)[:\s]+([\d,.]+)/i,
+      /(?:hips?)[:\s]+([\d,.]+)\s*(?:ft|lf|linear|feet)/i,
+    ],
+    valleyLength: [
+      /(?:valley\s+length)[:\s]+([\d,.]+)/i,
+      /(?:valley\s+linear)[:\s]+([\d,.]+)/i,
+      /(?:valleys?)[:\s]+([\d,.]+)\s*(?:ft|lf|linear|feet)/i,
+    ],
+    eaveLength: [
+      /(?:eave\s+length)[:\s]+([\d,.]+)/i,
+      /(?:eave\s+linear)[:\s]+([\d,.]+)/i,
+      /(?:eaves?)[:\s]+([\d,.]+)\s*(?:ft|lf|linear|feet)/i,
+      /(?:perimeter)[:\s]+([\d,.]+)/i,
+    ],
+    rakeLength: [
+      /(?:rake\s+length)[:\s]+([\d,.]+)/i,
+      /(?:rake\s+linear)[:\s]+([\d,.]+)/i,
+      /(?:rakes?)[:\s]+([\d,.]+)\s*(?:ft|lf|linear|feet)/i,
+    ],
+    flashingLength: [
+      /(?:flashing\s+length)[:\s]+([\d,.]+)/i,
+      /(?:flashing\s+linear)[:\s]+([\d,.]+)/i,
+      /(?:flashing)[:\s]+([\d,.]+)\s*(?:ft|lf|linear|feet)/i,
+    ],
+    facetCount: [
+      /(?:facets?)[:\s]+([\d]+)/i,
+      /(?:planes?)[:\s]+([\d]+)/i,
+      /(?:sections?)[:\s]+([\d]+)/i,
+      /(?:roof\s+planes?)[:\s]+([\d]+)/i,
+      /(?:number\s+of\s+facets?)[:\s]+([\d]+)/i,
+    ],
+    wallFlashing: [
+      /(?:wall\s+flashing)[:\s]+([\d,.]+)/i,
+    ],
+    stepFlashing: [
+      /(?:step\s+flashing)[:\s]+([\d,.]+)/i,
+    ],
   };
   
-  // Extract all measurements
+  // Extract all measurements with new multi-pattern approach
   const measurements: RoofrMeasurements = {
-    totalSquares: extract(patterns.totalSquares),
-    totalSqFt: extract(patterns.totalSqFt),
-    ridgeLength: extract(patterns.ridgeLength),
-    hipLength: extract(patterns.hipLength),
-    valleyLength: extract(patterns.valleyLength),
-    eaveLength: extract(patterns.eaveLength),
-    rakeLength: extract(patterns.rakeLength),
-    flashingLength: extract(patterns.flashingLength),
+    totalSquares: extract(patterns.totalSquares, 'totalSquares'),
+    totalSqFt: extract(patterns.totalSqFt, 'totalSqFt'),
+    ridgeLength: extract(patterns.ridgeLength, 'ridgeLength'),
+    hipLength: extract(patterns.hipLength, 'hipLength'),
+    valleyLength: extract(patterns.valleyLength, 'valleyLength'),
+    eaveLength: extract(patterns.eaveLength, 'eaveLength'),
+    rakeLength: extract(patterns.rakeLength, 'rakeLength'),
+    flashingLength: extract(patterns.flashingLength, 'flashingLength'),
     predominantPitch: extractPitch(),
-    facetCount: extract(patterns.facetCount),
-    wallFlashing: extract(patterns.wallFlashing) || undefined,
-    stepFlashing: extract(patterns.stepFlashing) || undefined,
+    facetCount: extract(patterns.facetCount, 'facetCount'),
+    wallFlashing: extract(patterns.wallFlashing, 'wallFlashing') || undefined,
+    stepFlashing: extract(patterns.stepFlashing, 'stepFlashing') || undefined,
     address: extractAddress(),
   };
   

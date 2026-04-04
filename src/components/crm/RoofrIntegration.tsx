@@ -185,19 +185,31 @@ export function RoofrIntegration({ contact, onEstimateGenerated }: RoofrIntegrat
                 <div>
                   <span className="text-gray-600">Ridge Length:</span>
                   <span className="ml-2 font-medium text-gray-900">
-                    {measurements.ridgeLength.toFixed(0)} LF
+                    {measurements.ridgeLength > 0 ? `${measurements.ridgeLength.toFixed(0)} LF` : '—'}
                   </span>
                 </div>
                 <div>
                   <span className="text-gray-600">Valley Length:</span>
                   <span className="ml-2 font-medium text-gray-900">
-                    {measurements.valleyLength.toFixed(0)} LF
+                    {measurements.valleyLength > 0 ? `${measurements.valleyLength.toFixed(0)} LF` : '—'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Hip Length:</span>
+                  <span className="ml-2 font-medium text-gray-900">
+                    {measurements.hipLength > 0 ? `${measurements.hipLength.toFixed(0)} LF` : '—'}
                   </span>
                 </div>
                 <div>
                   <span className="text-gray-600">Eave Length:</span>
                   <span className="ml-2 font-medium text-gray-900">
-                    {measurements.eaveLength.toFixed(0)} LF
+                    {measurements.eaveLength > 0 ? `${measurements.eaveLength.toFixed(0)} LF` : '—'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Rake Length:</span>
+                  <span className="ml-2 font-medium text-gray-900">
+                    {measurements.rakeLength > 0 ? `${measurements.rakeLength.toFixed(0)} LF` : '—'}
                   </span>
                 </div>
                 <div>
@@ -209,9 +221,28 @@ export function RoofrIntegration({ contact, onEstimateGenerated }: RoofrIntegrat
                 <div>
                   <span className="text-gray-600">Facets:</span>
                   <span className="ml-2 font-medium text-gray-900">
-                    {measurements.facetCount}
+                    {measurements.facetCount > 0 ? measurements.facetCount : '—'}
                   </span>
                 </div>
+                {measurements.address && (
+                  <div className="col-span-2">
+                    <span className="text-gray-600">Address:</span>
+                    <span className="ml-2 font-medium text-gray-900">
+                      {measurements.address}
+                    </span>
+                  </div>
+                )}
+              </div>
+              
+              {/* Note about console logs for debugging */}
+              <div className="mt-3 pt-3 border-t border-green-200">
+                <p className="text-xs text-green-700">
+                  💡 <strong>Tip:</strong> Open browser console (F12) to see detailed extraction logs if values are missing.
+                </p>
+                <p className="text-xs text-green-700 mt-1">
+                  📋 <strong>Multiple structures?</strong> Currently showing combined measurements. 
+                  To separate main house from garage/shed, you may need to manually adjust values.
+                </p>
               </div>
             </div>
           </div>
