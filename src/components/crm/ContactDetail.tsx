@@ -246,7 +246,8 @@ export default function ContactDetail() {
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [signedDocs, setSignedDocs] = useState<SignedDoc[]>([]);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
-  
+  const [templateRoofrData, setTemplateRoofrData] = useState<{ measurements: any; structures?: any[] } | undefined>(undefined);
+
   // Project-related data
   const [contactProjects, setContactProjects] = useState<any[]>([]);
   const [contactEstimates, setContactEstimates] = useState<any[]>([]);
@@ -2129,7 +2130,7 @@ export default function ContactDetail() {
                   <div className="p-6 border-b border-gray-200 flex items-center justify-between">
                     <h3 className="text-lg font-semibold text-gray-900">Uploaded Files</h3>
                     <div className="flex items-center gap-2">
-                      <button onClick={() => setShowTemplateModal(true)} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                      <button onClick={() => { try { const raw = localStorage.getItem(`roofr_order_${contact.id}`); if (raw) { const o = JSON.parse(raw); if (o.measurements) setTemplateRoofrData({ measurements: o.measurements, structures: o.structures }); } } catch {} setShowTemplateModal(true); }} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
                         <FileText size={18} />Use Template
                       </button>
                       <button onClick={() => documentInputRef.current?.click()} disabled={isUploadingDocument} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
@@ -2190,7 +2191,7 @@ export default function ContactDetail() {
                         <FileText size={32} className="mx-auto mb-2 opacity-50" />
                         <p>No uploaded files yet</p>
                         <div className="flex items-center justify-center gap-3 mt-4">
-                          <button onClick={() => setShowTemplateModal(true)} className="text-green-600 hover:text-green-700 text-sm font-medium">Use a template</button>
+                          <button onClick={() => { try { const raw = localStorage.getItem(`roofr_order_${contact.id}`); if (raw) { const o = JSON.parse(raw); if (o.measurements) setTemplateRoofrData({ measurements: o.measurements, structures: o.structures }); } } catch {} setShowTemplateModal(true); }} className="text-green-600 hover:text-green-700 text-sm font-medium">Use a template</button>
                           <span className="text-gray-300">|</span>
                           <button onClick={() => documentInputRef.current?.click()} className="text-blue-600 hover:text-blue-700 text-sm font-medium">Upload a file</button>
                         </div>
@@ -4144,10 +4145,11 @@ export default function ContactDetail() {
       {showTemplateModal && (
         <ContactTemplateModal
           contact={contact}
-          onClose={() => setShowTemplateModal(false)}
+          onClose={() => { setShowTemplateModal(false); setTemplateRoofrData(undefined); }}
           onDocumentSaved={(doc) => {
             setContactDocuments(prev => [doc, ...prev]);
           }}
+          roofrData={templateRoofrData}
         />
       )}
 

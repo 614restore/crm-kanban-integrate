@@ -16,11 +16,18 @@ import {
   getUnfilledVars,
 } from '@/lib/contractorTemplates';
 import { Contact, Document, getContactFullName } from '@/lib/crmData';
+import type { RoofrMeasurements, StructureMeasurements } from '@/lib/roofrParser';
+
+interface RoofrData {
+  measurements: RoofrMeasurements;
+  structures?: StructureMeasurements[];
+}
 
 interface Props {
   contact: Contact;
   onClose: () => void;
   onDocumentSaved: (doc: Document) => void;
+  roofrData?: RoofrData;
 }
 
 interface LineItem {
@@ -117,7 +124,51 @@ function fromDefault(d: LineItemDefault): LineItem {
   };
 }
 
-export default function ContactTemplateModal({ contact, onClose, onDocumentSaved }: Props) {
+/** Apply Roofr measurements to a line items array.
+ *  Matches on description keywords — safe to call on any template's defaults. */
+function applyRoofrToLineItems(items: LineItem[], m: RoofrMeasurements): LineItem[] {
+  const sq = m.totalSquares > 0 ? String(Math.ceil(m.totalSquares)) : '';
+  const drip = (m.eaveLength + m.rakeLength) > 0
+    ? String(Math.ceil(m.eaveLength + m.rakeLength))
+    : '';
+  const ridge = m.ridgeLength > 0 ? String(Math.ceil(m.ridgeLength)) : '';
+
+  return items.map(item => {
+    const desc = item.description.toLowerCase();
+    let qty = item.qty;
+
+    if (sq && (desc.includes('tear-off') || desc.includes('tearoff') || desc.includes('tear off'))) qty = sq;
+    else if (sq && desc.includes('ice') && desc.includes('water')) qty = sq;
+    else if (sq && desc.includes('underlayment')) qty = sq;
+    else if (sq && desc.includes('shingle') && !desc.includes('ridge')) qty = sq;
+    else if (drip && desc.includes('drip edge')) qty = drip;
+    else if (ridge && desc.includes('ridge cap')) qty = ridge;
+
+    // Recalculate total when qty changed
+    const price = parseNum(item.unitPrice);
+    const qtyNum = parseFloat(qty);
+    const newTotal = (qty !== item.qty && !isNaN(qtyNum) && price > 0)
+      ? String(Math.round(qtyNum * price * 100) / 100)
+      : item.total;
+
+    return { ...item, qty, total: newTotal };
+  });
+}
+
+/** Build field value overrides from Roofr measurements. */
+function roofrFieldOverrides(m: RoofrMeasurements): Record<string, string> {
+  const overrides: Record<string, string> = {};
+  if (m.totalSquares > 0) {
+    overrides['ROOF_SQUARES'] = String(Math.ceil(m.totalSquares));
+    overrides['ROOF_SQFT'] = m.totalSqFt > 0 ? String(Math.round(m.totalSqFt)) : String(Math.round(m.totalSquares * 100));
+  }
+  if (m.predominantPitch) overrides['ROOF_PITCH'] = m.predominantPitch;
+  if ((m.eaveLength + m.rakeLength) > 0) overrides['DRIP_EDGE_LF'] = String(Math.ceil(m.eaveLength + m.rakeLength));
+  if (m.ridgeLength > 0) overrides['RIDGE_LF'] = String(Math.ceil(m.ridgeLength));
+  return overrides;
+}
+
+export default function ContactTemplateModal({ contact, onClose, onDocumentSaved, roofrData }: Props) {
   const { profile } = useAuth();
   const [companyProfile, setCompanyProfile] = useState<DbCompany | null>(null);
   const [templates] = useState<DocumentTemplate[]>(getContractorEstimateTemplates());
@@ -131,6 +182,8 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [taxRate, setTaxRate] = useState('0');
   const [depositAmount, setDepositAmount] = useState('');
+  // Roofr structure selector (when multiple structures detected)
+  const [selectedRoofrStructureIdx, setSelectedRoofrStructureIdx] = useState<number>(0); // 0 = combined
   const initCompanyProfileRef = useRef<DbCompany | null>(null);
   const initProfileRef = useRef(profile);
 
@@ -190,11 +243,19 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
 
     if (selected.templateType === 'customer-service-agreement') {
       const lineDefaults = (selected as any).lineItemDefaults as LineItemDefault[] | undefined;
-      if (lineDefaults && lineDefaults.length > 0) {
-        setLineItems(lineDefaults.map(fromDefault));
-      } else {
-        setLineItems([{ id: crypto.randomUUID(), description: '', qty: '', unit: '', unitPrice: '', total: '' }]);
+      let items: LineItem[] = lineDefaults && lineDefaults.length > 0
+        ? lineDefaults.map(fromDefault)
+        : [{ id: crypto.randomUUID(), description: '', qty: '', unit: '', unitPrice: '', total: '' }];
+
+      // Auto-fill quantities from Roofr measurements if available
+      if (roofrData) {
+        const activeMeasurements = (roofrData.structures && roofrData.structures.length > 0 && selectedRoofrStructureIdx > 0)
+          ? roofrData.structures[selectedRoofrStructureIdx - 1].measurements
+          : roofrData.measurements;
+        items = applyRoofrToLineItems(items, activeMeasurements);
       }
+
+      setLineItems(items);
       // Pre-fill tax rate if in fields
       const taxField = selected.fields?.find(f => f.key === 'TAX_RATE');
       if (taxField?.defaultValue) setTaxRate(taxField.defaultValue);
@@ -216,8 +277,16 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
       }
     });
 
+    // Auto-fill Roofr measurement fields (ROOF_SQUARES, RIDGE_LF, etc.)
+    if (roofrData) {
+      const activeMeasurements = (roofrData.structures && roofrData.structures.length > 0 && selectedRoofrStructureIdx > 0)
+        ? roofrData.structures[selectedRoofrStructureIdx - 1].measurements
+        : roofrData.measurements;
+      Object.assign(defaults, roofrFieldOverrides(activeMeasurements));
+    }
+
     setFieldValues(defaults);
-  }, [selected?.id, contact.id]);
+  }, [selected?.id, contact.id, selectedRoofrStructureIdx]);
 
   // Computed totals
   const subtotal = useMemo(() => lineItems.reduce((sum, item) => sum + calcItemTotal(item), 0), [lineItems]);
@@ -577,6 +646,36 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
               <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Project Specs</p>
               <div className="space-y-2 bg-white rounded-xl border border-gray-200 p-3">
                 {specFields.map(renderFieldInput)}
+              </div>
+            </section>
+          )}
+
+          {/* Roofr structure selector — shown when template is open and Roofr data has multiple structures */}
+          {isAgreement && roofrData && roofrData.structures && roofrData.structures.length > 1 && (
+            <section className="mb-3">
+              <p className="text-xs font-bold text-blue-600 uppercase tracking-wide mb-1.5">Roofr Structure</p>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-2">
+                <p className="text-xs text-blue-700 mb-2">Select which structure's measurements to use for quantities:</p>
+                <select
+                  value={selectedRoofrStructureIdx}
+                  onChange={e => setSelectedRoofrStructureIdx(Number(e.target.value))}
+                  className="w-full text-sm border border-blue-300 rounded px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                >
+                  <option value={0}>All Combined ({roofrData.measurements.totalSquares.toFixed(1)} sq)</option>
+                  {roofrData.structures.map((s, i) => (
+                    <option key={i} value={i + 1}>{s.structureName} ({s.measurements.totalSquares.toFixed(1)} sq)</option>
+                  ))}
+                </select>
+              </div>
+            </section>
+          )}
+
+          {/* Roofr banner — shown when Roofr data present but single structure */}
+          {isAgreement && roofrData && (!roofrData.structures || roofrData.structures.length <= 1) && (
+            <section className="mb-3">
+              <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2 flex items-center gap-2">
+                <span className="text-green-600 text-sm">✓</span>
+                <p className="text-xs text-green-700">Line item quantities auto-filled from Roofr report ({roofrData.measurements.totalSquares.toFixed(1)} sq). Edit any value as needed.</p>
               </div>
             </section>
           )}
