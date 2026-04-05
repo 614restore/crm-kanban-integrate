@@ -613,16 +613,21 @@ export default function ContactDetail() {
     });
   };
 
-  const handleOpenDocument = async (url?: string, docName?: string) => {
+  const handleOpenDocument = async (url?: string, _docName?: string) => {
     if (!url) {
       toast.error('Document URL not available.');
       return;
     }
 
+    // Open a blank tab immediately (within the user gesture) so the browser
+    // doesn't treat the later window.open as a popup. We update its location
+    // once the signed URL is ready.
+    const newTab = window.open('', '_blank', 'noopener,noreferrer');
+
     try {
       // Non-Supabase URLs (EagleView reports, external links) — open directly
       if (isHttpUrl(url) && !isSupabaseStorageUrl(url)) {
-        window.open(url, '_blank', 'noopener,noreferrer');
+        if (newTab) newTab.location.href = url;
         return;
       }
 
@@ -631,20 +636,18 @@ export default function ContactDetail() {
       const { signedUrl } = await resolveDocumentSignedUrl(url);
 
       if (!signedUrl) {
+        if (newTab) newTab.close();
         toast.error('Unable to open document. The file may have been deleted.', { duration: 5000 });
         return;
       }
 
-      // Fetch first to verify the file has content before opening a blank tab
-      const head = await fetch(signedUrl, { method: 'HEAD' }).catch(() => null);
-      const contentLength = head ? Number(head.headers.get('content-length') ?? '-1') : -1;
-      if (head && contentLength === 0) {
-        toast.error('Document appears to be empty. Try saving it again.', { duration: 5000 });
-        return;
+      if (newTab) {
+        newTab.location.href = signedUrl;
+      } else {
+        window.open(signedUrl, '_blank', 'noopener,noreferrer');
       }
-
-      window.open(signedUrl, '_blank', 'noopener,noreferrer');
     } catch (error) {
+      if (newTab) newTab.close();
       console.error('[ContactDetail] Error opening document:', error);
       toast.error('Failed to open document: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
