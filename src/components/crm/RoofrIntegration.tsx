@@ -21,8 +21,11 @@ export function RoofrIntegration({ contact, onEstimateGenerated }: RoofrIntegrat
   const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
   const [estimateSummary, setEstimateSummary] = useState<any>(null);
   
-  // Detect mobile devices - PDF.js doesn't work reliably on iOS
-  const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  // Block PDF upload on mobile browsers but allow it in the native Capacitor app
+  // (Capacitor sets window.Capacitor; mobile browsers do not)
+  const isNativeApp = typeof window !== 'undefined' && typeof (window as any).Capacitor !== 'undefined';
+  const isMobileBrowser = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  const isMobile = isMobileBrowser && !isNativeApp;
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];

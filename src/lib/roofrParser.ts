@@ -11,9 +11,15 @@ if (typeof window !== 'undefined') {
     typeof (window as any).__TAURI__ !== 'undefined' ||
     window.location.protocol === 'tauri:' ||
     window.location.hostname === 'tauri.localhost';
-  pdfjsLib.GlobalWorkerOptions.workerSrc = isTauri
-    ? 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.2.67/build/pdf.worker.min.mjs'
-    : '/pdf.worker.min.mjs';
+  // Capacitor serves from capacitor://localhost — local worker path won't load
+  const isCapacitor =
+    window.location.protocol === 'capacitor:' ||
+    window.location.protocol === 'ionic:' ||
+    typeof (window as any).Capacitor !== 'undefined';
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    isTauri || isCapacitor
+      ? 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.2.67/build/pdf.worker.min.mjs'
+      : '/pdf.worker.min.mjs';
 }
 
 export interface RoofrMeasurements {
