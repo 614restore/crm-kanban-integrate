@@ -107,6 +107,7 @@ import {
   Folder,
   FolderOpen,
   Image,
+  Copy,
 } from 'lucide-react';
 
 type TabType = 'overview' | 'timeline' | 'documents' | 'financial' | 'projects' | 'jobStatus' | 'survey' | 'insurance';
@@ -362,6 +363,49 @@ export default function ContactDetail() {
       toast.error(err?.message || 'Failed to share estimate');
     } finally {
       setIsSharingEstimateId(null);
+    }
+  };
+
+  const handleDuplicateEstimate = async (estimate: any) => {
+    if (!profile?.company_id || !contactId) return;
+    try {
+      const newNumber = `EST-${Date.now().toString().slice(-6)}`;
+      const created = await db.createEstimate({
+        company_id: profile.company_id,
+        contact_id: contactId,
+        estimate_number: newNumber,
+        title: estimate.title ? `${estimate.title} (Copy)` : undefined,
+        description: estimate.description || undefined,
+        status: 'draft',
+        subtotal: estimate.subtotal || estimate.amount || 0,
+        tax: estimate.tax || 0,
+        total: estimate.total || 0,
+        valid_until: estimate.valid_until || undefined,
+        terms: estimate.terms || undefined,
+        notes: estimate.notes || undefined,
+        created_by: profile.id || undefined,
+      });
+      if (!created) throw new Error('Failed to create duplicate');
+
+      // Copy line items if any
+      const items = await db.getEstimateItems(estimate.id).catch(() => []);
+      await Promise.all(items.map(item =>
+        db.createEstimateItem({
+          company_id: profile.company_id,
+          estimate_id: created.id,
+          description: item.description,
+          quantity: item.quantity,
+          unit: item.unit,
+          unit_price: item.unit_price,
+          total: item.total,
+        })
+      ));
+
+      toast.success(`Estimate duplicated as ${newNumber}`);
+      const estimates = await db.getEstimatesByContact(contactId);
+      setContactEstimates(estimates);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to duplicate estimate');
     }
   };
 
@@ -2673,6 +2717,13 @@ export default function ContactDetail() {
                             title="View estimate"
                           >
                             <Eye size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleDuplicateEstimate(estimate)}
+                            className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+                            title="Duplicate estimate"
+                          >
+                            <Copy size={16} />
                           </button>
                           {!isEstimateLocked(estimate) && (
                             <>
