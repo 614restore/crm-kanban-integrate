@@ -45,7 +45,7 @@ jobs:
         run: npm run build
 
       - name: Sync Capacitor iOS
-        run: npx cap sync ios
+        run: npx --yes @capacitor/cli@7 sync ios
 
       - name: Commit synced ios/ assets
         run: |
