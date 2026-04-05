@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Auth Debug - 614restore CRM</title>
+  <style>
+    body { font-family: monospace; padding: 20px; background: #111; color: #0f0; }
+    h1 { color: #0ff; }
+    pre { background: #222; padding: 15px; border-radius: 5px; overflow-x: auto; }
+    button { margin: 5px; padding: 10px 20px; font-size: 14px; cursor: pointer; }
+    .error { color: #f00; }
+    .success { color: #0f0; }
+  </style>
+</head>
+<body>
+  <h1>🔍 Auth Debug Panel</h1>
+  <button onclick="checkAuth()">Check Auth</button>
+  <button onclick="clearStorage()">Clear All Storage</button>
+  <button onclick="testSupabase()">Test Supabase Connection</button>
+  <button onclick="location.href='/'">Back to App</button>
+  
+  <h2>Results:</h2>
+  <pre id="output">Click a button to run diagnostics...</pre>
+
+  <script type="module">
+    import { supabase } from '/src/lib/supabase.ts';
+    window.supabase = supabase;
+
+    window.checkAuth = async function() {
+      const output = document.getElementById('output');
+      output.innerHTML = 'Checking auth state...\n\n';
+      
+      try {
+        // Check session
+        const { data: { session }, error } = await supabase.auth.getSession();
+        output.innerHTML += '<span class="success">✓ Session check complete</span>\n';
+        output.innerHTML += `Session: ${session ? 'ACTIVE' : 'NONE'}\n`;
+        if (session) {
+          output.innerHTML += `User ID: ${session.user.id}\n`;
+          output.innerHTML += `Email: ${session.user.email}\n`;
+          output.innerHTML += `Expires: ${new Date(session.expires_at * 1000).toLocaleString()}\n\n`;
+          
+          // Check profile
+          output.innerHTML += 'Fetching profile...\n';
+          const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+          
+          if (profileError) {
+            output.innerHTML += `<span class="error">✗ Profile error: ${profileError.message}</span>\n`;
+          } else if (profile) {
+            output.innerHTML += '<span class="success">✓ Profile loaded</span>\n';
+            output.innerHTML += `Name: ${profile.first_name || ''} ${profile.last_name || ''}\n`;
+            output.innerHTML += `Company ID: ${profile.company_id || 'MISSING'}\n`;
+            output.innerHTML += `Role: ${profile.role || 'MISSING'}\n`;
+            output.innerHTML += JSON.stringify(profile, null, 2) + '\n';
+          }
+        }
+        
+        if (error) {
+          output.innerHTML += `<span class="error">✗ Error: ${error.message}</span>\n`;
+        }
+        
+        // Check localStorage
+        output.innerHTML += '\n--- localStorage keys ---\n';
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && (key.includes('supabase') || key.includes('auth') || key.includes('demo'))) {
+            output.innerHTML += `${key}: ${localStorage.getItem(key)?.substring(0, 100)}...\n`;
+          }
+        }
+      } catch (err) {
+        output.innerHTML += `<span class="error">✗ Fatal error: ${err.message}</span>\n`;
+        console.error(err);
+      }
+    };
+
+    window.clearStorage = function() {
+      try {
+        localStorage.clear();
+        sessionStorage.clear();
+        document.getElementById('output').innerHTML = '<span class="success">✓ All storage cleared. Reload the app to start fresh.</span>';
+      } catch (err) {
+        document.getElementById('output').innerHTML = `<span class="error">✗ Error: ${err.message}</span>`;
+      }
+    };
+
+    window.testSupabase = async function() {
+      const output = document.getElementById('output');
+      output.innerHTML = 'Testing Supabase connection...\n\n';
+      
+      try {
+        const start = Date.now();
+        const { data, error } = await supabase.from('companies').select('count').limit(1);
+        const elapsed = Date.now() - start;
+        
+        if (error) {
+          output.innerHTML += `<span class="error">✗ Connection failed: ${error.message}</span>\n`;
+        } else {
+          output.innerHTML += `<span class="success">✓ Connection successful (${elapsed}ms)</span>\n`;
+        }
+      } catch (err) {
+        output.innerHTML += `<span class="error">✗ Fatal error: ${err.message}</span>\n`;
+      }
+    };
+  </script>
+</body>
+</html>

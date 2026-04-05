@@ -4,9 +4,16 @@
 
 import * as pdfjsLib from 'pdfjs-dist';
 // Serve the pdfjs v4 ESM worker from public/ — no CDN, no Vite bundling, no MIME issues.
-// The file is committed at public/pdf.worker.min.mjs (pdfjs-dist 4.2.67).
+// In Tauri production builds the app is served from tauri://localhost, so the local
+// worker path is unreachable via the normal fetch; fall back to a CDN copy instead.
 if (typeof window !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+  const isTauri =
+    typeof (window as any).__TAURI__ !== 'undefined' ||
+    window.location.protocol === 'tauri:' ||
+    window.location.hostname === 'tauri.localhost';
+  pdfjsLib.GlobalWorkerOptions.workerSrc = isTauri
+    ? 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.2.67/build/pdf.worker.min.mjs'
+    : '/pdf.worker.min.mjs';
 }
 
 export interface RoofrMeasurements {

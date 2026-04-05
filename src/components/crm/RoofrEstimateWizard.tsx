@@ -3,15 +3,17 @@
 // Step 1: Enter measurements (manually from PDF, or auto-filled from live report)
 // Step 2: Choose roof type (Asphalt / Corrugated Metal / Standing Seam)
 // Step 3: Review auto-generated line items, fill in unit prices, and save
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   X, ChevronRight, ChevronLeft, CheckCircle,
-  Loader2, Trash2, FileSpreadsheet, ClipboardList,
+  Loader2, Trash2, FileSpreadsheet, ClipboardList, Building2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { db } from '@/lib/database';
 import { EstimateItem } from '@/lib/crmData';
 import { RoofrReport } from '@/lib/integrations/roofr';
+import { parseRoofrPDFWithStructures, type MultiStructureResult } from '@/lib/roofrParser';
+import { uploadDocument } from '@/lib/storage';
 
 type RoofrMeasurements = RoofrReport['measurements'];
 
@@ -299,10 +301,25 @@ export default function RoofrEstimateWizard({
   const [manualFlashing, setManualFlashing] = useState('');
   const [manualError,    setManualError]    = useState<string | null>(null);
 
-  // Saved Roofr PDFs
-  const [savedReports, setSavedReports] = useState<any[]>([]);
-  const [loadingReports, setLoadingReports] = useState(false);
-  const [loadingPdf, setLoadingPdf] = useState(false);
+  // PDF multi-structure state
+  const [parsedResult,   setParsedResult]  = useState<MultiStructureResult | null>(null);
+  const [loadingPdf,     setLoadingPdf]    = useState(false);
+  const [uploadedPdfFile, setUploadedPdfFile] = useState<File | null>(null); // Track the uploaded PDF file
+  const [savingPdf,      setSavingPdf]     = useState(false);
+
+  // ── Fill form from measurements object ────────────────────────────────────
+
+  const fillFormFromMeasurements = useCallback((m: RoofrMeasurements) => {
+    setManualSquares(String(m.totalSquares));
+    setManualSqFt(String(m.totalSqFt || ''));
+    setManualPitch(m.predominantPitch || '');
+    setManualRidge(String(m.ridgeLength || ''));
+    setManualHip(String(m.hipLength || ''));
+    setManualValley(String(m.valleyLength || ''));
+    setManualEave(String(m.eaveLength || ''));
+    setManualRake(String(m.rakeLength || ''));
+    setManualFlashing(String(m.flashingLength || ''));
+  }, []);
 
   // ── Manual entry submit ────────────────────────────────────────────────────
 
@@ -326,115 +343,98 @@ export default function RoofrEstimateWizard({
     setStep(2);
   };
 
-  // ── Load saved Roofr reports from documents ────────────────────────────────
-  
-  useEffect(() => {
-    loadSavedReports();
-  }, [contactId]);
+  // ── Save uploaded PDF to Documents ────────────────────────────────────────
+  const saveRoofrPdfToDocuments = async () => {
+    if (!uploadedPdfFile) {
+      toast.error('No PDF to save');
+      return;
+    }
 
-  const loadSavedReports = async () => {
-    setLoadingReports(true);
+    setSavingPdf(true);
     try {
-      const docs = await db.getContactDocuments(contactId);
-      const roofrReports = docs.filter((d: any) => 
-        d.category === 'measurements' && 
-        d.file_type === 'application/pdf'
-      );
-      setSavedReports(roofrReports);
-    } catch (error) {
-      console.error('Failed to load saved reports:', error);
+      // Upload to Supabase storage
+      const { url, path, error } = await uploadDocument(uploadedPdfFile, companyId, contactId);
+      
+      if (error) {
+        toast.error(`Failed to upload: ${error}`);
+        return;
+      }
+
+      // Save to documents table with category 'measurements'
+      const doc = {
+        id: crypto.randomUUID(),
+        company_id: companyId,
+        contact_id: contactId,
+        name: uploadedPdfFile.name,
+        file_path: path,
+        file_url: url,
+        file_type: 'application/pdf',
+        size: uploadedPdfFile.size.toString(),
+        category: 'measurements', // Important: this makes it a Roofr measurement report
+        notes: 'Roofr measurement report',
+        uploaded_by: userId || companyId,
+        uploaded_at: new Date().toISOString(),
+      };
+
+      await db.insertDocument(doc);
+      toast.success('Roofr PDF saved to Documents');
+    } catch (err: any) {
+      console.error('Failed to save PDF:', err);
+      toast.error('Failed to save PDF to Documents');
     } finally {
-      setLoadingReports(false);
+      setSavingPdf(false);
     }
   };
 
-  // ── Load and parse a saved PDF ──────────────────────────────────────────────
-  
-  const loadSavedPdf = async (doc: any) => {
-    setLoadingPdf(true);
-    toast.info('Parsing Roofr PDF...');
-    try {
-      // Fetch the PDF file from the URL
-      const response = await fetch(doc.file_url);
-      if (!response.ok) throw new Error('Failed to fetch PDF');
-      
-      const blob = await response.blob();
-      const file = new File([blob], doc.file_name, { type: 'application/pdf' });
-      
-      // Parse using the roofrParser
-      const { parseRoofrPDFWithStructures } = await import('@/lib/roofrParser');
-      const result = await parseRoofrPDFWithStructures(file);
-      
-      // Pre-fill manual fields so user can review
-      const m = result.combinedMeasurements;
-      setManualSquares(String(m.totalSquares));
-      setManualSqFt(String(m.totalSqFt));
-      setManualPitch(m.predominantPitch || '');
-      setManualRidge(String(m.ridgeLength));
-      setManualHip(String(m.hipLength));
-      setManualValley(String(m.valleyLength));
-      setManualEave(String(m.eaveLength));
-      setManualRake(String(m.rakeLength));
-      setManualFlashing(String(m.flashingLength));
-      
-      toast.success(`Measurements loaded from ${doc.name}! Review and click Continue.`);
-    } catch (error) {
-      console.error('Failed to parse saved PDF:', error);
-      toast.error('Could not read measurements from this file. Make sure it is a Roofr CSV or JSON export, or that the Report is a PDF with valid measurements.');
-    } finally {
-      setLoadingPdf(false);
-    }
-  };
-
-  // ── File upload / drag-drop (CSV/JSON/PDF) ──────────────────────────────────
+  // ── File upload / drag-drop (PDF + CSV/JSON) ──────────────────────────────
 
   const handleFile = useCallback(async (file: File) => {
-    if (file.name.toLowerCase().endsWith('.pdf')) {
-      // Now we support PDFs!
+    const lower = file.name.toLowerCase();
+
+    // ── PDF: use roofrParser ──────────────────────────────────────────────
+    if (lower.endsWith('.pdf')) {
       setLoadingPdf(true);
-      toast.info('Parsing Roofr PDF...');
+      setParsedResult(null);
+      setUploadedPdfFile(file); // Track the file for saving later
       try {
-        const { parseRoofrPDFWithStructures } = await import('@/lib/roofrParser');
         const result = await parseRoofrPDFWithStructures(file);
+        console.log('[RoofrEstimateWizard] PDF parsed:', {
+          hasMultiple: result.hasMultipleStructures,
+          structureCount: result.structures.length,
+          structureNames: result.structures.map(s => s.structureName),
+        });
         
-        const m = result.combinedMeasurements;
-        setManualSquares(String(m.totalSquares));
-        setManualSqFt(String(m.totalSqFt));
-        setManualPitch(m.predominantPitch || '');
-        setManualRidge(String(m.ridgeLength));
-        setManualHip(String(m.hipLength));
-        setManualValley(String(m.valleyLength));
-        setManualEave(String(m.eaveLength));
-        setManualRake(String(m.rakeLength));
-        setManualFlashing(String(m.flashingLength));
-        
-        toast.success('PDF measurements loaded — review and click Continue.');
-      } catch (error) {
-        console.error('PDF parse error:', error);
-        toast.error('Could not read measurements from PDF. Please enter manually.');
+        // Always show structure picker if there are structures (even if just 1)
+        if (result.structures.length > 0) {
+          setParsedResult(result);
+          if (result.hasMultipleStructures) {
+            toast.success(`Found ${result.structures.length} structures — select one below.`);
+          } else {
+            toast.success('PDF loaded — select structure below or combine all.');
+          }
+        } else {
+          // Fallback if no structures detected
+          fillFormFromMeasurements(result.combinedMeasurements);
+          toast.success('Measurements loaded from PDF — review and click Continue.');
+        }
+      } catch (err: any) {
+        toast.error(err?.message ?? 'Could not read this PDF. Check it is a Roofr measurement report.');
+        setUploadedPdfFile(null); // Clear on error
       } finally {
         setLoadingPdf(false);
       }
       return;
     }
-    
+
+    // ── CSV / JSON ────────────────────────────────────────────────────────
     const m = await parseMeasurementFile(file);
     if (!m) {
-      toast.error('Could not read measurements. Use a Roofr CSV/JSON export, upload a PDF, or enter values manually below.');
+      toast.error('Could not read measurements. Use a Roofr CSV export, or enter values manually below.');
       return;
     }
-    // Pre-fill manual fields from parsed data so user can review
-    setManualSquares(String(m.totalSquares));
-    setManualSqFt(String(m.totalSqFt));
-    setManualPitch(m.predominantPitch || '');
-    setManualRidge(String(m.ridgeLength));
-    setManualHip(String(m.hipLength));
-    setManualValley(String(m.valleyLength));
-    setManualEave(String(m.eaveLength));
-    setManualRake(String(m.rakeLength));
-    setManualFlashing(String(m.flashingLength));
+    fillFormFromMeasurements(m);
     toast.success('Measurements loaded — review and click Continue.');
-  }, []);
+  }, [fillFormFromMeasurements]);
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -576,135 +576,206 @@ export default function RoofrEstimateWizard({
           {/* ── Step 1: Measurements ────────────────────────────────────────── */}
           {step === 1 && (
             <div className="space-y-5">
-              {/* Saved Roofr Reports Section */}
-              {savedReports.length > 0 && (
-                <div className="bg-green-50 border border-green-200 rounded-xl p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <FileText size={16} className="text-green-600" />
-                    <h3 className="text-sm font-semibold text-green-900">
-                      Saved Roofr Reports ({savedReports.length})
-                    </h3>
-                  </div>
-                  <p className="text-xs text-green-700 mb-3">
-                    Click a report to automatically load measurements:
-                  </p>
-                  <div className="space-y-2 max-h-32 overflow-y-auto">
-                    {savedReports.map((doc: any) => (
-                      <button
-                        key={doc.id}
-                        onClick={() => loadSavedPdf(doc)}
-                        disabled={loadingPdf}
-                        className="w-full text-left p-3 bg-white border border-green-200 rounded-lg hover:border-green-400 hover:bg-green-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-900 truncate">{doc.name}</p>
-                            <p className="text-xs text-gray-500 mt-0.5">
-                              {doc.notes || 'No description'} • {new Date(doc.created_at).toLocaleDateString()}
-                            </p>
-                          </div>
-                          {loadingPdf ? (
-                            <Loader2 size={16} className="text-green-600 animate-spin shrink-0" />
-                          ) : (
-                            <ChevronRight size={16} className="text-green-600 shrink-0" />
-                          )}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
 
-              <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs text-blue-700">
-                <ClipboardList size={15} className="mt-0.5 shrink-0" />
-                <span>Upload a Roofr PDF below, or manually enter measurements. Only <strong>Total Squares</strong> is required — add the others for more accurate material quantities.</span>
-              </div>
-
-              {/* Manual entry grid */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2 sm:col-span-1">
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Total Squares <span className="text-red-500">*</span></label>
-                  <input type="number" min="0" step="0.1" placeholder="e.g. 32.4"
-                    value={manualSquares} onChange={e => setManualSquares(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent" />
-                </div>
-                <div className="col-span-2 sm:col-span-1">
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Total Area (sq ft)</label>
-                  <input type="number" min="0" placeholder="e.g. 3240 — or leave blank"
-                    value={manualSqFt} onChange={e => setManualSqFt(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent" />
-                </div>
-                <div className="col-span-2 sm:col-span-1">
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Predominant Pitch</label>
-                  <input type="text" placeholder="e.g. 6/12"
-                    value={manualPitch} onChange={e => setManualPitch(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent" />
-                </div>
-                <div className="col-span-2 sm:col-span-1">
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Ridge (LF)</label>
-                  <input type="number" min="0" step="0.1" placeholder="0"
-                    value={manualRidge} onChange={e => setManualRidge(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Hip (LF)</label>
-                  <input type="number" min="0" step="0.1" placeholder="0"
-                    value={manualHip} onChange={e => setManualHip(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Valley (LF)</label>
-                  <input type="number" min="0" step="0.1" placeholder="0"
-                    value={manualValley} onChange={e => setManualValley(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Eave (LF)</label>
-                  <input type="number" min="0" step="0.1" placeholder="0"
-                    value={manualEave} onChange={e => setManualEave(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Rake (LF)</label>
-                  <input type="number" min="0" step="0.1" placeholder="0"
-                    value={manualRake} onChange={e => setManualRake(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Flashing (LF)</label>
-                  <input type="number" min="0" step="0.1" placeholder="0"
-                    value={manualFlashing} onChange={e => setManualFlashing(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent" />
-                </div>
-              </div>
-
-              {manualError && (
-                <p className="text-xs text-red-600">{manualError}</p>
-              )}
-
-              {/* File upload - CSV, JSON, or PDF */}
+              {/* PDF upload zone — primary entry point */}
               <div
                 onDragOver={e => { e.preventDefault(); setDragging(true); }}
                 onDragLeave={() => setDragging(false)}
                 onDrop={onDrop}
-                onClick={() => fileRef.current?.click()}
-                className={`border border-dashed rounded-xl p-4 text-center cursor-pointer transition-colors ${
-                  dragging ? 'border-green-400 bg-green-50' : 'border-gray-200 hover:border-green-300 hover:bg-gray-50'
-                }`}
+                onClick={() => !loadingPdf && fileRef.current?.click()}
+                className={`border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-colors ${
+                  dragging ? 'border-green-400 bg-green-50' : 'border-gray-300 hover:border-green-400 hover:bg-green-50'
+                } ${loadingPdf ? 'cursor-wait opacity-70' : ''}`}
               >
-                <input ref={fileRef} type="file" accept=".csv,.json,.txt,.pdf" className="hidden" onChange={onFileChange} />
+                <input ref={fileRef} type="file" accept=".pdf,.csv,.json,.txt" className="hidden" onChange={onFileChange} />
                 {loadingPdf ? (
                   <div className="flex flex-col items-center gap-2">
-                    <Loader2 size={18} className="text-green-600 animate-spin" />
-                    <p className="text-xs text-gray-600">Parsing PDF...</p>
+                    <Loader2 size={22} className="animate-spin text-green-600" />
+                    <p className="text-sm text-green-700 font-medium">Reading Roofr PDF…</p>
                   </div>
                 ) : (
                   <>
-                    <FileSpreadsheet size={18} className="mx-auto mb-1 text-gray-300" />
-                    <p className="text-xs text-gray-400">Have a Roofr file? <span className="text-green-600 underline">Click to upload</span> (PDF, CSV, or JSON) and auto-fill the fields above</p>
+                    <FileSpreadsheet size={22} className="mx-auto mb-2 text-green-400" />
+                    <p className="text-sm font-semibold text-gray-700">Upload Roofr PDF or CSV</p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Drag &amp; drop your Roofr measurement report here, or <span className="text-green-600 underline">click to browse</span>
+                    </p>
                   </>
                 )}
               </div>
+
+              {/* Structure picker — shown after PDF is parsed */}
+              {parsedResult && parsedResult.structures.length > 0 && (
+                <div className="space-y-3">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
+                    <Building2 size={13} /> 
+                    {parsedResult.structures.length > 1 
+                      ? `Select Structure to Estimate (${parsedResult.structures.length} found)`
+                      : 'Select Structure to Estimate'
+                    }
+                  </p>
+
+                  {/* Individual structure cards */}
+                  {parsedResult.structures.map((s) => {
+                    const m = s.measurements;
+                    return (
+                      <button
+                        key={s.structureIndex}
+                        onClick={() => {
+                          fillFormFromMeasurements(m);
+                          setParsedResult(null);
+                          toast.success(`${s.structureName} measurements loaded.`);
+                        }}
+                        className="w-full text-left p-4 border-2 border-gray-200 rounded-xl hover:border-green-500 hover:bg-green-50 transition-colors group"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="font-semibold text-gray-900 text-sm group-hover:text-green-700">
+                              {s.structureName}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              {m.totalSquares} sq · {(m.totalSqFt || m.totalSquares * 100).toLocaleString()} sq ft
+                              {m.predominantPitch && m.predominantPitch !== '—' ? ` · pitch ${m.predominantPitch}` : ''}
+                            </p>
+                          </div>
+                          <ChevronRight size={16} className="text-gray-300 group-hover:text-green-500 mt-0.5 shrink-0" />
+                        </div>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-gray-400">
+                          {m.ridgeLength > 0 && <span>Ridge {m.ridgeLength} LF</span>}
+                          {m.hipLength > 0 && <span>Hip {m.hipLength} LF</span>}
+                          {m.valleyLength > 0 && <span>Valley {m.valleyLength} LF</span>}
+                          {m.eaveLength > 0 && <span>Eave {m.eaveLength} LF</span>}
+                          {m.rakeLength > 0 && <span>Rake {m.rakeLength} LF</span>}
+                        </div>
+                      </button>
+                    );
+                  })}
+
+                  {/* Combined card */}
+                  <button
+                    onClick={() => {
+                      fillFormFromMeasurements(parsedResult.combinedMeasurements);
+                      setParsedResult(null);
+                      toast.success('All structures combined — measurements loaded.');
+                    }}
+                    className="w-full text-left p-4 border-2 border-blue-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-colors group"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="font-semibold text-blue-700 text-sm group-hover:text-blue-800">
+                          All Structures Combined
+                        </p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {parsedResult.combinedMeasurements.totalSquares} sq total ·{' '}
+                          {(parsedResult.combinedMeasurements.totalSqFt || parsedResult.combinedMeasurements.totalSquares * 100).toLocaleString()} sq ft
+                        </p>
+                      </div>
+                      <ChevronRight size={16} className="text-blue-300 group-hover:text-blue-500 mt-0.5 shrink-0" />
+                    </div>
+                  </button>
+                </div>
+              )}
+
+              {/* Save PDF button — shown after PDF is uploaded */}
+              {uploadedPdfFile && !parsedResult && (
+                <div className="flex items-center justify-between gap-3 bg-green-50 border border-green-200 rounded-lg p-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <FileSpreadsheet size={16} className="text-green-600 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-green-900 truncate">{uploadedPdfFile.name}</p>
+                      <p className="text-xs text-green-600">Measurements loaded — save to Documents?</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={saveRoofrPdfToDocuments}
+                    disabled={savingPdf}
+                    className="px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap flex items-center gap-1.5"
+                  >
+                    {savingPdf ? (
+                      <>
+                        <Loader2 size={12} className="animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      'Save PDF'
+                    )}
+                  </button>
+                </div>
+              )}
+
+              {/* Manual entry hint */}
+              {!parsedResult && (
+                <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs text-blue-700">
+                  <ClipboardList size={15} className="mt-0.5 shrink-0" />
+                  <span>Don't have a PDF? Open your Roofr report and enter the measurements manually below. Only <strong>Total Squares</strong> is required.</span>
+                </div>
+              )}
+
+              {/* Manual entry grid — hidden while structure picker is shown */}
+              {!parsedResult && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="col-span-2 sm:col-span-1">
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Total Squares <span className="text-red-500">*</span></label>
+                      <input type="number" min="0" step="0.1" placeholder="e.g. 32.4"
+                        value={manualSquares} onChange={e => setManualSquares(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent" />
+                    </div>
+                    <div className="col-span-2 sm:col-span-1">
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Total Area (sq ft)</label>
+                      <input type="number" min="0" placeholder="e.g. 3240 — or leave blank"
+                        value={manualSqFt} onChange={e => setManualSqFt(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent" />
+                    </div>
+                    <div className="col-span-2 sm:col-span-1">
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Predominant Pitch</label>
+                      <input type="text" placeholder="e.g. 6/12"
+                        value={manualPitch} onChange={e => setManualPitch(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent" />
+                    </div>
+                    <div className="col-span-2 sm:col-span-1">
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Ridge (LF)</label>
+                      <input type="number" min="0" step="0.1" placeholder="0"
+                        value={manualRidge} onChange={e => setManualRidge(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Hip (LF)</label>
+                      <input type="number" min="0" step="0.1" placeholder="0"
+                        value={manualHip} onChange={e => setManualHip(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Valley (LF)</label>
+                      <input type="number" min="0" step="0.1" placeholder="0"
+                        value={manualValley} onChange={e => setManualValley(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Eave (LF)</label>
+                      <input type="number" min="0" step="0.1" placeholder="0"
+                        value={manualEave} onChange={e => setManualEave(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Rake (LF)</label>
+                      <input type="number" min="0" step="0.1" placeholder="0"
+                        value={manualRake} onChange={e => setManualRake(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Flashing (LF)</label>
+                      <input type="number" min="0" step="0.1" placeholder="0"
+                        value={manualFlashing} onChange={e => setManualFlashing(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent" />
+                    </div>
+                  </div>
+
+                  {manualError && (
+                    <p className="text-xs text-red-600">{manualError}</p>
+                  )}
+                </>
+              )}
             </div>
           )}
 
@@ -862,10 +933,11 @@ export default function RoofrEstimateWizard({
             {step === 1 ? 'Cancel' : 'Back'}
           </button>
 
-          {step === 1 && (
+          {step === 1 && !parsedResult && (
             <button
               onClick={handleManualSubmit}
-              className="flex items-center gap-2 px-5 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition-colors"
+              disabled={loadingPdf}
+              className="flex items-center gap-2 px-5 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               Continue <ChevronRight size={15} />
             </button>
