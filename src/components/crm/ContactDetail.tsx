@@ -47,6 +47,7 @@ import {
   validateMentions,
 } from '@/lib/mentions';
 import { uploadDocument, validateDocumentFile, formatFileSize, getDocumentSignedUrl, isHttpUrl, isSupabaseStorageUrl } from '@/lib/storage';
+import { htmlStringToPdfBlob } from '@/lib/pdfService';
 import { logActivity } from '@/lib/activityLogger';
 import { toast } from 'sonner';
 import {
@@ -246,7 +247,8 @@ export default function ContactDetail() {
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [signedDocs, setSignedDocs] = useState<SignedDoc[]>([]);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
-  
+  const [viewingDocHtml, setViewingDocHtml] = useState<{ name: string; html: string } | null>(null);
+
   // Project-related data
   const [contactProjects, setContactProjects] = useState<any[]>([]);
   const [contactEstimates, setContactEstimates] = useState<any[]>([]);
@@ -436,6 +438,7 @@ export default function ContactDetail() {
             uploadedAt: doc.created_at,
             uploadedBy: doc.uploaded_by || 'Team member',
             size: doc.size || 'Unknown',
+            htmlContent: doc.html_content || undefined,
           };
         })
       );
@@ -638,6 +641,33 @@ export default function ContactDetail() {
     } catch (error) {
       console.error('[ContactDetail] Error opening document:', error);
       toast.error('Failed to open document: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
+  };
+
+  const handleViewDoc = (doc: Document) => {
+    if (doc.htmlContent) {
+      setViewingDocHtml({ name: doc.name, html: doc.htmlContent });
+    } else {
+      handleOpenDocument(doc.url, doc.name);
+    }
+  };
+
+  const handleDownloadDoc = async (doc: Document) => {
+    if (doc.htmlContent) {
+      try {
+        const safeName = doc.name.replace(/[^a-zA-Z0-9_\- ]/g, '').trim() || 'document';
+        const blob = await htmlStringToPdfBlob(doc.htmlContent, `${safeName}.pdf`);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${safeName}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch {
+        toast.error('Failed to generate PDF for download.');
+      }
+    } else {
+      handleOpenDocument(doc.url, doc.name);
     }
   };
 
@@ -2085,8 +2115,8 @@ export default function ContactDetail() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button onClick={() => handleOpenDocument(doc.url, doc.name)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="View"><Eye size={18} className="text-gray-500" /></button>
-                    <button onClick={() => handleOpenDocument(doc.url, doc.name)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="Download"><Download size={18} className="text-gray-500" /></button>
+                    <button onClick={() => handleViewDoc(doc)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="View"><Eye size={18} className="text-gray-500" /></button>
+                    <button onClick={() => handleDownloadDoc(doc)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="Download"><Download size={18} className="text-gray-500" /></button>
                     <button onClick={() => handleDeleteDocument(doc.id)} className="p-2 hover:bg-red-100 rounded-lg transition-colors" title="Delete"><Trash2 size={18} className="text-red-500" /></button>
                   </div>
                 </div>
@@ -4174,6 +4204,48 @@ export default function ContactDetail() {
         changeOrder={viewingChangeOrder}
         companyId={profile?.company_id || ''}
       />
+
+      {/* In-app document viewer for template documents (HTML-based) */}
+      {viewingDocHtml && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl flex flex-col w-full max-w-5xl" style={{ height: '92vh' }}>
+            {/* Viewer header */}
+            <div className="flex items-center justify-between px-6 py-3.5 border-b border-gray-200 flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <FileText size={18} className="text-blue-600" />
+                <h2 className="text-base font-bold text-gray-900 truncate max-w-lg">{viewingDocHtml.name}</h2>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleDownloadDoc({ id: '', contactId: contact.id, name: viewingDocHtml.name, type: 'other', url: '', uploadedAt: '', uploadedBy: '', size: '', htmlContent: viewingDocHtml.html })}
+                  className="flex items-center gap-1.5 px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <Download size={15} /> Download PDF
+                </button>
+                <button
+                  onClick={() => setViewingDocHtml(null)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  title="Close"
+                >
+                  <X size={20} className="text-gray-500" />
+                </button>
+              </div>
+            </div>
+            {/* Document preview */}
+            <div className="flex-1 overflow-auto bg-gray-100 p-4">
+              <div className="max-w-4xl mx-auto bg-white shadow-lg rounded-lg overflow-hidden">
+                <iframe
+                  srcDoc={viewingDocHtml.html}
+                  className="w-full border-0"
+                  style={{ minHeight: '800px', height: '100%' }}
+                  title="Document View"
+                  sandbox="allow-scripts allow-same-origin"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

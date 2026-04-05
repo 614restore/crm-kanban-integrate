@@ -144,6 +144,7 @@ export interface Document {
   uploadedAt: string;
   uploadedBy: string;
   size: string;
+  htmlContent?: string; // Rendered HTML for in-app preview (template documents)
 }
 
 export interface TeamMember {

@@ -480,9 +480,9 @@ ${footer}`,
         { key: 'DECKING_TOTAL', label: 'Decking Total', type: 'text', defaultValue: '$195.00', required: true },
         
         // Ice & Water Shield
-        { key: 'ICE_WATER_SQ', label: 'Ice & Water Shield (squares)', type: 'number', defaultValue: '28', required: true },
-        { key: 'ICE_WATER_RATE', label: 'Ice & Water Rate (per square)', type: 'text', defaultValue: '$32.00', required: true },
-        { key: 'ICE_WATER_TOTAL', label: 'Ice & Water Total', type: 'text', defaultValue: '$896.00', required: true },
+        { key: 'ICE_WATER_SQ', label: 'Ice & Water Shield (rolls)', type: 'number', defaultValue: '14', required: true },
+        { key: 'ICE_WATER_RATE', label: 'Ice & Water Rate (per roll)', type: 'text', defaultValue: '$150.00', required: true },
+        { key: 'ICE_WATER_TOTAL', label: 'Ice & Water Total', type: 'text', defaultValue: '$2,100.00', required: true },
         
         // Underlayment
         { key: 'UNDERLAY_SQ', label: 'Underlayment (squares)', type: 'number', defaultValue: '28', required: true },
@@ -525,14 +525,14 @@ ${footer}`,
       lineItemDefaults: [
         { description: 'Tear-off & disposal (1 layer)', qty: '24', unit: 'sq', unitPrice: 85, total: 2040 },
         { description: 'Decking repair / replacement (4×8 sheets)', qty: '3', unit: 'sheets', unitPrice: 65, total: 195 },
-        { description: 'Ice & water shield', qty: '28', unit: 'sq', unitPrice: 32, total: 896 },
+        { description: 'Ice & water shield', qty: '14', unit: 'rolls', unitPrice: 150, total: 2100 },
         { description: 'Synthetic underlayment', qty: '28', unit: 'sq', unitPrice: 18, total: 504 },
         { description: 'Drip edge (aluminum)', qty: '310', unit: 'LF', unitPrice: 4.5, total: 1395 },
         { description: 'Shingles', qty: '24', unit: 'sq', unitPrice: 195, total: 4680 },
         { description: 'Ridge cap shingles', qty: '45', unit: 'LF', unitPrice: 12, total: 540 },
-        { description: 'Flashings (step, counter, pipe boots)', qty: '', unit: 'Lot', unitPrice: 0, total: 450 },
+        { description: 'Flashings (step, counter, pipe boots)', qty: '1', unit: 'Kit', unitPrice: 450, total: 450 },
         { description: 'Ridge vent / ventilation', qty: '2', unit: 'units', unitPrice: 85, total: 170 },
-        { description: 'Cleanup & haul-away', qty: '', unit: 'Lot', unitPrice: 0, total: 350 },
+        { description: 'Cleanup & haul-away', qty: '1', unit: 'Units', unitPrice: 350, total: 350 },
       ],
       content: contractHeader('Customer Service Agreement - Asphalt Shingle Roof Replacement') + `
 <div class="sec">
@@ -1586,9 +1586,9 @@ export function buildContactOverrides(
     DECKING_SHEETS: '3',              // Number of 4×8 plywood sheets needed
     DECKING_RATE: '$65.00',           // Cost per sheet for decking repair
     DECKING_TOTAL: '$195.00',         // 3 sheets × $65
-    ICE_WATER_SQ: '28',               // Squares of ice & water shield (add 15% waste)
-    ICE_WATER_RATE: '$32.00',         // Cost per square for ice & water
-    ICE_WATER_TOTAL: '$896.00',       // 28 sq × $32
+    ICE_WATER_SQ: '14',               // Rolls of ice & water shield
+    ICE_WATER_RATE: '$150.00',        // Cost per roll for ice & water
+    ICE_WATER_TOTAL: '$2,100.00',     // 14 rolls × $150
     UNDERLAY_SQ: '28',                // Squares of synthetic underlayment
     UNDERLAY_RATE: '$18.00',          // Cost per square for underlayment
     UNDERLAY_TOTAL: '$504.00',        // 28 sq × $18

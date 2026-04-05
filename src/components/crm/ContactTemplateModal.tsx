@@ -77,6 +77,8 @@ const COST_FIELD_PATTERNS = [
 // embedded inside TERMS_CONTENT so we don't show them as separate fields.
 const TERMS_FIELDS = ['TERMS_CONTENT'];
 const DOC_INFO_FIELDS = ['ESTIMATE_NUMBER', 'START_DATE', 'ESTIMATED_DURATION', 'ESTIMATE_DATE', 'ESTIMATE_EXPIRY', 'CONTRACT_NUMBER', 'CONTRACT_DATE', 'ESTIMATED_COMPLETION'];
+// Spec fields that should always be shown to user even if auto-filled with defaults
+const SPEC_ALWAYS_SHOW_FIELDS = ['SHINGLE_BRAND', 'SHINGLE_STYLE', 'SHINGLE_COLOR', 'SHINGLE_WARRANTY_YEARS', 'ROOF_SQUARES', 'ROOF_SQFT', 'ROOF_PITCH', 'STORY_COUNT', 'LAYER_COUNT'];
 
 function isCostField(key: string): boolean {
   return COST_FIELD_PATTERNS.some(p => key.includes(p));
@@ -206,7 +208,7 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
     const defaults: Record<string, string> = {};
 
     // Pick useful auto-fill defaults into fieldValues so the user can override them
-    const autoKeysToSeed = ['TERMS_CONTENT', 'CONTRACT_NUMBER', 'CONTRACT_DATE', 'ESTIMATE_DATE', 'ESTIMATE_NUMBER', 'ESTIMATE_EXPIRY', 'START_DATE', 'PAYMENT_TERMS', 'WARRANTY_PERIOD'];
+    const autoKeysToSeed = ['TERMS_CONTENT', 'CONTRACT_NUMBER', 'CONTRACT_DATE', 'ESTIMATE_DATE', 'ESTIMATE_NUMBER', 'ESTIMATE_EXPIRY', 'START_DATE', 'PAYMENT_TERMS', 'WARRANTY_PERIOD', ...SPEC_ALWAYS_SHOW_FIELDS];
     autoKeysToSeed.forEach(k => { if (autoBase[k]) defaults[k] = autoBase[k]; });
 
     // Also pull defaults from the template's fields[] definition
@@ -362,6 +364,7 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
         url: storedUrl,
         size: `${Math.round(pdfBlob.size / 1024)} KB`,
         uploaded_by: profile?.id || null,
+        html_content: finalHtml,
       });
 
       if (!newDbDoc) throw new Error('Failed to create document record');
@@ -375,6 +378,7 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
         uploadedAt: newDbDoc.created_at || new Date().toISOString(),
         uploadedBy: newDbDoc.uploaded_by || repName,
         size: newDbDoc.size || '',
+        htmlContent: finalHtml,
       };
 
       clearTmplDraft();
@@ -430,9 +434,12 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
     const termsKeys = TERMS_FIELDS.filter(k => templateKeys.has(k));
 
     // Spec fields: not auto-filled, not doc-info, not cost, not terms
-    const specKeys = allEditable.filter(
+    // Also always include SPEC_ALWAYS_SHOW_FIELDS if they exist in the template
+    const specEditable = allEditable.filter(
       k => !DOC_INFO_FIELDS.includes(k) && !isCostField(k) && !TERMS_FIELDS.includes(k)
     );
+    const specAlwaysPresent = SPEC_ALWAYS_SHOW_FIELDS.filter(k => templateKeys.has(k) && !specEditable.includes(k));
+    const specKeys = [...specAlwaysPresent, ...specEditable];
 
     return {
       docInfoFields: docInfoKeys,
