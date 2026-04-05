@@ -1,0 +1,78 @@
+name: TrussCTR CRM — Desktop Release (Tauri)
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest     # Apple Silicon (.dmg arm64)
+            args: --target aarch64-apple-darwin
+            rust-target: aarch64-apple-darwin
+          - platform: macos-13         # Intel Mac (.dmg x86_64)
+            args: --target x86_64-apple-darwin
+            rust-target: x86_64-apple-darwin
+          - platform: windows-latest   # Windows (.exe / .msi)
+            args: ''
+            rust-target: ''
+
+    runs-on: ${{ matrix.platform }}
+    name: Build desktop (${{ matrix.platform }})
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-target }}
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ./src-tauri -> target
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build & package
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          VITE_STRIPE_STARTER_MONTHLY: ${{ secrets.VITE_STRIPE_STARTER_MONTHLY }}
+          VITE_STRIPE_STARTER_YEARLY: ${{ secrets.VITE_STRIPE_STARTER_YEARLY }}
+          VITE_STRIPE_PRO_MONTHLY: ${{ secrets.VITE_STRIPE_PRO_MONTHLY }}
+          VITE_STRIPE_PRO_YEARLY: ${{ secrets.VITE_STRIPE_PRO_YEARLY }}
+          VITE_STRIPE_BUSINESS_MONTHLY: ${{ secrets.VITE_STRIPE_BUSINESS_MONTHLY }}
+          VITE_STRIPE_BUSINESS_YEARLY: ${{ secrets.VITE_STRIPE_BUSINESS_YEARLY }}
+        with:
+          tagName: desktop-v__VERSION__
+          releaseName: TrussCTR CRM Desktop v__VERSION__
+          releaseBody: |
+            ## TrussCTR CRM Desktop
+
+            Download the correct file for your machine:
+
+            | File | Platform |
+            |------|----------|
+            | `*.dmg` (aarch64) | Mac — Apple Silicon (M1/M2/M3) |
+            | `*.dmg` (x86_64) | Mac — Intel |
+            | `*.exe` | Windows (installer) |
+            | `*.msi` | Windows (MSI package) |
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}

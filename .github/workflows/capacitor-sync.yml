@@ -1,0 +1,60 @@
+name: TrussCTR CRM — iOS Capacitor Sync
+
+# Builds the latest web bundle and syncs it into the ios/ directory so
+# you can pull and immediately open in Xcode to test without running
+# npm locally.
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  sync:
+    name: Build web + sync iOS
+    runs-on: macos-latest
+
+    permissions:
+      contents: write   # needed to commit ios/ changes back
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web bundle
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          VITE_STRIPE_STARTER_MONTHLY: ${{ secrets.VITE_STRIPE_STARTER_MONTHLY }}
+          VITE_STRIPE_STARTER_YEARLY: ${{ secrets.VITE_STRIPE_STARTER_YEARLY }}
+          VITE_STRIPE_PRO_MONTHLY: ${{ secrets.VITE_STRIPE_PRO_MONTHLY }}
+          VITE_STRIPE_PRO_YEARLY: ${{ secrets.VITE_STRIPE_PRO_YEARLY }}
+          VITE_STRIPE_BUSINESS_MONTHLY: ${{ secrets.VITE_STRIPE_BUSINESS_MONTHLY }}
+          VITE_STRIPE_BUSINESS_YEARLY: ${{ secrets.VITE_STRIPE_BUSINESS_YEARLY }}
+        run: npm run build
+
+      - name: Sync Capacitor iOS
+        run: npx cap sync ios
+
+      - name: Commit synced ios/ assets
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add ios/App/App/public
+          if git diff --cached --quiet; then
+            echo "No iOS asset changes to commit."
+          else
+            git commit -m "chore: sync iOS web assets from latest main build [skip ci]"
+            git push
+          fi
