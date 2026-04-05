@@ -49,6 +49,8 @@ export interface DbCompany {
   // Limited permission seats tracking
   limited_seats_total?: number;
   limited_seats_used?: number;
+  // Material pricing config (shared across all team members)
+  pricing_config?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
 }

@@ -79,6 +79,7 @@ export const PRICING_DEFAULTS: MaterialPricing = {
 
 const LS_KEY = 'material_pricing_config_v1';
 
+/** Read from localStorage (fast, used synchronously during render). */
 export function getPricingConfig(): MaterialPricing {
   try {
     const raw = localStorage.getItem(LS_KEY);
@@ -87,9 +88,40 @@ export function getPricingConfig(): MaterialPricing {
   return { ...PRICING_DEFAULTS };
 }
 
+/** Write to localStorage (local cache). Call savePricingConfigToDb() to persist to Supabase. */
 export function savePricingConfig(config: Partial<MaterialPricing>): void {
   const merged: MaterialPricing = { ...getPricingConfig(), ...config, lastUpdated: new Date().toISOString() };
   localStorage.setItem(LS_KEY, JSON.stringify(merged));
+}
+
+/**
+ * Sync company's pricing_config from Supabase into localStorage so all
+ * subsequent getPricingConfig() calls use the server value.
+ * Call this after loading the company profile.
+ */
+export function syncPricingFromCompany(company: { pricing_config?: Record<string, unknown> | null }): void {
+  if (company.pricing_config && typeof company.pricing_config === 'object') {
+    const merged: MaterialPricing = { ...PRICING_DEFAULTS, ...(company.pricing_config as Partial<MaterialPricing>) };
+    localStorage.setItem(LS_KEY, JSON.stringify(merged));
+  }
+}
+
+/**
+ * Save pricing config to the companies table in Supabase.
+ * Also updates the local cache so reads are immediate.
+ */
+export async function savePricingConfigToDb(
+  companyId: string,
+  config: Partial<MaterialPricing>,
+): Promise<void> {
+  const { supabase } = await import('./supabase');
+  const merged: MaterialPricing = { ...getPricingConfig(), ...config, lastUpdated: new Date().toISOString() };
+  savePricingConfig(merged); // update cache first so UI is instant
+  const { error } = await supabase
+    .from('companies')
+    .update({ pricing_config: merged as unknown as Record<string, unknown>, updated_at: new Date().toISOString() })
+    .eq('id', companyId);
+  if (error) throw new Error(error.message);
 }
 
 export function getIceWaterProduct(productId: string): IceWaterProduct {

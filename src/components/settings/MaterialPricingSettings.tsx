@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Save, RotateCcw, DollarSign, Package, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '@/lib/authContext';
+import { db } from '@/lib/database';
 import {
   MaterialPricing,
   ICE_WATER_PRODUCTS,
   getPricingConfig,
-  savePricingConfig,
   PRICING_DEFAULTS,
+  syncPricingFromCompany,
+  savePricingConfigToDb,
 } from '@/lib/pricingConfig';
 
 function fmt(n: number) {
@@ -56,18 +59,42 @@ function PriceField({
 }
 
 export default function MaterialPricingSettings() {
+  const { profile } = useAuth();
   const [config, setConfig] = useState<MaterialPricing>(getPricingConfig);
   const [dirty, setDirty] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // On mount: load company's pricing_config from Supabase and sync to localStorage
+  useEffect(() => {
+    if (!profile?.company_id) return;
+    db.getCompany(profile.company_id).then(company => {
+      if (company?.pricing_config) {
+        syncPricingFromCompany(company);
+        setConfig(getPricingConfig());
+      }
+    }).catch(() => {});
+  }, [profile?.company_id]);
 
   function update(patch: Partial<MaterialPricing>) {
     setConfig(prev => ({ ...prev, ...patch }));
     setDirty(true);
   }
 
-  function handleSave() {
-    savePricingConfig(config);
-    setDirty(false);
-    toast.success('Material prices saved — new estimates will use these rates.');
+  async function handleSave() {
+    if (!profile?.company_id) {
+      toast.error('Company not loaded — please try again.');
+      return;
+    }
+    setIsSaving(true);
+    try {
+      await savePricingConfigToDb(profile.company_id, config);
+      setDirty(false);
+      toast.success('Material prices saved — all team members will use these rates.');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to save prices.');
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   function handleReset() {
@@ -102,10 +129,10 @@ export default function MaterialPricingSettings() {
           </button>
           <button
             onClick={handleSave}
-            disabled={!dirty}
+            disabled={!dirty || isSaving}
             className="flex items-center gap-1.5 px-4 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
-            <Save size={14} /> Save Prices
+            <Save size={14} /> {isSaving ? 'Saving…' : 'Save Prices'}
           </button>
         </div>
       </div>
