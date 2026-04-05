@@ -463,6 +463,9 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
       const fileName = `${selected.name.replace(/\s+/g, '_')}_${contactName}_${timestamp}.pdf`;
 
       const pdfBlob = await htmlStringToPdfBlob(finalHtml, fileName);
+      if (pdfBlob.size < 500) {
+        throw new Error('PDF generation produced an empty file. Please refresh and try again.');
+      }
       const storagePath = `${profile.company_id}/${contact.id}/${fileName}`;
       const uploaded = await uploadToAvailableBucket(storagePath, pdfBlob, 'application/pdf', profile.company_id);
       const storedUrl = buildStoredDocumentUrl(uploaded.publicUrl, uploaded.bucket, uploaded.path);

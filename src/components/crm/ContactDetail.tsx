@@ -47,6 +47,7 @@ import {
   validateMentions,
 } from '@/lib/mentions';
 import { uploadDocument, validateDocumentFile, formatFileSize, getDocumentSignedUrl, isHttpUrl, isSupabaseStorageUrl } from '@/lib/storage';
+import { resolveDocumentSignedUrl } from '@/lib/documentAccess';
 import { logActivity } from '@/lib/activityLogger';
 import { toast } from 'sonner';
 import {
@@ -614,11 +615,9 @@ export default function ContactDetail() {
 
   const handleOpenDocument = async (url?: string, docName?: string) => {
     if (!url) {
-      console.error('[ContactDetail] Document URL is missing');
-      toast.error('Document URL not available. The document may not have been uploaded correctly.');
+      toast.error('Document URL not available.');
       return;
     }
-
 
     try {
       // Non-Supabase URLs (EagleView reports, external links) — open directly
@@ -627,11 +626,20 @@ export default function ContactDetail() {
         return;
       }
 
-      // Supabase storage URLs (any bucket) — always create a signed URL
-      const signedUrl = await getDocumentSignedUrl(url, 3600);
+      // Use resolveDocumentSignedUrl — handles both legacy Supabase public URLs
+      // and hash-encoded bucket/path metadata from buildStoredDocumentUrl
+      const { signedUrl } = await resolveDocumentSignedUrl(url);
 
       if (!signedUrl) {
-        toast.error('Unable to open document. The file may have been deleted or storage access is not configured.', { duration: 5000 });
+        toast.error('Unable to open document. The file may have been deleted.', { duration: 5000 });
+        return;
+      }
+
+      // Fetch first to verify the file has content before opening a blank tab
+      const head = await fetch(signedUrl, { method: 'HEAD' }).catch(() => null);
+      const contentLength = head ? Number(head.headers.get('content-length') ?? '-1') : -1;
+      if (head && contentLength === 0) {
+        toast.error('Document appears to be empty. Try saving it again.', { duration: 5000 });
         return;
       }
 

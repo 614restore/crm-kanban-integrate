@@ -118,18 +118,27 @@ export async function generateAndDownloadPdf(
  * running html2pdf, then removing it.
  */
 export async function htmlStringToPdfBlob(html: string, filename: string): Promise<Blob> {
-  const container = document.createElement('div');
-  container.style.cssText = 'position:fixed;left:-9999px;top:0;width:210mm;background:#fff;';
-  container.innerHTML = html;
-  document.body.appendChild(container);
+  // Use a hidden iframe so the full HTML document (including <style> in <head>) renders
+  // correctly. Setting innerHTML on a <div> strips <html>/<head>/<body> tags and
+  // the embedded <style> may not be applied, producing a blank PDF.
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:210mm;height:297mm;border:none;visibility:hidden;';
+  document.body.appendChild(iframe);
   try {
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) throw new Error('Could not access iframe document');
+    doc.open();
+    doc.write(html);
+    doc.close();
+    // Wait for layout to settle
+    await new Promise(resolve => setTimeout(resolve, 300));
     const html2pdf = await loadHtml2Pdf();
     const blob: Blob = await html2pdf()
       .set(buildOptions(filename))
-      .from(container)
+      .from(doc.body)
       .outputPdf('blob');
     return blob;
   } finally {
-    document.body.removeChild(container);
+    document.body.removeChild(iframe);
   }
 }
