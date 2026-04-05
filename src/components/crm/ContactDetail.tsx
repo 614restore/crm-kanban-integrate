@@ -48,6 +48,7 @@ import {
 } from '@/lib/mentions';
 import { uploadDocument, validateDocumentFile, formatFileSize, getDocumentSignedUrl, isHttpUrl, isSupabaseStorageUrl } from '@/lib/storage';
 import { htmlStringToPdfBlob } from '@/lib/pdfService';
+import { resolveDocumentSignedUrl } from '@/lib/documentAccess';
 import { logActivity } from '@/lib/activityLogger';
 import { toast } from 'sonner';
 import {
@@ -248,6 +249,7 @@ export default function ContactDetail() {
   const [signedDocs, setSignedDocs] = useState<SignedDoc[]>([]);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [viewingDocHtml, setViewingDocHtml] = useState<{ name: string; html: string } | null>(null);
+  const [templateRoofrData, setTemplateRoofrData] = useState<{ measurements: any; structures?: any[] } | undefined>(undefined);
 
   // Project-related data
   const [contactProjects, setContactProjects] = useState<any[]>([]);
@@ -614,31 +616,41 @@ export default function ContactDetail() {
     });
   };
 
-  const handleOpenDocument = async (url?: string, docName?: string) => {
+  const handleOpenDocument = async (url?: string, _docName?: string) => {
     if (!url) {
-      console.error('[ContactDetail] Document URL is missing');
-      toast.error('Document URL not available. The document may not have been uploaded correctly.');
+      toast.error('Document URL not available.');
       return;
     }
 
+    // Open a blank tab immediately (within the user gesture) so the browser
+    // doesn't treat the later window.open as a popup. We update its location
+    // once the signed URL is ready.
+    const newTab = window.open('', '_blank', 'noopener,noreferrer');
 
     try {
       // Non-Supabase URLs (EagleView reports, external links) — open directly
       if (isHttpUrl(url) && !isSupabaseStorageUrl(url)) {
-        window.open(url, '_blank', 'noopener,noreferrer');
+        if (newTab) newTab.location.href = url;
         return;
       }
 
-      // Supabase storage URLs (any bucket) — always create a signed URL
-      const signedUrl = await getDocumentSignedUrl(url, 3600);
+      // Use resolveDocumentSignedUrl — handles both legacy Supabase public URLs
+      // and hash-encoded bucket/path metadata from buildStoredDocumentUrl
+      const { signedUrl } = await resolveDocumentSignedUrl(url);
 
       if (!signedUrl) {
-        toast.error('Unable to open document. The file may have been deleted or storage access is not configured.', { duration: 5000 });
+        if (newTab) newTab.close();
+        toast.error('Unable to open document. The file may have been deleted.', { duration: 5000 });
         return;
       }
 
-      window.open(signedUrl, '_blank', 'noopener,noreferrer');
+      if (newTab) {
+        newTab.location.href = signedUrl;
+      } else {
+        window.open(signedUrl, '_blank', 'noopener,noreferrer');
+      }
     } catch (error) {
+      if (newTab) newTab.close();
       console.error('[ContactDetail] Error opening document:', error);
       toast.error('Failed to open document: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
@@ -2159,7 +2171,7 @@ export default function ContactDetail() {
                   <div className="p-6 border-b border-gray-200 flex items-center justify-between">
                     <h3 className="text-lg font-semibold text-gray-900">Uploaded Files</h3>
                     <div className="flex items-center gap-2">
-                      <button onClick={() => setShowTemplateModal(true)} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                      <button onClick={() => { try { const raw = localStorage.getItem(`roofr_order_${contact.id}`); if (raw) { const o = JSON.parse(raw); if (o.measurements) setTemplateRoofrData({ measurements: o.measurements, structures: o.structures }); } } catch {} setShowTemplateModal(true); }} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
                         <FileText size={18} />Use Template
                       </button>
                       <button onClick={() => documentInputRef.current?.click()} disabled={isUploadingDocument} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
@@ -2220,7 +2232,7 @@ export default function ContactDetail() {
                         <FileText size={32} className="mx-auto mb-2 opacity-50" />
                         <p>No uploaded files yet</p>
                         <div className="flex items-center justify-center gap-3 mt-4">
-                          <button onClick={() => setShowTemplateModal(true)} className="text-green-600 hover:text-green-700 text-sm font-medium">Use a template</button>
+                          <button onClick={() => { try { const raw = localStorage.getItem(`roofr_order_${contact.id}`); if (raw) { const o = JSON.parse(raw); if (o.measurements) setTemplateRoofrData({ measurements: o.measurements, structures: o.structures }); } } catch {} setShowTemplateModal(true); }} className="text-green-600 hover:text-green-700 text-sm font-medium">Use a template</button>
                           <span className="text-gray-300">|</span>
                           <button onClick={() => documentInputRef.current?.click()} className="text-blue-600 hover:text-blue-700 text-sm font-medium">Upload a file</button>
                         </div>
@@ -4174,10 +4186,11 @@ export default function ContactDetail() {
       {showTemplateModal && (
         <ContactTemplateModal
           contact={contact}
-          onClose={() => setShowTemplateModal(false)}
+          onClose={() => { setShowTemplateModal(false); setTemplateRoofrData(undefined); }}
           onDocumentSaved={(doc) => {
             setContactDocuments(prev => [doc, ...prev]);
           }}
+          roofrData={templateRoofrData}
         />
       )}
 

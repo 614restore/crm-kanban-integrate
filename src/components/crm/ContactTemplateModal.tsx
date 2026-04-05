@@ -16,11 +16,18 @@ import {
   getUnfilledVars,
 } from '@/lib/contractorTemplates';
 import { Contact, Document, getContactFullName } from '@/lib/crmData';
+import type { RoofrMeasurements, StructureMeasurements } from '@/lib/roofrParser';
+
+interface RoofrData {
+  measurements: RoofrMeasurements;
+  structures?: StructureMeasurements[];
+}
 
 interface Props {
   contact: Contact;
   onClose: () => void;
   onDocumentSaved: (doc: Document) => void;
+  roofrData?: RoofrData;
 }
 
 interface LineItem {
@@ -30,6 +37,7 @@ interface LineItem {
   unit: string;
   unitPrice: string;
   total: string; // manual override total (used when qty is empty/Lot)
+  structureGroup?: string; // e.g. "Structure 1", "Garage" — used to render section headers
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -119,7 +127,106 @@ function fromDefault(d: LineItemDefault): LineItem {
   };
 }
 
-export default function ContactTemplateModal({ contact, onClose, onDocumentSaved }: Props) {
+// Keys whose values are computed from lineItems/totals — must NOT be pre-filled by fillTemplateVars.
+// buildContactOverrides() returns hardcoded placeholder values for these; we replace them with
+// the computed values AFTER fillTemplateVars runs, so they must be stripped from merged first.
+const COMPUTED_TOTAL_KEYS = [
+  'SUBTOTAL','TAX_AMOUNT','TOTAL_AMOUNT','DEPOSIT_AMOUNT','BALANCE_DUE',
+  'TEAROFF_TOTAL','DECKING_TOTAL','ICE_WATER_TOTAL','UNDERLAY_TOTAL',
+  'DRIP_EDGE_TOTAL','SHINGLE_TOTAL','RIDGE_TOTAL','FLASHING_TOTAL',
+  'VENT_TOTAL','CLEANUP_TOTAL','PANEL_TOTAL','TRIM_TOTAL','EAVE_TOTAL',
+  'HARDWARE_TOTAL','REMOVAL_TOTAL','WRAP_TOTAL','SOFFIT_TOTAL',
+  'FASCIA_TOTAL','GUTTER_TOTAL','DOWNSPOUT_TOTAL',
+];
+
+/** True when a line item should be treated as a lump-sum / Lot item. */
+function isLotItem(item: LineItem): boolean {
+  const qty = item.qty.trim();
+  const unit = item.unit.trim().toLowerCase();
+  return qty === '' || unit === 'lot' || unit === '' ;
+}
+
+/** Format qty + unit for display, avoiding double-printing when unit already contains qty. */
+function formatQtyUnit(item: LineItem): string {
+  if (isLotItem(item)) return 'Lot';
+  const qty = item.qty.trim();
+  const unit = item.unit.trim();
+  // Guard: if unit starts with a digit the user likely typed "1 Lot" — treat as Lot
+  if (/^\d/.test(unit)) return 'Lot';
+  return `${qty}${unit ? ' ' + unit : ''}`;
+}
+
+/** Render line items to HTML table rows, injecting group header rows when structureGroup changes. */
+function buildLineItemsHtml(items: LineItem[]): string {
+  let lastGroup: string | undefined = undefined;
+  const rows: string[] = [];
+  for (const item of items) {
+    if (item.structureGroup !== undefined && item.structureGroup !== lastGroup) {
+      lastGroup = item.structureGroup;
+      rows.push(
+        `<tr style="background:#f1f5f9;"><td colspan="4" style="padding:6px 10px;font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.05em;">${escHtml(lastGroup)}</td></tr>`
+      );
+    }
+    const computedTotal = calcItemTotal(item);
+    const lot = isLotItem(item);
+    const qtyDisplay = formatQtyUnit(item);
+    const priceDisplay = (!lot && parseNum(item.unitPrice) > 0) ? `$${fmt(parseNum(item.unitPrice))}` : '—';
+    rows.push(`<tr><td>${escHtml(item.description || '—')}</td><td>${escHtml(qtyDisplay)}</td><td>${priceDisplay}</td><td>$${fmt(computedTotal)}</td></tr>`);
+  }
+  return rows.join('\n      ');
+}
+
+/** Apply Roofr measurements to a line items array.
+ *  Matches on description keywords — safe to call on any template's defaults. */
+function applyRoofrToLineItems(items: LineItem[], m: RoofrMeasurements): LineItem[] {
+  const sq = m.totalSquares > 0 ? String(Math.ceil(m.totalSquares)) : '';
+  const drip = (m.eaveLength + m.rakeLength) > 0
+    ? String(Math.ceil(m.eaveLength + m.rakeLength))
+    : '';
+  const ridge = m.ridgeLength > 0 ? String(Math.ceil(m.ridgeLength)) : '';
+
+  return items.map(item => {
+    const desc = item.description.toLowerCase();
+    let qty = item.qty;
+
+    // Ice & water shield: calculated from eave length (6 ft wide coverage, 75 sqft/roll)
+    // Falls back to squares-based estimate if no eave data
+    const iceRolls = (m.eaveLength + m.valleyLength) > 0
+      ? String(Math.ceil((m.eaveLength * 6 + m.valleyLength * 3) / 75))
+      : sq ? String(Math.ceil(parseFloat(sq) * 0.6)) : '';
+
+    if (sq && (desc.includes('tear-off') || desc.includes('tearoff') || desc.includes('tear off'))) qty = sq;
+    else if (desc.includes('ice') && desc.includes('water')) qty = iceRolls;
+    else if (sq && desc.includes('underlayment')) qty = sq;
+    else if (sq && desc.includes('shingle') && !desc.includes('ridge')) qty = sq;
+    else if (drip && desc.includes('drip edge')) qty = drip;
+    else if (ridge && desc.includes('ridge cap')) qty = ridge;
+
+    // Recalculate total when qty changed
+    const price = parseNum(item.unitPrice);
+    const qtyNum = parseFloat(qty);
+    const newTotal = (qty !== item.qty && !isNaN(qtyNum) && price > 0)
+      ? String(Math.round(qtyNum * price * 100) / 100)
+      : item.total;
+
+    return { ...item, qty, total: newTotal };
+  });
+}
+
+/** Build field value overrides from Roofr measurements. */
+function roofrFieldOverrides(m: RoofrMeasurements): Record<string, string> {
+  const overrides: Record<string, string> = {};
+  if (m.totalSquares > 0) {
+    overrides['ROOF_SQUARES'] = String(Math.ceil(m.totalSquares));
+    overrides['ROOF_SQFT'] = m.totalSqFt > 0 ? String(Math.round(m.totalSqFt)) : String(Math.round(m.totalSquares * 100));
+  }
+  if (m.predominantPitch) overrides['ROOF_PITCH'] = m.predominantPitch;
+  if ((m.eaveLength + m.rakeLength) > 0) overrides['DRIP_EDGE_LF'] = String(Math.ceil(m.eaveLength + m.rakeLength));
+  if (m.ridgeLength > 0) overrides['RIDGE_LF'] = String(Math.ceil(m.ridgeLength));
+  return overrides;
+}
+
+export default function ContactTemplateModal({ contact, onClose, onDocumentSaved, roofrData }: Props) {
   const { profile } = useAuth();
   const [companyProfile, setCompanyProfile] = useState<DbCompany | null>(null);
   const [templates] = useState<DocumentTemplate[]>(getContractorEstimateTemplates());
@@ -133,6 +240,8 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [taxRate, setTaxRate] = useState('0');
   const [depositAmount, setDepositAmount] = useState('');
+  // Roofr structure selector (when multiple structures detected)
+  const [selectedRoofrStructureIdx, setSelectedRoofrStructureIdx] = useState<number>(0); // 0 = combined
   const initCompanyProfileRef = useRef<DbCompany | null>(null);
   const initProfileRef = useRef(profile);
 
@@ -192,11 +301,19 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
 
     if (selected.templateType === 'customer-service-agreement') {
       const lineDefaults = (selected as any).lineItemDefaults as LineItemDefault[] | undefined;
-      if (lineDefaults && lineDefaults.length > 0) {
-        setLineItems(lineDefaults.map(fromDefault));
-      } else {
-        setLineItems([{ id: crypto.randomUUID(), description: '', qty: '', unit: '', unitPrice: '', total: '' }]);
+      let items: LineItem[] = lineDefaults && lineDefaults.length > 0
+        ? lineDefaults.map(fromDefault)
+        : [{ id: crypto.randomUUID(), description: '', qty: '', unit: '', unitPrice: '', total: '' }];
+
+      // Auto-fill quantities from Roofr measurements if available
+      if (roofrData) {
+        const activeMeasurements = (roofrData.structures && roofrData.structures.length > 0 && selectedRoofrStructureIdx > 0)
+          ? roofrData.structures[selectedRoofrStructureIdx - 1].measurements
+          : roofrData.measurements;
+        items = applyRoofrToLineItems(items, activeMeasurements);
       }
+
+      setLineItems(items);
       // Pre-fill tax rate if in fields
       const taxField = selected.fields?.find(f => f.key === 'TAX_RATE');
       if (taxField?.defaultValue) setTaxRate(taxField.defaultValue);
@@ -218,8 +335,16 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
       }
     });
 
+    // Auto-fill Roofr measurement fields (ROOF_SQUARES, RIDGE_LF, etc.)
+    if (roofrData) {
+      const activeMeasurements = (roofrData.structures && roofrData.structures.length > 0 && selectedRoofrStructureIdx > 0)
+        ? roofrData.structures[selectedRoofrStructureIdx - 1].measurements
+        : roofrData.measurements;
+      Object.assign(defaults, roofrFieldOverrides(activeMeasurements));
+    }
+
     setFieldValues(defaults);
-  }, [selected?.id, contact.id]);
+  }, [selected?.id, contact.id, selectedRoofrStructureIdx]);
 
   // Computed totals
   const subtotal = useMemo(() => lineItems.reduce((sum, item) => sum + calcItemTotal(item), 0), [lineItems]);
@@ -233,6 +358,8 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
     if (!selected) return '';
     const base = buildContactOverrides(contact, companyProfile, profile);
     const merged = { ...base, ...fieldValues };
+    // Strip hardcoded total values so computed replacements below can fill them correctly
+    COMPUTED_TOTAL_KEYS.forEach(k => delete merged[k]);
     // Convert TERMS_CONTENT plain-text newlines → HTML <br> for the document
     if (merged.TERMS_CONTENT) {
       merged.TERMS_CONTENT = merged.TERMS_CONTENT.replace(/\n/g, '<br>');
@@ -240,14 +367,8 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
     let html = fillTemplateVars(selected.content, merged);
 
     if (isAgreement) {
-      // Inject dynamic line item rows into the Cost Breakdown tbody
-      const rowsHtml = lineItems.map(item => {
-        const computedTotal = calcItemTotal(item);
-        const isLot = item.qty.trim() === '' || item.unit.toLowerCase() === 'lot';
-        const qtyDisplay = isLot ? 'Lot' : `${item.qty}${item.unit ? ' ' + item.unit : ''}`;
-        const priceDisplay = (!isLot && parseNum(item.unitPrice) > 0) ? `$${fmt(parseNum(item.unitPrice))}` : '—';
-        return `<tr><td>${escHtml(item.description || '—')}</td><td>${escHtml(qtyDisplay)}</td><td>${priceDisplay}</td><td>$${fmt(computedTotal)}</td></tr>`;
-      }).join('\n      ');
+      // Inject dynamic line item rows into the Cost Breakdown tbody (with optional structure group headers)
+      const rowsHtml = buildLineItemsHtml(lineItems);
       html = html.replace(/<tbody>[\s\S]*?<\/tbody>/, `<tbody>\n      ${rowsHtml}\n    </tbody>`);
 
       // Replace totals with computed values
@@ -292,7 +413,7 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
       if (field === 'qty' || field === 'unitPrice') {
         const qtyNum = parseNum(updated.qty);
         const price = parseNum(updated.unitPrice);
-        const isLot = updated.qty.trim() === '' || updated.unit.toLowerCase() === 'lot';
+        const isLot = isLotItem(updated);
         if (!isLot && qtyNum > 0 && price > 0) {
           updated.total = String((qtyNum * price).toFixed(2));
         }
@@ -309,6 +430,8 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
 
     const base = buildContactOverrides(contact, companyProfile, profile);
     const merged = { ...base, ...fieldValues };
+    // Strip hardcoded total values so computed replacements fill them correctly
+    COMPUTED_TOTAL_KEYS.forEach(k => delete merged[k]);
     // Convert TERMS_CONTENT plain-text newlines → HTML <br>
     if (merged.TERMS_CONTENT) {
       merged.TERMS_CONTENT = merged.TERMS_CONTENT.replace(/\n/g, '<br>');
@@ -316,13 +439,7 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
     const finalHtml = (() => {
       let html = fillTemplateVars(selected.content, merged);
       if (isAgreement) {
-        const rowsHtml = lineItems.map(item => {
-          const computedTotal = calcItemTotal(item);
-          const isLot = item.qty.trim() === '' || item.unit.toLowerCase() === 'lot';
-          const qtyDisplay = isLot ? 'Lot' : `${item.qty}${item.unit ? ' ' + item.unit : ''}`;
-          const priceDisplay = (!isLot && parseNum(item.unitPrice) > 0) ? `$${fmt(parseNum(item.unitPrice))}` : '—';
-          return `<tr><td>${escHtml(item.description || '—')}</td><td>${escHtml(qtyDisplay)}</td><td>${priceDisplay}</td><td>$${fmt(computedTotal)}</td></tr>`;
-        }).join('\n');
+        const rowsHtml = buildLineItemsHtml(lineItems);
         html = html.replace(/<tbody>[\s\S]*?<\/tbody>/, `<tbody>${rowsHtml}</tbody>`);
         html = html.replace(/\{\{SUBTOTAL\}\}/g, `$${fmt(subtotal)}`);
         html = html.replace(/\{\{TAX_RATE\}\}/g, taxRate || '0');
@@ -348,6 +465,9 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
       const fileName = `${selected.name.replace(/\s+/g, '_')}_${contactName}_${timestamp}.pdf`;
 
       const pdfBlob = await htmlStringToPdfBlob(finalHtml, fileName);
+      if (pdfBlob.size < 500) {
+        throw new Error('PDF generation produced an empty file. Please refresh and try again.');
+      }
       const storagePath = `${profile.company_id}/${contact.id}/${fileName}`;
       const uploaded = await uploadToAvailableBucket(storagePath, pdfBlob, 'application/pdf', profile.company_id);
       const storedUrl = buildStoredDocumentUrl(uploaded.publicUrl, uploaded.bucket, uploaded.path);
@@ -588,6 +708,81 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
             </section>
           )}
 
+          {/* Roofr structure panel — multi-structure */}
+          {isAgreement && roofrData && roofrData.structures && roofrData.structures.length > 1 && (
+            <section className="mb-3">
+              <p className="text-xs font-bold text-blue-600 uppercase tracking-wide mb-1.5">Roofr Structures</p>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 space-y-2">
+                <div className="flex items-center gap-2">
+                  <select
+                    value={selectedRoofrStructureIdx}
+                    onChange={e => setSelectedRoofrStructureIdx(Number(e.target.value))}
+                    className="flex-1 text-sm border border-blue-300 rounded px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  >
+                    <option value={0}>All Combined ({roofrData.measurements.totalSquares.toFixed(1)} sq)</option>
+                    {roofrData.structures.map((s, i) => (
+                      <option key={i} value={i + 1}>{s.structureName} ({s.measurements.totalSquares.toFixed(1)} sq)</option>
+                    ))}
+                  </select>
+                </div>
+                {/* Add second structure as separate priced section */}
+                {selectedRoofrStructureIdx > 0 && (() => {
+                  const otherStructures = roofrData.structures!.filter((_, i) => i !== selectedRoofrStructureIdx - 1);
+                  const alreadyAdded = lineItems.some(li => li.structureGroup !== undefined);
+                  return otherStructures.length > 0 && (
+                    <div className="border-t border-blue-200 pt-2">
+                      {alreadyAdded ? (
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs text-blue-700">Both structures included — priced separately.</p>
+                          <button
+                            onClick={() => {
+                              const primaryName = roofrData.structures![selectedRoofrStructureIdx - 1].structureName;
+                              // Keep only primary structure items, strip group labels
+                              setLineItems(prev =>
+                                prev
+                                  .filter(li => li.structureGroup === undefined || li.structureGroup === primaryName)
+                                  .map(li => ({ ...li, structureGroup: undefined }))
+                              );
+                            }}
+                            className="text-xs text-red-500 hover:text-red-700 underline ml-2"
+                          >Remove second structure</button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            const primaryName = roofrData.structures![selectedRoofrStructureIdx - 1].structureName;
+                            // Label current items as primary structure
+                            const primaryItems = lineItems.map(li => ({ ...li, structureGroup: primaryName }));
+                            // Build line items for each additional structure
+                            const extraItems: LineItem[] = [];
+                            for (const s of otherStructures) {
+                              const template = lineItems.map(li => ({ ...li, id: crypto.randomUUID(), structureGroup: s.structureName }));
+                              extraItems.push(...applyRoofrToLineItems(template, s.measurements));
+                            }
+                            setLineItems([...primaryItems, ...extraItems]);
+                          }}
+                          className="flex items-center gap-1.5 text-xs bg-blue-600 text-white rounded px-2.5 py-1.5 hover:bg-blue-700 transition-colors font-medium"
+                        >
+                          <Plus size={12} /> Add {otherStructures.map(s => s.structureName).join(' + ')} as separate section
+                        </button>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            </section>
+          )}
+
+          {/* Roofr banner — single structure */}
+          {isAgreement && roofrData && (!roofrData.structures || roofrData.structures.length <= 1) && (
+            <section className="mb-3">
+              <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2 flex items-center gap-2">
+                <span className="text-green-600 text-sm">✓</span>
+                <p className="text-xs text-green-700">Line item quantities auto-filled from Roofr report ({roofrData.measurements.totalSquares.toFixed(1)} sq). Edit any value as needed.</p>
+              </div>
+            </section>
+          )}
+
           {/* Cost Breakdown — only for customer-service-agreement */}
           {isAgreement && (
             <section>
@@ -604,11 +799,21 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
 
                 {/* Line item rows */}
                 <div className="divide-y divide-gray-100">
-                  {lineItems.map((item) => {
-                    const isLot = item.qty.trim() === '' || item.unit.toLowerCase() === 'lot';
+                  {(() => {
+                    let lastGroup: string | undefined = undefined;
+                    return lineItems.map((item) => {
+                    const isLot = isLotItem(item);
                     const computedTotal = calcItemTotal(item);
+                    const showGroupHeader = item.structureGroup !== undefined && item.structureGroup !== lastGroup;
+                    if (showGroupHeader) lastGroup = item.structureGroup;
                     return (
-                      <div key={item.id} className="grid grid-cols-[1fr_70px_75px_75px_28px] gap-1 px-3 py-2 items-start hover:bg-gray-50">
+                      <React.Fragment key={item.id}>
+                        {showGroupHeader && (
+                          <div className="px-3 py-1.5 bg-slate-100 border-b border-slate-200">
+                            <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">{item.structureGroup}</span>
+                          </div>
+                        )}
+                      <div className="grid grid-cols-[1fr_70px_75px_75px_28px] gap-1 px-3 py-2 items-start hover:bg-gray-50">
                         {/* Description */}
                         <div className="space-y-1">
                           <input
@@ -675,8 +880,10 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
                           <Trash2 size={13} />
                         </button>
                       </div>
+                      </React.Fragment>
                     );
-                  })}
+                  });
+                  })()}
                 </div>
 
                 {/* Add line button */}

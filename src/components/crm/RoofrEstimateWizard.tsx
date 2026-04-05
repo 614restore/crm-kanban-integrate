@@ -132,14 +132,14 @@ async function parseMeasurementFile(file: File): Promise<RoofrMeasurements | nul
 
 // ── Line item generators ──────────────────────────────────────────────────────
 
-function makeItem(description: string, quantity: number, unit: string): EstimateItem {
+function makeItem(description: string, quantity: number, unit: string, defaultPrice: number = 0): EstimateItem {
   return {
     id: crypto.randomUUID(),
     description,
     quantity: Math.round(quantity * 10) / 10,
     unit,
-    unitPrice: 0,
-    total: 0,
+    unitPrice: defaultPrice,
+    total: Math.round(quantity * defaultPrice * 100) / 100,
   };
 }
 
@@ -148,23 +148,23 @@ function generateAsphaltItems(m: RoofrMeasurements): EstimateItem[] {
   const sqft   = m.totalSqFt || sq * 100;
   const waste  = 1.1;
   const items: EstimateItem[] = [
-    makeItem('Roof Tear-Off & Disposal',                    sq,                              'sq'),
-    makeItem('Architectural Asphalt Shingles (30-year)',    Math.ceil(sq * waste),           'sq'),
-    makeItem('Synthetic Underlayment',                      Math.ceil(sqft * waste),         'sqft'),
-    makeItem('Ice & Water Shield (valleys/eaves)',          Math.ceil(sqft * waste * 0.15 / 200), 'roll'),
-    makeItem('Drip Edge (aluminum)',                        Math.ceil(m.eaveLength + m.rakeLength), 'lf'),
-    makeItem('Ridge Vent',                                  Math.ceil(m.ridgeLength),        'lf'),
-    makeItem('Ridge Cap Shingles',                          Math.ceil(m.ridgeLength / 35),   'bundle'),
-    makeItem('Starter Shingles',                            Math.ceil(m.eaveLength),         'lf'),
+    makeItem('Roof Tear-Off & Disposal',                    sq,                              'sq', 85),
+    makeItem('Architectural Asphalt Shingles (30-year)',    Math.ceil(sq * waste),           'sq', 165),
+    makeItem('Synthetic Underlayment',                      Math.ceil(sqft * waste),         'sqft', 0.45),
+    makeItem('Ice & Water Shield (valleys/eaves)',          Math.ceil(sqft * waste * 0.15 / 200), 'roll', 125),
+    makeItem('Drip Edge (aluminum)',                        Math.ceil(m.eaveLength + m.rakeLength), 'lf', 3.50),
+    makeItem('Ridge Vent',                                  Math.ceil(m.ridgeLength),        'lf', 8.50),
+    makeItem('Ridge Cap Shingles',                          Math.ceil(m.ridgeLength / 35),   'bundle', 45),
+    makeItem('Starter Shingles',                            Math.ceil(m.eaveLength),         'lf', 2.75),
   ];
   if (m.valleyLength > 0) {
-    items.push(makeItem('Valley Flashing (metal)', Math.ceil(m.valleyLength), 'lf'));
+    items.push(makeItem('Valley Flashing (metal)', Math.ceil(m.valleyLength), 'lf', 12));
   }
   items.push(
-    makeItem('Pipe Boots/Flashings',        Math.max(2, Math.ceil(sqft / 500)),  'ea'),
-    makeItem('Roofing Nails & Fasteners',   1,                                   'lot'),
-    makeItem('Labor - Installation',        sq,                                  'sq'),
-    makeItem('Dumpster & Cleanup',          1,                                   'ea'),
+    makeItem('Pipe Boots/Flashings',        Math.max(2, Math.ceil(sqft / 500)),  'ea', 35),
+    makeItem('Roofing Nails & Fasteners',   1,                                   'lot', 150),
+    makeItem('Labor - Installation',        sq,                                  'sq', 125),
+    makeItem('Dumpster & Cleanup',          1,                                   'ea', 450),
   );
   return items;
 }
@@ -174,24 +174,24 @@ function generateCorrugatedMetalItems(m: RoofrMeasurements): EstimateItem[] {
   const sqft = m.totalSqFt || sq * 100;
   const waste = 1.1;
   const items: EstimateItem[] = [
-    makeItem('Roof Tear-Off & Disposal (if needed)',  sq,                             'sq'),
-    makeItem('Corrugated Metal Panels (29 gauge)',    Math.ceil(sqft * waste),        'sqft'),
-    makeItem('Synthetic Underlayment',                Math.ceil(sq * waste),          'sq'),
-    makeItem('Metal Roof Purlins/Strapping',          Math.ceil(sqft * waste),        'sqft'),
-    makeItem('Eave Trim (metal)',                     Math.ceil(m.eaveLength),        'lf'),
-    makeItem('Rake Trim (metal)',                     Math.ceil(m.rakeLength),        'lf'),
-    makeItem('Ridge Cap (metal)',                     Math.ceil(m.ridgeLength),       'lf'),
+    makeItem('Roof Tear-Off & Disposal (if needed)',  sq,                             'sq', 75),
+    makeItem('Corrugated Metal Panels (29 gauge)',    Math.ceil(sqft * waste),        'sqft', 4.25),
+    makeItem('Synthetic Underlayment',                Math.ceil(sq * waste),          'sq', 45),
+    makeItem('Metal Roof Purlins/Strapping',          Math.ceil(sqft * waste),        'sqft', 1.85),
+    makeItem('Eave Trim (metal)',                     Math.ceil(m.eaveLength),        'lf', 6.50),
+    makeItem('Rake Trim (metal)',                     Math.ceil(m.rakeLength),        'lf', 6.50),
+    makeItem('Ridge Cap (metal)',                     Math.ceil(m.ridgeLength),       'lf', 12),
   ];
   if (m.valleyLength > 0) {
-    items.push(makeItem('Valley Flashing (metal)', Math.ceil(m.valleyLength), 'lf'));
+    items.push(makeItem('Valley Flashing (metal)', Math.ceil(m.valleyLength), 'lf', 14));
   }
   items.push(
-    makeItem('Closure Strips (foam)',         Math.ceil(m.eaveLength + m.rakeLength), 'lf'),
-    makeItem('Metal Roofing Screws (w/ washers)', Math.ceil(sqft / 100),             'box'),
-    makeItem('Pipe Flashings (metal)',        Math.max(2, Math.ceil(sqft / 500)),     'ea'),
-    makeItem('Butyl Sealant Tape',            Math.ceil(sqft / 400),                 'roll'),
-    makeItem('Labor - Installation',          sq,                                    'sq'),
-    makeItem('Dumpster & Cleanup',            1,                                     'ea'),
+    makeItem('Closure Strips (foam)',         Math.ceil(m.eaveLength + m.rakeLength), 'lf', 2.25),
+    makeItem('Metal Roofing Screws (w/ washers)', Math.ceil(sqft / 100),             'box', 28),
+    makeItem('Pipe Flashings (metal)',        Math.max(2, Math.ceil(sqft / 500)),     'ea', 45),
+    makeItem('Butyl Sealant Tape',            Math.ceil(sqft / 400),                 'roll', 18),
+    makeItem('Labor - Installation',          sq,                                    'sq', 175),
+    makeItem('Dumpster & Cleanup',            1,                                     'ea', 450),
   );
   return items;
 }
@@ -201,23 +201,23 @@ function generateStandingSeamItems(m: RoofrMeasurements): EstimateItem[] {
   const sqft = m.totalSqFt || sq * 100;
   const waste = 1.1;
   const items: EstimateItem[] = [
-    makeItem('Roof Tear-Off & Disposal (if needed)',    sq,                             'sq'),
-    makeItem('Standing Seam Metal Panels (24 gauge)',   Math.ceil(sqft * waste),        'sqft'),
-    makeItem('High-Temp Underlayment',                  Math.ceil(sq * waste),          'sq'),
-    makeItem('Metal Roof Clips (concealed fasteners)',  Math.ceil(sqft * waste),        'sqft'),
-    makeItem('Eave Trim (custom bent)',                 Math.ceil(m.eaveLength),        'lf'),
-    makeItem('Rake Trim (custom bent)',                 Math.ceil(m.rakeLength),        'lf'),
-    makeItem('Ridge Cap (standing seam)',               Math.ceil(m.ridgeLength),       'lf'),
+    makeItem('Roof Tear-Off & Disposal (if needed)',    sq,                             'sq', 85),
+    makeItem('Standing Seam Metal Panels (24 gauge)',   Math.ceil(sqft * waste),        'sqft', 7.50),
+    makeItem('High-Temp Underlayment',                  Math.ceil(sq * waste),          'sq', 55),
+    makeItem('Metal Roof Clips (concealed fasteners)',  Math.ceil(sqft * waste),        'sqft', 0.95),
+    makeItem('Eave Trim (custom bent)',                 Math.ceil(m.eaveLength),        'lf', 9),
+    makeItem('Rake Trim (custom bent)',                 Math.ceil(m.rakeLength),        'lf', 9),
+    makeItem('Ridge Cap (standing seam)',               Math.ceil(m.ridgeLength),       'lf', 18),
   ];
   if (m.valleyLength > 0) {
-    items.push(makeItem('Valley Panels (standing seam)', Math.ceil(m.valleyLength), 'lf'));
+    items.push(makeItem('Valley Panels (standing seam)', Math.ceil(m.valleyLength), 'lf', 22));
   }
   items.push(
-    makeItem('Pipe Flashings (custom)',       Math.max(2, Math.ceil(sqft / 500)),     'ea'),
-    makeItem('Butyl Sealant & Accessories',   1,                                      'lot'),
-    makeItem('Labor - Installation (specialized)', sq,                                'sq'),
-    makeItem('Seaming Tool Rental',           1,                                      'ea'),
-    makeItem('Dumpster & Cleanup',            1,                                      'ea'),
+    makeItem('Pipe Flashings (custom)',       Math.max(2, Math.ceil(sqft / 500)),     'ea', 75),
+    makeItem('Butyl Sealant & Accessories',   1,                                      'lot', 200),
+    makeItem('Labor - Installation (specialized)', sq,                                'sq', 225),
+    makeItem('Seaming Tool Rental',           1,                                      'ea', 350),
+    makeItem('Dumpster & Cleanup',            1,                                      'ea', 500),
   );
   return items;
 }

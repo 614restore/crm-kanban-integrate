@@ -18,9 +18,12 @@ export function isHttpUrl(value: string): boolean {
 // Returns null for non-storage URLs (e.g. external links).
 export function extractStorageInfo(value: string): { bucket: string; path: string } | null {
   if (!value || !isHttpUrl(value)) return null;
+  // Strip hash fragment — buildStoredDocumentUrl embeds bucket/path metadata there,
+  // which would otherwise be captured as part of the storage path by the regex below.
+  const withoutHash = value.split('#')[0];
   // public:  /storage/v1/object/public/{bucket}/{path}
   // signed:  /storage/v1/object/sign/{bucket}/{path}
-  const m = value.match(/\/storage\/v1\/object\/(?:public|sign)\/([^/?]+)\/(.+?)(?:\?.*)?$/);
+  const m = withoutHash.match(/\/storage\/v1\/object\/(?:public|sign)\/([^/?]+)\/(.+?)(?:\?.*)?$/);
   if (!m) return null;
   return { bucket: m[1], path: decodeURIComponent(m[2]) };
 }
