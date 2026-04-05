@@ -125,6 +125,35 @@ function fromDefault(d: LineItemDefault): LineItem {
   };
 }
 
+// Keys whose values are computed from lineItems/totals — must NOT be pre-filled by fillTemplateVars.
+// buildContactOverrides() returns hardcoded placeholder values for these; we replace them with
+// the computed values AFTER fillTemplateVars runs, so they must be stripped from merged first.
+const COMPUTED_TOTAL_KEYS = [
+  'SUBTOTAL','TAX_AMOUNT','TOTAL_AMOUNT','DEPOSIT_AMOUNT','BALANCE_DUE',
+  'TEAROFF_TOTAL','DECKING_TOTAL','ICE_WATER_TOTAL','UNDERLAY_TOTAL',
+  'DRIP_EDGE_TOTAL','SHINGLE_TOTAL','RIDGE_TOTAL','FLASHING_TOTAL',
+  'VENT_TOTAL','CLEANUP_TOTAL','PANEL_TOTAL','TRIM_TOTAL','EAVE_TOTAL',
+  'HARDWARE_TOTAL','REMOVAL_TOTAL','WRAP_TOTAL','SOFFIT_TOTAL',
+  'FASCIA_TOTAL','GUTTER_TOTAL','DOWNSPOUT_TOTAL',
+];
+
+/** True when a line item should be treated as a lump-sum / Lot item. */
+function isLotItem(item: LineItem): boolean {
+  const qty = item.qty.trim();
+  const unit = item.unit.trim().toLowerCase();
+  return qty === '' || unit === 'lot' || unit === '' ;
+}
+
+/** Format qty + unit for display, avoiding double-printing when unit already contains qty. */
+function formatQtyUnit(item: LineItem): string {
+  if (isLotItem(item)) return 'Lot';
+  const qty = item.qty.trim();
+  const unit = item.unit.trim();
+  // Guard: if unit starts with a digit the user likely typed "1 Lot" — treat as Lot
+  if (/^\d/.test(unit)) return 'Lot';
+  return `${qty}${unit ? ' ' + unit : ''}`;
+}
+
 /** Render line items to HTML table rows, injecting group header rows when structureGroup changes. */
 function buildLineItemsHtml(items: LineItem[]): string {
   let lastGroup: string | undefined = undefined;
@@ -137,9 +166,9 @@ function buildLineItemsHtml(items: LineItem[]): string {
       );
     }
     const computedTotal = calcItemTotal(item);
-    const isLot = item.qty.trim() === '' || item.unit.toLowerCase() === 'lot';
-    const qtyDisplay = isLot ? 'Lot' : `${item.qty}${item.unit ? ' ' + item.unit : ''}`;
-    const priceDisplay = (!isLot && parseNum(item.unitPrice) > 0) ? `$${fmt(parseNum(item.unitPrice))}` : '—';
+    const lot = isLotItem(item);
+    const qtyDisplay = formatQtyUnit(item);
+    const priceDisplay = (!lot && parseNum(item.unitPrice) > 0) ? `$${fmt(parseNum(item.unitPrice))}` : '—';
     rows.push(`<tr><td>${escHtml(item.description || '—')}</td><td>${escHtml(qtyDisplay)}</td><td>${priceDisplay}</td><td>$${fmt(computedTotal)}</td></tr>`);
   }
   return rows.join('\n      ');
@@ -321,6 +350,8 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
     if (!selected) return '';
     const base = buildContactOverrides(contact, companyProfile, profile);
     const merged = { ...base, ...fieldValues };
+    // Strip hardcoded total values so computed replacements below can fill them correctly
+    COMPUTED_TOTAL_KEYS.forEach(k => delete merged[k]);
     // Convert TERMS_CONTENT plain-text newlines → HTML <br> for the document
     if (merged.TERMS_CONTENT) {
       merged.TERMS_CONTENT = merged.TERMS_CONTENT.replace(/\n/g, '<br>');
@@ -374,7 +405,7 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
       if (field === 'qty' || field === 'unitPrice') {
         const qtyNum = parseNum(updated.qty);
         const price = parseNum(updated.unitPrice);
-        const isLot = updated.qty.trim() === '' || updated.unit.toLowerCase() === 'lot';
+        const isLot = isLotItem(updated);
         if (!isLot && qtyNum > 0 && price > 0) {
           updated.total = String((qtyNum * price).toFixed(2));
         }
@@ -391,6 +422,8 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
 
     const base = buildContactOverrides(contact, companyProfile, profile);
     const merged = { ...base, ...fieldValues };
+    // Strip hardcoded total values so computed replacements fill them correctly
+    COMPUTED_TOTAL_KEYS.forEach(k => delete merged[k]);
     // Convert TERMS_CONTENT plain-text newlines → HTML <br>
     if (merged.TERMS_CONTENT) {
       merged.TERMS_CONTENT = merged.TERMS_CONTENT.replace(/\n/g, '<br>');
@@ -753,7 +786,7 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
                   {(() => {
                     let lastGroup: string | undefined = undefined;
                     return lineItems.map((item) => {
-                    const isLot = item.qty.trim() === '' || item.unit.toLowerCase() === 'lot';
+                    const isLot = isLotItem(item);
                     const computedTotal = calcItemTotal(item);
                     const showGroupHeader = item.structureGroup !== undefined && item.structureGroup !== lastGroup;
                     if (showGroupHeader) lastGroup = item.structureGroup;
