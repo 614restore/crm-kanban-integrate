@@ -525,7 +525,7 @@ ${footer}`,
       lineItemDefaults: [
         { description: 'Tear-off & disposal (1 layer)', qty: '24', unit: 'sq', unitPrice: 85, total: 2040 },
         { description: 'Decking repair / replacement (4×8 sheets)', qty: '3', unit: 'sheets', unitPrice: 65, total: 195 },
-        { description: 'Ice & water shield', qty: '28', unit: 'sq', unitPrice: 32, total: 896 },
+        { description: 'Ice & water shield', qty: '14', unit: 'rolls', unitPrice: 95, total: 1330 },
         { description: 'Synthetic underlayment', qty: '28', unit: 'sq', unitPrice: 18, total: 504 },
         { description: 'Drip edge (aluminum)', qty: '310', unit: 'LF', unitPrice: 4.5, total: 1395 },
         { description: 'Shingles', qty: '24', unit: 'sq', unitPrice: 195, total: 4680 },

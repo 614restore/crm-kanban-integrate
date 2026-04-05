@@ -187,8 +187,14 @@ function applyRoofrToLineItems(items: LineItem[], m: RoofrMeasurements): LineIte
     const desc = item.description.toLowerCase();
     let qty = item.qty;
 
+    // Ice & water shield: calculated from eave length (6 ft wide coverage, 75 sqft/roll)
+    // Falls back to squares-based estimate if no eave data
+    const iceRolls = (m.eaveLength + m.valleyLength) > 0
+      ? String(Math.ceil((m.eaveLength * 6 + m.valleyLength * 3) / 75))
+      : sq ? String(Math.ceil(parseFloat(sq) * 0.6)) : '';
+
     if (sq && (desc.includes('tear-off') || desc.includes('tearoff') || desc.includes('tear off'))) qty = sq;
-    else if (sq && desc.includes('ice') && desc.includes('water')) qty = sq;
+    else if (desc.includes('ice') && desc.includes('water')) qty = iceRolls;
     else if (sq && desc.includes('underlayment')) qty = sq;
     else if (sq && desc.includes('shingle') && !desc.includes('ridge')) qty = sq;
     else if (drip && desc.includes('drip edge')) qty = drip;
