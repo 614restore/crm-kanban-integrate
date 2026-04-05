@@ -357,6 +357,7 @@ export default function RoofrEstimateWizard({
       
       if (error) {
         toast.error(`Failed to upload: ${error}`);
+        setSavingPdf(false);
         return;
       }
 
@@ -368,16 +369,23 @@ export default function RoofrEstimateWizard({
         name: uploadedPdfFile.name,
         file_path: path,
         file_url: url,
+        url: url, // legacy field
         file_type: 'application/pdf',
+        type: 'application/pdf', // legacy field
         size: uploadedPdfFile.size.toString(),
         category: 'measurements', // Important: this makes it a Roofr measurement report
         notes: 'Roofr measurement report',
         uploaded_by: userId || companyId,
         uploaded_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
       };
 
-      await db.insertDocument(doc);
-      toast.success('Roofr PDF saved to Documents');
+      const saved = await db.createDocument(doc);
+      if (saved) {
+        toast.success('✅ Roofr PDF saved to Documents');
+      } else {
+        toast.error('Failed to save PDF metadata');
+      }
     } catch (err: any) {
       console.error('Failed to save PDF:', err);
       toast.error('Failed to save PDF to Documents');

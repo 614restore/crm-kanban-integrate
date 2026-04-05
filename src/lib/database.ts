@@ -177,6 +177,12 @@ export interface DbDocument {
   size?: string;
   uploaded_by?: string;
   created_at: string;
+  category?: string; // e.g., 'measurements' for Roofr PDFs
+  notes?: string;
+  file_path?: string;
+  file_url?: string;
+  file_type?: string;
+  uploaded_at?: string;
   // Signing workflow columns (added via add-document-signing-columns.sql)
   sign_token?: string;
   html_content?: string;

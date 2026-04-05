@@ -75,7 +75,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // ── Deduplicated, retrying profile loader ─────────────────────────────
   // Returns the same in-flight promise if called concurrently (fixes reload race).
-  // Retries up to 3x with backoff if company_id is missing (Supabase trigger lag).
+  // Retries with faster backoff if company_id is missing (only happens for new users).
   const loadProfileOnce = (userId: string, email: string): Promise<Profile | null> => {
     if (profileFetchPromise.current) return profileFetchPromise.current;
 
@@ -83,9 +83,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         let profileData = await fetchProfile(userId);
 
-        // If no company_id, the DB trigger may not have run yet — retry with backoff
+        // Fast path: existing user with company_id — return immediately
+        if (profileData?.company_id) {
+          return profileData;
+        }
+
+        // Slow path: new user or missing company_id — retry with shorter delays
         if (profileData && !profileData.company_id) {
-          for (const delay of [600, 1200, 2000]) {
+          for (const delay of [300, 500]) {
             await new Promise(r => setTimeout(r, delay));
             profileData = await fetchProfile(userId);
             if (profileData?.company_id) break;
@@ -96,7 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (profileData && !profileData.company_id) {
           const ok = await setupNewUser(userId, email);
           if (ok) {
-            await new Promise(r => setTimeout(r, 800));
+            await new Promise(r => setTimeout(r, 400));
             profileData = await fetchProfile(userId);
           }
           if (!profileData?.company_id) {
