@@ -47,6 +47,7 @@ import {
   validateMentions,
 } from '@/lib/mentions';
 import { uploadDocument, validateDocumentFile, formatFileSize, getDocumentSignedUrl, isHttpUrl, isSupabaseStorageUrl } from '@/lib/storage';
+import { htmlStringToPdfBlob } from '@/lib/pdfService';
 import { resolveDocumentSignedUrl } from '@/lib/documentAccess';
 import { logActivity } from '@/lib/activityLogger';
 import { toast } from 'sonner';
@@ -106,6 +107,7 @@ import {
   Folder,
   FolderOpen,
   Image,
+  Copy,
 } from 'lucide-react';
 
 type TabType = 'overview' | 'timeline' | 'documents' | 'financial' | 'projects' | 'jobStatus' | 'survey' | 'insurance';
@@ -247,6 +249,7 @@ export default function ContactDetail() {
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [signedDocs, setSignedDocs] = useState<SignedDoc[]>([]);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [viewingDocHtml, setViewingDocHtml] = useState<{ name: string; html: string } | null>(null);
   const [templateRoofrData, setTemplateRoofrData] = useState<{ measurements: any; structures?: any[] } | undefined>(undefined);
 
   // Project-related data
@@ -363,6 +366,49 @@ export default function ContactDetail() {
     }
   };
 
+  const handleDuplicateEstimate = async (estimate: any) => {
+    if (!profile?.company_id || !contactId) return;
+    try {
+      const newNumber = `EST-${Date.now().toString().slice(-6)}`;
+      const created = await db.createEstimate({
+        company_id: profile.company_id,
+        contact_id: contactId,
+        estimate_number: newNumber,
+        title: estimate.title ? `${estimate.title} (Copy)` : undefined,
+        description: estimate.description || undefined,
+        status: 'draft',
+        subtotal: estimate.subtotal || estimate.amount || 0,
+        tax: estimate.tax || 0,
+        total: estimate.total || 0,
+        valid_until: estimate.valid_until || undefined,
+        terms: estimate.terms || undefined,
+        notes: estimate.notes || undefined,
+        created_by: profile.id || undefined,
+      });
+      if (!created) throw new Error('Failed to create duplicate');
+
+      // Copy line items if any
+      const items = await db.getEstimateItems(estimate.id).catch(() => []);
+      await Promise.all(items.map(item =>
+        db.createEstimateItem({
+          company_id: profile.company_id,
+          estimate_id: created.id,
+          description: item.description,
+          quantity: item.quantity,
+          unit: item.unit,
+          unit_price: item.unit_price,
+          total: item.total,
+        })
+      ));
+
+      toast.success(`Estimate duplicated as ${newNumber}`);
+      const estimates = await db.getEstimatesByContact(contactId);
+      setContactEstimates(estimates);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to duplicate estimate');
+    }
+  };
+
   useEffect(() => {
     if (!contactId) return;
     setQuickNote(contactNotes);
@@ -438,6 +484,7 @@ export default function ContactDetail() {
             uploadedAt: doc.created_at,
             uploadedBy: doc.uploaded_by || 'Team member',
             size: doc.size || 'Unknown',
+            htmlContent: doc.html_content || undefined,
           };
         })
       );
@@ -650,6 +697,33 @@ export default function ContactDetail() {
       if (newTab) newTab.close();
       console.error('[ContactDetail] Error opening document:', error);
       toast.error('Failed to open document: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
+  };
+
+  const handleViewDoc = (doc: Document) => {
+    if (doc.htmlContent) {
+      setViewingDocHtml({ name: doc.name, html: doc.htmlContent });
+    } else {
+      handleOpenDocument(doc.url, doc.name);
+    }
+  };
+
+  const handleDownloadDoc = async (doc: Document) => {
+    if (doc.htmlContent) {
+      try {
+        const safeName = doc.name.replace(/[^a-zA-Z0-9_\- ]/g, '').trim() || 'document';
+        const blob = await htmlStringToPdfBlob(doc.htmlContent, `${safeName}.pdf`);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${safeName}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch {
+        toast.error('Failed to generate PDF for download.');
+      }
+    } else {
+      handleOpenDocument(doc.url, doc.name);
     }
   };
 
@@ -2097,8 +2171,8 @@ export default function ContactDetail() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button onClick={() => handleOpenDocument(doc.url, doc.name)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="View"><Eye size={18} className="text-gray-500" /></button>
-                    <button onClick={() => handleOpenDocument(doc.url, doc.name)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="Download"><Download size={18} className="text-gray-500" /></button>
+                    <button onClick={() => handleViewDoc(doc)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="View"><Eye size={18} className="text-gray-500" /></button>
+                    <button onClick={() => handleDownloadDoc(doc)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="Download"><Download size={18} className="text-gray-500" /></button>
                     <button onClick={() => handleDeleteDocument(doc.id)} className="p-2 hover:bg-red-100 rounded-lg transition-colors" title="Delete"><Trash2 size={18} className="text-red-500" /></button>
                   </div>
                 </div>
@@ -2141,7 +2215,7 @@ export default function ContactDetail() {
                   <div className="p-6 border-b border-gray-200 flex items-center justify-between">
                     <h3 className="text-lg font-semibold text-gray-900">Uploaded Files</h3>
                     <div className="flex items-center gap-2">
-                      <button onClick={() => { try { const raw = localStorage.getItem(`roofr_order_${contact.id}`); if (raw) { const o = JSON.parse(raw); if (o.measurements) setTemplateRoofrData({ measurements: o.measurements, structures: o.structures }); } } catch {} setShowTemplateModal(true); }} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                      <button onClick={() => { try { const raw = localStorage.getItem(`roofr_order_${contact.id}`); if (raw) { const o = JSON.parse(raw); if (o.measurements) setTemplateRoofrData({ measurements: o.measurements, structures: o.structures }); } } catch { /* ignore parse errors */ } setShowTemplateModal(true); }} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
                         <FileText size={18} />Use Template
                       </button>
                       <button onClick={() => documentInputRef.current?.click()} disabled={isUploadingDocument} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
@@ -2202,7 +2276,7 @@ export default function ContactDetail() {
                         <FileText size={32} className="mx-auto mb-2 opacity-50" />
                         <p>No uploaded files yet</p>
                         <div className="flex items-center justify-center gap-3 mt-4">
-                          <button onClick={() => { try { const raw = localStorage.getItem(`roofr_order_${contact.id}`); if (raw) { const o = JSON.parse(raw); if (o.measurements) setTemplateRoofrData({ measurements: o.measurements, structures: o.structures }); } } catch {} setShowTemplateModal(true); }} className="text-green-600 hover:text-green-700 text-sm font-medium">Use a template</button>
+                          <button onClick={() => { try { const raw = localStorage.getItem(`roofr_order_${contact.id}`); if (raw) { const o = JSON.parse(raw); if (o.measurements) setTemplateRoofrData({ measurements: o.measurements, structures: o.structures }); } } catch { /* ignore parse errors */ } setShowTemplateModal(true); }} className="text-green-600 hover:text-green-700 text-sm font-medium">Use a template</button>
                           <span className="text-gray-300">|</span>
                           <button onClick={() => documentInputRef.current?.click()} className="text-blue-600 hover:text-blue-700 text-sm font-medium">Upload a file</button>
                         </div>
@@ -2643,6 +2717,13 @@ export default function ContactDetail() {
                             title="View estimate"
                           >
                             <Eye size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleDuplicateEstimate(estimate)}
+                            className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+                            title="Duplicate estimate"
+                          >
+                            <Copy size={16} />
                           </button>
                           {!isEstimateLocked(estimate) && (
                             <>
@@ -4187,6 +4268,48 @@ export default function ContactDetail() {
         changeOrder={viewingChangeOrder}
         companyId={profile?.company_id || ''}
       />
+
+      {/* In-app document viewer for template documents (HTML-based) */}
+      {viewingDocHtml && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl flex flex-col w-full max-w-5xl" style={{ height: '92vh' }}>
+            {/* Viewer header */}
+            <div className="flex items-center justify-between px-6 py-3.5 border-b border-gray-200 flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <FileText size={18} className="text-blue-600" />
+                <h2 className="text-base font-bold text-gray-900 truncate max-w-lg">{viewingDocHtml.name}</h2>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleDownloadDoc({ id: '', contactId: contact.id, name: viewingDocHtml.name, type: 'other', url: '', uploadedAt: '', uploadedBy: '', size: '', htmlContent: viewingDocHtml.html })}
+                  className="flex items-center gap-1.5 px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <Download size={15} /> Download PDF
+                </button>
+                <button
+                  onClick={() => setViewingDocHtml(null)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  title="Close"
+                >
+                  <X size={20} className="text-gray-500" />
+                </button>
+              </div>
+            </div>
+            {/* Document preview */}
+            <div className="flex-1 overflow-auto bg-gray-100 p-4">
+              <div className="max-w-4xl mx-auto bg-white shadow-lg rounded-lg overflow-hidden">
+                <iframe
+                  srcDoc={viewingDocHtml.html}
+                  className="w-full border-0"
+                  style={{ minHeight: '800px', height: '100%' }}
+                  title="Document View"
+                  sandbox="allow-scripts allow-same-origin"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

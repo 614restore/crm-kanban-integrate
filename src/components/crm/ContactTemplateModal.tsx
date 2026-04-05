@@ -17,6 +17,13 @@ import {
 } from '@/lib/contractorTemplates';
 import { Contact, Document, getContactFullName } from '@/lib/crmData';
 import type { RoofrMeasurements, StructureMeasurements } from '@/lib/roofrParser';
+import {
+  getPricingConfig,
+  getIceWaterProduct,
+  calcIceWaterRolls,
+  calcUnderlaymentRolls,
+  ICE_WATER_PRODUCTS,
+} from '@/lib/pricingConfig';
 
 interface RoofrData {
   measurements: RoofrMeasurements;
@@ -85,6 +92,8 @@ const COST_FIELD_PATTERNS = [
 // embedded inside TERMS_CONTENT so we don't show them as separate fields.
 const TERMS_FIELDS = ['TERMS_CONTENT'];
 const DOC_INFO_FIELDS = ['ESTIMATE_NUMBER', 'START_DATE', 'ESTIMATED_DURATION', 'ESTIMATE_DATE', 'ESTIMATE_EXPIRY', 'CONTRACT_NUMBER', 'CONTRACT_DATE', 'ESTIMATED_COMPLETION'];
+// Spec fields that should always be shown to user even if auto-filled with defaults
+const SPEC_ALWAYS_SHOW_FIELDS = ['SHINGLE_BRAND', 'SHINGLE_STYLE', 'SHINGLE_COLOR', 'SHINGLE_WARRANTY_YEARS', 'ROOF_SQUARES', 'ROOF_SQFT', 'ROOF_PITCH', 'STORY_COUNT', 'LAYER_COUNT'];
 
 function isCostField(key: string): boolean {
   return COST_FIELD_PATTERNS.some(p => key.includes(p));
@@ -175,32 +184,43 @@ function buildLineItemsHtml(items: LineItem[]): string {
 }
 
 /** Apply Roofr measurements to a line items array.
- *  Matches on description keywords — safe to call on any template's defaults. */
-function applyRoofrToLineItems(items: LineItem[], m: RoofrMeasurements): LineItem[] {
-  const sq = m.totalSquares > 0 ? String(Math.ceil(m.totalSquares)) : '';
+ *  Matches on description keywords — safe to call on any template's defaults.
+ *  iceWaterProductId: uses pricing config product for coverage calculation. */
+function applyRoofrToLineItems(
+  items: LineItem[],
+  m: RoofrMeasurements,
+  iceWaterProductId?: string,
+): LineItem[] {
+  const pricing = getPricingConfig();
+  const product = getIceWaterProduct(iceWaterProductId ?? pricing.iceWaterProductId);
+
+  const sqNum = m.totalSquares > 0 ? Math.ceil(m.totalSquares) : 0;
+  const sq = sqNum > 0 ? String(sqNum) : '';
   const drip = (m.eaveLength + m.rakeLength) > 0
     ? String(Math.ceil(m.eaveLength + m.rakeLength))
     : '';
   const ridge = m.ridgeLength > 0 ? String(Math.ceil(m.ridgeLength)) : '';
 
+  // Ice & water: one strip (roll width = 3 ft) along eaves + two strips in valleys
+  const iceRolls = calcIceWaterRolls(m.eaveLength, m.valleyLength, product, sqNum);
+  const iceRollsStr = iceRolls > 0 ? String(iceRolls) : '';
+
+  // Underlayment: 1 roll per 10 sq (or per pricing config sqPerRoll)
+  const underlayRolls = sqNum > 0
+    ? String(calcUnderlaymentRolls(sqNum, pricing.underlaymentSqPerRoll))
+    : '';
+
   return items.map(item => {
     const desc = item.description.toLowerCase();
     let qty = item.qty;
 
-    // Ice & water shield: calculated from eave length (6 ft wide coverage, 75 sqft/roll)
-    // Falls back to squares-based estimate if no eave data
-    const iceRolls = (m.eaveLength + m.valleyLength) > 0
-      ? String(Math.ceil((m.eaveLength * 6 + m.valleyLength * 3) / 75))
-      : sq ? String(Math.ceil(parseFloat(sq) * 0.6)) : '';
-
     if (sq && (desc.includes('tear-off') || desc.includes('tearoff') || desc.includes('tear off'))) qty = sq;
-    else if (desc.includes('ice') && desc.includes('water')) qty = iceRolls;
-    else if (sq && desc.includes('underlayment')) qty = sq;
+    else if (iceRollsStr && desc.includes('ice') && desc.includes('water')) qty = iceRollsStr;
+    else if (underlayRolls && desc.includes('underlayment')) qty = underlayRolls;
     else if (sq && desc.includes('shingle') && !desc.includes('ridge')) qty = sq;
     else if (drip && desc.includes('drip edge')) qty = drip;
     else if (ridge && desc.includes('ridge cap')) qty = ridge;
 
-    // Recalculate total when qty changed
     const price = parseNum(item.unitPrice);
     const qtyNum = parseFloat(qty);
     const newTotal = (qty !== item.qty && !isNaN(qtyNum) && price > 0)
@@ -208,6 +228,22 @@ function applyRoofrToLineItems(items: LineItem[], m: RoofrMeasurements): LineIte
       : item.total;
 
     return { ...item, qty, total: newTotal };
+  });
+}
+
+/** When ice & water manufacturer changes, update the matching line item's unit price and total. */
+function applyIceWaterPrice(items: LineItem[], productId: string): LineItem[] {
+  const product = getIceWaterProduct(productId);
+  return items.map(item => {
+    const desc = item.description.toLowerCase();
+    if (!(desc.includes('ice') && desc.includes('water'))) return item;
+    const qty = parseNum(item.qty) || 1;
+    return {
+      ...item,
+      description: `Ice & water shield (${product.name})`,
+      unitPrice: String(product.price),
+      total: String(Math.round(qty * product.price * 100) / 100),
+    };
   });
 }
 
@@ -240,6 +276,8 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
   const [depositAmount, setDepositAmount] = useState('');
   // Roofr structure selector (when multiple structures detected)
   const [selectedRoofrStructureIdx, setSelectedRoofrStructureIdx] = useState<number>(0); // 0 = combined
+  // Ice & water manufacturer (drives unit price + coverage calculation)
+  const [iceWaterProductId, setIceWaterProductId] = useState<string>(() => getPricingConfig().iceWaterProductId);
   const initCompanyProfileRef = useRef<DbCompany | null>(null);
   const initProfileRef = useRef(profile);
 
@@ -308,7 +346,7 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
         const activeMeasurements = (roofrData.structures && roofrData.structures.length > 0 && selectedRoofrStructureIdx > 0)
           ? roofrData.structures[selectedRoofrStructureIdx - 1].measurements
           : roofrData.measurements;
-        items = applyRoofrToLineItems(items, activeMeasurements);
+        items = applyRoofrToLineItems(items, activeMeasurements, iceWaterProductId);
       }
 
       setLineItems(items);
@@ -323,7 +361,7 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
     const defaults: Record<string, string> = {};
 
     // Pick useful auto-fill defaults into fieldValues so the user can override them
-    const autoKeysToSeed = ['TERMS_CONTENT', 'CONTRACT_NUMBER', 'CONTRACT_DATE', 'ESTIMATE_DATE', 'ESTIMATE_NUMBER', 'ESTIMATE_EXPIRY', 'START_DATE', 'PAYMENT_TERMS', 'WARRANTY_PERIOD'];
+    const autoKeysToSeed = ['TERMS_CONTENT', 'CONTRACT_NUMBER', 'CONTRACT_DATE', 'ESTIMATE_DATE', 'ESTIMATE_NUMBER', 'ESTIMATE_EXPIRY', 'START_DATE', 'PAYMENT_TERMS', 'WARRANTY_PERIOD', ...SPEC_ALWAYS_SHOW_FIELDS];
     autoKeysToSeed.forEach(k => { if (autoBase[k]) defaults[k] = autoBase[k]; });
 
     // Also pull defaults from the template's fields[] definition
@@ -482,6 +520,7 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
         url: storedUrl,
         size: `${Math.round(pdfBlob.size / 1024)} KB`,
         uploaded_by: profile?.id || null,
+        html_content: finalHtml,
       });
 
       if (!newDbDoc) throw new Error('Failed to create document record');
@@ -495,6 +534,7 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
         uploadedAt: newDbDoc.created_at || new Date().toISOString(),
         uploadedBy: newDbDoc.uploaded_by || repName,
         size: newDbDoc.size || '',
+        htmlContent: finalHtml,
       };
 
       clearTmplDraft();
@@ -550,9 +590,12 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
     const termsKeys = TERMS_FIELDS.filter(k => templateKeys.has(k));
 
     // Spec fields: not auto-filled, not doc-info, not cost, not terms
-    const specKeys = allEditable.filter(
+    // Also always include SPEC_ALWAYS_SHOW_FIELDS if they exist in the template
+    const specEditable = allEditable.filter(
       k => !DOC_INFO_FIELDS.includes(k) && !isCostField(k) && !TERMS_FIELDS.includes(k)
     );
+    const specAlwaysPresent = SPEC_ALWAYS_SHOW_FIELDS.filter(k => templateKeys.has(k) && !specEditable.includes(k));
+    const specKeys = [...specAlwaysPresent, ...specEditable];
 
     return {
       docInfoFields: docInfoKeys,
@@ -750,7 +793,7 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
                             const extraItems: LineItem[] = [];
                             for (const s of otherStructures) {
                               const template = lineItems.map(li => ({ ...li, id: crypto.randomUUID(), structureGroup: s.structureName }));
-                              extraItems.push(...applyRoofrToLineItems(template, s.measurements));
+                              extraItems.push(...applyRoofrToLineItems(template, s.measurements, iceWaterProductId));
                             }
                             setLineItems([...primaryItems, ...extraItems]);
                           }}
@@ -772,6 +815,41 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
               <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2 flex items-center gap-2">
                 <span className="text-green-600 text-sm">✓</span>
                 <p className="text-xs text-green-700">Line item quantities auto-filled from Roofr report ({roofrData.measurements.totalSquares.toFixed(1)} sq). Edit any value as needed.</p>
+              </div>
+            </section>
+          )}
+
+          {/* Ice & Water Manufacturer Selector — only for agreement templates */}
+          {isAgreement && (
+            <section>
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Ice & Water Product</p>
+              <div className="bg-white rounded-xl border border-gray-200 p-3 space-y-1">
+                {ICE_WATER_PRODUCTS.map(p => {
+                  const selected = iceWaterProductId === p.id;
+                  return (
+                    <label
+                      key={p.id}
+                      className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors ${selected ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-50'}`}
+                    >
+                      <input
+                        type="radio"
+                        name="iceWaterProduct"
+                        value={p.id}
+                        checked={selected}
+                        onChange={() => {
+                          setIceWaterProductId(p.id);
+                          setLineItems(prev => applyIceWaterPrice(prev, p.id));
+                        }}
+                        className="text-blue-600"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900">{p.name}</p>
+                        <p className="text-xs text-gray-500">{p.lengthFt}′ × {p.widthIn}″ · {p.sqFtPerRoll} sq ft/roll (~{(p.sqFtPerRoll / 100).toFixed(1)} sq)</p>
+                      </div>
+                      <span className="text-sm font-semibold text-gray-700">${p.price}/roll</span>
+                    </label>
+                  );
+                })}
               </div>
             </section>
           )}

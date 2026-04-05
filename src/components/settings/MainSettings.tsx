@@ -14,7 +14,8 @@ import {
   DollarSign,
   BarChart3,
   HelpCircle,
-  Wrench
+  Wrench,
+  Hammer,
 } from 'lucide-react';
 import { useCRM } from '@/lib/crmStore';
 
@@ -22,6 +23,7 @@ import IntegrationsSettings from './IntegrationsSettings';
 import CompanyTeamSettings from './CompanyTeamSettings';
 import BillingSettingsPage from './BillingSettings';
 import { NotificationPreferences } from './NotificationPreferences';
+import MaterialPricingSettings from './MaterialPricingSettings';
 
 // Main Settings Component with Navigation
 const MainSettings: React.FC = () => {
@@ -90,6 +92,13 @@ const MainSettings: React.FC = () => {
       description: 'Templates, contracts, and document automation',
       icon: FileText,
       component: DocumentSettings
+    },
+    {
+      id: 'pricing',
+      title: 'Material Pricing',
+      description: 'Default unit rates for estimates — underlayment, ice & water, shingles, labor',
+      icon: Hammer,
+      component: MaterialPricingSettings,
     },
     {
       id: 'billing',
