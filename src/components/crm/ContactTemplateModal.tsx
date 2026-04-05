@@ -37,6 +37,7 @@ interface LineItem {
   unit: string;
   unitPrice: string;
   total: string; // manual override total (used when qty is empty/Lot)
+  structureGroup?: string; // e.g. "Structure 1", "Garage" — used to render section headers
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -122,6 +123,26 @@ function fromDefault(d: LineItemDefault): LineItem {
     unitPrice: d.unitPrice > 0 ? String(d.unitPrice) : '',
     total: d.total > 0 ? String(d.total) : '',
   };
+}
+
+/** Render line items to HTML table rows, injecting group header rows when structureGroup changes. */
+function buildLineItemsHtml(items: LineItem[]): string {
+  let lastGroup: string | undefined = undefined;
+  const rows: string[] = [];
+  for (const item of items) {
+    if (item.structureGroup !== undefined && item.structureGroup !== lastGroup) {
+      lastGroup = item.structureGroup;
+      rows.push(
+        `<tr style="background:#f1f5f9;"><td colspan="4" style="padding:6px 10px;font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.05em;">${escHtml(lastGroup)}</td></tr>`
+      );
+    }
+    const computedTotal = calcItemTotal(item);
+    const isLot = item.qty.trim() === '' || item.unit.toLowerCase() === 'lot';
+    const qtyDisplay = isLot ? 'Lot' : `${item.qty}${item.unit ? ' ' + item.unit : ''}`;
+    const priceDisplay = (!isLot && parseNum(item.unitPrice) > 0) ? `$${fmt(parseNum(item.unitPrice))}` : '—';
+    rows.push(`<tr><td>${escHtml(item.description || '—')}</td><td>${escHtml(qtyDisplay)}</td><td>${priceDisplay}</td><td>$${fmt(computedTotal)}</td></tr>`);
+  }
+  return rows.join('\n      ');
 }
 
 /** Apply Roofr measurements to a line items array.
@@ -307,14 +328,8 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
     let html = fillTemplateVars(selected.content, merged);
 
     if (isAgreement) {
-      // Inject dynamic line item rows into the Cost Breakdown tbody
-      const rowsHtml = lineItems.map(item => {
-        const computedTotal = calcItemTotal(item);
-        const isLot = item.qty.trim() === '' || item.unit.toLowerCase() === 'lot';
-        const qtyDisplay = isLot ? 'Lot' : `${item.qty}${item.unit ? ' ' + item.unit : ''}`;
-        const priceDisplay = (!isLot && parseNum(item.unitPrice) > 0) ? `$${fmt(parseNum(item.unitPrice))}` : '—';
-        return `<tr><td>${escHtml(item.description || '—')}</td><td>${escHtml(qtyDisplay)}</td><td>${priceDisplay}</td><td>$${fmt(computedTotal)}</td></tr>`;
-      }).join('\n      ');
+      // Inject dynamic line item rows into the Cost Breakdown tbody (with optional structure group headers)
+      const rowsHtml = buildLineItemsHtml(lineItems);
       html = html.replace(/<tbody>[\s\S]*?<\/tbody>/, `<tbody>\n      ${rowsHtml}\n    </tbody>`);
 
       // Replace totals with computed values
@@ -383,13 +398,7 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
     const finalHtml = (() => {
       let html = fillTemplateVars(selected.content, merged);
       if (isAgreement) {
-        const rowsHtml = lineItems.map(item => {
-          const computedTotal = calcItemTotal(item);
-          const isLot = item.qty.trim() === '' || item.unit.toLowerCase() === 'lot';
-          const qtyDisplay = isLot ? 'Lot' : `${item.qty}${item.unit ? ' ' + item.unit : ''}`;
-          const priceDisplay = (!isLot && parseNum(item.unitPrice) > 0) ? `$${fmt(parseNum(item.unitPrice))}` : '—';
-          return `<tr><td>${escHtml(item.description || '—')}</td><td>${escHtml(qtyDisplay)}</td><td>${priceDisplay}</td><td>$${fmt(computedTotal)}</td></tr>`;
-        }).join('\n');
+        const rowsHtml = buildLineItemsHtml(lineItems);
         html = html.replace(/<tbody>[\s\S]*?<\/tbody>/, `<tbody>${rowsHtml}</tbody>`);
         html = html.replace(/\{\{SUBTOTAL\}\}/g, `$${fmt(subtotal)}`);
         html = html.replace(/\{\{TAX_RATE\}\}/g, taxRate || '0');
@@ -650,27 +659,72 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
             </section>
           )}
 
-          {/* Roofr structure selector — shown when template is open and Roofr data has multiple structures */}
+          {/* Roofr structure panel — multi-structure */}
           {isAgreement && roofrData && roofrData.structures && roofrData.structures.length > 1 && (
             <section className="mb-3">
-              <p className="text-xs font-bold text-blue-600 uppercase tracking-wide mb-1.5">Roofr Structure</p>
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-2">
-                <p className="text-xs text-blue-700 mb-2">Select which structure's measurements to use for quantities:</p>
-                <select
-                  value={selectedRoofrStructureIdx}
-                  onChange={e => setSelectedRoofrStructureIdx(Number(e.target.value))}
-                  className="w-full text-sm border border-blue-300 rounded px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
-                >
-                  <option value={0}>All Combined ({roofrData.measurements.totalSquares.toFixed(1)} sq)</option>
-                  {roofrData.structures.map((s, i) => (
-                    <option key={i} value={i + 1}>{s.structureName} ({s.measurements.totalSquares.toFixed(1)} sq)</option>
-                  ))}
-                </select>
+              <p className="text-xs font-bold text-blue-600 uppercase tracking-wide mb-1.5">Roofr Structures</p>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 space-y-2">
+                <div className="flex items-center gap-2">
+                  <select
+                    value={selectedRoofrStructureIdx}
+                    onChange={e => setSelectedRoofrStructureIdx(Number(e.target.value))}
+                    className="flex-1 text-sm border border-blue-300 rounded px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  >
+                    <option value={0}>All Combined ({roofrData.measurements.totalSquares.toFixed(1)} sq)</option>
+                    {roofrData.structures.map((s, i) => (
+                      <option key={i} value={i + 1}>{s.structureName} ({s.measurements.totalSquares.toFixed(1)} sq)</option>
+                    ))}
+                  </select>
+                </div>
+                {/* Add second structure as separate priced section */}
+                {selectedRoofrStructureIdx > 0 && (() => {
+                  const otherStructures = roofrData.structures!.filter((_, i) => i !== selectedRoofrStructureIdx - 1);
+                  const alreadyAdded = lineItems.some(li => li.structureGroup !== undefined);
+                  return otherStructures.length > 0 && (
+                    <div className="border-t border-blue-200 pt-2">
+                      {alreadyAdded ? (
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs text-blue-700">Both structures included — priced separately.</p>
+                          <button
+                            onClick={() => {
+                              const primaryName = roofrData.structures![selectedRoofrStructureIdx - 1].structureName;
+                              // Keep only primary structure items, strip group labels
+                              setLineItems(prev =>
+                                prev
+                                  .filter(li => li.structureGroup === undefined || li.structureGroup === primaryName)
+                                  .map(li => ({ ...li, structureGroup: undefined }))
+                              );
+                            }}
+                            className="text-xs text-red-500 hover:text-red-700 underline ml-2"
+                          >Remove second structure</button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            const primaryName = roofrData.structures![selectedRoofrStructureIdx - 1].structureName;
+                            // Label current items as primary structure
+                            const primaryItems = lineItems.map(li => ({ ...li, structureGroup: primaryName }));
+                            // Build line items for each additional structure
+                            const extraItems: LineItem[] = [];
+                            for (const s of otherStructures) {
+                              const template = lineItems.map(li => ({ ...li, id: crypto.randomUUID(), structureGroup: s.structureName }));
+                              extraItems.push(...applyRoofrToLineItems(template, s.measurements));
+                            }
+                            setLineItems([...primaryItems, ...extraItems]);
+                          }}
+                          className="flex items-center gap-1.5 text-xs bg-blue-600 text-white rounded px-2.5 py-1.5 hover:bg-blue-700 transition-colors font-medium"
+                        >
+                          <Plus size={12} /> Add {otherStructures.map(s => s.structureName).join(' + ')} as separate section
+                        </button>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             </section>
           )}
 
-          {/* Roofr banner — shown when Roofr data present but single structure */}
+          {/* Roofr banner — single structure */}
           {isAgreement && roofrData && (!roofrData.structures || roofrData.structures.length <= 1) && (
             <section className="mb-3">
               <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2 flex items-center gap-2">
@@ -696,11 +750,21 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
 
                 {/* Line item rows */}
                 <div className="divide-y divide-gray-100">
-                  {lineItems.map((item) => {
+                  {(() => {
+                    let lastGroup: string | undefined = undefined;
+                    return lineItems.map((item) => {
                     const isLot = item.qty.trim() === '' || item.unit.toLowerCase() === 'lot';
                     const computedTotal = calcItemTotal(item);
+                    const showGroupHeader = item.structureGroup !== undefined && item.structureGroup !== lastGroup;
+                    if (showGroupHeader) lastGroup = item.structureGroup;
                     return (
-                      <div key={item.id} className="grid grid-cols-[1fr_70px_75px_75px_28px] gap-1 px-3 py-2 items-start hover:bg-gray-50">
+                      <React.Fragment key={item.id}>
+                        {showGroupHeader && (
+                          <div className="px-3 py-1.5 bg-slate-100 border-b border-slate-200">
+                            <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">{item.structureGroup}</span>
+                          </div>
+                        )}
+                      <div className="grid grid-cols-[1fr_70px_75px_75px_28px] gap-1 px-3 py-2 items-start hover:bg-gray-50">
                         {/* Description */}
                         <div className="space-y-1">
                           <input
@@ -767,8 +831,10 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
                           <Trash2 size={13} />
                         </button>
                       </div>
+                      </React.Fragment>
                     );
-                  })}
+                  });
+                  })()}
                 </div>
 
                 {/* Add line button */}
