@@ -307,6 +307,23 @@ export default function RoofrEstimateWizard({
   const [uploadedPdfFile, setUploadedPdfFile] = useState<File | null>(null); // Track the uploaded PDF file
   const [savingPdf,      setSavingPdf]     = useState(false);
 
+  // Contact's uploaded PDFs — lets user pick an existing doc instead of the file picker
+  const [contactPdfs, setContactPdfs] = useState<{ id: string; name: string; url: string }[]>([]);
+  useEffect(() => {
+    if (!contactId) return;
+    import('@/lib/supabase').then(({ supabase }) => {
+      supabase.from('documents').select('id,name,url').eq('contact_id', contactId)
+        .then(({ data }) => {
+          if (data) setContactPdfs(
+            data.filter((d: any) =>
+              String(d.name || '').toLowerCase().endsWith('.pdf') ||
+              String(d.url  || '').toLowerCase().includes('.pdf')
+            )
+          );
+        });
+    });
+  }, [contactId]);
+
   // ── Fill form from measurements object ────────────────────────────────────
 
   const fillFormFromMeasurements = useCallback((m: RoofrMeasurements) => {
@@ -457,6 +474,36 @@ export default function RoofrEstimateWizard({
     if (file) handleFile(file);
   };
 
+  const handleDocumentPick = async (doc: { id: string; name: string; url: string }) => {
+    setLoadingPdf(true);
+    setParsedResult(null);
+    setUploadedPdfFile(null);
+    try {
+      const { getDocumentSignedUrl } = await import('@/lib/storage');
+      const { parseRoofrPDFFromUrl } = await import('@/lib/roofrParser');
+      let url = doc.url;
+      // Resolve to a signed URL if it's a storage path
+      const signed = await getDocumentSignedUrl(url);
+      if (signed) url = signed;
+      const result = await parseRoofrPDFFromUrl(url);
+      if (result.structures.length > 0) {
+        setParsedResult(result);
+        if (result.hasMultipleStructures) {
+          toast.success(`Found ${result.structures.length} structures — select one below.`);
+        } else {
+          toast.success('PDF loaded — select structure below or combine all.');
+        }
+      } else {
+        fillFormFromMeasurements(result.combinedMeasurements);
+        toast.success('Measurements loaded — review and click Continue.');
+      }
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Could not read this PDF.');
+    } finally {
+      setLoadingPdf(false);
+    }
+  };
+
   // ── Step transitions ───────────────────────────────────────────────────────
 
   const handleSelectRoofType = (type: RoofType) => {
@@ -584,6 +631,24 @@ export default function RoofrEstimateWizard({
           {/* ── Step 1: Measurements ────────────────────────────────────────── */}
           {step === 1 && (
             <div className="space-y-5">
+
+              {/* Choose from existing uploaded documents (works on all platforms) */}
+              {contactPdfs.length > 0 && (
+                <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 space-y-2">
+                  <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Use an uploaded document</p>
+                  {contactPdfs.map(doc => (
+                    <button
+                      key={doc.id}
+                      onClick={() => !loadingPdf && handleDocumentPick(doc)}
+                      disabled={loadingPdf}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-white border border-blue-200 hover:border-blue-400 hover:bg-blue-50 transition-colors text-left disabled:opacity-50"
+                    >
+                      <FileSpreadsheet size={16} className="text-blue-500 flex-shrink-0" />
+                      <span className="text-sm font-medium text-gray-800 truncate">{doc.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {/* PDF upload zone — primary entry point */}
               <div
