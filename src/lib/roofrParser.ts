@@ -422,6 +422,64 @@ export async function parseRoofrPDF(file: File): Promise<RoofrMeasurements> {
 }
 
 /**
+ * Parse a Roofr PDF from a URL (e.g. Supabase signed URL).
+ * Fetches the PDF as an ArrayBuffer then runs the same parser pipeline.
+ * Avoids all file-picker limitations on Capacitor iOS.
+ */
+export async function parseRoofrPDFFromUrl(url: string): Promise<MultiStructureResult> {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Failed to fetch PDF: ${response.status} ${response.statusText}`);
+  const arrayBuffer = await response.arrayBuffer();
+
+  const isCapacitor =
+    typeof window !== 'undefined' && (
+      window.location.protocol === 'capacitor:' ||
+      window.location.protocol === 'ionic:' ||
+      typeof (window as any).Capacitor !== 'undefined'
+    );
+  if (isCapacitor) await ensureCapacitorWorker();
+
+  const loadingTask = pdfjsLib.getDocument({
+    data: arrayBuffer,
+    useWorkerFetch: false,
+    isEvalSupported: false,
+    useSystemFonts: true,
+  });
+  const pdf = await loadingTask.promise;
+
+  let fullText = '';
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const textContent = await page.getTextContent();
+    const pageText = (textContent.items as { str: string }[])
+      .map(item => item.str)
+      .join(' ');
+    fullText += pageText + '\n';
+  }
+
+  const structureBlocks = detectStructures(fullText);
+  if (structureBlocks.length > 1) {
+    const structures: StructureMeasurements[] = structureBlocks.map((block, index) => ({
+      structureName: block.name,
+      structureIndex: index + 1,
+      measurements: extractMeasurements(block.text),
+    }));
+    return {
+      hasMultipleStructures: true,
+      combinedMeasurements: combineStructures(structures),
+      structures,
+    };
+  }
+
+  const measurements = extractMeasurements(fullText);
+  return {
+    hasMultipleStructures: false,
+    combinedMeasurements: measurements,
+    structures: [{ structureName: 'Main Structure', structureIndex: 1, measurements }],
+  };
+}
+
+/**
  * Validate measurements are reasonable for a roof.
  */
 export function validateMeasurements(measurements: RoofrMeasurements): {

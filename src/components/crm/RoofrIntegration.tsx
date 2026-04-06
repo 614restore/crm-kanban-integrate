@@ -3,10 +3,11 @@
 
 import React, { useState } from 'react';
 import { toast } from 'sonner';
-import { FileUp, Loader2, CheckCircle, AlertCircle, FileText, Download } from 'lucide-react';
+import { FileUp, Loader2, CheckCircle, AlertCircle, FileText, Download, FolderOpen } from 'lucide-react';
 import type { RoofrMeasurements, MultiStructureResult, StructureMeasurements } from '@/lib/roofrParser';
 import { generateEstimateFromMeasurements, generateEstimateSummary, formatEstimateForCustomer } from '@/lib/roofrEstimateGenerator';
 import { Contact } from '@/lib/crmData';
+import { getDocumentSignedUrl } from '@/lib/storage';
 
 interface RoofrIntegrationProps {
   contact: Contact;
@@ -27,13 +28,67 @@ export function RoofrIntegration({ contact, onEstimateGenerated }: RoofrIntegrat
   const isMobileBrowser = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
   const isMobile = isMobileBrowser && !isNativeApp;
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    toast.info('📂 File picker triggered…');
-    const file = event.target.files?.[0];
-    if (!file) {
-      toast.error('No file received — if uploading from iCloud, open Files and download it first');
-      return;
+  // PDFs already attached to this contact (uploaded via Documents tab)
+  const contactPdfs = (contact.documents || []).filter(
+    doc => doc.name?.toLowerCase().endsWith('.pdf') || doc.url?.toLowerCase().includes('.pdf')
+  );
+
+  const processResult = async (result: MultiStructureResult) => {
+    setMultiStructureResult(result);
+    setMeasurements(result.combinedMeasurements);
+    const validation = (await import('@/lib/roofrParser')).validateMeasurements(result.combinedMeasurements);
+    setValidationWarnings(validation.warnings);
+    if (validation.warnings.length > 0) {
+      toast.warning('Measurements extracted with warnings - please review');
+    } else if (result.hasMultipleStructures) {
+      toast.success(`Found ${result.structures.length} structures! Use selector to view each.`);
+    } else {
+      toast.success('Measurements extracted successfully!');
     }
+    const lineItems = generateEstimateFromMeasurements(result.combinedMeasurements);
+    const summary = generateEstimateSummary(result.combinedMeasurements, lineItems);
+    setEstimateSummary(summary);
+    if (onEstimateGenerated) {
+      onEstimateGenerated(lineItems, result.combinedMeasurements, result.hasMultipleStructures ? result : undefined);
+    }
+    toast.success(`Estimate generated: $${summary.totalCost.toLocaleString()}`);
+  };
+
+  const handleDocumentSelect = async (docId: string) => {
+    const doc = contactPdfs.find(d => d.id === docId);
+    if (!doc) return;
+
+    setIsProcessing(true);
+    setMeasurements(null);
+    setMultiStructureResult(null);
+    setSelectedStructure(0);
+    setValidationWarnings([]);
+    setEstimateSummary(null);
+    toast.info(`Parsing ${doc.name}…`);
+
+    try {
+      let url = doc.url;
+      // If it's a Supabase storage path, get a signed URL
+      if (!url.startsWith('http')) {
+        const signed = await getDocumentSignedUrl(url);
+        if (!signed) throw new Error('Could not generate download URL for this document');
+        url = signed;
+      }
+      const { parseRoofrPDFFromUrl } = await import('@/lib/roofrParser');
+      const result = await parseRoofrPDFFromUrl(url);
+      await processResult(result);
+    } catch (error) {
+      const msg = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+      console.error('[RoofrImport] error:', msg);
+      toast.error(msg || 'Failed to parse PDF', { duration: 10000 });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
 
     // iOS iCloud files often have empty file.type — accept by extension as fallback
     const isPdf = file.type === 'application/pdf' ||
@@ -42,9 +97,6 @@ export function RoofrIntegration({ contact, onEstimateGenerated }: RoofrIntegrat
       toast.error(`Not a PDF (type: "${file.type}", name: "${file.name}")`);
       return;
     }
-
-    toast.info(`📄 Got file: ${file.name} (${file.size} bytes)`);
-    console.log('[RoofrImport] File received:', file.name, 'type:', file.type || '(empty)', 'size:', file.size);
 
     setIsProcessing(true);
     toast.info('Parsing Roofr measurement report...');
@@ -55,51 +107,15 @@ export function RoofrIntegration({ contact, onEstimateGenerated }: RoofrIntegrat
     setEstimateSummary(null);
 
     try {
-      // Step 1: Parse PDF with multi-structure support
-      const { parseRoofrPDFWithStructures, validateMeasurements } = await import('@/lib/roofrParser');
+      const { parseRoofrPDFWithStructures } = await import('@/lib/roofrParser');
       const result = await parseRoofrPDFWithStructures(file);
-      
-      // Store full result
-      setMultiStructureResult(result);
-      setMeasurements(result.combinedMeasurements);
-
-      // Step 2: Validate measurements
-      const validation = validateMeasurements(result.combinedMeasurements);
-      setValidationWarnings(validation.warnings);
-
-      if (validation.warnings.length > 0) {
-        toast.warning('Measurements extracted with warnings - please review');
-      } else if (result.hasMultipleStructures) {
-        toast.success(`Found ${result.structures.length} structures! Use selector to view each.`);
-      } else {
-        toast.success('Measurements extracted successfully!');
-      }
-
-      // Step 3: Generate estimate from combined measurements
-      const lineItems = generateEstimateFromMeasurements(result.combinedMeasurements);
-      const summary = generateEstimateSummary(result.combinedMeasurements, lineItems);
-      setEstimateSummary(summary);
-
-      // Step 4: Notify parent component — pass full multi-structure result so
-      // the parent can store per-structure measurements instead of combined only
-      if (onEstimateGenerated) {
-        onEstimateGenerated(
-          lineItems,
-          result.combinedMeasurements,
-          result.hasMultipleStructures ? result : undefined,
-        );
-      }
-
-      toast.success(`Estimate generated: $${summary.totalCost.toLocaleString()}`);
+      await processResult(result);
     } catch (error) {
-      const msg = error instanceof Error
-        ? `${error.name}: ${error.message}`
-        : String(error);
+      const msg = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
       console.error('[RoofrImport] error:', msg);
       toast.error(msg || 'Failed to parse PDF', { duration: 10000 });
     } finally {
       setIsProcessing(false);
-      // Reset file input
       event.target.value = '';
     }
   };
@@ -147,20 +163,31 @@ export function RoofrIntegration({ contact, onEstimateGenerated }: RoofrIntegrat
 
   return (
     <div className="space-y-4">
-      {/* Mobile Notice or Upload Section */}
-      {isMobile ? (
-        <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 bg-gray-50">
-          <div className="flex flex-col items-center gap-3 text-center">
-            <FileUp className="w-8 h-8 text-gray-400" />
-            <div>
-              <h3 className="font-semibold text-gray-900">PDF Upload Available on Desktop</h3>
-              <p className="text-sm text-gray-500 mt-1">
-                Upload Roofr PDFs from your computer or use the "Order New Report" option below
-              </p>
-            </div>
+      {/* Choose from customer documents (works on all platforms including iOS) */}
+      {contactPdfs.length > 0 && (
+        <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+          <div className="flex items-center gap-2 mb-3">
+            <FolderOpen className="w-5 h-5 text-blue-600" />
+            <h3 className="font-semibold text-gray-900">Use Existing Customer Document</h3>
+          </div>
+          <div className="space-y-2">
+            {contactPdfs.map(doc => (
+              <button
+                key={doc.id}
+                onClick={() => handleDocumentSelect(doc.id)}
+                disabled={isProcessing}
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg border border-gray-200 bg-white hover:border-blue-400 hover:bg-blue-50 transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <FileText className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                <span className="text-sm font-medium text-gray-800 truncate">{doc.name}</span>
+              </button>
+            ))}
           </div>
         </div>
-      ) : (
+      )}
+
+      {/* File upload (desktop/web/native app) */}
+      {!isMobile && (
         <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 hover:border-blue-400 transition-colors">
           <div className="flex flex-col items-center gap-3">
             <FileUp className="w-8 h-8 text-gray-400" />
@@ -170,7 +197,7 @@ export function RoofrIntegration({ contact, onEstimateGenerated }: RoofrIntegrat
                 Upload a PDF to auto-generate an estimate
               </p>
             </div>
-            
+
             <label className="relative cursor-pointer">
               <input
                 type="file"
@@ -181,8 +208,8 @@ export function RoofrIntegration({ contact, onEstimateGenerated }: RoofrIntegrat
               />
               <div className={`
                 px-4 py-2 rounded-lg font-medium transition-colors
-                ${isProcessing 
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                ${isProcessing
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   : 'bg-blue-600 text-white hover:bg-blue-700'
                 }
               `}>
