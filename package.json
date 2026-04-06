@@ -54,6 +54,7 @@
   "dependencies": {
     "@capacitor/core": "^7.0.0",
     "@capacitor/push-notifications": "^7.0.0",
+    "@e965/xlsx": "^0.20.3",
     "@hookform/resolvers": "^3.9.0",
     "@radix-ui/react-accordion": "^1.2.0",
     "@radix-ui/react-alert-dialog": "^1.1.1",
@@ -104,7 +105,7 @@
     "next-themes": "^0.3.0",
     "node-quickbooks": "^2.0.48",
     "nodemailer": "^8.0.4",
-    "pdfjs-dist": "4.2.67",
+    "pdfjs-dist": "^4.10.38",
     "react": "^18.3.1",
     "react-day-picker": "^8.10.1",
     "react-dom": "^18.3.1",
@@ -119,7 +120,6 @@
     "tailwindcss-animate": "^1.0.7",
     "uuid": "^11.1.0",
     "vaul": "^0.9.3",
-    "xlsx": "^0.18.5",
     "zod": "^3.23.8"
   },
   "devDependencies": {
