@@ -44,8 +44,8 @@ jobs:
           VITE_STRIPE_BUSINESS_YEARLY: ${{ secrets.VITE_STRIPE_BUSINESS_YEARLY }}
         run: npm run build
 
-      - name: Sync Capacitor iOS
-        run: npx --yes @capacitor/cli@7 sync ios
+      - name: Copy web assets to iOS project
+        run: npx --yes @capacitor/cli@7 copy ios
 
       - name: Commit synced ios/ assets
         run: |
