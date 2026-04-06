@@ -727,6 +727,42 @@ export default function ContactDetail() {
     }
   };
 
+  const handleConvertToEstimate = async (doc: Document) => {
+    const isPdf = doc.name?.toLowerCase().endsWith('.pdf') || doc.url?.toLowerCase().includes('.pdf');
+    if (!isPdf) { toast.error('Only PDF files can be converted to estimates'); return; }
+
+    toast.info(`Parsing ${doc.name}…`);
+    try {
+      let url = doc.url;
+      if (!isHttpUrl(url) || isSupabaseStorageUrl(url)) {
+        const { signedUrl } = await resolveDocumentSignedUrl(url);
+        if (!signedUrl) throw new Error('Could not generate a download URL for this document');
+        url = signedUrl;
+      }
+      const { parseRoofrPDFFromUrl } = await import('@/lib/roofrParser');
+      const result = await parseRoofrPDFFromUrl(url);
+
+      const order = {
+        reportId: `UPLOADED-${Date.now()}`,
+        address: contact.address || '',
+        reportType: 'premium',
+        orderedAt: new Date().toISOString(),
+        status: 'completed',
+        statusMessage: result.hasMultipleStructures
+          ? `${result.structures.length} structures detected`
+          : `Parsed from ${doc.name}`,
+        measurements: result.combinedMeasurements,
+        structures: result.structures,
+      };
+      localStorage.setItem(`roofr_order_${contact.id}`, JSON.stringify(order));
+      window.dispatchEvent(new CustomEvent('roofr-order-updated', { detail: { contactId: contact.id } }));
+      toast.success('Measurements extracted! See Roofr panel above for the estimate.');
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      toast.error(`Failed to parse PDF: ${msg}`, { duration: 8000 });
+    }
+  };
+
   if (!contact) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -2173,6 +2209,9 @@ export default function ContactDetail() {
                   <div className="flex items-center gap-2">
                     <button onClick={() => handleViewDoc(doc)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="View"><Eye size={18} className="text-gray-500" /></button>
                     <button onClick={() => handleDownloadDoc(doc)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="Download"><Download size={18} className="text-gray-500" /></button>
+                    {(doc.name?.toLowerCase().endsWith('.pdf') || doc.url?.toLowerCase().includes('.pdf')) && (
+                      <button onClick={() => handleConvertToEstimate(doc)} className="p-2 hover:bg-blue-100 rounded-lg transition-colors" title="Convert to Estimate"><Zap size={18} className="text-blue-500" /></button>
+                    )}
                     <button onClick={() => handleDeleteDocument(doc.id)} className="p-2 hover:bg-red-100 rounded-lg transition-colors" title="Delete"><Trash2 size={18} className="text-red-500" /></button>
                   </div>
                 </div>

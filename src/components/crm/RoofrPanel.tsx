@@ -132,6 +132,16 @@ export default function RoofrPanel({
       }
     };
     load();
+
+    // Re-read when another component converts a document PDF to an estimate
+    const onExternalUpdate = (e: Event) => {
+      if ((e as CustomEvent).detail?.contactId === contactId) {
+        const updated = readOrderFromStorage(contactId);
+        if (updated) setOrder(updated);
+      }
+    };
+    window.addEventListener('roofr-order-updated', onExternalUpdate);
+    return () => window.removeEventListener('roofr-order-updated', onExternalUpdate);
   }, [companyId, contactId]);
 
   // ── Persist order ──────────────────────────────────────────────────────────
