@@ -3325,7 +3325,37 @@ export default function ContactDetail() {
               <button
                 onClick={async () => {
                   if (!templateMessage.trim()) return;
-                  await persistCommunication(contact.id, templateMessage.trim(), 'email');
+                  if (!effectiveCompanyId) {
+                    toast.error('No company context. Please refresh and sign in again.');
+                    return;
+                  }
+                  const created = await db.createCommunication({
+                    company_id: effectiveCompanyId,
+                    contact_id: contact.id,
+                    type: 'email',
+                    direction: 'outbound',
+                    content: templateMessage.trim(),
+                    user_id: profile?.id,
+                  });
+                  if (!created) {
+                    toast.error('Failed to save message. Please try again.');
+                    return;
+                  }
+                  const newComm: Communication = {
+                    id: created.id,
+                    contactId: contact.id,
+                    type: 'email',
+                    direction: 'outbound',
+                    content: templateMessage.trim(),
+                    timestamp: created.created_at || new Date().toISOString(),
+                    userId: state.currentUser?.id || 'unknown',
+                    userName: state.currentUser?.name || 'Unknown User',
+                  };
+                  dispatch({ type: 'UPDATE_CONTACT', payload: {
+                    ...contact,
+                    communications: [...(contact.communications || []), newComm],
+                    updatedAt: new Date().toISOString(),
+                  }});
                   setTemplateMessage('');
                   toast.success('Message saved to timeline');
                 }}
