@@ -64,16 +64,20 @@ export default function CalendarPage() {
       const [
         { data: contacts, error: contactError },
         { data: workOrders, error: workOrderError },
-        { data: appointmentRows, error: appointmentError },
       ] = await Promise.all([
         supabase.from('contacts').select('*').eq('company_id', profile.company_id),
         supabase.from('work_orders').select('*').eq('company_id', profile.company_id).order('scheduled_date', { ascending: true }),
-        supabase.from('appointments').select('*').eq('company_id', profile.company_id),
       ]);
 
       if (contactError) throw contactError;
       if (workOrderError) throw workOrderError;
-      if (appointmentError) throw appointmentError;
+
+      // Fetch appointments separately — non-fatal if table is inaccessible
+      const { data: appointmentRows } = await supabase
+        .from('appointments')
+        .select('*')
+        .eq('company_id', profile.company_id)
+        .catch(() => ({ data: null, error: null }));
 
       const workOrderRows = (workOrders || []) as WorkOrderRow[];
       const contactRows = (contacts || []) as ContactRow[];
