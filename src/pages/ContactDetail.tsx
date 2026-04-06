@@ -4,7 +4,7 @@ import {
   ChevronLeft, Phone, MessageSquare, Mail, Edit2,
   Info, History, FileText, DollarSign, Shield,
   MapPin, User, CheckCircle2, MoreVertical, Plus, ChevronRight, Calendar,
-  ClipboardList, PenLine, Wrench, TrendingUp
+  ClipboardList, PenLine, Wrench, TrendingUp, Zap
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../lib/supabase';
@@ -1881,6 +1881,38 @@ function DocumentsTab({ contactId, documents, onUpload, onLegalUpload }: { conta
     };
   }).filter((entry) => entry.signedPdf);
   const gridDocs = visibleDocs.filter((doc) => !(filter === 'legal' && doc.type === 'contract' && isLegalDocument(doc)));
+
+  const [convertingDocId, setConvertingDocId] = useState<string | null>(null);
+  const handleConvertToEstimate = async (e: React.MouseEvent, doc: any) => {
+    e.stopPropagation();
+    setConvertingDocId(doc.id);
+    try {
+      const { getDocumentSignedUrl } = await import('../lib/storage');
+      const { parseRoofrPDFFromUrl } = await import('../lib/roofrParser');
+      const { toast } = await import('sonner');
+      let url: string = doc.url || '';
+      const signed = await getDocumentSignedUrl(url);
+      if (signed) url = signed;
+      const result = await parseRoofrPDFFromUrl(url);
+      const order = {
+        contactId,
+        measurements: result.combinedMeasurements,
+        structures: result.structures,
+        source: 'pdf',
+        importedAt: new Date().toISOString(),
+      };
+      localStorage.setItem(`roofr_order_${contactId}`, JSON.stringify(order));
+      window.dispatchEvent(new CustomEvent('roofr-order-updated', { detail: { contactId } }));
+      toast.success('Roofr measurements loaded — opening estimator…');
+      navigate(`/contacts/${contactId}/estimate`);
+    } catch (err: any) {
+      const { toast } = await import('sonner');
+      toast.error(err?.message ?? 'Could not parse this PDF.');
+    } finally {
+      setConvertingDocId(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex gap-2">
@@ -1998,24 +2030,42 @@ function DocumentsTab({ contactId, documents, onUpload, onLegalUpload }: { conta
         </label>
       </div>
       <div className="grid grid-cols-2 gap-3">
-        {gridDocs.length > 0 ? gridDocs.map((doc, i) => (
-          <button
-            key={i}
-            type="button"
-            className="card p-3 space-y-2 text-left"
-            onClick={() => navigate(`/documents/view/${doc.id}`)}
-          >
-            <div>
-              <div className="h-24 bg-slate-50 rounded-xl overflow-hidden flex items-center justify-center text-slate-300">
-                {doc.type === 'photo' ? <img src={doc.displayUrl || doc.url} alt={doc.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <FileText size={32} />}
-              </div>
-              <div>
-                <p className="text-xs font-bold text-primary truncate">{doc.name}</p>
-                <p className="text-[10px] text-slate-400">{(doc.size / 1024 / 1024).toFixed(1)} MB</p>
-              </div>
+        {gridDocs.length > 0 ? gridDocs.map((doc, i) => {
+          const isPdf = String(doc.name || '').toLowerCase().endsWith('.pdf') || String(doc.url || '').toLowerCase().includes('.pdf');
+          return (
+            <div key={i} className="relative">
+              <button
+                type="button"
+                className="card p-3 space-y-2 text-left w-full"
+                onClick={() => navigate(`/documents/view/${doc.id}`)}
+              >
+                <div>
+                  <div className="h-24 bg-slate-50 rounded-xl overflow-hidden flex items-center justify-center text-slate-300">
+                    {doc.type === 'photo' ? <img src={doc.displayUrl || doc.url} alt={doc.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <FileText size={32} />}
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-primary truncate">{doc.name}</p>
+                    <p className="text-[10px] text-slate-400">{(doc.size / 1024 / 1024).toFixed(1)} MB</p>
+                  </div>
+                </div>
+              </button>
+              {isPdf && (
+                <button
+                  type="button"
+                  title="Convert to Estimate"
+                  disabled={convertingDocId === doc.id}
+                  onClick={(e) => handleConvertToEstimate(e, doc)}
+                  className="absolute top-2 right-2 bg-amber-400 hover:bg-amber-500 active:scale-90 transition-all rounded-lg p-1.5 shadow-sm disabled:opacity-50"
+                >
+                  {convertingDocId === doc.id
+                    ? <span className="block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    : <Zap size={14} className="text-white" />
+                  }
+                </button>
+              )}
             </div>
-          </button>
-        )) : (
+          );
+        }) : (
           <div className="col-span-2 text-center py-12 text-slate-400">
             <FileText size={48} className="mx-auto mb-4 opacity-20" />
             <p className="text-sm">{filter === 'legal' ? 'No signed legal PDFs yet' : 'No documents uploaded yet'}</p>
