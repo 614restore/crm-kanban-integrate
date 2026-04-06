@@ -28,17 +28,22 @@ export function RoofrIntegration({ contact, onEstimateGenerated }: RoofrIntegrat
   const isMobile = isMobileBrowser && !isNativeApp;
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    toast.info('📂 File picker triggered…');
     const file = event.target.files?.[0];
-    if (!file) return;
-
-    // iOS iCloud files often have empty file.type — accept by extension as fallback
-    const isPdf = file.type === 'application/pdf' ||
-      (file.name.toLowerCase().endsWith('.pdf'));
-    if (!isPdf) {
-      toast.error('Please upload a PDF file');
+    if (!file) {
+      toast.error('No file received — if uploading from iCloud, open Files and download it first');
       return;
     }
 
+    // iOS iCloud files often have empty file.type — accept by extension as fallback
+    const isPdf = file.type === 'application/pdf' ||
+      (file.name?.toLowerCase().endsWith('.pdf') ?? false);
+    if (!isPdf) {
+      toast.error(`Not a PDF (type: "${file.type}", name: "${file.name}")`);
+      return;
+    }
+
+    toast.info(`📄 Got file: ${file.name} (${file.size} bytes)`);
     console.log('[RoofrImport] File received:', file.name, 'type:', file.type || '(empty)', 'size:', file.size);
 
     setIsProcessing(true);
@@ -87,9 +92,11 @@ export function RoofrIntegration({ contact, onEstimateGenerated }: RoofrIntegrat
 
       toast.success(`Estimate generated: $${summary.totalCost.toLocaleString()}`);
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      console.error('[RoofrImport] error message:', msg);
-      toast.error(msg || 'Failed to parse PDF');
+      const msg = error instanceof Error
+        ? `${error.name}: ${error.message}`
+        : String(error);
+      console.error('[RoofrImport] error:', msg);
+      toast.error(msg || 'Failed to parse PDF', { duration: 10000 });
     } finally {
       setIsProcessing(false);
       // Reset file input
