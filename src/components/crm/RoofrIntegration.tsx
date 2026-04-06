@@ -31,10 +31,15 @@ export function RoofrIntegration({ contact, onEstimateGenerated }: RoofrIntegrat
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (file.type !== 'application/pdf') {
+    // iOS iCloud files often have empty file.type — accept by extension as fallback
+    const isPdf = file.type === 'application/pdf' ||
+      (file.name.toLowerCase().endsWith('.pdf'));
+    if (!isPdf) {
       toast.error('Please upload a PDF file');
       return;
     }
+
+    console.log('[RoofrImport] File received:', file.name, 'type:', file.type || '(empty)', 'size:', file.size);
 
     setIsProcessing(true);
     toast.info('Parsing Roofr measurement report...');
@@ -82,8 +87,9 @@ export function RoofrIntegration({ contact, onEstimateGenerated }: RoofrIntegrat
 
       toast.success(`Estimate generated: $${summary.totalCost.toLocaleString()}`);
     } catch (error) {
-      console.error('Failed to process Roofr PDF:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to parse PDF');
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error('[RoofrImport] error message:', msg);
+      toast.error(msg || 'Failed to parse PDF');
     } finally {
       setIsProcessing(false);
       // Reset file input

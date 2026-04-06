@@ -3,23 +3,51 @@
 // Built against real Roofr PDF format (verified Apr 2026)
 
 import * as pdfjsLib from 'pdfjs-dist';
-// Serve the pdfjs v4 ESM worker from public/ — no CDN, no Vite bundling, no MIME issues.
-// In Tauri production builds the app is served from tauri://localhost, so the local
-// worker path is unreachable via the normal fetch; fall back to a CDN copy instead.
+// Worker setup — three environments:
+//  • Web/dev:       /pdf.worker.min.mjs served from public/
+//  • Tauri desktop: CDN copy (tauri:// protocol can't fetch local workers)
+//  • Capacitor iOS: /pdf.worker.min.mjs set lazily before first parse;
+//                   pdfjs tries a module Worker, WKWebView may reject it and
+//                   fall back to _setupFakeWorker() which uses dynamic import()
+//                   from capacitor://localhost — that works in Capacitor 7 / iOS 15+.
 if (typeof window !== 'undefined') {
   const isTauri =
     typeof (window as any).__TAURI__ !== 'undefined' ||
     window.location.protocol === 'tauri:' ||
     window.location.hostname === 'tauri.localhost';
-  // Capacitor serves from capacitor://localhost — local worker path won't load
   const isCapacitor =
     window.location.protocol === 'capacitor:' ||
     window.location.protocol === 'ionic:' ||
     typeof (window as any).Capacitor !== 'undefined';
-  pdfjsLib.GlobalWorkerOptions.workerSrc =
-    isTauri || isCapacitor
+  if (!isCapacitor) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = isTauri
       ? 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.2.67/build/pdf.worker.min.mjs'
       : '/pdf.worker.min.mjs';
+  }
+}
+
+// Capacitor iOS: dynamically import the bundled worker shim, which sets
+// globalThis.pdfjsWorker.WorkerMessageHandler so that pdfjs v4 runs the
+// entire PDF pipeline on the main thread, bypassing all Web Worker / dynamic
+// import restrictions that WKWebView imposes under the capacitor:// scheme.
+let _capacitorWorker: Promise<void> | null = null;
+function ensureCapacitorWorker(): Promise<void> {
+  if (!_capacitorWorker) {
+    console.log('[RoofrParser] Capacitor detected — loading main-thread worker shim…');
+    _capacitorWorker = import('./pdfjsCapacitorWorker')
+      .then(() => {
+        const hasHandler = !!(globalThis as any).pdfjsWorker?.WorkerMessageHandler;
+        console.log('[RoofrParser] Worker shim loaded. globalThis.pdfjsWorker.WorkerMessageHandler set:', hasHandler);
+      })
+      .catch((err) => {
+        console.error('[RoofrParser] Worker shim import FAILED:', err);
+        // Fallback: point workerSrc at the local .mjs file and let pdfjs
+        // attempt _setupFakeWorker() with a same-origin dynamic import.
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+        console.log('[RoofrParser] Fallback: workerSrc set to /pdf.worker.min.mjs');
+      });
+  }
+  return _capacitorWorker;
 }
 
 export interface RoofrMeasurements {
@@ -319,7 +347,17 @@ function combineStructures(structures: StructureMeasurements[]): RoofrMeasuremen
  * Parse a Roofr PDF with multi-structure support.
  */
 export async function parseRoofrPDFWithStructures(file: File): Promise<MultiStructureResult> {
+  console.log('[RoofrParser] parseRoofrPDFWithStructures called. protocol:', typeof window !== 'undefined' ? window.location.protocol : 'no-window', 'Capacitor:', typeof (window as any)?.Capacitor);
   try {
+    // On Capacitor iOS, ensure the worker blob URL is ready before loading any PDF
+    const isCapacitor =
+      typeof window !== 'undefined' && (
+        window.location.protocol === 'capacitor:' ||
+        window.location.protocol === 'ionic:' ||
+        typeof (window as any).Capacitor !== 'undefined'
+      );
+    if (isCapacitor) await ensureCapacitorWorker();
+
     const arrayBuffer = await file.arrayBuffer();
 
     const loadingTask = pdfjsLib.getDocument({
@@ -369,7 +407,9 @@ export async function parseRoofrPDFWithStructures(file: File): Promise<MultiStru
     };
   } catch (error) {
     console.error('[RoofrParser] Failed to parse PDF:', error);
-    throw new Error(`Failed to parse Roofr PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    // Re-throw preserving the original message so callers can display it.
+    const msg = error instanceof Error ? error.message : String(error);
+    throw new Error(msg);
   }
 }
 
