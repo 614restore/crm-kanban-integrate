@@ -61,13 +61,19 @@ export default function CalendarPage() {
     if (!profile?.company_id) return;
     setLoading(true);
     try {
-      const [{ data: contacts, error: contactError }, { data: workOrders, error: workOrderError }] = await Promise.all([
+      const [
+        { data: contacts, error: contactError },
+        { data: workOrders, error: workOrderError },
+        { data: appointmentRows, error: appointmentError },
+      ] = await Promise.all([
         supabase.from('contacts').select('*').eq('company_id', profile.company_id),
         supabase.from('work_orders').select('*').eq('company_id', profile.company_id).order('scheduled_date', { ascending: true }),
+        supabase.from('appointments').select('*').eq('company_id', profile.company_id),
       ]);
 
       if (contactError) throw contactError;
       if (workOrderError) throw workOrderError;
+      if (appointmentError) throw appointmentError;
 
       const workOrderRows = (workOrders || []) as WorkOrderRow[];
       const contactRows = (contacts || []) as ContactRow[];
@@ -78,9 +84,34 @@ export default function CalendarPage() {
         workOrdersByContact.set(order.contact_id, current);
       }
 
-      const nextEvents = contactRows
+      const contactById = new Map(contactRows.map((c) => [c.id, c]));
+
+      const pipelineEvents = contactRows
         .flatMap((contact) => buildContactPipelineEvents(contact, workOrdersByContact.get(contact.id) || []))
-        .filter((event) => (displayContactFilter ? event.contactId === displayContactFilter : true))
+        .filter((event) => (displayContactFilter ? event.contactId === displayContactFilter : true));
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const calendarAppointments: PipelineEvent[] = (appointmentRows || []).map((apt: any) => {
+        const contact = contactById.get(apt.contact_id);
+        const dateStr = apt.start_time
+          ? apt.start_time
+          : apt.date && apt.time
+          ? new Date(`${apt.date}T${apt.time}`).toISOString()
+          : apt.date;
+        return {
+          id: apt.id,
+          contactId: apt.contact_id,
+          contactName: contact ? (contact as any).name || 'Unknown' : 'Unknown',
+          title: apt.title || 'Appointment',
+          type: 'inspection' as PipelineEvent['type'],
+          date: dateStr,
+          location: apt.location || (contact ? (contact as any).address || '' : ''),
+          crew: apt.assigned_to || null,
+          source: 'work_order' as const,
+        };
+      }).filter((event) => (displayContactFilter ? event.contactId === displayContactFilter : true));
+
+      const nextEvents = [...pipelineEvents, ...calendarAppointments]
         .sort((left, right) => new Date(left.date).getTime() - new Date(right.date).getTime());
 
       setEvents(nextEvents);
