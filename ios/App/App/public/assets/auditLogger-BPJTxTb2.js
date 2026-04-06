@@ -1,1 +1,0 @@
-import{o as e}from"./index-v1QafAB_.js";async function t(t){const{error:a}=await e.from("audit_logs").insert({user_id:t.userId,user_email:t.userEmail,action:t.action,entity_type:t.entityType,entity_id:t.entityId??null,old_value:t.oldValue??null,new_value:t.newValue??null,metadata:t.metadata??null})}export{t as l};
