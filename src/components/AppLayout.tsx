@@ -1336,11 +1336,8 @@ useEffect(() => {
             <TopBar />
           </div>
 
-          {/* Connection status banner (shown when WebSocket fails) */}
-          <ConnectionStatusBanner 
-            show={connectionUnstable} 
-            onDismiss={() => setConnectionUnstable(false)} 
-          />
+          {/* Connection status banner — hidden; toast notification handles user feedback */}
+          {/* <ConnectionStatusBanner show={connectionUnstable} onDismiss={() => setConnectionUnstable(false)} /> */}
 
           {/* Trial banner (shown when trial ends within 7 days) */}
           <TrialBanner companyId={profile?.company_id ?? state.companyId ?? null} />
