@@ -60,7 +60,8 @@ const CommissionPayrollView = lazy(() => import('./crm/CommissionPayrollView'));
 
 // --- LocalStorage data cache (stale-while-revalidate) ---
 const DATA_CACHE_KEY = 'crm_app_data_v1';
-const DATA_CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days — cache persists even with infrequent usage
+const LAST_COMPANY_KEY = 'crm_last_company_id';
+const DATA_CACHE_TTL = 30 * 24 * 60 * 60 * 1000; // 30 days — covers long periods of inactivity
 
 function readDataCache(companyId: string): Record<string, unknown> | null {
   try {
@@ -75,7 +76,19 @@ function readDataCache(companyId: string): Record<string, unknown> | null {
 function writeDataCache(companyId: string, data: unknown): void {
   try {
     localStorage.setItem(DATA_CACHE_KEY, JSON.stringify({ v: 1, cid: companyId, ts: Date.now(), data }));
+    // Also store company_id separately so we can preload cache before auth resolves on next refresh
+    localStorage.setItem(LAST_COMPANY_KEY, companyId);
   } catch { /* quota exceeded or private browsing — silently skip */ }
+}
+
+// Preload cache immediately using the last known company_id — before auth resolves.
+// This eliminates the blank/mock-data flash on hard refresh.
+function preloadCachedData(): Record<string, unknown> | null {
+  try {
+    const companyId = localStorage.getItem(LAST_COMPANY_KEY);
+    if (!companyId) return null;
+    return readDataCache(companyId);
+  } catch { return null; }
 }
 
 // Initial CRM state (completely empty)
@@ -481,7 +494,13 @@ function ConnectionStatusBanner({ show, onDismiss }: { show: boolean; onDismiss:
 // CRM App (authenticated view)
 function CRMApp() {
   const { profile, user, loading: authLoading } = useAuth();
-  const [state, dispatch] = useReducer(crmReducer, initialState);
+  const [state, dispatch] = useReducer(crmReducer, initialState, () => {
+    // On first render, immediately hydrate state from the last-known cache so the
+    // user sees their real data instead of blank/default boards during auth restore.
+    const preloaded = preloadCachedData();
+    if (preloaded) return { ...initialState, ...(preloaded as Partial<CRMState>) };
+    return initialState;
+  });
   const [subscriptionBlocked, setSubscriptionBlocked] = useState(false);
   const [connectionUnstable, setConnectionUnstable] = useState(false);
   useEffect(() => {
