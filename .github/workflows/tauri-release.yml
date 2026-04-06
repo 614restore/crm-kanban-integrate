@@ -13,7 +13,7 @@ jobs:
           - platform: macos-latest     # Apple Silicon (.dmg arm64)
             args: --target aarch64-apple-darwin
             rust-target: aarch64-apple-darwin
-          - platform: macos-13         # Intel Mac (.dmg x86_64)
+          - platform: macos-12         # Intel Mac (.dmg x86_64) — macos-13 deprecated
             args: --target x86_64-apple-darwin
             rust-target: x86_64-apple-darwin
           - platform: windows-latest   # Windows (.exe / .msi)
