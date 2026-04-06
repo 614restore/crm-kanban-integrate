@@ -273,6 +273,7 @@ export default function ContactDetail() {
   const [templateMessage, setTemplateMessage] = useState('');
   
   const [showNewEstimateModal, setShowNewEstimateModal] = useState(false);
+  const [showRoofrPicker, setShowRoofrPicker] = useState(false);
   const [newEstTitle, setNewEstTitle] = useState('');
   const [newEstItems, setNewEstItems] = useState<{id: string; description: string; quantity: number; unit: string; unitPrice: number; total: number}[]>([{id: crypto.randomUUID(), description: '', quantity: 1, unit: 'ea', unitPrice: 0, total: 0}]);
   const [newEstNotes, setNewEstNotes] = useState('');
@@ -757,6 +758,39 @@ export default function ContactDetail() {
       localStorage.setItem(`roofr_order_${contact.id}`, JSON.stringify(order));
       window.dispatchEvent(new CustomEvent('roofr-order-updated', { detail: { contactId: contact.id } }));
       toast.success('Measurements extracted! See Roofr panel above for the estimate.');
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      toast.error(`Failed to parse PDF: ${msg}`, { duration: 8000 });
+    }
+  };
+
+  const handleEstimateFromDoc = async (doc: Document) => {
+    setShowRoofrPicker(false);
+    toast.info(`Parsing ${doc.name}…`);
+    try {
+      let url = doc.url;
+      if (!isHttpUrl(url) || isSupabaseStorageUrl(url)) {
+        const { signedUrl } = await resolveDocumentSignedUrl(url);
+        if (!signedUrl) throw new Error('Could not generate a download URL for this document');
+        url = signedUrl;
+      }
+      const { parseRoofrPDFFromUrl } = await import('@/lib/roofrParser');
+      const { generateEstimateFromMeasurements } = await import('@/lib/roofrEstimateGenerator');
+      const result = await parseRoofrPDFFromUrl(url);
+      const lineItems = generateEstimateFromMeasurements(result.combinedMeasurements);
+      setNewEstTitle(`Roofr Estimate — ${doc.name.replace(/\.pdf$/i, '')}`);
+      setNewEstItems(lineItems.map(li => ({
+        id: crypto.randomUUID(),
+        description: li.description,
+        quantity: li.quantity,
+        unit: li.unit,
+        unitPrice: li.rate,
+        total: li.amount,
+      })));
+      setNewEstNotes('');
+      setNewEstTax(0);
+      setShowNewEstimateModal(true);
+      toast.success('Measurements loaded — review and save your estimate');
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       toast.error(`Failed to parse PDF: ${msg}`, { duration: 8000 });
@@ -2409,6 +2443,38 @@ export default function ContactDetail() {
                   <Plus size={18} />
                   New Estimate
                 </button>
+                {(() => {
+                  const pdfs = (contactDocuments || []).filter(d =>
+                    d.name?.toLowerCase().endsWith('.pdf') || d.url?.toLowerCase().includes('.pdf')
+                  );
+                  if (pdfs.length === 0) return null;
+                  return (
+                    <div className="relative">
+                      <button
+                        onClick={() => setShowRoofrPicker(p => !p)}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        <Zap size={18} />
+                        Estimate from PDF
+                      </button>
+                      {showRoofrPicker && (
+                        <div className="absolute left-0 top-full mt-1 z-50 bg-white border border-gray-200 rounded-xl shadow-lg min-w-[220px]">
+                          <p className="text-xs font-medium text-gray-500 px-3 pt-3 pb-1">Choose a Roofr PDF</p>
+                          {pdfs.map(doc => (
+                            <button
+                              key={doc.id}
+                              onClick={() => handleEstimateFromDoc(doc)}
+                              className="w-full flex items-center gap-2 px-3 py-2 hover:bg-blue-50 text-left text-sm text-gray-800 last:rounded-b-xl"
+                            >
+                              <FileText size={14} className="text-blue-500 flex-shrink-0" />
+                              <span className="truncate">{doc.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
                 <button
                   onClick={() => dispatch({ type: 'TOGGLE_INVOICE_MODAL' })}
                   className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
