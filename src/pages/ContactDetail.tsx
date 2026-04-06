@@ -884,15 +884,15 @@ function OverviewTab({ contact, onRefresh }: { contact: any; onRefresh: () => vo
               </div>
             </div>
             <div className="flex items-start gap-4">
-              <div className="h-10 w-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400"><Mail size={18} /></div>
-              <div>
+              <div className="h-10 w-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 shrink-0"><Mail size={18} /></div>
+              <div className="flex-1 min-w-0">
                 <p className="text-[10px] font-bold text-slate-400 uppercase">Email Address</p>
-                <p className="text-sm font-bold text-primary">{contact.email || 'Not provided'}</p>
+                <p className="text-sm font-bold text-primary break-all">{contact.email || 'Not provided'}</p>
               </div>
             </div>
             <div className="flex items-start gap-4">
-              <div className="h-10 w-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400"><MapPin size={18} /></div>
-              <div>
+              <div className="h-10 w-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 shrink-0"><MapPin size={18} /></div>
+              <div className="flex-1 min-w-0">
                 <p className="text-[10px] font-bold text-slate-400 uppercase">Address</p>
                 <p className="text-sm font-bold text-primary leading-tight">{contact.address}<br />{contact.city}, {contact.state} {contact.zip}</p>
               </div>
