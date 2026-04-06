@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock, MapPin, User, Plus, X, Check } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock, MapPin, Trash2, User, Plus, X, Check } from 'lucide-react';
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, parseISO } from 'date-fns';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -32,6 +32,8 @@ export default function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [events, setEvents] = useState<PipelineEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const appointmentIds = useRef<Set<string>>(new Set());
 
   // Add-event sheet state
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -94,6 +96,8 @@ export default function CalendarPage() {
         .flatMap((contact) => buildContactPipelineEvents(contact, workOrdersByContact.get(contact.id) || []))
         .filter((event) => (displayContactFilter ? event.contactId === displayContactFilter : true));
 
+      appointmentIds.current = new Set((appointmentRows || []).map((apt: any) => apt.id as string));
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const calendarAppointments: PipelineEvent[] = (appointmentRows || []).map((apt: any) => {
         const contact = contactById.get(apt.contact_id);
@@ -143,6 +147,34 @@ export default function CalendarPage() {
     fetchEvents();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.company_id, loadingAuth, displayContactFilter]);
+
+  const handleDeleteEvent = async (event: PipelineEvent) => {
+    setDeletingId(event.id);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const db = supabase as any;
+      if (appointmentIds.current.has(event.id)) {
+        await db.from('appointments').delete().eq('id', event.id);
+      } else if (event.source === 'work_order') {
+        await db.from('work_orders').delete().eq('id', event.id);
+      } else {
+        // Clear milestone date from contact notes
+        const { data: contactData } = await db
+          .from('contacts').select('notes').eq('id', event.contactId).single();
+        if (contactData) {
+          const { schedule, plainNotes } = parseContactSchedule(contactData.notes);
+          const updated = updateScheduleMilestone(schedule, event.type as ContactMilestoneId, { date: undefined });
+          const newNotes = serializeContactSchedule(updated, plainNotes);
+          await db.from('contacts').update({ notes: newNotes }).eq('id', event.contactId);
+        }
+      }
+      await fetchEvents();
+    } catch (err) {
+      console.error('Failed to delete event:', err);
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const handleSaveEvent = async () => {
     if (!saveContactId || !profile?.company_id) return;
@@ -359,13 +391,12 @@ export default function CalendarPage() {
         <div className="space-y-3">
           {filteredEvents.length > 0 ? (
             filteredEvents.map((event) => (
-              <button
-                key={event.id}
-                onClick={() => navigate(`/contacts/${event.contactId}`)}
-                className="card w-full p-4 text-left active:bg-slate-50 transition-colors"
-              >
-                <div className="flex gap-4">
-                  <div className={`w-1 rounded-full ${event.type === 'inspection' ? 'bg-amber-500' : event.type === 'build' ? 'bg-teal-500' : 'bg-primary'}`} />
+              <div key={event.id} className="card p-4 flex gap-3 items-stretch">
+                <button
+                  onClick={() => navigate(`/contacts/${event.contactId}`)}
+                  className="flex gap-4 flex-1 text-left active:opacity-70 transition-opacity"
+                >
+                  <div className={`w-1 rounded-full shrink-0 ${event.type === 'inspection' ? 'bg-amber-500' : event.type === 'build' ? 'bg-teal-500' : 'bg-primary'}`} />
                   <div className="flex-1 space-y-2">
                     <div className="flex justify-between items-start gap-3">
                       <h4 className="font-bold text-primary text-sm">{event.title}</h4>
@@ -390,8 +421,17 @@ export default function CalendarPage() {
                       )}
                     </div>
                   </div>
-                </div>
-              </button>
+                </button>
+                <button
+                  onClick={() => handleDeleteEvent(event)}
+                  disabled={deletingId === event.id}
+                  className="flex items-center justify-center w-8 shrink-0 rounded-lg text-slate-300 active:text-red-500 active:bg-red-50 transition-colors disabled:opacity-40"
+                >
+                  {deletingId === event.id
+                    ? <div className="h-3.5 w-3.5 rounded-full border-2 border-slate-300 border-t-transparent animate-spin" />
+                    : <Trash2 size={15} />}
+                </button>
+              </div>
             ))
           ) : (
             <div className="card p-8 flex flex-col items-center justify-center text-center space-y-2 border-2 border-dashed border-slate-200 bg-transparent shadow-none">
