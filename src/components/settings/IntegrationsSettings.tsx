@@ -413,35 +413,21 @@ const IntegrationConfigModal: React.FC<IntegrationConfigModalProps> = ({ integra
         <div className="p-6 max-h-[calc(90vh-140px)] overflow-y-auto">
           {isQuickBooks ? (
             <div className="space-y-4">
-              {isQbConnected ? (
-                <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-lg">
-                  <Check className="w-5 h-5 text-green-600 flex-shrink-0" />
-                  <div>
-                    <p className="font-medium text-green-900">QuickBooks is connected</p>
-                    <p className="text-sm text-green-700 mt-0.5">Your account is linked and syncing. Reconnect below if needed.</p>
-                  </div>
+              <div className="flex items-center gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                <div>
+                  <p className="font-medium text-blue-900">QuickBooks — Coming Soon</p>
+                  <p className="text-sm text-blue-700 mt-0.5">QuickBooks sync is currently in development and will be available in a future update.</p>
                 </div>
-              ) : (
-                <div className="flex items-center gap-3 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0" />
-                  <div>
-                    <p className="font-medium text-yellow-900">Not connected</p>
-                    <p className="text-sm text-yellow-700 mt-0.5">Click below to authorize TrussCTR to access your QuickBooks account.</p>
-                  </div>
-                </div>
-              )}
+              </div>
               <p className="text-sm text-gray-500">
-                QuickBooks uses OAuth 2.0 — you'll be redirected to Intuit to securely authorize the connection. No passwords are stored.
+                QuickBooks will use OAuth 2.0 for a secure connection — no passwords stored. Stay tuned for the full release.
               </p>
               <button
-                onClick={handleConnectQuickBooks}
-                disabled={qbConnecting}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#2CA01C] hover:bg-[#248018] text-white font-semibold rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                disabled
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-200 text-gray-500 font-semibold rounded-lg cursor-not-allowed"
               >
-                {qbConnecting
-                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Redirecting to Intuit...</>
-                  : <><Link2 className="w-4 h-4" /> {isQbConnected ? 'Reconnect QuickBooks' : 'Connect QuickBooks'}</>
-                }
+                <Link2 className="w-4 h-4" /> Coming Soon
               </button>
             </div>
           ) : (

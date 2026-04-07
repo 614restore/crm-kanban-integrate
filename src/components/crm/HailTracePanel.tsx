@@ -151,8 +151,7 @@ export default function HailTracePanel({ address, city, state, zip, companyId, c
         .from('company_integrations')
         .select('credentials')
         .eq('company_id', companyId)
-        .eq('integration_type', 'hailtrace')
-        .eq('is_active', true)
+        .eq('integration_id', 'hailtrace')
         .single();
 
       if (dbError && dbError.code !== 'PGRST116') {
