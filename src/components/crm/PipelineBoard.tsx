@@ -78,27 +78,33 @@ const UNIFIED_SALES_STAGES: Array<{
   color: string;
   stageType: 'shared' | 'retail' | 'insurance';
 }> = [
+  // ── Shared: top of funnel ─────────────────────────────────────────────────
   { status: 'prospect',             title: 'New Lead',                  color: '#94a3b8', stageType: 'shared'    },
   { status: 'lead',                 title: 'Contacted / Qualifying',    color: '#6366f1', stageType: 'shared'    },
   { status: 'appt_set',            title: 'Appointment Set',           color: '#8b5cf6', stageType: 'shared'    },
+  // ── Insurance: in order ───────────────────────────────────────────────────
+  { status: 'inspected',           title: 'Inspection',                color: '#0284c7', stageType: 'insurance' },
+  { status: 'contingency',         title: 'Contingency',               color: '#a855f7', stageType: 'insurance' },
   { status: 'claim_filed',         title: 'Claim Filed',               color: '#0ea5e9', stageType: 'insurance' },
   { status: 'adjuster_scheduled',  title: 'Adjuster Scheduled',        color: '#06b6d4', stageType: 'insurance' },
-  { status: 'inspection_completed',title: 'Inspected',                 color: '#0891b2', stageType: 'insurance' },
+  { status: 'inspection_completed',title: 'Insurance Inspected',       color: '#0891b2', stageType: 'insurance' },
+  { status: 'approved',            title: 'Approved / Final Scope',    color: '#14b8a6', stageType: 'insurance' },
   { status: 'supplement_filed',    title: 'Supplement Filed',          color: '#0e7490', stageType: 'insurance' },
+  // ── Shared: estimating & closing ──────────────────────────────────────────
   { status: 'estimating',          title: 'Estimating',                color: '#f59e0b', stageType: 'shared'    },
   { status: 'estimate_sent',       title: 'Estimate Sent',             color: '#f97316', stageType: 'shared'    },
-  { status: 'contingency',         title: 'Contingency',               color: '#a855f7', stageType: 'insurance' },
-  { status: 'approved',            title: 'Approved / Final Scope',    color: '#14b8a6', stageType: 'insurance' },
   { status: 'signed',              title: 'Signed / Won',              color: '#22c55e', stageType: 'shared'    },
   { status: 'ordering_material',   title: 'Ordering Material',         color: '#10b981', stageType: 'shared'    },
+  // ── Shared: production ────────────────────────────────────────────────────
   { status: 'in_progress',         title: 'Scheduled',                 color: '#3b82f6', stageType: 'shared'    },
   { status: 'build_phase',         title: 'In Progress',               color: '#2563eb', stageType: 'shared'    },
   { status: 'cleanup',             title: 'Punch List / Cleanup',      color: '#f97316', stageType: 'shared'    },
-  { status: 'retail',              title: 'Retail (Cash Job)',          color: '#9333ea', stageType: 'retail'    },
   { status: 'invoicing',           title: 'Invoicing',                 color: '#ec4899', stageType: 'shared'    },
   { status: 'pending_payment',     title: 'Pending Payment',           color: '#e11d48', stageType: 'shared'    },
   { status: 'completed',           title: 'Completed',                 color: '#10b981', stageType: 'shared'    },
   { status: 'lost',                title: 'Lost',                      color: '#ef4444', stageType: 'shared'    },
+  // ── Retail ────────────────────────────────────────────────────────────────
+  { status: 'retail',              title: 'Retail (Cash Job)',          color: '#9333ea', stageType: 'retail'    },
 ];
 
 const STAGE_TYPE_STYLES = {
