@@ -4,7 +4,7 @@ import {
   ChevronLeft, Phone, MessageSquare, Mail, Edit2,
   Info, History, FileText, DollarSign, Shield,
   MapPin, User, CheckCircle2, MoreVertical, Plus, ChevronRight, Calendar,
-  ClipboardList, PenLine, Wrench, TrendingUp, Zap
+  ClipboardList, PenLine, Wrench, TrendingUp, Zap, X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../lib/supabase';
@@ -21,6 +21,8 @@ import { buildContactPipelineEvents, getUpcomingPipelineEvents } from '../lib/sc
 import { applyMention, extractMentionHandles, findActiveMentionQuery, getMentionSuggestions, getMentionTargets, parseNoteMentions, serializeNoteMentions, validateMentions } from '../lib/noteMentions';
 import { handleAutoProgression } from '../lib/progressionRules';
 import { fireAutomationEvent } from '../lib/automationEngine';
+import PaymentModal from '../components/crm/PaymentModal';
+import { getContactPayments, deletePayment, PAYMENT_METHOD_LABELS, type Payment } from '../services/paymentService';
 
 const MultiShotCamera = registerPlugin<{ open: (options?: { saveMode?: InspectionPhotoStorageMode }) => Promise<{ photos: string[] }> }>('MultiShotCamera');
 
@@ -2078,16 +2080,19 @@ function DocumentsTab({ contactId, documents, onUpload, onLegalUpload }: { conta
 
 function FinancialTab({ contact, userId, onEdit, onRefresh }: { contact: any; userId?: string; onEdit: () => void; onRefresh: () => void }) {
   const navigate = useNavigate();
+  const { profile } = useAuth();
   const [latestEstimate, setLatestEstimate] = useState<any>(null);
   const [latestWorkOrder, setLatestWorkOrder] = useState<any>(null);
   const [savingField, setSavingField] = useState<'deposit' | 'final' | null>(null);
   const [creatingWorkOrder, setCreatingWorkOrder] = useState(false);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   useEffect(() => {
     const fetchFinancialArtifacts = async () => {
       if (!contact?.id) return;
       try {
-        const [{ data: estimate }, { data: workOrder }] = await Promise.all([
+        const [{ data: estimate }, { data: workOrder }, fetchedPayments] = await Promise.all([
           supabase
             .from('estimates')
             .select('*')
@@ -2102,9 +2107,11 @@ function FinancialTab({ contact, userId, onEdit, onRefresh }: { contact: any; us
             .order('created_at', { ascending: false })
             .limit(1)
             .maybeSingle(),
+          getContactPayments(contact.id).catch(() => [] as Payment[]),
         ]);
         setLatestEstimate(estimate || null);
         setLatestWorkOrder(workOrder || null);
+        setPayments(fetchedPayments);
       } catch (err) {
         console.error('Error loading financial data:', err);
       }
@@ -2232,6 +2239,74 @@ function FinancialTab({ contact, userId, onEdit, onRefresh }: { contact: any; us
             </div>
           </div>
         </div>
+        {/* ── Payment History Card ─────────────────────────────── */}
+        <div className="card p-5 space-y-4">
+          <div className="flex justify-between items-center">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Payments</h3>
+            <span className="text-sm font-bold text-primary">
+              {formatCurrency(payments.reduce((s, p) => s + p.amount, 0))} received
+            </span>
+          </div>
+
+          {payments.length > 0 ? (
+            <div className="space-y-2">
+              {payments.map((p) => (
+                <div key={p.id} className="flex items-start justify-between py-2 border-b border-slate-100 last:border-0">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-bold text-slate-900">{formatCurrency(p.amount)}</span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded-md uppercase">
+                        {PAYMENT_METHOD_LABELS[p.payment_method]}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      {new Date(p.payment_date).toLocaleDateString()} · {p.processed_by_name || 'Unknown'}
+                    </p>
+                    {p.reference_number && (
+                      <p className="text-[11px] text-slate-500">Ref: {p.reference_number}</p>
+                    )}
+                    {p.notes && <p className="text-[11px] text-slate-500">{p.notes}</p>}
+                    {p.stripe_payment_link_url && (
+                      <a
+                        href={p.stripe_payment_link_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[11px] text-blue-500 underline"
+                      >
+                        View payment link
+                      </a>
+                    )}
+                  </div>
+                  <button
+                    onClick={async () => {
+                      try {
+                        await deletePayment(p.id);
+                        setPayments((prev) => prev.filter((x) => x.id !== p.id));
+                      } catch {
+                        alert('Unable to delete payment');
+                      }
+                    }}
+                    className="ml-2 p-1 text-slate-300 hover:text-red-500"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-slate-400">No payments recorded yet</p>
+          )}
+
+          <button
+            onClick={() => setShowPaymentModal(true)}
+            className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3 text-xs font-bold text-white"
+          >
+            <Plus size={14} />
+            Record Payment
+          </button>
+        </div>
+
+        {/* ── Deposit (legacy toggle) ──────────────────────────── */}
         <div className="card p-5 space-y-4">
           <div className="flex justify-between items-center">
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Deposit</h3>
@@ -2309,6 +2384,21 @@ function FinancialTab({ contact, userId, onEdit, onRefresh }: { contact: any; us
           </div>
         </div>
       </div>
+
+      {/* Payment modal */}
+      <PaymentModal
+        open={showPaymentModal}
+        onOpenChange={setShowPaymentModal}
+        contactId={contact.id}
+        contactName={[contact.first_name, contact.last_name].filter(Boolean).join(' ') || 'Customer'}
+        companyId={contact.company_id}
+        workOrderId={latestWorkOrder?.id}
+        processorId={userId || ''}
+        processorName={profile?.full_name || profile?.email || 'Unknown'}
+        onPaymentRecorded={(payment) => {
+          setPayments((prev) => [payment, ...prev]);
+        }}
+      />
     </div>
   );
 }
