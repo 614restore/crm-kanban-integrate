@@ -58,12 +58,13 @@ export default function TeamView() {
   const assignableRoles = getAssignableRoles(userRole);
 
   const [subscriptionPlan, setSubscriptionPlan] = useState<string>('trial');
+  const [bonusSeats, setBonusSeats] = useState<number>(0);
 
   const USER_LIMITS: Record<string, number> = {
     starter: 2, pro: 5, business: 15, scale: Infinity, trial: 2,
   };
 
-  // Fetch company plan once so the UI can reflect seat limits immediately
+  // Fetch company plan + bonus seats so the UI reflects the real seat limit
   useEffect(() => {
     const companyId = state.companyId || profile?.company_id;
     if (!companyId) return;
@@ -71,11 +72,14 @@ export default function TeamView() {
       .then(c => {
         if (c?.subscription_plan) setSubscriptionPlan(c.subscription_plan);
         if (c?.name) setCompanyName(c.name);
+        setBonusSeats((c as any)?.bonus_seats ?? 0);
       })
       .catch(() => {});
   }, [state.companyId, profile?.company_id]);
 
-  const planLimit = USER_LIMITS[subscriptionPlan] ?? 2;
+  const basePlanLimit = USER_LIMITS[subscriptionPlan] ?? 2;
+  // Effective limit = plan limit + any bonus seats granted by platform admin
+  const planLimit = basePlanLimit === Infinity ? Infinity : basePlanLimit + bonusSeats;
   const activeSeats = state.teamMembers.length;
   const pendingSeats = pendingInvites.filter(i => !i.accepted).length;
   const atSeatLimit = planLimit !== Infinity && (activeSeats + pendingSeats) >= planLimit;
@@ -157,7 +161,9 @@ export default function TeamView() {
       ? await db.getCompany(effectiveCompanyId).catch(() => null)
       : null;
     const plan = companyRow?.subscription_plan ?? subscriptionPlan ?? 'trial';
-    const limit = USER_LIMITS[plan] ?? 2;
+    const baseLimit = USER_LIMITS[plan] ?? 2;
+    const bonus = (companyRow as any)?.bonus_seats ?? bonusSeats ?? 0;
+    const limit = baseLimit === Infinity ? Infinity : baseLimit + bonus;
 
     if (limit !== Infinity) {
       const activeCount = state.teamMembers.length;

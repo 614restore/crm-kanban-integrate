@@ -2214,24 +2214,37 @@ export async function getLimitedSeatUsage(companyId: string): Promise<{
   used: number;
   available: number;
 }> {
-  const { data, error } = await supabase
+  // Fetch the seat cap from companies
+  const { data: company, error: companyError } = await supabase
     .from('companies')
-    .select('limited_seats_total, limited_seats_used')
+    .select('limited_seats_total')
     .eq('id', companyId)
     .single();
 
-  if (error) {
-    console.error('[DB] Get limited seat usage error:', error);
-    throw new Error(`Failed to get seat usage: ${error.message}`);
+  if (companyError) {
+    console.error('[DB] Get limited seat usage error:', companyError);
+    throw new Error(`Failed to get seat usage: ${companyError.message}`);
   }
 
-  const total = data?.limited_seats_total || 5;
-  const used = data?.limited_seats_used || 0;
+  // Count active limited accounts live instead of relying on a cached counter
+  const { count, error: countError } = await supabase
+    .from('profiles')
+    .select('id', { count: 'exact', head: true })
+    .eq('company_id', companyId)
+    .eq('is_limited_account', true)
+    .eq('is_active', true);
+
+  if (countError) {
+    console.error('[DB] Count limited accounts error:', countError);
+  }
+
+  const total = company?.limited_seats_total || 5;
+  const used = count ?? 0;
 
   return {
     total,
     used,
-    available: total - used
+    available: Math.max(0, total - used),
   };
 }
 
