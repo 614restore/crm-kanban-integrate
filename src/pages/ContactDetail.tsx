@@ -37,38 +37,60 @@ const TABS = [
 ];
 
 // Ordered pipeline stages for progress bar (main path only)
+// Progress bar stages — shared path only, mirrors PipelineBoard order
 const STAGES: CustomerStatus[] = [
-  'lead', 'contacted', 'appointment_set', 'inspected', 'estimate_sent',
-  'approved', 'scheduled', 'in_progress', 'completed', 'paid',
+  'lead', 'contacted', 'appointment_set',
+  // insurance block
+  'inspected', 'contingency', 'claim_filed', 'adjuster_scheduled',
+  'inspection_completed', 'approved', 'supplement_filed',
+  // shared closing & production
+  'estimating', 'estimate_sent', 'signed',
+  'ordering_material', 'in_progress', 'build_phase',
+  'cleanup', 'invoicing', 'pending_payment', 'completed', 'paid',
 ];
 
-// All valid statuses available in the status dropdown (includes aliases and terminal stages)
+// All valid statuses available in the status dropdown — matches pipeline order
 const ALL_STATUSES: { value: CustomerStatus; label: string }[] = [
-  { value: 'lead', label: 'Lead' },
-  { value: 'contacted', label: 'Contacted' },
-  { value: 'appointment_set', label: 'Appointment Set' },
-  { value: 'inspection_scheduled', label: 'Inspection Scheduled' },
-  { value: 'inspected', label: 'Inspection' },
-  { value: 'inspection_complete', label: 'Inspection Complete' },
-  { value: 'estimate_sent', label: 'Follow Up / Negotiating' },
-  { value: 'approved', label: 'Sold' },
-  { value: 'signed_won', label: 'Signed / Won' },
-  { value: 'scheduled', label: 'Scheduled' },
-  { value: 'in_progress', label: 'In Progress' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'paid', label: 'Paid' },
-  { value: 'retail', label: 'Retail' },
-  { value: 'lost', label: 'Lost' },
+  // Shared — top of funnel
+  { value: 'lead',                  label: 'Lead' },
+  { value: 'contacted',             label: 'Contacted' },
+  { value: 'appointment_set',       label: 'Appointment Set' },
+  // Insurance flow
+  { value: 'inspected',             label: 'Inspection' },
+  { value: 'contingency',           label: 'Contingency' },
+  { value: 'claim_filed',           label: 'Claim Filed' },
+  { value: 'adjuster_scheduled',    label: 'Adjuster Scheduled' },
+  { value: 'inspection_completed',  label: 'Insurance Inspected' },
+  { value: 'approved',              label: 'Approved / Final Scope' },
+  { value: 'supplement_filed',      label: 'Supplement Filed' },
+  // Shared — estimating & closing
+  { value: 'estimating',            label: 'Estimating' },
+  { value: 'estimate_sent',         label: 'Estimate Sent' },
+  { value: 'signed',                label: 'Signed / Won' },
+  { value: 'ordering_material',     label: 'Ordering Material' },
+  // Shared — production
+  { value: 'in_progress',           label: 'Scheduled' },
+  { value: 'build_phase',           label: 'In Progress' },
+  { value: 'cleanup',               label: 'Punch List / Cleanup' },
+  { value: 'invoicing',             label: 'Invoicing' },
+  { value: 'pending_payment',       label: 'Pending Payment' },
+  { value: 'completed',             label: 'Completed' },
+  { value: 'paid',                  label: 'Paid' },
+  // Other
+  { value: 'retail',                label: 'Retail (Cash Job)' },
+  { value: 'lost',                  label: 'Lost' },
 ];
 
 // Normalize alias statuses to their canonical stage for progress bar positioning
 function normalizeStatusForProgress(status: string): CustomerStatus {
   const aliases: Record<string, CustomerStatus> = {
     new_lead: 'lead',
+    prospect: 'lead',
+    appt_set: 'appointment_set',
     inspection_scheduled: 'appointment_set',
     inspection_complete: 'inspected',
-    signed_won: 'approved',
-    retail: 'approved',
+    signed_won: 'signed',
+    retail: 'completed',
     lost: 'completed',
   };
   return (aliases[status] as CustomerStatus) ?? (status as CustomerStatus);

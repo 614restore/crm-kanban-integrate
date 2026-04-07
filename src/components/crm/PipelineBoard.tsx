@@ -215,7 +215,7 @@ function openNavigation(e: React.MouseEvent, contact: Contact) {
 
 export default function PipelineBoard() {
   const { state, dispatch } = useCRM();
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const currentBoard = useCurrentBoard();
 
   const [draggedContact, setDraggedContact] = useState<Contact | null>(null);
