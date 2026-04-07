@@ -105,7 +105,7 @@ export default function Pipeline() {
     try {
       const { data, error } = await supabase
         .from('contacts')
-        .select('*')
+        .select('id, first_name, last_name, status, project_value, project_type, address, city, state, zip, email, phone1, phone2, lead_source, updated_at')
         .eq('company_id', profile.company_id)
         .order('updated_at', { ascending: false });
       

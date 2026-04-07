@@ -1087,7 +1087,7 @@ function CRMApp() {
       if (realtimeFailedRef.current) {
         requestSoftReload();
       }
-    }, 20000);
+    }, 60000);
 
     return () => window.clearInterval(poller);
   }, [profile?.company_id, requestSoftReload]);

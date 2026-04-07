@@ -59,7 +59,7 @@ export default function MobileNav() {
     loadPhotoCount();
 
     // Update count periodically
-    const interval = setInterval(loadPhotoCount, 5000);
+    const interval = setInterval(loadPhotoCount, 60000);
     return () => clearInterval(interval);
   }, []);
 

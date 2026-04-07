@@ -86,11 +86,11 @@ export default function Dashboard() {
       const [{ data: contacts, error }, { data: workOrders, error: workOrderError }] = await Promise.all([
         supabase
           .from('contacts')
-          .select('*')
+          .select('id, first_name, last_name, status, project_value, updated_at, notes, address, city, state, zip')
           .eq('company_id', profile.company_id),
         supabase
           .from('work_orders')
-          .select('*')
+          .select('id, contact_id, scheduled_date, title, assigned_to, status')
           .eq('company_id', profile.company_id)
           .order('scheduled_date', { ascending: true }),
       ]);
