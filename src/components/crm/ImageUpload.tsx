@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { compressImage, formatFileSize } from '@/lib/imageUtils';
 
 type Props = {
   label?: string;
@@ -12,11 +13,18 @@ export default function ImageUpload({ label, currentUrl, uploadFn, onUploaded, a
   const [preview, setPreview] = useState<string | null>(currentUrl || null);
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [sizeNote, setSizeNote] = useState<string | null>(null);
 
-  const handleFile = (f?: File) => {
+  const handleFile = async (f?: File) => {
     if (!f) return;
-    setFile(f);
-    const url = URL.createObjectURL(f);
+    const compressed = await compressImage(f);
+    setFile(compressed);
+    setSizeNote(
+      f.size !== compressed.size
+        ? `Compressed ${formatFileSize(f.size)} → ${formatFileSize(compressed.size)}`
+        : null,
+    );
+    const url = URL.createObjectURL(compressed);
     setPreview(url);
   };
 
@@ -55,6 +63,9 @@ export default function ImageUpload({ label, currentUrl, uploadFn, onUploaded, a
             {uploading ? 'Uploading...' : 'Upload'}
           </button>
         </div>
+        {sizeNote && (
+          <p className="text-xs text-gray-400 mt-1">{sizeNote} — full size stays on your device</p>
+        )}
       </div>
     </div>
   );

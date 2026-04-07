@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Camera, Upload, X, Eye, Trash2, CheckCircle } from 'lucide-react';
 import { uploadDocument, getDocumentSignedUrl } from '@/lib/storage';
+import { compressImage } from '@/lib/imageUtils';
 import { toast } from 'sonner';
 
 interface PhotoChecklistItem {
@@ -51,7 +52,9 @@ export default function PhotoChecklist({ items, onChange, companyId, contactId }
   const handleFileSelect = async (itemId: string, file: File) => {
     setUploading(itemId);
     try {
-      const result = await uploadDocument(file, companyId, contactId);
+      // Compress before upload — full-size original stays on the device
+      const compressed = await compressImage(file, { maxPx: 1400, quality: 0.82 });
+      const result = await uploadDocument(compressed, companyId, contactId);
       if (result.error) {
         toast.error(`Upload failed: ${result.error}`);
         return;

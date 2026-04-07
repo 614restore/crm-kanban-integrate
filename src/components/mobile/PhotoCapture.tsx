@@ -3,6 +3,7 @@
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Camera, Upload, MapPin, Wifi, WifiOff, Check, X } from 'lucide-react';
+import { compressImage } from '@/lib/imageUtils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -170,25 +171,26 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({
     
     if (!context) return;
 
-    // Set canvas size to match video
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    // Resize to max 1280px on the longest side before encoding
+    const MAX_PX = 1280;
+    const scale = Math.min(1, MAX_PX / Math.max(video.videoWidth, video.videoHeight));
+    canvas.width  = Math.round(video.videoWidth  * scale);
+    canvas.height = Math.round(video.videoHeight * scale);
 
-    // Draw video frame to canvas
-    context.drawImage(video, 0, 0);
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    // Convert to blob
+    // Encode at 0.78 quality — targets < 200 KB for typical roof photos
     canvas.toBlob((blob) => {
       if (blob) {
         const url = URL.createObjectURL(blob);
         setPreviewUrl(url);
         stopCamera();
       }
-    }, 'image/jpeg', 0.9);
+    }, 'image/jpeg', 0.78);
   }, [stopCamera]);
 
-  // Handle file selection
-  const handleFileSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle file selection — compress gallery picks before preview/upload
+  const handleFileSelect = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -201,9 +203,11 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({
       return;
     }
 
-    const url = URL.createObjectURL(file);
+    // Compress before storing — full-size original stays in the device gallery
+    const compressed = await compressImage(file, { maxPx: 1280, quality: 0.78, targetBytes: 150_000 });
+    const url = URL.createObjectURL(compressed);
     setPreviewUrl(url);
-    
+
     // Get GPS when photo is selected
     getLocation();
   }, [toast, getLocation]);

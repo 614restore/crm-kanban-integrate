@@ -6,6 +6,7 @@ import { db } from '@/lib/database';
 import { MaterialOrder, MaterialOrderItem } from '@/lib/crmData';
 import { exportMaterialOrdersToExcel } from '@/lib/exportUtils';
 import { uploadDocument, getDocumentSignedUrl } from '@/lib/storage';
+import { logActivity } from '@/lib/activityLogger';
 import {
   Package,
   Plus,
@@ -382,6 +383,15 @@ export default function MaterialOrdersView() {
           };
           dispatch({ type: 'UPDATE_MATERIAL_ORDER', payload: appOrder });
           toast.success('Material order updated');
+          // Audit trail — log to contact's timeline if linked to a contact
+          if (updated.contact_id) {
+            await logActivity({
+              contactId: updated.contact_id,
+              companyId: profile.company_id,
+              userId: profile.id,
+              content: `📦 Material order updated: Order #${updated.order_number || updated.id.slice(0, 6)} — Status: ${updated.status} — Total: $${Number(updated.total || 0).toFixed(2)}. Updated by: ${profile.full_name || profile.email || 'team member'}`,
+            }).catch(() => {});
+          }
           handleCloseModal();
         } else {
           toast.error('Failed to update order. Please try again.');
@@ -413,6 +423,15 @@ export default function MaterialOrdersView() {
           };
           dispatch({ type: 'ADD_MATERIAL_ORDER', payload: appOrder });
           toast.success('Material order created');
+          // Audit trail — log to contact's timeline if linked to a contact
+          if (created.contact_id) {
+            await logActivity({
+              contactId: created.contact_id,
+              companyId: profile.company_id,
+              userId: profile.id,
+              content: `📦 Material order created: Order #${created.order_number || created.id.slice(0, 6)} — Supplier: ${state.suppliers.find(s => s.id === created.supplier_id)?.name || 'Unknown'} — Total: $${Number(created.total || 0).toFixed(2)}. Created by: ${profile.full_name || profile.email || 'team member'}`,
+            }).catch(() => {});
+          }
           handleCloseModal();
         }
       }
