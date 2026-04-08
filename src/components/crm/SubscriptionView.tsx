@@ -181,10 +181,10 @@ export default function SubscriptionView() {
     if (API_BASE && priceId) {
       setLoadingPlan(planKey);
       try {
-        const res = await fetch(`${API_BASE}/api/stripe-checkout`, {
+        const res = await fetch(`${API_BASE}/api/stripe`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ priceId, planId: planKey }),
+          body: JSON.stringify({ action: 'checkout', priceId, planId: planKey }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed to start checkout');

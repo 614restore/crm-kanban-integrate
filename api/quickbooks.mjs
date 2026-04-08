@@ -1,26 +1,60 @@
-// POST /api/quickbooks-sync
-// Body: { sync_type: 'invoices' | 'customers' | 'all' }
-// Pushes data from Supabase → QuickBooks
+// POST /api/quickbooks
+// Unified QuickBooks endpoint — routes by `action` field in request body.
+//   action: 'auth'  — initiate OAuth flow, returns { authUri }
+//   action: 'sync'  — push data to QuickBooks, body also accepts { sync_type }
+//
+// Note: The OAuth callback stays at /api/quickbooks-callback (registered redirect URI with Intuit).
 import OAuthClient from 'intuit-oauth';
 import QuickBooks from 'node-quickbooks';
 import { createClient } from '@supabase/supabase-js';
-import { encrypt, decrypt, setNoCacheHeaders } from './_crypto-utils.mjs';
+import { createOAuthState, encrypt, decrypt, setNoCacheHeaders } from './_crypto-utils.mjs';
 import { requireAuth } from './_auth-middleware.mjs';
 
-function setCors(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+const APP_URL = process.env.APP_URL || 'https://crm-kanban-integrate.vercel.app';
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+function setCors(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', APP_URL);
   res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 }
 
-const supabase = createClient(
-  process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://qgvuzrvpyyrrulhwlzma.supabase.co',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-);
+// ── Auth action ───────────────────────────────────────────────────────────────
+
+async function handleAuth(user, res) {
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('company_id')
+    .eq('id', user.id)
+    .single();
+
+  if (!profile?.company_id) {
+    return res.status(403).json({ error: 'No company associated with this account' });
+  }
+
+  const environment = process.env.QBO_ENVIRONMENT || 'sandbox';
+  const oauthClient = new OAuthClient({
+    clientId: (process.env.QBO_CLIENT_ID || '').trim(),
+    clientSecret: (process.env.QBO_CLIENT_SECRET || '').trim(),
+    environment: environment === 'production' ? 'production' : 'sandbox',
+    redirectUri: `${APP_URL}/api/quickbooks-callback`,
+  });
+
+  const signedState = createOAuthState(profile.company_id);
+  const authUri = oauthClient.authorizeUri({
+    scope: [OAuthClient.scopes.Accounting, OAuthClient.scopes.Payment],
+    state: signedState,
+  });
+
+  return res.json({ authUri });
+}
+
+// ── Sync action ───────────────────────────────────────────────────────────────
 
 async function getAccessToken(company) {
-  // Access tokens are never stored in DB (volatile memory only per Intuit requirement).
-  // Always generate a fresh access token from the encrypted refresh token.
   const refreshToken = decrypt(company.qb_refresh_token);
   if (!refreshToken) throw new Error('No refresh token — please reconnect QuickBooks.');
 
@@ -29,72 +63,46 @@ async function getAccessToken(company) {
     clientId: process.env.QBO_CLIENT_ID,
     clientSecret: process.env.QBO_CLIENT_SECRET,
     environment,
-    redirectUri: `${process.env.APP_URL || 'https://crm-kanban-integrate.vercel.app'}/api/quickbooks-callback`,
+    redirectUri: `${APP_URL}/api/quickbooks-callback`,
   });
 
-  oauthClient.setToken({
-    token_type: 'bearer',
-    access_token: '',
-    refresh_token: refreshToken,
-    expires_in: 0,
-  });
+  oauthClient.setToken({ token_type: 'bearer', access_token: '', refresh_token: refreshToken, expires_in: 0 });
 
   const refreshed = await oauthClient.refresh();
   const token = refreshed.getJson();
   const expiresAt = new Date(Date.now() + token.expires_in * 1000).toISOString();
 
-  // Save the new encrypted refresh token back to DB; access token stays in memory only
   await supabase.from('companies').update({
     qb_access_token: null,
     qb_refresh_token: encrypt(token.refresh_token || refreshToken),
     qb_token_expires_at: expiresAt,
   }).eq('id', company.id);
 
-  return token.access_token; // returned in memory, never persisted
+  return token.access_token;
 }
 
 function getQBClient(accessToken, realmId, environment) {
-  const useSandbox = environment === 'sandbox';
   return new QuickBooks(
     process.env.QBO_CLIENT_ID,
     process.env.QBO_CLIENT_SECRET,
     accessToken,
-    false, // no token secret for OAuth2
-    realmId,
-    useSandbox,
-    false, // debug
-    null,  // minor version
-    '2.0', // oauth version
-    null   // refresh token (handled separately)
+    false, realmId,
+    environment === 'sandbox',
+    false, null, '2.0', null
   );
 }
 
-export default async function handler(req, res) {
-  setCors(res);
-  setNoCacheHeaders(res);
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
-
-  const user = await requireAuth(req, res);
-  if (!user) return;
-
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+async function handleSync(user, body, res) {
+  if (!SUPABASE_KEY) {
     return res.status(500).json({ error: 'Server misconfigured: missing SUPABASE_SERVICE_ROLE_KEY' });
   }
 
-  // Derive company_id from authenticated user — never trust caller-supplied value
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('company_id')
-    .eq('id', user.id)
-    .single();
-
+  const { data: profile } = await supabase.from('profiles').select('company_id').eq('id', user.id).single();
   const company_id = profile?.company_id;
   if (!company_id) return res.status(403).json({ error: 'No company associated with this account' });
 
-  const { sync_type = 'all' } = req.body || {};
+  const { sync_type = 'all' } = body;
 
-  // Load company QB tokens
   const { data: company, error: companyError } = await supabase
     .from('companies')
     .select('id, name, qb_access_token, qb_refresh_token, qb_realm_id, qb_token_expires_at, qb_environment')
@@ -111,13 +119,12 @@ export default async function handler(req, res) {
     const accessToken = await getAccessToken(company);
     const qb = getQBClient(accessToken, company.qb_realm_id, company.qb_environment);
 
-    // Load contacts (customers)
     if (sync_type === 'customers' || sync_type === 'all') {
       const { data: contacts } = await supabase
         .from('contacts')
         .select('id, first_name, last_name, email, phone1, address, city, state, zip')
         .eq('company_id', company_id)
-        .is('qb_customer_id', null) // only unsynced
+        .is('qb_customer_id', null)
         .limit(50);
 
       for (const contact of contacts || []) {
@@ -128,15 +135,11 @@ export default async function handler(req, res) {
               PrimaryEmailAddr: contact.email ? { Address: contact.email } : undefined,
               PrimaryPhone: contact.phone1 ? { FreeFormNumber: contact.phone1 } : undefined,
               BillAddr: contact.address ? {
-                Line1: contact.address,
-                City: contact.city,
-                CountrySubDivisionCode: contact.state,
-                PostalCode: contact.zip,
-                Country: 'US',
+                Line1: contact.address, City: contact.city,
+                CountrySubDivisionCode: contact.state, PostalCode: contact.zip, Country: 'US',
               } : undefined,
             }, async (err, customer) => {
               if (err) { reject(err); return; }
-              // Save QB customer ID back to contact
               await supabase.from('contacts').update({ qb_customer_id: customer.Id }).eq('id', contact.id);
               results.customers++;
               resolve(customer);
@@ -148,13 +151,12 @@ export default async function handler(req, res) {
       }
     }
 
-    // Sync invoices
     if (sync_type === 'invoices' || sync_type === 'all') {
       const { data: invoices } = await supabase
         .from('invoices')
         .select('id, invoice_number, contact_id, amount, due_date, status, items, notes, contacts(first_name, last_name, qb_customer_id)')
         .eq('company_id', company_id)
-        .is('qb_invoice_id', null) // only unsynced
+        .is('qb_invoice_id', null)
         .in('status', ['sent', 'paid', 'overdue'])
         .limit(50);
 
@@ -163,7 +165,6 @@ export default async function handler(req, res) {
           const contact = invoice.contacts;
           let customerId = contact?.qb_customer_id;
 
-          // If no QB customer yet, create one
           if (!customerId && contact) {
             customerId = await new Promise((resolve, reject) => {
               qb.createCustomer({
@@ -176,31 +177,19 @@ export default async function handler(req, res) {
             });
           }
 
-          if (!customerId) {
-            results.errors.push(`Invoice ${invoice.invoice_number}: no customer found`);
-            continue;
-          }
+          if (!customerId) { results.errors.push(`Invoice ${invoice.invoice_number}: no customer found`); continue; }
 
           const lineItems = (invoice.items || []).map((item, i) => ({
-            Id: String(i + 1),
-            LineNum: i + 1,
+            Id: String(i + 1), LineNum: i + 1,
             Description: item.description || 'Service',
             Amount: Number(item.total || item.unit_price || 0),
             DetailType: 'SalesItemLineDetail',
-            SalesItemLineDetail: {
-              UnitPrice: Number(item.unit_price || item.unitPrice || 0),
-              Qty: Number(item.quantity || 1),
-            },
+            SalesItemLineDetail: { UnitPrice: Number(item.unit_price || item.unitPrice || 0), Qty: Number(item.quantity || 1) },
           }));
 
           if (lineItems.length === 0) {
-            lineItems.push({
-              Id: '1', LineNum: 1,
-              Description: 'Services',
-              Amount: Number(invoice.amount || 0),
-              DetailType: 'SalesItemLineDetail',
-              SalesItemLineDetail: { UnitPrice: Number(invoice.amount || 0), Qty: 1 },
-            });
+            lineItems.push({ Id: '1', LineNum: 1, Description: 'Services', Amount: Number(invoice.amount || 0),
+              DetailType: 'SalesItemLineDetail', SalesItemLineDetail: { UnitPrice: Number(invoice.amount || 0), Qty: 1 } });
           }
 
           await new Promise((resolve, reject) => {
@@ -224,12 +213,31 @@ export default async function handler(req, res) {
     }
 
     return res.status(200).json({
-      success: true,
-      synced: results,
+      success: true, synced: results,
       message: `Synced ${results.customers} customers + ${results.invoices} invoices to QuickBooks`,
     });
   } catch (err) {
     console.error('QB sync error:', err);
     return res.status(500).json({ error: err.message });
   }
+}
+
+// ── Main handler ──────────────────────────────────────────────────────────────
+
+export default async function handler(req, res) {
+  setCors(req, res);
+  setNoCacheHeaders(res);
+
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const user = await requireAuth(req, res);
+  if (!user) return;
+
+  const { action, ...body } = req.body || {};
+
+  if (action === 'auth') return handleAuth(user, res);
+  if (action === 'sync') return handleSync(user, body, res);
+
+  return res.status(400).json({ error: 'Missing or invalid action. Use "auth" or "sync".' });
 }

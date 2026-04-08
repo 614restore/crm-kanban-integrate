@@ -280,12 +280,13 @@ const IntegrationConfigModal: React.FC<IntegrationConfigModalProps> = ({ integra
       const { data: { session } } = await supabaseClient.auth.getSession();
       const token = session?.access_token;
 
-      const res = await fetch('/api/quickbooks-auth', {
+      const res = await fetch('/api/quickbooks', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
+        body: JSON.stringify({ action: 'auth' }),
       });
 
       if (!res.ok) {
@@ -522,13 +523,13 @@ const QuickBooksSyncButton: React.FC<QuickBooksSyncButtonProps> = ({ supabaseCli
     try {
       const { data: { session } } = await supabaseClient.auth.getSession();
       const token = session?.access_token;
-      const res = await fetch('/api/quickbooks-sync', {
+      const res = await fetch('/api/quickbooks', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ sync_type: 'all' }),
+        body: JSON.stringify({ action: 'sync', sync_type: 'all' }),
       });
       const data = await res.json().catch(() => ({ error: 'Unknown error' }));
       if (!res.ok) {

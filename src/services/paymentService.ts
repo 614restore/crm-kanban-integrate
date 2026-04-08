@@ -157,10 +157,11 @@ export async function sendPaymentReceipt(params: {
     </div>
   `;
 
-  const res = await fetch('/api/send-email', {
+  const res = await fetch('/api/send', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({
+      type: 'email',
       to: params.toEmail,
       subject: `Payment Receipt — $${params.amount.toFixed(2)} from ${params.companyName}`,
       html,
