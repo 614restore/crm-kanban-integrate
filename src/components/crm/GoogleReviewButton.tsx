@@ -23,7 +23,7 @@ const GoogleReviewButton: React.FC<GoogleReviewButtonProps> = ({
     
     // If no specific URL provided, generate a search URL
     const companyQuery = encodeURIComponent(`${companyName} reviews`);
-    return `https://www.google.com/search?q=${companyQuery}#lrd=0x0:0x0,3`;
+    return `https://www.google.com/search?q=${companyQuery}`;
   };
 
   const handleGoogleReviewClick = () => {

@@ -413,22 +413,36 @@ const IntegrationConfigModal: React.FC<IntegrationConfigModalProps> = ({ integra
         <div className="p-6 max-h-[calc(90vh-140px)] overflow-y-auto">
           {isQuickBooks ? (
             <div className="space-y-4">
-              <div className="flex items-center gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0" />
-                <div>
-                  <p className="font-medium text-blue-900">QuickBooks — Coming Soon</p>
-                  <p className="text-sm text-blue-700 mt-0.5">QuickBooks sync is currently in development and will be available in a future update.</p>
+              {isQbConnected ? (
+                <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-lg">
+                  <Check className="w-5 h-5 text-green-600 flex-shrink-0" />
+                  <div>
+                    <p className="font-medium text-green-900">QuickBooks Connected</p>
+                    <p className="text-sm text-green-700 mt-0.5">Your QuickBooks account is linked. Invoices are created automatically when estimates are accepted.</p>
+                  </div>
                 </div>
-              </div>
-              <p className="text-sm text-gray-500">
-                QuickBooks will use OAuth 2.0 for a secure connection — no passwords stored. Stay tuned for the full release.
-              </p>
+              ) : (
+                <div className="flex items-center gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                  <div>
+                    <p className="font-medium text-blue-900">Connect QuickBooks Online</p>
+                    <p className="text-sm text-blue-700 mt-0.5">Uses OAuth 2.0 — no passwords stored. Invoices sync automatically when estimates are accepted.</p>
+                  </div>
+                </div>
+              )}
               <button
-                disabled
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-200 text-gray-500 font-semibold rounded-lg cursor-not-allowed"
+                onClick={handleConnectQuickBooks}
+                disabled={qbConnecting}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#2CA01C] hover:bg-[#249118] text-white font-semibold rounded-lg disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
               >
-                <Link2 className="w-4 h-4" /> Coming Soon
+                {qbConnecting
+                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Redirecting to QuickBooks…</>
+                  : <><Link2 className="w-4 h-4" /> {isQbConnected ? 'Reconnect QuickBooks' : 'Connect QuickBooks'}</>
+                }
               </button>
+              {isQbConnected && (
+                <QuickBooksSyncButton supabaseClient={supabaseClient} />
+              )}
             </div>
           ) : (
             <div className="space-y-4">
@@ -489,6 +503,66 @@ const IntegrationConfigModal: React.FC<IntegrationConfigModalProps> = ({ integra
           </div>
         </div>
       </div>
+    </div>
+  );
+};
+
+// QuickBooks Sync Button — calls /api/quickbooks-sync, shows last-sync status
+interface QuickBooksSyncButtonProps {
+  supabaseClient: any;
+}
+
+const QuickBooksSyncButton: React.FC<QuickBooksSyncButtonProps> = ({ supabaseClient }) => {
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      const token = session?.access_token;
+      const res = await fetch('/api/quickbooks-sync', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ sync_type: 'all' }),
+      });
+      const data = await res.json().catch(() => ({ error: 'Unknown error' }));
+      if (!res.ok) {
+        setSyncResult({ success: false, message: data.error || `Server error ${res.status}` });
+      } else {
+        setSyncResult({ success: true, message: data.message || 'Sync complete' });
+      }
+    } catch (err) {
+      setSyncResult({ success: false, message: err instanceof Error ? err.message : 'Sync failed' });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <button
+        onClick={handleSync}
+        disabled={syncing}
+        className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium rounded-lg disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+      >
+        {syncing
+          ? <><Loader2 className="w-4 h-4 animate-spin" /> Syncing…</>
+          : 'Sync Customers & Invoices Now'
+        }
+      </button>
+      {syncResult && (
+        <div className={`flex items-start gap-2 px-3 py-2 rounded-lg text-sm ${
+          syncResult.success ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
+        }`}>
+          {syncResult.success ? <Check className="w-4 h-4 mt-0.5 flex-shrink-0" /> : <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />}
+          {syncResult.message}
+        </div>
+      )}
     </div>
   );
 };

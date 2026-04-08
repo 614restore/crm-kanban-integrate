@@ -6,6 +6,7 @@ import { db } from '@/lib/database';
 import { sendEmail } from '@/lib/emailApi';
 import { fireAutomationEvent } from '@/lib/automationEngine';
 import { logActivity } from '@/lib/activityLogger';
+import { supabase } from '@/lib/supabase';
 import { Estimate, EstimateItem, Contact } from '@/lib/crmData';
 import { exportEstimatesToExcel } from '@/lib/exportUtils';
 import { SignaturePad } from './SignaturePad';
@@ -36,6 +37,45 @@ import {
   Lock,
 } from 'lucide-react';
 import { withTimeout } from '@/lib/utils';
+
+/**
+ * Fire-and-forget: create a QuickBooks invoice when an estimate is accepted.
+ * Never throws — QB failure must not block the estimate acceptance flow.
+ */
+async function maybeCreateQBInvoice(
+  estimate: { id: string; title: string; contactName: string; items: EstimateItem[]; total: number; notes?: string },
+  companyId: string,
+  onSuccess: () => void,
+  onError: (msg: string) => void,
+) {
+  try {
+    const { data: session } = await supabase.auth.getSession();
+    const token = session?.session?.access_token;
+
+    const res = await fetch('/api/quickbooks-sync', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      // Re-use the sync endpoint with a single accepted estimate
+      body: JSON.stringify({ sync_type: 'invoices', estimate_id: estimate.id }),
+    });
+
+    if (res.ok) {
+      onSuccess();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      // 400 = QB not connected; treat silently so we don't alarm users for a missing optional integration
+      if (res.status !== 400) {
+        onError(data.error || `QB sync returned ${res.status}`);
+      }
+    }
+  } catch (err) {
+    // Network/parse error — log but don't surface to user
+    console.warn('QuickBooks invoice creation failed (non-blocking):', err);
+  }
+}
 
 // Status badge component
 function StatusBadge({ status }: { status: Estimate['status'] }) {
@@ -716,6 +756,15 @@ export default function EstimatesView() {
         } else {
           toast.success('Estimate marked as accepted');
         }
+
+        // Fire-and-forget: push to QuickBooks if connected (never blocks this flow)
+        maybeCreateQBInvoice(
+          mapDbEstimateToApp(updated),
+          profile.company_id,
+          () => toast.success('Invoice created in QuickBooks'),
+          (msg) => toast.error(`Failed to create QB invoice — check Settings (${msg})`),
+        );
+
         setViewingEstimate(null);
       }
     } catch (err: any) {
@@ -761,6 +810,15 @@ export default function EstimatesView() {
         } else {
           toast.success('Estimate signed & accepted');
         }
+
+        // Fire-and-forget: push to QuickBooks if connected (never blocks this flow)
+        maybeCreateQBInvoice(
+          appEstimate,
+          profile.company_id,
+          () => toast.success('Invoice created in QuickBooks'),
+          (msg) => toast.error(`Failed to create QB invoice — check Settings (${msg})`),
+        );
+
         setShowSignatureModal(null);
         setSignerName('');
         setViewingEstimate(null);

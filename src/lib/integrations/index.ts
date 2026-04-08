@@ -10,3 +10,5 @@ export type { RoofrReport, RoofrReportOrder } from './roofr';
 export { OpenWeatherIntegration, HailTraceIntegration } from './weather';
 export { default as AIAssistantIntegration } from './aiAssistantIntegration';
 export { AIAssistantService } from './aiAssistant';
+export { default as SendGridIntegration } from './sendgrid';
+export type { SendGridEmailResult, SendGridTemplate } from './sendgrid';

@@ -7,6 +7,7 @@ import TwilioIntegration from './twilio';
 import EagleViewIntegration from './eagleview';
 import RoofrIntegration from './roofr';
 import { OpenWeatherIntegration, HailTraceIntegration } from './weather';
+import SendGridIntegration from './sendgrid';
 
 export class IntegrationManager {
   private integrations: Map<string, BaseIntegration> = new Map();
@@ -234,6 +235,12 @@ export class IntegrationManager {
           connection = new HailTraceIntegration(
             integration.credentials.apiKey,
             integration.credentials.environment ?? 'production'
+          );
+          break;
+        case 'sendgrid':
+          connection = new SendGridIntegration(
+            integration.credentials.apiKey,
+            integration.credentials.fromEmail
           );
           break;
         default:
@@ -604,6 +611,29 @@ export class IntegrationManager {
    */
   getConnection(id: string): any {
     return this.activeConnections.get(id);
+  }
+
+  /**
+   * Return the active SendGrid connection if the integration is configured and enabled.
+   * Returns null if SendGrid is not set up so callers can fall back gracefully.
+   */
+  getSendGrid(): SendGridIntegration | null {
+    const integration = this.integrations.get('sendgrid');
+    if (!integration?.isEnabled || !integration?.isConfigured) return null;
+
+    // Return cached connection if available.
+    const cached = this.activeConnections.get('sendgrid');
+    if (cached) return cached as SendGridIntegration;
+
+    // Build on-demand from stored credentials (e.g. after page reload before auto-connect fires).
+    const creds = integration.credentials;
+    if (creds?.apiKey && creds?.fromEmail) {
+      const sg = new SendGridIntegration(creds.apiKey as string, creds.fromEmail as string);
+      this.activeConnections.set('sendgrid', sg);
+      return sg;
+    }
+
+    return null;
   }
 
   /**

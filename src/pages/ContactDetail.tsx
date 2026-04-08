@@ -23,6 +23,10 @@ import { handleAutoProgression } from '../lib/progressionRules';
 import { fireAutomationEvent } from '../lib/automationEngine';
 import PaymentModal from '../components/crm/PaymentModal';
 import { getContactPayments, deletePayment, PAYMENT_METHOD_LABELS, type Payment } from '../services/paymentService';
+import { SMSDialog } from '../components/crm/SMSDialog';
+import { useTwilio } from '../hooks/useTwilio';
+import EagleViewPanel from '../components/crm/EagleViewPanel';
+import WeatherWidget from '../components/integrations/WeatherWidget';
 
 const MultiShotCamera = registerPlugin<{ open: (options?: { saveMode?: InspectionPhotoStorageMode }) => Promise<{ photos: string[] }> }>('MultiShotCamera');
 
@@ -100,6 +104,8 @@ export default function ContactDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user, profile } = useAuth();
+  const { twilioEnabled } = useTwilio();
+  const [showSMSDialog, setShowSMSDialog] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
   const [contact, setContact] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -226,8 +232,13 @@ export default function ContactDetail() {
       );
     }
     if (type === 'call') window.location.href = `tel:${value}`;
-    else if (type === 'sms') window.location.href = `sms:${value}`;
-    else window.location.href = `mailto:${value}`;
+    else if (type === 'sms') {
+      if (twilioEnabled) {
+        setShowSMSDialog(true);
+      } else {
+        window.location.href = `sms:${value}`;
+      }
+    } else window.location.href = `mailto:${value}`;
   };
 
   const openEdit = () => {
@@ -462,7 +473,7 @@ export default function ContactDetail() {
             {activeTab === 'inspection' && <InspectionTab contact={contact} userId={user?.id} onDocumentsChanged={fetchDocuments} />}
             {activeTab === 'status' && <StatusTab contact={contact} onAdvance={advanceStatus} />}
             {activeTab === 'timeline' && <TimelineTab timeline={timeline} onRefresh={fetchTimeline} contact={contact} userId={user?.id} companyId={profile?.company_id} />}
-            {activeTab === 'documents' && <DocumentsTab contactId={contact.id} documents={documentsWithUrls.length ? documentsWithUrls : documents} onUpload={handleUpload} onLegalUpload={handleLegalUpload} />}
+            {activeTab === 'documents' && <DocumentsTab contactId={contact.id} contact={contact} userId={user?.id} documents={documentsWithUrls.length ? documentsWithUrls : documents} onUpload={handleUpload} onLegalUpload={handleLegalUpload} onDocumentsRefresh={fetchDocuments} />}
             {activeTab === 'financial' && <FinancialTab contact={contact} userId={user?.id} onEdit={openEdit} onRefresh={fetchContact} />}
             {activeTab === 'insurance' && <InsuranceTab contact={contact} />}
           </motion.div>
@@ -574,6 +585,18 @@ export default function ContactDetail() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* SMS Dialog — only rendered when Twilio is configured */}
+      {contact && (
+        <SMSDialog
+          open={showSMSDialog}
+          onOpenChange={setShowSMSDialog}
+          contactName={`${contact.first_name || ''} ${contact.last_name || ''}`.trim()}
+          contactPhone={contact.phone1 ?? null}
+          contactId={contact.id}
+          companyId={contact.company_id}
+        />
       )}
     </div>
   );
@@ -903,7 +926,18 @@ function OverviewTab({ contact, onRefresh }: { contact: any; onRefresh: () => vo
               <div className="h-10 w-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400"><Phone size={18} /></div>
               <div className="flex-1">
                 <p className="text-[10px] font-bold text-slate-400 uppercase">Primary Phone</p>
-                <p className="text-sm font-bold text-primary">{formatPhone(contact.phone1)}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-bold text-primary">{formatPhone(contact.phone1)}</p>
+                  {twilioEnabled && contact.phone1 && (
+                    <button
+                      onClick={() => setShowSMSDialog(true)}
+                      title="Send SMS via Twilio"
+                      className="p-1 rounded-lg bg-green-50 text-green-600 hover:bg-green-100 transition-colors"
+                    >
+                      <MessageSquare size={14} />
+                    </button>
+                  )}
+                </div>
                 {contact.phone2 && <p className="text-xs text-slate-500 mt-1">Secondary: {formatPhone(contact.phone2)}</p>}
               </div>
             </div>
@@ -936,6 +970,9 @@ function OverviewTab({ contact, onRefresh }: { contact: any; onRefresh: () => vo
             </div>
           </div>
         </div>
+        {contact.address && contact.company_id && (
+          <WeatherWidget address={`${contact.address}, ${contact.city || ''}, ${contact.state || ''}`} companyId={contact.company_id} />
+        )}
         <div className="card p-5 space-y-4">
           <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Quick Notes</h3>
           <textarea
@@ -1859,7 +1896,7 @@ function TimelineTab({ timeline, onRefresh, contact, userId, companyId }: { time
   );
 }
 
-function DocumentsTab({ contactId, documents, onUpload, onLegalUpload }: { contactId: string; documents: any[]; onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void; onLegalUpload: (label: string, docType: string, e: React.ChangeEvent<HTMLInputElement>) => void }) {
+function DocumentsTab({ contactId, contact, userId, documents, onUpload, onLegalUpload, onDocumentsRefresh }: { contactId: string; contact?: any; userId?: string; documents: any[]; onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void; onLegalUpload: (label: string, docType: string, e: React.ChangeEvent<HTMLInputElement>) => void; onDocumentsRefresh?: () => void }) {
   const navigate = useNavigate();
   const [filter, setFilter] = useState<'all' | 'photos' | 'docs' | 'legal'>('all');
   const LEGAL_DOCS = [
@@ -2014,13 +2051,17 @@ function DocumentsTab({ contactId, documents, onUpload, onLegalUpload }: { conta
           )}
         </div>
       )}
-      <div className="bg-primary/5 border border-primary/10 rounded-2xl p-5 space-y-3">
-        <div className="flex justify-between items-center">
-          <h4 className="text-xs font-bold text-primary uppercase tracking-wider">EagleView Report</h4>
-          <span className="text-[10px] font-bold text-slate-400 uppercase">Not Requested</span>
-        </div>
-        <button className="w-full bg-primary text-white py-3 rounded-xl text-xs font-bold active:scale-95 transition-transform">Order Aerial Measurement</button>
-      </div>
+      <EagleViewPanel
+        address={contact?.address || ''}
+        city={contact?.city || ''}
+        state={contact?.state || ''}
+        zip={contact?.zip || contact?.postal_code || ''}
+        companyId={contact?.company_id || ''}
+        contactId={contactId}
+        contactName={[contact?.first_name, contact?.last_name].filter(Boolean).join(' ') || undefined}
+        userId={userId}
+        onDocumentSaved={() => { onDocumentsRefresh?.(); }}
+      />
       <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-5 space-y-3">
         <div className="flex justify-between items-center">
           <h4 className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Before & After Report</h4>

@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
-import { Upload, Download, CheckCircle, AlertCircle, Loader, Home, Ruler, TrendingUp } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Download, CheckCircle, Loader, Home, Ruler, TrendingUp, Settings } from 'lucide-react';
 import { EstimateItem } from '@/lib/crmData';
 import { toast } from 'sonner';
+import { supabase } from '@/lib/supabase';
+import { EagleViewIntegration } from '@/lib/integrations/eagleview';
 
 interface EagleViewReport {
   reportId: string;
@@ -27,33 +29,91 @@ interface EagleViewReport {
 
 interface EagleViewImportProps {
   contactAddress: string;
+  companyId: string;
   onImportComplete: (items: EstimateItem[]) => void;
 }
 
-export function EagleViewImport({ contactAddress, onImportComplete }: EagleViewImportProps) {
+export function EagleViewImport({ contactAddress, companyId, onImportComplete }: EagleViewImportProps) {
   const [isSearching, setIsSearching] = useState(false);
   const [report, setReport] = useState<EagleViewReport | null>(null);
   const [searchAddress, setSearchAddress] = useState(contactAddress);
+  const [eagleView, setEagleView] = useState<EagleViewIntegration | null>(null);
+  const [configStatus, setConfigStatus] = useState<'unknown' | 'ok' | 'missing'>('unknown');
+
+  // Load EagleView credentials from Supabase on mount
+  useEffect(() => {
+    if (!companyId) { setConfigStatus('missing'); return; }
+    const load = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) { setConfigStatus('missing'); return; }
+
+        const { data, error: dbError } = await supabase
+          .from('company_integrations')
+          .select('credentials')
+          .eq('company_id', companyId)
+          .eq('integration_type', 'eagleview')
+          .eq('is_active', true)
+          .single();
+
+        if (dbError && dbError.code !== 'PGRST116') {
+          setConfigStatus('missing');
+          return;
+        }
+
+        const apiKey = data?.credentials?.apiKey;
+        const clientId = data?.credentials?.clientId;
+        const env = data?.credentials?.environment || 'production';
+        if (!apiKey || !clientId) { setConfigStatus('missing'); return; }
+
+        setEagleView(new EagleViewIntegration(apiKey, clientId, env));
+        setConfigStatus('ok');
+      } catch {
+        setConfigStatus('missing');
+      }
+    };
+    load();
+  }, [companyId]);
 
   const searchEagleView = async () => {
+    if (!eagleView) return;
     setIsSearching(true);
-    
+
     try {
-      // Call EagleView API
-      const response = await fetch('/api/eagleview/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address: searchAddress }),
-      });
+      // Parse address into components for searchProperties
+      // Format expected: "123 Main St, City, ST ZIP" or similar
+      const parts = searchAddress.split(',').map((s) => s.trim());
+      const street = parts[0] || searchAddress;
+      const city = parts[1] || '';
+      const stateZip = (parts[2] || '').trim().split(' ');
+      const state = stateZip[0] || '';
+      const zip = stateZip[1] || '';
 
-      if (!response.ok) {
-        throw new Error('Failed to search EagleView');
-      }
+      const data = await eagleView.searchProperties(street, city, state, zip);
 
-      const data = await response.json();
-      
-      if (data.report) {
-        setReport(data.report);
+      // Normalize API response into our EagleViewReport shape
+      const property = Array.isArray(data) ? data[0] : (data?.properties?.[0] ?? data);
+
+      if (property) {
+        const m = property.measurements ?? property.roof_measurements ?? {};
+        const normalizedReport: EagleViewReport = {
+          reportId: property.report_id ?? property.id ?? 'EV-' + Date.now(),
+          address: searchAddress,
+          reportDate: property.report_date ?? property.created_at ?? new Date().toISOString(),
+          measurements: {
+            totalSquares: m.total_squares ?? m.totalSquares ?? 0,
+            roofArea: m.roof_area ?? m.roofArea ?? 0,
+            pitch: m.pitch ?? m.predominant_pitch ?? '0/12',
+            ridgeLength: m.ridge_length ?? m.ridgeLength ?? 0,
+            eaveLength: m.eave_length ?? m.eaveLength ?? 0,
+            rakeLength: m.rake_length ?? m.rakeLength ?? 0,
+            valleyLength: m.valley_length ?? m.valleyLength ?? 0,
+            hipLength: m.hip_length ?? m.hipLength ?? 0,
+            facets: m.facets ?? [],
+          },
+          imageUrl: property.image_url ?? property.imageUrl,
+        };
+        setReport(normalizedReport);
         toast.success('EagleView report found!');
       } else {
         toast.error('No EagleView report found for this address');
@@ -210,6 +270,48 @@ export function EagleViewImport({ contactAddress, onImportComplete }: EagleViewI
     toast.success(`Imported ${items.length} line items from EagleView!`);
   };
 
+  // Not configured state
+  if (configStatus === 'missing') {
+    return (
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-bold text-white mb-1">EagleView Integration</h3>
+              <p className="text-blue-100 text-sm">Import 3D roof measurements</p>
+            </div>
+            <Home size={32} className="text-white/80" />
+          </div>
+        </div>
+        <div className="p-6">
+          <div className="flex items-start gap-2 bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm text-gray-500">
+            <Settings size={16} className="mt-0.5 shrink-0" />
+            <span>Configure EagleView in Settings to enable aerial measurements.</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (configStatus === 'unknown') {
+    return (
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-bold text-white mb-1">EagleView Integration</h3>
+              <p className="text-blue-100 text-sm">Import 3D roof measurements</p>
+            </div>
+            <Home size={32} className="text-white/80" />
+          </div>
+        </div>
+        <div className="p-6 flex items-center gap-2 text-gray-400 text-sm">
+          <Loader size={16} className="animate-spin" /> Loading EagleView…
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       {/* Header */}
@@ -241,7 +343,7 @@ export function EagleViewImport({ contactAddress, onImportComplete }: EagleViewI
 
           <button
             onClick={searchEagleView}
-            disabled={isSearching || !searchAddress}
+            disabled={isSearching || !searchAddress || configStatus !== 'ok'}
             className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {isSearching ? (

@@ -20,6 +20,7 @@ import SignChangeOrder from "./pages/SignChangeOrder";
 import SignDocTemplate from "./pages/SignDocTemplate";
 import AcceptInvite from "./pages/AcceptInvite";
 import WorkOrders from "./pages/WorkOrders";
+import QuickBooksCallback from "./pages/QuickBooksCallback";
 import { supabase } from '@/lib/supabase';
 
 const queryClient = new QueryClient({
@@ -118,6 +119,7 @@ const App = () => {
               <Route path="/sign-doc" element={<SignDocTemplate />} />
               <Route path="/accept-invite" element={<AcceptInvite />} />
               <Route path="/work-orders" element={<WorkOrders />} />
+              <Route path="/integrations/quickbooks/callback" element={<QuickBooksCallback />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

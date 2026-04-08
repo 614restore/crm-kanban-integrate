@@ -4,6 +4,8 @@ import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
 import { sendEmail } from '@/lib/emailApi';
 import { toast } from 'sonner';
+import { useTwilio } from '@/hooks/useTwilio';
+import { SMSDialog } from '@/components/crm/SMSDialog';
 import {
   formatDateTime,
   getContactFullName,
@@ -292,6 +294,9 @@ export default function CommunicationHub() {
   const [composeText, setComposeText] = useState('');
   const [composeType, setComposeType] = useState<'note' | 'email' | 'sms' | 'call'>('note');
   const [isAiDrafting, setIsAiDrafting] = useState(false);
+  const [showSMSDialog, setShowSMSDialog] = useState(false);
+
+  const { twilioEnabled, loadingCredentials } = useTwilio();
   const [composeMentionStart, setComposeMentionStart] = useState<number | null>(null);
   const composeInputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -619,26 +624,41 @@ export default function CommunicationHub() {
 
   return (
     <div className="h-full flex flex-col">
-      {/* Coming Soon Banner for SMS/Voice */}
-      <div className="bg-gradient-to-r from-green-50 to-blue-50 border-b border-green-200 px-6 py-3">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
+      {/* Twilio SMS Bar */}
+      {!loadingCredentials && (
+        <div className="bg-gradient-to-r from-green-50 to-blue-50 border-b border-green-200 px-6 py-3">
+          <div className="flex items-center gap-3">
             <MessageSquare className="w-5 h-5 text-green-600" />
-            <Phone className="w-5 h-5 text-blue-600" />
+            <div className="flex-1">
+              {twilioEnabled ? (
+                <>
+                  <p className="text-sm font-semibold text-gray-900">Send SMS via Twilio</p>
+                  <p className="text-xs text-gray-500">
+                    {hasSelectedThread
+                      ? `Click "Send SMS" to text ${getContactFullName(selectedCommData!.contact)}`
+                      : 'Select a contact thread to send an SMS, or click "Send SMS" to compose.'}
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-gray-600">
+                  Configure Twilio in{' '}
+                  <span className="font-semibold text-gray-800">Settings → Integrations</span>
+                  {' '}to enable SMS.
+                </p>
+              )}
+            </div>
+            {twilioEnabled && (
+              <button
+                onClick={() => setShowSMSDialog(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition-colors"
+              >
+                <MessageSquare className="w-4 h-4" />
+                Send SMS
+              </button>
+            )}
           </div>
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-gray-900">
-              📱 SMS & Voice Calling Coming Soon!
-            </p>
-            <p className="text-xs text-gray-600">
-              Twilio integration in progress — send texts and make calls directly from TrussCTR (Q2 2026)
-            </p>
-          </div>
-          <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">
-            In Development
-          </span>
         </div>
-      </div>
+      )}
 
       <div className="flex flex-1 min-h-0">
       {/* Left Panel - Communication List */}
@@ -1173,6 +1193,16 @@ export default function CommunicationHub() {
         </div>
       )}
       </div>
+
+      {/* SMS Dialog — opens when Twilio is configured */}
+      <SMSDialog
+        open={showSMSDialog}
+        onOpenChange={setShowSMSDialog}
+        contactName={selectedCommData?.contact ? getContactFullName(selectedCommData.contact) : undefined}
+        contactPhone={selectedCommData?.contact?.phone1 ?? undefined}
+        contactId={selectedCommData?.contact?.id}
+        companyId={profile?.company_id}
+      />
     </div>
   );
 }

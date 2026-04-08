@@ -1,5 +1,5 @@
 // Stripe Payment Processing Integration
-import { StripeIntegration, IntegrationTestResult } from './apiTypes';
+import { IntegrationTestResult } from './apiTypes';
 
 export const STRIPE_API_VERSION = '2023-10-16';
 
