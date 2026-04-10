@@ -34,6 +34,7 @@ import AppointmentModal from './AppointmentModal';
 import ContactTemplateModal from './ContactTemplateModal';
 import ChangeOrderModal, { ChangeOrder } from './ChangeOrderModal';
 import HailTracePanel from './HailTracePanel';
+import WeatherWidget from '@/components/integrations/WeatherWidget';
 import EagleViewPanel from './EagleViewPanel';
 import RoofrPanel from './RoofrPanel';
 import InsuranceTrackingView from './InsuranceTrackingView';
@@ -2049,6 +2050,14 @@ export default function ContactDetail() {
 
                   <p className="text-[10px] text-gray-300 mt-2">NOAA National Weather Service</p>
                 </div>
+              )}
+
+              {/* Live weather forecast for this job site (OpenWeather — only renders if API key configured) */}
+              {contact && effectiveCompanyId && (contact.address || contact.city) && (
+                <WeatherWidget
+                  address={[contact.address, contact.city, contact.state].filter(Boolean).join(', ')}
+                  companyId={effectiveCompanyId}
+                />
               )}
 
               {/* Quick Actions */}

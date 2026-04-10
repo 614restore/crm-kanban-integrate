@@ -405,11 +405,16 @@ export class IntegrationManager {
     if (!credentials?.apiKey) {
       return { success: false, message: 'API Key is required', timestamp: new Date().toISOString() };
     }
-    return {
-      success: true,
-      message: 'OpenWeather credentials saved. Weather data will be available on job sites.',
-      timestamp: new Date().toISOString(),
-    };
+    try {
+      const integration = new OpenWeatherIntegration(credentials.apiKey);
+      return await integration.testConnection();
+    } catch (error) {
+      return {
+        success: false,
+        message: `OpenWeather test failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        timestamp: new Date().toISOString(),
+      };
+    }
   }
 
   private async testHailTrace(credentials: any): Promise<IntegrationTestResult> {
