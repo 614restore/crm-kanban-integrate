@@ -11,7 +11,7 @@ import { getDocumentSignedUrl } from '@/lib/storage';
 
 interface RoofrIntegrationProps {
   contact: Contact;
-  onEstimateGenerated?: (lineItems: any[], measurements: RoofrMeasurements, multiStructureResult?: MultiStructureResult) => void;
+  onEstimateGenerated?: (lineItems: any[], measurements: RoofrMeasurements, multiStructureResult?: MultiStructureResult, file?: File) => void;
 }
 
 export function RoofrIntegration({ contact, onEstimateGenerated }: RoofrIntegrationProps) {
@@ -33,7 +33,7 @@ export function RoofrIntegration({ contact, onEstimateGenerated }: RoofrIntegrat
     doc => doc.name?.toLowerCase().endsWith('.pdf') || doc.url?.toLowerCase().includes('.pdf')
   );
 
-  const processResult = async (result: MultiStructureResult) => {
+  const processResult = async (result: MultiStructureResult, sourceFile?: File) => {
     setMultiStructureResult(result);
     setMeasurements(result.combinedMeasurements);
     const validation = (await import('@/lib/roofrParser')).validateMeasurements(result.combinedMeasurements);
@@ -49,7 +49,7 @@ export function RoofrIntegration({ contact, onEstimateGenerated }: RoofrIntegrat
     const summary = generateEstimateSummary(result.combinedMeasurements, lineItems);
     setEstimateSummary(summary);
     if (onEstimateGenerated) {
-      onEstimateGenerated(lineItems, result.combinedMeasurements, result.hasMultipleStructures ? result : undefined);
+      onEstimateGenerated(lineItems, result.combinedMeasurements, result.hasMultipleStructures ? result : undefined, sourceFile);
     }
     toast.success(`Estimate generated: $${summary.totalCost.toLocaleString()}`);
   };
@@ -109,7 +109,7 @@ export function RoofrIntegration({ contact, onEstimateGenerated }: RoofrIntegrat
     try {
       const { parseRoofrPDFWithStructures } = await import('@/lib/roofrParser');
       const result = await parseRoofrPDFWithStructures(file);
-      await processResult(result);
+      await processResult(result, file);
     } catch (error) {
       const msg = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
       console.error('[RoofrImport] error:', msg);

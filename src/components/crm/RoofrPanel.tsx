@@ -93,6 +93,9 @@ export default function RoofrPanel({
   const [order, setOrder] = useState<StoredOrder | null>(null);
   const [reportType, setReportType] = useState<'standard' | 'premium'>('standard');
   const [error, setError] = useState<string | null>(null);
+  // Holds the original uploaded PDF File so handleSaveReport can save the real
+  // PDF rather than an HTML summary when the user uploads locally.
+  const [uploadedPdfFile, setUploadedPdfFile] = useState<File | null>(null);
 
   const fullAddress = [address, city, state, zip].filter(Boolean).join(', ');
   const repName = contactName || 'Customer';
@@ -271,7 +274,11 @@ export default function RoofrPanel({
       let fileBlob: Blob;
       let ext = 'html';
 
-      if (order.downloadUrl && !order.reportId.startsWith('DEMO-')) {
+      if (uploadedPdfFile) {
+        // Use the original PDF the user uploaded
+        fileBlob = uploadedPdfFile;
+        ext = 'pdf';
+      } else if (order.downloadUrl && !order.reportId.startsWith('DEMO-')) {
         // Fetch the actual PDF from Roofr
         const res = await fetch(order.downloadUrl);
         if (!res.ok) throw new Error('Failed to fetch Roofr report PDF');
@@ -358,6 +365,7 @@ export default function RoofrPanel({
       onDocumentSaved?.(frontendDoc);
       toast.success('Roofr report saved to customer documents!');
       persistOrder(null);
+      setUploadedPdfFile(null);
     } catch (err: any) {
       console.error('[RoofrPanel] Save error:', err);
       setError(err?.message || 'Failed to save report.');
@@ -590,7 +598,8 @@ export default function RoofrPanel({
                 firstName: contactName?.split(' ')[0] || '',
                 lastName: contactName?.split(' ').slice(1).join(' ') || '',
               } as any}
-              onEstimateGenerated={(lineItems, measurements, multiResult) => {
+              onEstimateGenerated={(lineItems, measurements, multiResult, file) => {
+                if (file) setUploadedPdfFile(file);
                 persistOrder({
                   reportId: `UPLOADED-${Date.now()}`,
                   address: fullAddress,
