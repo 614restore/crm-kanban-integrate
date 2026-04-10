@@ -139,7 +139,7 @@ export interface Document {
   id: string;
   contactId: string;
   name: string;
-  type: 'contract' | 'estimate' | 'invoice' | 'photo' | 'insurance' | 'other';
+  type: 'contract' | 'estimate' | 'invoice' | 'photo' | 'insurance' | 'other' | 'avatar';
   url: string;
   uploadedAt: string;
   uploadedBy: string;

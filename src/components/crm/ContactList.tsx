@@ -48,8 +48,8 @@ export default function ContactList() {
   const importInputRef = useRef<HTMLInputElement>(null);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
-  const [sortField, setSortField] = useState<SortField>('createdAt');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [sortField, setSortField] = useState<SortField>('name');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [showBulkActions, setShowBulkActions] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [archivedContacts, setArchivedContacts] = useState<Contact[]>([]);
