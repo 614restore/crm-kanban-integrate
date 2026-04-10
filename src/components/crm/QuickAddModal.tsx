@@ -200,6 +200,7 @@ export default function QuickAddModal() {
   };
 
   const saveContact = async (skipDuplicateCheck = false) => {
+    setIsSubmitting(true);
     try {
       // Use company_id from auth profile (preferred) or CRM state (populated by AppLayout).
       const finalCompanyId = profile?.company_id || state.companyId;
