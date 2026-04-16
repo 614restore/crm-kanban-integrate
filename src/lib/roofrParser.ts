@@ -242,9 +242,16 @@ interface StructureBlock {
  * Roofr uses headings like "Structure #1 summary" / "Structure #2 summary".
  */
 function detectStructures(fullText: string): StructureBlock[] {
+  // Normalise the full text once for detection (collapse all whitespace to
+  // single space) so pdfjs kerning gaps like "Structure # 1 summary" still
+  // match.  We keep the ORIGINAL text for slicing so byte-offsets are valid.
+  const normalised = fullText.replace(/\s+/g, ' ');
+
   const structurePatterns = [
-    // Primary Roofr format: "Structure #1 summary"
+    // Primary Roofr format: "Structure #1 summary" / "Structure # 1 summary"
     /structure\s*#\s*(\d+)\s+summary/gi,
+    // "Structure #1" without "summary" (some Roofr variants)
+    /structure\s*#\s*(\d+)/gi,
     // Generic fallback: "Structure 1", "Building 1"
     /(?:structure|building)\s+#?\s*(\d+)/gi,
     // Named structures: "Main House", "Garage", etc.
@@ -255,7 +262,7 @@ function detectStructures(fullText: string): StructureBlock[] {
   let foundMarkers: Array<{ index: number; name: string }> = [];
 
   for (const pattern of structurePatterns) {
-    const matches = [...fullText.matchAll(pattern)];
+    const matches = [...normalised.matchAll(pattern)];
 
     // Deduplicate: only keep the FIRST occurrence of each unique name.
     // Without this, a label that repeats in measurement rows creates dozens of
@@ -266,6 +273,8 @@ function detectStructures(fullText: string): StructureBlock[] {
       const key = match[0].trim().toLowerCase();
       if (!seen.has(key)) {
         seen.add(key);
+        // Store the index from the normalised string — it corresponds
+        // closely enough to the original for slicing (single-space collapsed).
         unique.push({ index: match.index ?? 0, name: match[0] });
       }
     }
@@ -278,17 +287,18 @@ function detectStructures(fullText: string): StructureBlock[] {
   }
 
   if (foundMarkers.length > 1) {
+    // Slice from the normalised string so offsets are consistent.
     return foundMarkers.map((marker, i) => ({
       name: formatStructureName(marker.name),
-      text: fullText.substring(
+      text: normalised.substring(
         marker.index,
-        i < foundMarkers.length - 1 ? foundMarkers[i + 1].index : fullText.length
+        i < foundMarkers.length - 1 ? foundMarkers[i + 1].index : normalised.length
       ),
     }));
   }
 
-  // Single structure
-  return [{ name: 'Main Structure', text: fullText }];
+  // Single structure — return the normalised text for consistent extraction.
+  return [{ name: 'Main Structure', text: normalised }];
 }
 
 function formatStructureName(rawName: string): string {
@@ -384,31 +394,55 @@ export async function parseRoofrPDFWithStructures(file: File): Promise<MultiStru
     console.log('[RoofrParser] First 300 chars:', fullText.substring(0, 300));
 
     const structureBlocks = detectStructures(fullText);
+    console.log(`[RoofrParser] detectStructures returned ${structureBlocks.length} block(s):`, structureBlocks.map(b => b.name));
 
     if (structureBlocks.length > 1) {
-      const structures: StructureMeasurements[] = structureBlocks.map((block, index) => ({
-        structureName: block.name,
-        structureIndex: index + 1,
-        measurements: extractMeasurements(block.text),
-      }));
+      // Extract measurements for each block independently.
+      // If one block fails, skip it rather than aborting the whole parse.
+      const structures: StructureMeasurements[] = [];
+      for (let idx = 0; idx < structureBlocks.length; idx++) {
+        const block = structureBlocks[idx];
+        try {
+          const measurements = extractMeasurements(block.text);
+          structures.push({ structureName: block.name, structureIndex: idx + 1, measurements });
+          console.log(`[RoofrParser] ${block.name}: ${measurements.totalSqFt} sqft`);
+        } catch (blockErr) {
+          console.warn(`[RoofrParser] Skipping ${block.name} — extraction failed:`, blockErr instanceof Error ? blockErr.message : blockErr);
+        }
+      }
 
-      return {
-        hasMultipleStructures: true,
-        combinedMeasurements: combineStructures(structures),
-        structures,
-      };
+      if (structures.length > 1) {
+        return {
+          hasMultipleStructures: true,
+          combinedMeasurements: combineStructures(structures),
+          structures,
+        };
+      }
+
+      // Only one block survived — treat as single-structure
+      if (structures.length === 1) {
+        return {
+          hasMultipleStructures: false,
+          combinedMeasurements: structures[0].measurements,
+          structures,
+        };
+      }
+
+      // All blocks failed — fall through to full-text parse below
+      console.warn('[RoofrParser] All per-structure blocks failed — falling back to full-text parse');
     }
 
-    const measurements = extractMeasurements(fullText);
+    const measurements = extractMeasurements(fullText.replace(/\s+/g, ' '));
+    console.log(`[RoofrParser] Single-structure parse: ${measurements.totalSqFt} sqft`);
     return {
       hasMultipleStructures: false,
       combinedMeasurements: measurements,
       structures: [{ structureName: 'Main Structure', structureIndex: 1, measurements }],
     };
   } catch (error) {
-    console.error('[RoofrParser] Failed to parse PDF:', error);
-    // Re-throw preserving the original message so callers can display it.
     const msg = error instanceof Error ? error.message : String(error);
+    console.error('[RoofrParser] Failed to parse PDF — message:', msg, '| raw:', error);
+    // Re-throw preserving the original message so callers can display it.
     throw new Error(msg);
   }
 }
@@ -459,19 +493,24 @@ export async function parseRoofrPDFFromUrl(url: string): Promise<MultiStructureR
 
   const structureBlocks = detectStructures(fullText);
   if (structureBlocks.length > 1) {
-    const structures: StructureMeasurements[] = structureBlocks.map((block, index) => ({
-      structureName: block.name,
-      structureIndex: index + 1,
-      measurements: extractMeasurements(block.text),
-    }));
-    return {
-      hasMultipleStructures: true,
-      combinedMeasurements: combineStructures(structures),
-      structures,
-    };
+    const structures: StructureMeasurements[] = [];
+    for (let idx = 0; idx < structureBlocks.length; idx++) {
+      const block = structureBlocks[idx];
+      try {
+        structures.push({ structureName: block.name, structureIndex: idx + 1, measurements: extractMeasurements(block.text) });
+      } catch {
+        console.warn(`[RoofrParser] parseRoofrPDFFromUrl: skipping ${block.name}`);
+      }
+    }
+    if (structures.length > 1) {
+      return { hasMultipleStructures: true, combinedMeasurements: combineStructures(structures), structures };
+    }
+    if (structures.length === 1) {
+      return { hasMultipleStructures: false, combinedMeasurements: structures[0].measurements, structures };
+    }
   }
 
-  const measurements = extractMeasurements(fullText);
+  const measurements = extractMeasurements(fullText.replace(/\s+/g, ' '));
   return {
     hasMultipleStructures: false,
     combinedMeasurements: measurements,
