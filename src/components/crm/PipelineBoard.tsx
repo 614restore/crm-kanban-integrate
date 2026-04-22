@@ -68,48 +68,147 @@ const NEXT_STEP_ICONS: Record<string, React.ElementType> = {
 };
 
 
-// ── Unified sales pipeline ────────────────────────────────────────────────────
-// Defines the single logical stage order used in the "Unified Sales" view.
-// 'shared' = both retail & insurance, 'retail' = retail only, 'insurance' = insurance only.
-const UNIFIED_SALES_STAGES: Array<{
-  status: CustomerStatus;
+// ── Power Pipeline — 8-column "Velocity" Kanban ──────────────────────────────
+// Each column groups related statuses. Cards show a sub-status badge for
+// granularity. Insurance contacts get a blue left border; Retail get green.
+// Dragging a card into a column assigns it the column's primaryStatus.
+const POWER_PIPELINE_COLUMNS: Array<{
+  id: string;
   title: string;
+  description: string;
+  primaryStatus: CustomerStatus;
+  statuses: CustomerStatus[];
   color: string;
-  stageType: 'shared' | 'retail' | 'insurance';
+  bg: string;
+  headerBorder: string;
+  badge: string;
 }> = [
-  // ── Shared: top of funnel ─────────────────────────────────────────────────
-  { status: 'prospect',             title: 'New Lead',                  color: '#94a3b8', stageType: 'shared'    },
-  { status: 'lead',                 title: 'Contacted / Qualifying',    color: '#6366f1', stageType: 'shared'    },
-  { status: 'appt_set',            title: 'Appointment Set',           color: '#8b5cf6', stageType: 'shared'    },
-  // ── Insurance: in order ───────────────────────────────────────────────────
-  { status: 'inspected',           title: 'Inspection',                color: '#0284c7', stageType: 'insurance' },
-  { status: 'contingency',         title: 'Contingency',               color: '#a855f7', stageType: 'insurance' },
-  { status: 'claim_filed',         title: 'Claim Filed',               color: '#0ea5e9', stageType: 'insurance' },
-  { status: 'adjuster_scheduled',  title: 'Adjuster Scheduled',        color: '#06b6d4', stageType: 'insurance' },
-  { status: 'inspection_completed',title: 'Insurance Inspected',       color: '#0891b2', stageType: 'insurance' },
-  { status: 'approved',            title: 'Approved / Final Scope',    color: '#14b8a6', stageType: 'insurance' },
-  { status: 'supplement_filed',    title: 'Supplement Filed',          color: '#0e7490', stageType: 'insurance' },
-  // ── Shared: estimating & closing ──────────────────────────────────────────
-  { status: 'estimating',          title: 'Estimating',                color: '#f59e0b', stageType: 'shared'    },
-  { status: 'estimate_sent',       title: 'Estimate Sent',             color: '#f97316', stageType: 'shared'    },
-  { status: 'signed',              title: 'Signed / Won',              color: '#22c55e', stageType: 'shared'    },
-  { status: 'ordering_material',   title: 'Ordering Material',         color: '#10b981', stageType: 'shared'    },
-  // ── Shared: production ────────────────────────────────────────────────────
-  { status: 'in_progress',         title: 'Scheduled',                 color: '#3b82f6', stageType: 'shared'    },
-  { status: 'build_phase',         title: 'In Progress',               color: '#2563eb', stageType: 'shared'    },
-  { status: 'cleanup',             title: 'Punch List / Cleanup',      color: '#f97316', stageType: 'shared'    },
-  { status: 'invoicing',           title: 'Invoicing',                 color: '#ec4899', stageType: 'shared'    },
-  { status: 'pending_payment',     title: 'Pending Payment',           color: '#e11d48', stageType: 'shared'    },
-  { status: 'completed',           title: 'Completed',                 color: '#10b981', stageType: 'shared'    },
-  { status: 'lost',                title: 'Lost',                      color: '#ef4444', stageType: 'shared'    },
-  // ── Retail ────────────────────────────────────────────────────────────────
-  { status: 'retail',              title: 'Retail (Cash Job)',          color: '#9333ea', stageType: 'retail'    },
+  {
+    id: 'discovery',
+    title: 'Discovery',
+    description: 'New prospects & leads',
+    primaryStatus: 'lead',
+    statuses: ['prospect', 'lead'],
+    color: '#64748b',
+    bg: 'bg-slate-50',
+    headerBorder: 'border-slate-200',
+    badge: 'bg-slate-100 text-slate-600',
+  },
+  {
+    id: 'inspection',
+    title: 'Inspection',
+    description: 'Appointment set or inspection in progress',
+    primaryStatus: 'appt_set',
+    statuses: ['appt_set', 'claim_filed', 'adjuster_scheduled', 'inspection_completed', 'inspected' as CustomerStatus],
+    color: '#7c3aed',
+    bg: 'bg-violet-50',
+    headerBorder: 'border-violet-200',
+    badge: 'bg-violet-100 text-violet-700',
+  },
+  {
+    id: 'pending_scope',
+    title: 'Pending Scope',
+    description: 'Estimating or awaiting commitment',
+    primaryStatus: 'contingency',
+    statuses: ['estimating', 'estimate_sent', 'contingency', 'supplement_filed', 'retail'],
+    color: '#d97706',
+    bg: 'bg-amber-50',
+    headerBorder: 'border-amber-200',
+    badge: 'bg-amber-100 text-amber-700',
+  },
+  {
+    id: 'approval_sold',
+    title: 'Approval / Sold',
+    description: 'Approved scope or signed contract — Closed Won',
+    primaryStatus: 'signed',
+    statuses: ['approved', 'signed'],
+    color: '#059669',
+    bg: 'bg-emerald-50',
+    headerBorder: 'border-emerald-200',
+    badge: 'bg-emerald-100 text-emerald-700',
+  },
+  {
+    id: 'pre_production',
+    title: 'Pre-Production',
+    description: 'Ordering materials & admin handoff',
+    primaryStatus: 'ordering_material',
+    statuses: ['ordering_material', 'scheduled'],
+    color: '#0891b2',
+    bg: 'bg-cyan-50',
+    headerBorder: 'border-cyan-200',
+    badge: 'bg-cyan-100 text-cyan-700',
+  },
+  {
+    id: 'active_build',
+    title: 'Active Build',
+    description: 'Crews on site',
+    primaryStatus: 'in_progress',
+    statuses: ['in_progress', 'build_phase', 'cleanup'],
+    color: '#2563eb',
+    bg: 'bg-blue-50',
+    headerBorder: 'border-blue-200',
+    badge: 'bg-blue-100 text-blue-700',
+  },
+  {
+    id: 'final_billing',
+    title: 'Final Billing',
+    description: 'Invoiced — awaiting payment',
+    primaryStatus: 'invoicing',
+    statuses: ['invoicing', 'pending_payment'],
+    color: '#e11d48',
+    bg: 'bg-rose-50',
+    headerBorder: 'border-rose-200',
+    badge: 'bg-rose-100 text-rose-700',
+  },
+  {
+    id: 'closed_paid',
+    title: 'Closed / Paid',
+    description: 'Project complete',
+    primaryStatus: 'completed',
+    statuses: ['completed'],
+    color: '#16a34a',
+    bg: 'bg-green-50',
+    headerBorder: 'border-green-200',
+    badge: 'bg-green-100 text-green-700',
+  },
+  {
+    id: 'lost',
+    title: 'Lost',
+    description: 'Did not convert',
+    primaryStatus: 'lost',
+    statuses: ['lost'],
+    color: '#dc2626',
+    bg: 'bg-red-50',
+    headerBorder: 'border-red-200',
+    badge: 'bg-red-100 text-red-700',
+  },
 ];
 
-const STAGE_TYPE_STYLES = {
-  shared:    { column: 'bg-gray-100',   header: 'border-gray-200',   badge: 'bg-gray-200 text-gray-600',     label: 'Shared'    },
-  retail:    { column: 'bg-purple-50',  header: 'border-purple-200', badge: 'bg-purple-100 text-purple-700', label: 'Retail'    },
-  insurance: { column: 'bg-sky-50',     header: 'border-sky-200',    badge: 'bg-sky-100 text-sky-700',       label: 'Insurance' },
+// Sub-status labels shown on cards within a column for granularity.
+const SUB_STATUS_LABELS: Partial<Record<CustomerStatus, string>> = {
+  prospect:             'New Prospect',
+  lead:                 'Contacted',
+  appt_set:            'Appt Set',
+  claim_filed:          'Claim Filed',
+  adjuster_scheduled:   'Adjuster Sched.',
+  inspection_completed: 'Inspected',
+  inspected:            'Inspected',
+  estimating:           'Estimating',
+  estimate_sent:        'Est. Sent',
+  contingency:          'Pending Commit.',
+  supplement_filed:     'Supplement',
+  retail:               'Retail',
+  approved:             'Approved',
+  signed:               'Signed',
+  ordering_material:    'Ordering',
+  scheduled:            'Scheduled',
+  in_progress:          'In Progress',
+  build_phase:          'Build Phase',
+  cleanup:              'Cleanup',
+  invoicing:            'Invoicing',
+  pending_payment:      'Pending Pmt.',
+  completed:            'Complete',
+  lost:                 'Lost',
 };
 
 // Determine whether a contact is retail, insurance, or shared based on their data.
@@ -251,9 +350,13 @@ export default function PipelineBoard() {
     return state.contacts.filter((c) => normalizePipelineStatus(c.status) === column.status);
   };
 
-  // Unified pipeline: only show stages that have at least one contact OR are part of the
-  // logical flow; filter to statuses actually present in the loaded contacts for performance.
-  const unifiedSalesColumns = UNIFIED_SALES_STAGES;
+  // Power Pipeline: match any contact whose normalized status falls within the column's statuses.
+  const getPowerColumnContacts = (statuses: CustomerStatus[]): Contact[] => {
+    return state.contacts.filter((c) => {
+      const normalized = normalizePipelineStatus(c.status) as CustomerStatus | undefined;
+      return normalized ? (statuses as string[]).includes(normalized) : (statuses as string[]).includes(c.status);
+    });
+  };
 
   const handleDragStart = (e: React.DragEvent, contact: Contact) => {
     setDraggedContact(contact);
@@ -406,9 +509,12 @@ export default function PipelineBoard() {
         targetColumn = currentBoard.columns.find(col => col.id === columnId) || null;
       }
       
-      // Check unified sales columns if not found
+      // Check Power Pipeline columns if not found in custom boards
       if (!targetColumn && canViewUnified) {
-        targetColumn = UNIFIED_SALES_STAGES.find(col => col.status === columnId) || null;
+        const powerCol = POWER_PIPELINE_COLUMNS.find(col => col.id === columnId);
+        if (powerCol) {
+          targetColumn = { id: powerCol.id, title: powerCol.title, status: powerCol.primaryStatus, color: powerCol.color, order: 0 };
+        }
       }
       
       // Perform the drop operation if we have a valid target
@@ -658,7 +764,7 @@ export default function PipelineBoard() {
                 {showAllBoards ? (
                   <><LayoutGrid size={16} className="text-indigo-600" /><span className="font-semibold text-indigo-700">All Boards</span></>
                 ) : showCombinedSales ? (
-                  <><Users size={16} className="text-purple-600" /><span className="font-semibold text-purple-700">Unified Sales</span></>
+                  <><Users size={16} className="text-purple-600" /><span className="font-semibold text-purple-700">Power Pipeline</span></>
                 ) : (
                   <span className="font-semibold text-gray-900">{currentBoard?.name || 'Select Board'}</span>
                 )}
@@ -696,8 +802,8 @@ export default function PipelineBoard() {
                         onClick={() => { setShowCombinedSales(true); setShowAllBoards(false); setShowBoardSelector(false); }}
                         className={`w-full flex items-center gap-2 p-2 rounded-lg transition-colors ${showCombinedSales ? 'bg-purple-50 text-purple-700 font-semibold' : 'text-gray-700 hover:bg-gray-100'}`}
                       >
-                        <Users size={16} /><span className="font-medium">Unified Sales View</span>
-                        <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-600 font-semibold">Retail + Ins.</span>
+                        <Users size={16} /><span className="font-medium">Power Pipeline</span>
+                        <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-600 font-semibold">8 Columns</span>
                       </button>
                     )}
                     <button
@@ -758,27 +864,26 @@ export default function PipelineBoard() {
       <div className="flex-1 overflow-x-auto p-6 bg-gray-50">
         {showCombinedSales ? (
           <div className="flex flex-col h-full gap-0">
-            {/* Legend */}
+            {/* Legend — card border = contact type */}
             <div className="flex items-center gap-4 mb-4 px-1 flex-wrap">
-              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Pipeline key:</span>
-              <span className="flex items-center gap-1.5 text-xs font-medium text-gray-600">
-                <span className="w-3 h-3 rounded-sm bg-gray-200 border border-gray-300 inline-block" />Shared (Retail &amp; Insurance)
-              </span>
-              <span className="flex items-center gap-1.5 text-xs font-medium text-purple-700">
-                <span className="w-3 h-3 rounded-sm bg-purple-200 border border-purple-300 inline-block" />Retail / Cash Job
-              </span>
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Card tag:</span>
               <span className="flex items-center gap-1.5 text-xs font-medium text-sky-700">
-                <span className="w-3 h-3 rounded-sm bg-sky-200 border border-sky-300 inline-block" />Insurance / Claims
+                <span className="w-3 h-3 rounded-sm border-l-4 border-l-sky-400 border border-sky-200 bg-white inline-block" />Insurance / Claims
               </span>
-              <span className="ml-auto text-xs text-gray-400">Card border = contact type &nbsp;·&nbsp; Column background = stage type</span>
+              <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-700">
+                <span className="w-3 h-3 rounded-sm border-l-4 border-l-emerald-400 border border-emerald-200 bg-white inline-block" />Retail / Cash Job
+              </span>
+              <span className="flex items-center gap-1.5 text-xs font-medium text-gray-500">
+                <span className="w-3 h-3 rounded-sm border border-gray-200 bg-white inline-block" />Standard
+              </span>
+              <span className="ml-auto text-xs text-gray-400">Drag cards between columns · Sub-status badge shows exact stage</span>
             </div>
 
-            {/* Unified board columns */}
+            {/* Power Pipeline columns */}
             <div className="flex gap-4 flex-1 min-w-max">
-              {unifiedSalesColumns.map((stage) => {
-                const fakeColumn: KanbanColumn = { id: `unified-${stage.status}`, title: stage.title, status: stage.status, color: stage.color, order: 0 };
-                const contacts = getColumnContacts(fakeColumn);
-                const stageStyle = STAGE_TYPE_STYLES[stage.stageType];
+              {POWER_PIPELINE_COLUMNS.map((col) => {
+                const fakeColumn: KanbanColumn = { id: col.id, title: col.title, status: col.primaryStatus, color: col.color, order: 0 };
+                const contacts = getPowerColumnContacts(col.statuses);
                 const columnValue = contacts.reduce((sum, c) => {
                   if (c.projectValue && c.projectValue > 0) return sum + c.projectValue;
                   const bestEstimate = state.estimates.filter(e => e.contactId === c.id && e.status !== 'declined').reduce((max, e) => Math.max(max, Number(e.total || 0)), 0);
@@ -786,23 +891,23 @@ export default function PipelineBoard() {
                 }, 0);
                 return (
                   <div
-                    key={stage.status}
-                    data-column-id={stage.status}
-                    className={`w-72 flex-shrink-0 flex flex-col rounded-xl transition-colors ${stageStyle.column} ${dragOverColumn === fakeColumn.id ? 'ring-2 ring-blue-500' : ''}`}
-                    onDragOver={(e) => handleDragOver(e, fakeColumn.id)}
+                    key={col.id}
+                    data-column-id={col.id}
+                    className={`w-72 flex-shrink-0 flex flex-col rounded-xl transition-colors ${col.bg} ${dragOverColumn === col.id ? 'ring-2 ring-blue-500' : ''}`}
+                    onDragOver={(e) => handleDragOver(e, col.id)}
                     onDragLeave={handleDragLeave}
                     onDrop={(e) => handleDrop(e, fakeColumn)}
                   >
                     {/* Column header */}
-                    <div className={`p-3 border-b ${stageStyle.header} rounded-t-xl`}>
+                    <div className={`p-3 border-b ${col.headerBorder} rounded-t-xl`}>
                       <div className="flex items-center gap-2">
-                        <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: stage.color }} />
-                        <h3 className="font-semibold text-gray-900 text-sm truncate flex-1">{stage.title}</h3>
+                        <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: col.color }} />
+                        <h3 className="font-semibold text-gray-900 text-sm truncate flex-1">{col.title}</h3>
                         <span className="px-1.5 py-0.5 bg-white/70 rounded-full text-xs font-medium text-gray-600 flex-shrink-0">{contacts.length}</span>
                       </div>
                       <div className="flex items-center justify-between mt-1">
                         <p className="text-xs text-gray-500">{formatCurrency(columnValue)}</p>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${stageStyle.badge}`}>{stageStyle.label}</span>
+                        <p className="text-[10px] text-gray-400 italic truncate max-w-[140px]">{col.description}</p>
                       </div>
                     </div>
 
@@ -830,7 +935,14 @@ export default function PipelineBoard() {
                                   <GripVertical size={12} className="text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab flex-shrink-0" />
                                   <p className="font-medium text-gray-900 text-sm truncate">{getContactFullName(contact)}</p>
                                 </div>
-                                {contact.projectType && <p className="text-xs text-gray-400 mt-0.5 truncate ml-4">{contact.projectType}</p>}
+                                <div className="flex items-center gap-1 ml-4 mt-0.5 flex-wrap">
+                                  {contact.projectType && <span className="text-xs text-gray-400 truncate">{contact.projectType}</span>}
+                                  {SUB_STATUS_LABELS[contact.status as CustomerStatus] && (
+                                    <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${col.badge}`}>
+                                      {SUB_STATUS_LABELS[contact.status as CustomerStatus]}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                               <div className="flex items-center gap-1 flex-shrink-0">
                                 {assignee && <img src={assignee.avatar} alt={assignee.name} className="w-6 h-6 rounded-full object-cover" title={assignee.name} />}

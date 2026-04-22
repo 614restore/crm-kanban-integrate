@@ -34,6 +34,7 @@ import AppointmentModal from './AppointmentModal';
 import ContactTemplateModal from './ContactTemplateModal';
 import ChangeOrderModal, { ChangeOrder } from './ChangeOrderModal';
 import HailTracePanel from './HailTracePanel';
+import WeatherWidget from '@/components/integrations/WeatherWidget';
 import EagleViewPanel from './EagleViewPanel';
 import RoofrPanel from './RoofrPanel';
 import InsuranceTrackingView from './InsuranceTrackingView';
@@ -283,6 +284,17 @@ export default function ContactDetail() {
   const [showTemplateForEstimate, setShowTemplateForEstimate] = useState(false);
   const noteInputRef = useRef<HTMLInputElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  // Document naming dialog state
+  const [pendingUploadFile, setPendingUploadFile] = useState<File | null>(null);
+  const [pendingUploadName, setPendingUploadName] = useState('');
+  const [pendingUploadCategory, setPendingUploadCategory] = useState<'contract' | 'estimate' | 'invoice' | 'photo' | 'insurance' | 'other'>('other');
+  const [showUploadNameDialog, setShowUploadNameDialog] = useState(false);
+
+  // Avatar state
+  const [contactAvatarUrl, setContactAvatarUrl] = useState<string | null>(null);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
   const mentionTargets = useMemo(() => getMentionTargets(state.teamMembers), [state.teamMembers]);
   const effectiveCompanyId = profile?.company_id || state.companyId || null;
@@ -490,7 +502,20 @@ export default function ContactDetail() {
         })
       );
 
-      setContactDocuments(docsWithSignedUrls);
+      // Handle avatar: find avatar doc, get signed URL, filter it out of visible docs
+      const avatarDoc = docsWithSignedUrls.find(d => d.name === '__contact_avatar__');
+      if (avatarDoc) {
+        try {
+          const signedUrl = await getDocumentSignedUrl(avatarDoc.url, 3600);
+          setContactAvatarUrl(signedUrl);
+        } catch {
+          setContactAvatarUrl(null);
+        }
+      } else {
+        setContactAvatarUrl(null);
+      }
+      const visibleDocs = docsWithSignedUrls.filter(d => d.name !== '__contact_avatar__');
+      setContactDocuments(visibleDocs);
 
       const origin = window.location.origin;
       const normalized: SignedDoc[] = [
@@ -564,7 +589,18 @@ export default function ContactDetail() {
     if (contact?.zip) fetchWeatherAlerts(contact.zip);
   }, [contact?.zip]);
 
-  const handleUploadDocument = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  // Infer document category from file
+  const inferCategory = (file: File): 'contract' | 'estimate' | 'invoice' | 'photo' | 'insurance' | 'other' => {
+    const fileName = file.name.toLowerCase();
+    if (fileName.includes('contract')) return 'contract';
+    if (fileName.includes('estimate')) return 'estimate';
+    if (fileName.includes('invoice')) return 'invoice';
+    if (file.type.startsWith('image/')) return 'photo';
+    if (fileName.includes('insurance')) return 'insurance';
+    return 'other';
+  };
+
+  const handleUploadDocument = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || !contactId) return;
 
@@ -576,71 +612,124 @@ export default function ContactDetail() {
     const validationError = validateDocumentFile(file, 15);
     if (validationError) {
       toast.error(validationError);
+      event.target.value = '';
       return;
     }
 
+    // Strip extension for default display name
+    const nameWithoutExt = file.name.replace(/\.[^/.]+$/, '');
+    setPendingUploadFile(file);
+    setPendingUploadName(nameWithoutExt);
+    setPendingUploadCategory(inferCategory(file));
+    setShowUploadNameDialog(true);
+    // Don't clear event.target.value here — we still hold reference to the file
+  };
+
+  const handleConfirmUpload = async () => {
+    if (!pendingUploadFile || !contactId || !effectiveCompanyId) return;
+
     setIsUploadingDocument(true);
+    setShowUploadNameDialog(false);
 
     try {
-      const uploadResult = await uploadDocument(file, effectiveCompanyId, contactId);
+      const uploadResult = await uploadDocument(pendingUploadFile, effectiveCompanyId, contactId);
 
       if (uploadResult.error) {
         console.error('[ContactDetail] Upload failed:', uploadResult.error);
         toast.error(`Upload failed: ${uploadResult.error}`);
-        setIsUploadingDocument(false);
-        event.target.value = '';
         return;
       }
 
-      // Infer document category
-      const inferCategory = (file: File): 'contract' | 'estimate' | 'invoice' | 'photo' | 'insurance' | 'other' => {
-        const fileName = file.name.toLowerCase();
-        if (fileName.includes('contract')) return 'contract';
-        if (fileName.includes('estimate')) return 'estimate';
-        if (fileName.includes('invoice')) return 'invoice';
-        if (file.type.startsWith('image/')) return 'photo';
-        if (fileName.includes('insurance')) return 'insurance';
-        return 'other';
-      };
-
-      const category = inferCategory(file);
       const created = await db.createDocument({
         company_id: effectiveCompanyId,
         contact_id: contactId,
-        name: file.name,
-        type: category,
+        name: pendingUploadName || pendingUploadFile.name,
+        type: pendingUploadCategory,
         url: uploadResult.path,
-        size: formatFileSize(file.size),
+        size: formatFileSize(pendingUploadFile.size),
         uploaded_by: profile?.id,
       });
 
       if (!created) {
         console.error('[ContactDetail] Failed to save document record');
         toast.error('File uploaded but failed to save document record');
-        setIsUploadingDocument(false);
-        event.target.value = '';
         return;
       }
-
 
       const newDoc: Document = {
         id: created.id,
         contactId: created.contact_id || '',
         name: created.name,
         type: created.type as 'contract' | 'estimate' | 'invoice' | 'photo' | 'insurance' | 'other',
-        url: created.url,  // Store the path, not signed URL
+        url: created.url,
         uploadedAt: created.created_at,
         uploadedBy: created.uploaded_by || 'Team member',
-        size: created.size || formatFileSize(file.size),
+        size: created.size || formatFileSize(pendingUploadFile.size),
       };
 
       setContactDocuments((prev) => [newDoc, ...prev]);
-      toast.success(`${file.name} uploaded successfully!`);
+      toast.success(`${created.name} uploaded successfully!`);
     } catch (error) {
       console.error('[ContactDetail] Document upload error:', error);
       toast.error('Failed to upload file: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setIsUploadingDocument(false);
+      setPendingUploadFile(null);
+      setPendingUploadName('');
+      setPendingUploadCategory('other');
+      if (documentInputRef.current) documentInputRef.current.value = '';
+    }
+  };
+
+  const handleCancelUploadDialog = () => {
+    setShowUploadNameDialog(false);
+    setPendingUploadFile(null);
+    setPendingUploadName('');
+    setPendingUploadCategory('other');
+    if (documentInputRef.current) documentInputRef.current.value = '';
+  };
+
+  const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !contactId || !effectiveCompanyId) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file');
+      event.target.value = '';
+      return;
+    }
+
+    setIsUploadingAvatar(true);
+    try {
+      const uploadResult = await uploadDocument(file, effectiveCompanyId, contactId);
+      if (uploadResult.error) {
+        toast.error(`Avatar upload failed: ${uploadResult.error}`);
+        return;
+      }
+
+      const created = await db.createDocument({
+        company_id: effectiveCompanyId,
+        contact_id: contactId,
+        name: '__contact_avatar__',
+        type: 'photo',
+        url: uploadResult.path,
+        size: formatFileSize(file.size),
+        uploaded_by: profile?.id,
+      });
+
+      if (!created) {
+        toast.error('Failed to save avatar record');
+        return;
+      }
+
+      const signedUrl = await getDocumentSignedUrl(uploadResult.path, 3600);
+      setContactAvatarUrl(signedUrl);
+      toast.success('Profile photo updated!');
+    } catch (error) {
+      console.error('[ContactDetail] Avatar upload error:', error);
+      toast.error('Failed to upload photo');
+    } finally {
+      setIsUploadingAvatar(false);
       event.target.value = '';
     }
   };
@@ -1240,10 +1329,19 @@ export default function ContactDetail() {
               <ArrowLeft size={20} className="text-gray-600" />
             </button>
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-xl">
-                {contact.firstName[0]}
-                {contact.lastName[0]}
+              <div className="relative group cursor-pointer w-14 h-14" onClick={() => avatarInputRef.current?.click()}>
+                {contactAvatarUrl ? (
+                  <img src={contactAvatarUrl} alt="" className="w-14 h-14 rounded-full object-cover" />
+                ) : (
+                  <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-xl">
+                    {contact.firstName[0]}{contact.lastName[0]}
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  {isUploadingAvatar ? <Loader2 size={16} className="text-white animate-spin" /> : <Camera size={16} className="text-white" />}
+                </div>
               </div>
+              <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">
                   {getContactFullName(contact)}
@@ -1952,6 +2050,14 @@ export default function ContactDetail() {
 
                   <p className="text-[10px] text-gray-300 mt-2">NOAA National Weather Service</p>
                 </div>
+              )}
+
+              {/* Live weather forecast for this job site (OpenWeather — only renders if API key configured) */}
+              {contact && effectiveCompanyId && (contact.address || contact.city) && (
+                <WeatherWidget
+                  address={[contact.address, contact.city, contact.state].filter(Boolean).join(', ')}
+                  companyId={effectiveCompanyId}
+                />
               )}
 
               {/* Quick Actions */}
@@ -4441,6 +4547,62 @@ export default function ContactDetail() {
                   sandbox="allow-scripts allow-same-origin"
                 />
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Document naming dialog */}
+      {showUploadNameDialog && pendingUploadFile && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Name Your Document</h2>
+            <div className="space-y-4">
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Original file</p>
+                <p className="text-sm text-gray-400 truncate">{pendingUploadFile.name}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Document name</label>
+                <input
+                  type="text"
+                  value={pendingUploadName}
+                  onChange={(e) => setPendingUploadName(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter document name"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Folder / Category</label>
+                <select
+                  value={pendingUploadCategory}
+                  onChange={(e) => setPendingUploadCategory(e.target.value as typeof pendingUploadCategory)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="insurance">Insurance Documents</option>
+                  <option value="contract">Contracts</option>
+                  <option value="estimate">Estimates</option>
+                  <option value="invoice">Invoices</option>
+                  <option value="photo">Photos</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={handleCancelUploadDialog}
+                className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmUpload}
+                disabled={!pendingUploadName.trim()}
+                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Upload
+              </button>
             </div>
           </div>
         </div>

@@ -1,22 +1,24 @@
 import React, { useState } from 'react';
 import { CustomerStatus, Contact, Job, statusLabels } from '@/lib/crmData';
-import { 
-  CheckCircle, 
-  Clock, 
-  Calendar, 
-  FileText, 
-  DollarSign, 
-  MapPin, 
-  Wrench, 
+import {
+  CheckCircle,
+  Clock,
+  Calendar,
+  FileText,
+  DollarSign,
+  MapPin,
+  Wrench,
   Package,
   AlertCircle,
   Eye,
   Mail,
-  Phone,
   Shield,
   ArrowLeft,
   Circle,
-  X
+  X,
+  Hammer,
+  CreditCard,
+  Trophy,
 } from 'lucide-react';
 
 interface JobStatusTimelineProps {
@@ -27,85 +29,198 @@ interface JobStatusTimelineProps {
   onSendEstimate?: () => void;
 }
 
-const statusSteps: { 
-  status: CustomerStatus; 
-  label: string; 
+interface PowerStep {
+  id: string;
+  label: string;
   description: string;
+  statuses: CustomerStatus[];
   icon: React.ComponentType<any>;
   color: string;
-}[] = [
-  { status: 'prospect', label: statusLabels.prospect, description: 'Initial lead identified', icon: Eye, color: 'gray' },
-  { status: 'lead', label: statusLabels.lead, description: 'Contact established', icon: Phone, color: 'blue' },
-  { status: 'appt_set', label: statusLabels.appt_set, description: 'Inspection scheduled', icon: Calendar, color: 'purple' },
-  { status: 'inspection_completed', label: statusLabels.inspection_completed, description: 'Property assessment done', icon: MapPin, color: 'indigo' },
-  { status: 'estimating', label: statusLabels.estimating, description: 'Preparing quote for customer', icon: FileText, color: 'sky' },
-  { status: 'estimate_sent', label: statusLabels.estimate_sent, description: 'Quote provided to customer', icon: Mail, color: 'cyan' },
-  { status: 'contingency', label: statusLabels.contingency, description: 'Follow-up and negotiation phase', icon: AlertCircle, color: 'yellow' },
-  { status: 'approved', label: statusLabels.approved, description: 'Insurance approval received', icon: Shield, color: 'teal' },
-  { status: 'signed', label: statusLabels.signed, description: 'Work authorized by customer', icon: CheckCircle, color: 'green' },
-  { status: 'ordering_material', label: statusLabels.ordering_material, description: 'Materials being ordered', icon: Package, color: 'amber' },
-  { status: 'in_progress', label: statusLabels.in_progress, description: 'Project underway', icon: Wrench, color: 'orange' },
-  { status: 'build_phase', label: statusLabels.build_phase, description: 'Construction/repairs active', icon: Package, color: 'red' },
-  { status: 'cleanup', label: statusLabels.cleanup, description: 'Final site preparation', icon: CheckCircle, color: 'pink' },
-  { status: 'invoicing', label: statusLabels.invoicing, description: 'Final billing prepared', icon: DollarSign, color: 'rose' },
-  { status: 'pending_payment', label: statusLabels.pending_payment, description: 'Awaiting final payment', icon: DollarSign, color: 'amber' },
-  { status: 'completed', label: statusLabels.completed, description: 'Project finished successfully', icon: CheckCircle, color: 'emerald' },
-];
-
-function normalizePipelineStatus(rawStatus: string | undefined | null): CustomerStatus | undefined {
-  if (!rawStatus) return undefined;
-  const status = rawStatus.trim().toLowerCase();
-  const aliases: Record<string, CustomerStatus> = {
-    new_lead: 'lead',
-    appointment_set: 'appt_set',
-    inspection_scheduled: 'appt_set',
-    inspection_complete: 'inspection_completed',
-    signed_won: 'signed',
-    paid: 'completed',
-  };
-
-  return aliases[status] ?? (status as CustomerStatus);
+  primaryStatus: CustomerStatus;
 }
 
-const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({ contact, jobs = [], onStatusChange, onScheduleInspection, onSendEstimate }) => {
+// 8-column Power Pipeline — each step groups related statuses.
+const POWER_STEPS: PowerStep[] = [
+  {
+    id: 'discovery',
+    label: 'Discovery',
+    description: 'New prospect or lead identified',
+    statuses: ['prospect', 'lead'],
+    icon: Eye,
+    color: 'slate',
+    primaryStatus: 'lead',
+  },
+  {
+    id: 'inspection',
+    label: 'Inspection',
+    description: 'Appointment set — adjuster or rep on site',
+    statuses: ['appt_set', 'claim_filed', 'adjuster_scheduled', 'inspection_completed', 'inspected' as CustomerStatus],
+    icon: Calendar,
+    color: 'violet',
+    primaryStatus: 'appt_set',
+  },
+  {
+    id: 'pending_scope',
+    label: 'Pending Scope',
+    description: 'Estimating or awaiting homeowner / insurance commitment',
+    statuses: ['estimating', 'estimate_sent', 'contingency', 'supplement_filed', 'retail'],
+    icon: FileText,
+    color: 'amber',
+    primaryStatus: 'contingency',
+  },
+  {
+    id: 'approval_sold',
+    label: 'Approval / Sold',
+    description: 'Scope approved or contract signed — Closed Won',
+    statuses: ['approved', 'signed'],
+    icon: Shield,
+    color: 'emerald',
+    primaryStatus: 'signed',
+  },
+  {
+    id: 'pre_production',
+    label: 'Pre-Production',
+    description: 'Ordering materials — back office handoff',
+    statuses: ['ordering_material', 'scheduled'],
+    icon: Package,
+    color: 'cyan',
+    primaryStatus: 'ordering_material',
+  },
+  {
+    id: 'active_build',
+    label: 'Active Build',
+    description: 'Crews on site — construction through cleanup',
+    statuses: ['in_progress', 'build_phase', 'cleanup'],
+    icon: Hammer,
+    color: 'blue',
+    primaryStatus: 'in_progress',
+  },
+  {
+    id: 'final_billing',
+    label: 'Final Billing',
+    description: 'Invoice sent — awaiting final payment',
+    statuses: ['invoicing', 'pending_payment'],
+    icon: CreditCard,
+    color: 'rose',
+    primaryStatus: 'invoicing',
+  },
+  {
+    id: 'closed_paid',
+    label: 'Closed / Paid',
+    description: 'Project complete — fully closed',
+    statuses: ['completed'],
+    icon: Trophy,
+    color: 'green',
+    primaryStatus: 'completed',
+  },
+];
+
+const COLOR_MAP: Record<string, string> = {
+  slate:   'text-slate-600 border-slate-400 bg-slate-50',
+  violet:  'text-violet-600 border-violet-500 bg-violet-50',
+  amber:   'text-amber-600 border-amber-500 bg-amber-50',
+  emerald: 'text-emerald-600 border-emerald-500 bg-emerald-50',
+  cyan:    'text-cyan-600 border-cyan-500 bg-cyan-50',
+  blue:    'text-blue-600 border-blue-500 bg-blue-50',
+  rose:    'text-rose-600 border-rose-500 bg-rose-50',
+  green:   'text-green-700 border-green-500 bg-green-50',
+};
+
+// Sub-status labels for within-column granularity
+const SUB_STATUS_LABELS: Partial<Record<string, string>> = {
+  prospect:             'New Prospect',
+  lead:                 'Contacted',
+  appt_set:            'Appt Set',
+  claim_filed:          'Claim Filed',
+  adjuster_scheduled:   'Adjuster Sched.',
+  inspection_completed: 'Inspected',
+  inspected:            'Inspected',
+  estimating:           'Estimating',
+  estimate_sent:        'Est. Sent',
+  contingency:          'Pending Commit.',
+  supplement_filed:     'Supplement',
+  retail:               'Retail',
+  approved:             'Approved',
+  signed:               'Signed',
+  ordering_material:    'Ordering',
+  scheduled:            'Scheduled',
+  in_progress:          'In Progress',
+  build_phase:          'Build Phase',
+  cleanup:              'Cleanup',
+  invoicing:            'Invoicing',
+  pending_payment:      'Pending Pmt.',
+  completed:            'Complete',
+};
+
+const LEGACY_ALIASES: Record<string, CustomerStatus> = {
+  new_lead:             'prospect',
+  contacted:            'lead',
+  appointment_set:      'appt_set',
+  inspection_scheduled: 'appt_set',
+  inspection_complete:  'inspection_completed',
+  signed_won:           'signed',
+  paid:                 'completed',
+  follow_up:            'contingency',
+};
+
+function resolveStatus(raw: string | undefined | null): CustomerStatus {
+  if (!raw) return 'prospect';
+  const s = raw.trim().toLowerCase();
+  return (LEGACY_ALIASES[s] ?? s) as CustomerStatus;
+}
+
+function findStepIndex(status: CustomerStatus): number {
+  for (let i = 0; i < POWER_STEPS.length; i++) {
+    if ((POWER_STEPS[i].statuses as string[]).includes(status)) return i;
+  }
+  return 0;
+}
+
+const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({
+  contact,
+  jobs = [],
+  onStatusChange,
+  onScheduleInspection,
+  onSendEstimate,
+}) => {
   const [showRevertModal, setShowRevertModal] = useState(false);
-  const [revertTargetStage, setRevertTargetStage] = useState<CustomerStatus | null>(null);
-  
-  const normalizedStatus = normalizePipelineStatus(contact.status);
-  const currentStatusIndex = statusSteps.findIndex(step => step.status === normalizedStatus);
-  
-  const getStatusColor = (index: number) => {
-    if (index < currentStatusIndex) return 'text-green-600 border-green-600 bg-green-50';
-    if (index === currentStatusIndex) return `text-blue-600 border-blue-600 bg-blue-50`;
+  const [revertTargetStep, setRevertTargetStep] = useState<PowerStep | null>(null);
+
+  const normalizedStatus = resolveStatus(contact.status);
+  const currentStepIndex = findStepIndex(normalizedStatus);
+
+  const getStepColor = (index: number) => {
+    if (index < currentStepIndex) return 'text-green-600 border-green-600 bg-green-50';
+    if (index === currentStepIndex) return `${COLOR_MAP[POWER_STEPS[index].color]}`;
     return 'text-gray-400 border-gray-300 bg-gray-50';
   };
 
-  const getLineColor = (index: number) => {
-    if (index < currentStatusIndex) return 'bg-green-600';
-    return 'bg-gray-300';
-  };
+  const getLineColor = (index: number) =>
+    index < currentStepIndex ? 'bg-green-600' : 'bg-gray-300';
 
-  const handleStageClick = (status: CustomerStatus, index: number) => {
-    if (index < currentStatusIndex) {
-      setRevertTargetStage(status);
+  const handleStepClick = (step: PowerStep, index: number) => {
+    if (index < currentStepIndex) {
+      setRevertTargetStep(step);
       setShowRevertModal(true);
-    } else if (index > currentStatusIndex && onStatusChange) {
-      onStatusChange(status);
+    } else if (index > currentStepIndex && onStatusChange) {
+      onStatusChange(step.primaryStatus);
     }
   };
 
   const handleRevertConfirm = () => {
-    if (revertTargetStage && onStatusChange) {
-      onStatusChange(revertTargetStage);
+    if (revertTargetStep && onStatusChange) {
+      onStatusChange(revertTargetStep.primaryStatus);
     }
     setShowRevertModal(false);
-    setRevertTargetStage(null);
+    setRevertTargetStep(null);
   };
 
   const handleRevertCancel = () => {
     setShowRevertModal(false);
-    setRevertTargetStage(null);
+    setRevertTargetStep(null);
   };
+
+  const subLabel = SUB_STATUS_LABELS[contact.status] ?? SUB_STATUS_LABELS[normalizedStatus];
 
   return (
     <div className="space-y-6">
@@ -117,30 +232,35 @@ const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({ contact, jobs = [
           </div>
           <h3 className="text-lg font-semibold text-gray-900">Current Status</h3>
         </div>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-blue-50 rounded-lg p-4">
-            <div className="text-sm font-medium text-blue-900">Current Stage</div>
+            <div className="text-sm font-medium text-blue-900">Current Column</div>
             <div className="text-lg font-semibold text-blue-700">
-              {statusSteps.find(step => step.status === normalizedStatus)?.label || contact.status}
+              {POWER_STEPS[currentStepIndex]?.label}
             </div>
-            <div className="text-sm text-blue-600">
-              {statusSteps.find(step => step.status === normalizedStatus)?.description}
+            {subLabel && (
+              <div className="text-xs text-blue-600 mt-0.5 font-medium">{subLabel}</div>
+            )}
+            <div className="text-sm text-blue-600 mt-1">
+              {POWER_STEPS[currentStepIndex]?.description}
             </div>
           </div>
-          
+
           {contact.inspectionScheduled && (
-            <div className="bg-purple-50 rounded-lg p-4">
-              <div className="text-sm font-medium text-purple-900">Inspection</div>
-              <div className="text-lg font-semibold text-purple-700">
+            <div className="bg-violet-50 rounded-lg p-4">
+              <div className="text-sm font-medium text-violet-900">Inspection</div>
+              <div className="text-lg font-semibold text-violet-700">
                 {contact.inspectionCompleted ? 'Completed' : 'Scheduled'}
               </div>
-              <div className="text-sm text-purple-600">
-                {contact.inspectionDate ? new Date(contact.inspectionDate).toLocaleDateString() : 'Date TBD'}
+              <div className="text-sm text-violet-600">
+                {contact.inspectionDate
+                  ? new Date(contact.inspectionDate).toLocaleDateString()
+                  : 'Date TBD'}
               </div>
             </div>
           )}
-          
+
           {contact.projectValue && (
             <div className="bg-green-50 rounded-lg p-4">
               <div className="text-sm font-medium text-green-900">Project Value</div>
@@ -161,42 +281,29 @@ const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({ contact, jobs = [
           <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
             <CheckCircle className="w-4 h-4 text-green-600" />
           </div>
-          <h3 className="text-lg font-semibold text-gray-900">Status Timeline</h3>
+          <h3 className="text-lg font-semibold text-gray-900">Pipeline Stages</h3>
         </div>
 
         <div className="relative">
-          {statusSteps.map((step, index) => {
+          {POWER_STEPS.map((step, index) => {
             const StepIcon = step.icon;
-            const isCompleted = index < currentStatusIndex;
-            const isCurrent = index === currentStatusIndex;
-            const isUpcoming = index > currentStatusIndex;
-            
+            const isCompleted = index < currentStepIndex;
+            const isCurrent   = index === currentStepIndex;
+
             return (
-              <div key={step.status} className="relative">
-                {/* Connecting Line */}
-                {index < statusSteps.length - 1 && (
-                  <div 
-                    className={`absolute left-6 top-12 w-0.5 h-16 ${getLineColor(index)}`}
-                  />
+              <div key={step.id} className="relative">
+                {index < POWER_STEPS.length - 1 && (
+                  <div className={`absolute left-6 top-12 w-0.5 h-14 ${getLineColor(index)}`} />
                 )}
-                
-                {/* Step Item */}
+
                 <div
-                  className={`flex items-start gap-4 pb-8 ${index > currentStatusIndex && onStatusChange ? 'cursor-pointer hover:opacity-80' : ''}`}
-                  onClick={() => handleStageClick(step.status, index)}
+                  className={`flex items-start gap-4 pb-8 ${index !== currentStepIndex && onStatusChange ? 'cursor-pointer hover:opacity-80' : ''}`}
+                  onClick={() => handleStepClick(step, index)}
                 >
-                  {/* Icon */}
-                  <div
-                    className={`w-12 h-12 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${getStatusColor(index)}`}
-                  >
-                    {isCompleted ? (
-                      <CheckCircle className="w-5 h-5" />
-                    ) : (
-                      <StepIcon className="w-5 h-5" />
-                    )}
+                  <div className={`w-12 h-12 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${getStepColor(index)}`}>
+                    {isCompleted ? <CheckCircle className="w-5 h-5" /> : <StepIcon className="w-5 h-5" />}
                   </div>
-                  
-                  {/* Content */}
+
                   <div className="flex-1 min-w-0">
                     <div className={`font-medium ${isCompleted || isCurrent ? 'text-gray-900' : 'text-gray-500'}`}>
                       {step.label}
@@ -204,36 +311,26 @@ const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({ contact, jobs = [
                     <div className={`text-sm ${isCompleted || isCurrent ? 'text-gray-600' : 'text-gray-400'}`}>
                       {step.description}
                     </div>
-                    
-                    {/* Additional Info */}
-                    {step.status === 'inspection_completed' && contact.inspectionCompletedDate && (
-                      <div className="text-xs text-green-600 mt-1">
-                        Completed: {new Date(contact.inspectionCompletedDate).toLocaleDateString()}
-                      </div>
-                    )}
-                    
-                    {step.status === 'estimate_sent' && contact.projectValue && (
+
+                    {step.id === 'approval_sold' && contact.projectValue && (
                       <div className="text-xs text-blue-600 mt-1">
-                        Estimated Value: ${contact.projectValue.toLocaleString()}
+                        Value: ${contact.projectValue.toLocaleString()}
                       </div>
                     )}
-                    
-                    {step.status === 'signed' && contact.depositPaid && (
+                    {step.id === 'approval_sold' && contact.depositPaid && (
                       <div className="text-xs text-green-600 mt-1">
-                        Deposit Collected: {contact.depositDate ? new Date(contact.depositDate).toLocaleDateString() : 'Yes'}
+                        Deposit: {contact.depositDate ? new Date(contact.depositDate).toLocaleDateString() : 'Collected'}
                       </div>
                     )}
                   </div>
-                  
-                  {/* Status Badge */}
+
                   {isCurrent && (
-                    <div className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
+                    <div className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full flex-shrink-0">
                       Current
                     </div>
                   )}
-                  
                   {isCompleted && (
-                    <div className="px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">
+                    <div className="px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full flex-shrink-0">
                       Done
                     </div>
                   )}
@@ -253,7 +350,7 @@ const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({ contact, jobs = [
             </div>
             <h3 className="text-lg font-semibold text-gray-900">Active Jobs</h3>
           </div>
-          
+
           <div className="space-y-3">
             {jobs.map((job) => (
               <div key={job.id} className="border border-gray-200 rounded-lg p-4">
@@ -261,23 +358,20 @@ const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({ contact, jobs = [
                   <div className="flex-1">
                     <div className="font-medium text-gray-900">{job.title}</div>
                     <div className="text-sm text-gray-600 mt-1">{job.description}</div>
-                    
                     <div className="flex items-center gap-4 mt-2">
                       <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                        job.status === 'complete' ? 'bg-green-100 text-green-800' :
+                        job.status === 'complete'    ? 'bg-green-100 text-green-800' :
                         job.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
-                        job.status === 'scheduled' ? 'bg-purple-100 text-purple-800' :
+                        job.status === 'scheduled'   ? 'bg-violet-100 text-violet-800' :
                         'bg-gray-100 text-gray-800'
                       }`}>
                         {job.status.replace('_', ' ')}
                       </span>
-                      
                       {job.scheduledDate && (
                         <span className="text-xs text-gray-500">
                           Scheduled: {new Date(job.scheduledDate).toLocaleDateString()}
                         </span>
                       )}
-                      
                       {job.estimatedValue > 0 && (
                         <span className="text-xs text-gray-500">
                           Value: ${job.estimatedValue.toLocaleString()}
@@ -285,7 +379,6 @@ const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({ contact, jobs = [
                       )}
                     </div>
                   </div>
-                  
                   {job.status === 'complete' && (
                     <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
                   )}
@@ -296,45 +389,36 @@ const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({ contact, jobs = [
         </div>
       )}
 
-      {/* Pipeline Stages - Interactive for mobile */}
+      {/* Mobile-friendly interactive stage list */}
       <div className="bg-white rounded-lg border border-gray-200 p-4 mb-safe">
-        <h3 className="text-lg font-semibold text-gray-900 mb-2">Pipeline Stages</h3>
-        <p className="text-sm text-gray-600 mb-4">
-          {currentStatusIndex > 0
+        <h3 className="text-lg font-semibold text-gray-900 mb-1">Pipeline Stages</h3>
+        <p className="text-sm text-gray-500 mb-4">
+          {currentStepIndex > 0
             ? 'Tap a future stage to advance · Tap a past stage to revert'
             : 'Tap any stage below to advance this contact'}
         </p>
 
         <div className="space-y-2">
-          {statusSteps.map((step, index) => {
-            const isCompleted = index < currentStatusIndex;
-            const isCurrent = index === currentStatusIndex;
-            const isPending = index > currentStatusIndex;
+          {POWER_STEPS.map((step, index) => {
+            const isCompleted = index < currentStepIndex;
+            const isCurrent   = index === currentStepIndex;
+            const isPending   = index > currentStepIndex;
 
             return (
               <div
-                key={step.status}
-                onClick={() => handleStageClick(step.status, index)}
-                className={`
-                  flex items-center gap-3 p-3 rounded-lg border-2 transition-all cursor-pointer active:scale-95
-                  ${isCurrent ?
-                    'border-blue-500 bg-blue-50 hover:bg-blue-100' :
-                    isCompleted ?
-                      'border-green-200 bg-green-50 hover:bg-green-100' :
-                      'border-gray-200 bg-gray-50 hover:bg-gray-100'
-                  }
-                `}
+                key={step.id}
+                onClick={() => handleStepClick(step, index)}
+                className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all cursor-pointer active:scale-95 ${
+                  isCurrent   ? 'border-blue-500 bg-blue-50 hover:bg-blue-100' :
+                  isCompleted ? 'border-green-200 bg-green-50 hover:bg-green-100' :
+                  'border-gray-200 bg-gray-50 hover:bg-gray-100'
+                }`}
               >
-                {/* Stage Icon */}
-                <div className={`
-                  w-6 h-6 rounded-full flex items-center justify-center border-2
-                  ${isCurrent ?
-                    'border-blue-500 bg-blue-500' :
-                    isCompleted ?
-                      'border-green-500 bg-green-500' :
-                      'border-gray-300 bg-white'
-                  }
-                `}>
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center border-2 flex-shrink-0 ${
+                  isCurrent   ? 'border-blue-500 bg-blue-500' :
+                  isCompleted ? 'border-green-500 bg-green-500' :
+                  'border-gray-300 bg-white'
+                }`}>
                   {isCompleted ? (
                     <CheckCircle className="w-4 h-4 text-white" />
                   ) : isCurrent ? (
@@ -344,24 +428,22 @@ const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({ contact, jobs = [
                   )}
                 </div>
 
-                {/* Stage Details */}
                 <div className="flex-1">
-                  <div className={`font-medium ${
-                    isCurrent ? 'text-blue-900' :
-                    isCompleted ? 'text-green-900' :
-                    'text-gray-600'
+                  <div className={`font-medium text-sm ${
+                    isCurrent   ? 'text-blue-900' :
+                    isCompleted ? 'text-green-900' : 'text-gray-600'
                   }`}>
                     {step.label}
                   </div>
-                  {isCompleted && (
-                    <div className="text-xs text-green-600 font-medium">Tap to revert</div>
-                  )}
-                  {isCurrent && (
-                    <div className="text-xs text-blue-600 font-medium">Current stage</div>
-                  )}
-                  {isPending && (
-                    <div className="text-xs text-blue-500 font-medium">Tap to advance</div>
-                  )}
+                  <div className={`text-xs ${
+                    isCurrent   ? 'text-blue-600 font-medium' :
+                    isCompleted ? 'text-green-600 font-medium' :
+                    isPending   ? 'text-blue-500 font-medium' : 'text-gray-400'
+                  }`}>
+                    {isCurrent   ? 'Current stage' :
+                     isCompleted ? 'Tap to revert' :
+                     'Tap to advance'}
+                  </div>
                 </div>
               </div>
             );
@@ -369,135 +451,132 @@ const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({ contact, jobs = [
         </div>
       </div>
 
-      {/* Confirmation Modal */}
-      {showRevertModal && revertTargetStage && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 p-4 pt-16" style={{ paddingBottom: '120px' }}>
-          <div className="bg-white rounded-xl w-full max-w-md p-6 shadow-2xl">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">Revert Job Stage?</h3>
-              <button
-                onClick={handleRevertCancel}
-                className="p-2 hover:bg-gray-100 rounded-full"
-              >
-                <X className="w-5 h-5 text-gray-500" />
-              </button>
-            </div>
-            
-            <div className="space-y-4">
-              <p className="text-gray-600">
-                Are you sure you want to revert this contact back to:
-              </p>
-              
-              <div className="bg-gray-50 rounded-lg p-3 border">
-                <div className="font-medium text-gray-900">
-                  {statusSteps.find(s => s.status === revertTargetStage)?.label}
-                </div>
-                <div className="text-sm text-gray-600">
-                  {statusSteps.find(s => s.status === revertTargetStage)?.description}
-                </div>
-              </div>
-              
-              <div className="flex gap-3 pt-4">
-                <button
-                  onClick={handleRevertCancel}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleRevertConfirm}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
-                >
-                  Revert Stage
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Quick Actions */}
       <div className="bg-gray-50 rounded-lg border border-gray-200 p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
-        
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {normalizedStatus === 'lead' && (
+          {(normalizedStatus === 'lead' || normalizedStatus === 'prospect') && (
             <button
               onClick={onScheduleInspection}
-              className="p-3 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors text-sm font-medium disabled:opacity-50"
+              className="p-3 bg-violet-100 text-violet-700 rounded-lg hover:bg-violet-200 transition-colors text-sm font-medium disabled:opacity-50"
               disabled={!onScheduleInspection}
             >
               Schedule Inspection
             </button>
           )}
-          
+
           {normalizedStatus === 'inspection_completed' && (
             <button
               onClick={onSendEstimate}
-              className="p-3 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm font-medium disabled:opacity-50"
+              className="p-3 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors text-sm font-medium disabled:opacity-50"
               disabled={!onSendEstimate}
             >
-              Send Estimate
+              Create Estimate
             </button>
           )}
-          
-          {normalizedStatus === 'estimate_sent' && (
+
+          {(normalizedStatus === 'estimating' || normalizedStatus === 'estimate_sent') && (
             <button
               onClick={() => onStatusChange?.('contingency')}
-              className="p-3 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 transition-colors text-sm font-medium disabled:opacity-50"
+              className="p-3 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors text-sm font-medium disabled:opacity-50"
               disabled={!onStatusChange}
             >
-              Mark Contingency
+              Mark Pending Commitment
             </button>
           )}
 
           {normalizedStatus === 'contingency' && (
             <button
               onClick={() => onStatusChange?.('signed')}
-              className="p-3 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors text-sm font-medium disabled:opacity-50"
+              className="p-3 bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200 transition-colors text-sm font-medium disabled:opacity-50"
               disabled={!onStatusChange}
             >
-              Mark Signed
+              Mark Signed / Won
             </button>
           )}
 
-          {normalizedStatus === 'signed' && (
+          {(normalizedStatus === 'approved' || normalizedStatus === 'signed') && (
+            <button
+              onClick={() => onStatusChange?.('ordering_material')}
+              className="p-3 bg-cyan-100 text-cyan-700 rounded-lg hover:bg-cyan-200 transition-colors text-sm font-medium disabled:opacity-50"
+              disabled={!onStatusChange}
+            >
+              Start Pre-Production
+            </button>
+          )}
+
+          {(normalizedStatus === 'ordering_material' || normalizedStatus === 'scheduled') && (
             <button
               onClick={() => onStatusChange?.('in_progress')}
-              className="p-3 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors text-sm font-medium disabled:opacity-50"
+              className="p-3 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm font-medium disabled:opacity-50"
               disabled={!onStatusChange}
             >
-              Start Work
+              Start Build
             </button>
           )}
 
-          {normalizedStatus === 'in_progress' && (
+          {(normalizedStatus === 'in_progress' || normalizedStatus === 'build_phase' || normalizedStatus === 'cleanup') && (
             <button
               onClick={() => onStatusChange?.('invoicing')}
               className="p-3 bg-rose-100 text-rose-700 rounded-lg hover:bg-rose-200 transition-colors text-sm font-medium disabled:opacity-50"
               disabled={!onStatusChange}
             >
-              Move to Invoicing
+              Move to Billing
             </button>
           )}
 
-          {normalizedStatus === 'invoicing' && (
+          {(normalizedStatus === 'invoicing' || normalizedStatus === 'pending_payment') && (
             <button
               onClick={() => onStatusChange?.('completed')}
               className="p-3 bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200 transition-colors text-sm font-medium disabled:opacity-50"
               disabled={!onStatusChange}
             >
-              Mark Completed
+              Mark Closed / Paid
             </button>
           )}
-          
-          {(normalizedStatus === 'completed' || jobs.some(j => j.status === 'complete')) && (
+
+          {normalizedStatus === 'completed' && (
             <button className="p-3 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 transition-colors text-sm font-medium">
               Request Review
             </button>
           )}
         </div>
       </div>
+
+      {/* Revert Confirmation Modal */}
+      {showRevertModal && revertTargetStep && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 p-4 pt-16" style={{ paddingBottom: '120px' }}>
+          <div className="bg-white rounded-xl w-full max-w-md p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Revert Job Stage?</h3>
+              <button onClick={handleRevertCancel} className="p-2 hover:bg-gray-100 rounded-full">
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <p className="text-gray-600 mb-4">
+              Are you sure you want to revert this contact back to:
+            </p>
+            <div className="bg-gray-50 rounded-lg p-3 border mb-4">
+              <div className="font-medium text-gray-900">{revertTargetStep.label}</div>
+              <div className="text-sm text-gray-600">{revertTargetStep.description}</div>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={handleRevertCancel}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRevertConfirm}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+              >
+                Revert Stage
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

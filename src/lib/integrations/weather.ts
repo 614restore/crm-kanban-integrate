@@ -117,7 +117,7 @@ export class OpenWeatherIntegration {
   async getAirQuality(lat: number, lon: number): Promise<any> {
     try {
       const response = await fetch(
-        `${this.baseUrl}/data/3.0/stations?lat=${lat}&lon=${lon}&appid=${this.apiKey}`,
+        `${this.baseUrl}/data/2.5/air_pollution?lat=${lat}&lon=${lon}&appid=${this.apiKey}`,
         { method: 'GET' }
       );
 

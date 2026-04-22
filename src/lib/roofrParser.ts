@@ -3,13 +3,17 @@
 // Built against real Roofr PDF format (verified Apr 2026)
 
 import * as pdfjsLib from 'pdfjs-dist';
+// Import worker URL from pdfjs-dist directly so the worker version always
+// matches the installed library — prevents "API version does not match Worker
+// version" errors that occur when public/pdf.worker.min.mjs drifts out of sync.
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 // Worker setup — three environments:
-//  • Web/dev:       /pdf.worker.min.mjs served from public/
+//  • Web/dev:       bundled worker URL (always version-matched)
 //  • Tauri desktop: CDN copy (tauri:// protocol can't fetch local workers)
-//  • Capacitor iOS: /pdf.worker.min.mjs set lazily before first parse;
-//                   pdfjs tries a module Worker, WKWebView may reject it and
-//                   fall back to _setupFakeWorker() which uses dynamic import()
-//                   from capacitor://localhost — that works in Capacitor 7 / iOS 15+.
+//  • Capacitor iOS: worker set lazily before first parse; pdfjs tries a module
+//                   Worker, WKWebView may reject it and fall back to
+//                   _setupFakeWorker() which uses dynamic import() from
+//                   capacitor://localhost — that works in Capacitor 7 / iOS 15+.
 if (typeof window !== 'undefined') {
   const isTauri =
     typeof (window as any).__TAURI__ !== 'undefined' ||
@@ -22,7 +26,7 @@ if (typeof window !== 'undefined') {
   if (!isCapacitor) {
     pdfjsLib.GlobalWorkerOptions.workerSrc = isTauri
       ? 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.2.67/build/pdf.worker.min.mjs'
-      : '/pdf.worker.min.mjs';
+      : pdfWorkerUrl;
   }
 }
 
