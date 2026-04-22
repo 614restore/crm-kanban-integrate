@@ -2084,7 +2084,17 @@ export default function ContactDetail() {
                     <Calendar size={18} className="text-blue-600" />
                     <span className="font-medium text-gray-700">Schedule Appointment</span>
                   </button>
-                  
+                  <button
+                    onClick={() => {
+                      dispatch({ type: 'SET_VIEW', payload: 'inspections' });
+                      dispatch({ type: 'SELECT_CONTACT', payload: contact.id });
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-3 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors text-left"
+                  >
+                    <Camera size={18} className="text-blue-600" />
+                    <span className="font-medium text-gray-700">Start Inspection</span>
+                  </button>
+
                   {/* Mark Inspection Complete - show if contact is in appt_set or inspection status */}
                   {(contact.status === 'appt_set' || contact.status === 'inspection_scheduled') && (
                     <button 

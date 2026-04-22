@@ -29,7 +29,9 @@ import QuickAddModal from './crm/QuickAddModal';
 import InvoiceModal from './crm/InvoiceModal';
 import ResponsiveLayout from './mobile/ResponsiveLayout';
 import { useIsMobile } from '@/hooks/useMediaQuery';
-import { Building2, Loader2, Zap, X, Tag, WifiOff } from 'lucide-react';
+import { Building2, Loader2, Zap, X, Tag, WifiOff, AlertTriangle, Download } from 'lucide-react';
+import { SubscriptionProvider, useSubscription } from '@/contexts/SubscriptionContext';
+import { exportAllData } from '@/lib/exportUtils';
 
 // Lazy load all CRM view components for better code splitting
 const Dashboard = lazy(() => import('./crm/Dashboard'));
@@ -57,6 +59,7 @@ const SupplementTrackingView = lazy(() => import('./crm/SupplementTrackingView')
 const CrewScheduleView = lazy(() => import('./crm/CrewScheduleView'));
 const EquipmentView = lazy(() => import('./crm/EquipmentView'));
 const CommissionPayrollView = lazy(() => import('./crm/CommissionPayrollView'));
+const InspectionsView = lazy(() => import('./crm/InspectionsView'));
 
 // --- LocalStorage data cache (stale-while-revalidate) ---
 const DATA_CACHE_KEY = 'crm_app_data_v1';
@@ -140,12 +143,24 @@ function buildFallbackAvatar(firstName?: string, lastName?: string, email?: stri
 }
 
 // View Router Component
+// Views accessible in read-only (expired subscription) mode
+const EXPIRED_ALLOWED_VIEWS = new Set<ViewType>([
+  'contacts', 'pipeline', 'contact-detail',
+  'documents', 'financial', 'estimates', 'reports', 'settings',
+]);
+
 function ViewRouter() {
-  const { state } = React.useContext(CRMContext)!;
+  const { state, dispatch } = React.useContext(CRMContext)!;
+  const { isExpiredReadOnly } = useSubscription();
+
+  // When expired, silently redirect blocked views to contacts list
+  const view = isExpiredReadOnly && !EXPIRED_ALLOWED_VIEWS.has(state.currentView)
+    ? 'contacts'
+    : state.currentView;
 
   // Wrap each view in Suspense for lazy loading
   const renderView = () => {
-    switch (state.currentView) {
+    switch (view) {
       case 'dashboard':
         return <Dashboard />;
       case 'pipeline':
@@ -192,6 +207,8 @@ function ViewRouter() {
         return <EquipmentView />;
       case 'commission-payroll':
         return <CommissionPayrollView />;
+      case 'inspections':
+        return <InspectionsView />;
       case 'settings':
         return <SettingsView />;
       case 'ai-assistant':
@@ -491,6 +508,60 @@ function ConnectionStatusBanner({ show, onDismiss }: { show: boolean; onDismiss:
   );
 }
 
+// Expired subscription banner — non-dismissable, shown in read-only mode
+function ExpiredBanner({
+  companyId,
+  onGoToBilling,
+}: {
+  companyId: string | null;
+  onGoToBilling: () => void;
+}) {
+  const { state } = React.useContext(CRMContext)!;
+
+  const handleExportAll = () => {
+    try {
+      exportAllData(
+        state.contacts,
+        state.projects,
+        state.workOrders ?? [],
+        state.materialOrders ?? [],
+        state.estimates,
+        state.suppliers ?? [],
+        'TrussCTR-Export',
+      );
+    } catch (e) {
+      console.error('[ExpiredBanner] Export failed', e);
+    }
+  };
+
+  return (
+    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 bg-amber-50 border-b border-amber-200 px-4 py-3 text-sm">
+      <div className="flex items-start gap-2 min-w-0">
+        <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+        <span className="text-amber-800">
+          <strong>Your subscription has ended.</strong>{' '}
+          Your data is safe — you can view your contacts and export everything below. Upgrade to re-enable all features.
+        </span>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <button
+          onClick={handleExportAll}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-amber-300 text-amber-800 rounded-lg text-xs font-semibold hover:bg-amber-100 transition-colors"
+        >
+          <Download className="w-3.5 h-3.5" />
+          Export All Data
+        </button>
+        <button
+          onClick={onGoToBilling}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 text-white rounded-lg text-xs font-semibold hover:bg-amber-700 transition-colors"
+        >
+          Subscribe Now
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // CRM App (authenticated view)
 function CRMApp() {
   const { profile, user, loading: authLoading } = useAuth();
@@ -511,7 +582,9 @@ function CRMApp() {
     }
     return initialState;
   });
-  const [subscriptionBlocked, setSubscriptionBlocked] = useState(false);
+  // Read-only mode — true when trial is expired, subscription canceled, or past-due.
+  // Users can still log in, view contacts, and export data; write actions are blocked.
+  const [isExpiredReadOnly, setIsExpiredReadOnly] = useState(false);
   const [connectionUnstable, setConnectionUnstable] = useState(false);
   useEffect(() => {
     try { localStorage.setItem('crm_current_view', state.currentView); } catch (e) { console.warn('[AppLayout] localStorage write failed (private browsing?):', e); }
@@ -1183,7 +1256,7 @@ useEffect(() => {
     return () => window.clearTimeout(timer);
   }, [state.isLoading, state.isInitialized, authLoading]);
 
-  // Check subscription status after data loads — enforce paywall on expired/canceled accounts
+  // Subscription check — sets read-only mode when trial has expired or subscription is inactive.
   useEffect(() => {
     if (!profile?.company_id) return;
     db.getCompany(profile.company_id).then((company) => {
@@ -1192,11 +1265,11 @@ useEffect(() => {
         company.subscription_status === 'trialing' &&
         !!company.trial_ends_at &&
         new Date(company.trial_ends_at) < new Date();
-      const blocked =
+      const readOnly =
         trialExpired ||
         company.subscription_status === 'canceled' ||
         company.subscription_status === 'past_due';
-      setSubscriptionBlocked(blocked);
+      setIsExpiredReadOnly(readOnly);
     });
   }, [profile?.company_id]);
 
@@ -1280,64 +1353,16 @@ useEffect(() => {
     return <LoadingScreen />;
   }
 
-  if (subscriptionBlocked) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 max-w-md w-full p-8 text-center">
-          <div className="w-14 h-14 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-4">
-            <Zap className="w-7 h-7 text-amber-600" />
-          </div>
-          <h1 className="text-xl font-bold text-gray-900 mb-2">Subscription Required</h1>
-          <p className="text-gray-500 text-sm mb-6">
-            Your free trial has ended. Subscribe to continue using TrussCTR.
-            Use code <strong className="font-mono text-indigo-600">LAUNCH50</strong> for 50% off your first 3 months on any monthly plan.
-          </p>
-          <button
-            onClick={() => {
-              setSubscriptionBlocked(false);
-              dispatch({ type: 'SET_VIEW', payload: 'settings' });
-              // Navigate to billing tab after SettingsView mounts
-              window.setTimeout(() => {
-                window.dispatchEvent(
-                  new CustomEvent('crm-open-settings-tab', { detail: { tab: 'billing' } })
-                );
-              }, 50);
-              // Re-verify subscription status after a short delay to prevent long-term bypass
-              window.setTimeout(() => {
-                if (profile?.company_id) {
-                  db.getCompany(profile.company_id).then((company) => {
-                    if (!company) return;
-                    const isBlocked =
-                      company.subscription_status === 'canceled' ||
-                      company.subscription_status === 'past_due' ||
-                      (company.subscription_status === 'trialing' &&
-                        !!company.trial_ends_at &&
-                        new Date(company.trial_ends_at) < new Date());
-                    setSubscriptionBlocked(isBlocked);
-                  });
-                }
-              }, 5000);
-            }}
-            className="inline-block w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg px-6 py-3 text-sm transition-colors"
-          >
-            Subscribe Now
-          </button>
-          <p className="text-xs text-gray-400 mt-4">
-            Already subscribed?{' '}
-            <button
-              onClick={() => window.location.reload()}
-              className="text-indigo-500 hover:underline"
-            >
-              Refresh to continue
-            </button>
-          </p>
-        </div>
-      </div>
-    );
-  }
+  const goToBilling = () => {
+    dispatch({ type: 'SET_VIEW', payload: 'settings' });
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('crm-open-settings-tab', { detail: { tab: 'billing' } }));
+    }, 50);
+  };
 
   return (
     <CRMContext.Provider value={{ state, dispatch }}>
+      <SubscriptionProvider value={{ isExpiredReadOnly }}>
       <ResponsiveLayout>
         <div className="flex flex-col h-full">
           {/* Top bar only on desktop */}
@@ -1345,11 +1370,18 @@ useEffect(() => {
             <TopBar />
           </div>
 
-          {/* Connection status banner — hidden; toast notification handles user feedback */}
-          {/* <ConnectionStatusBanner show={connectionUnstable} onDismiss={() => setConnectionUnstable(false)} /> */}
+          {/* Expired subscription banner (non-dismissable) — read-only mode notice */}
+          {isExpiredReadOnly && (
+            <ExpiredBanner
+              companyId={profile?.company_id ?? state.companyId ?? null}
+              onGoToBilling={goToBilling}
+            />
+          )}
 
-          {/* Trial banner (shown when trial ends within 7 days) */}
-          <TrialBanner companyId={profile?.company_id ?? state.companyId ?? null} />
+          {/* Trial banner (shown when trial is active but ending soon) */}
+          {!isExpiredReadOnly && (
+            <TrialBanner companyId={profile?.company_id ?? state.companyId ?? null} />
+          )}
           
           {/* Main content area */}
           <main className="flex-1 min-h-0 overflow-auto">
@@ -1357,10 +1389,11 @@ useEffect(() => {
           </main>
         </div>
         
-        {/* Modals */}
-        <QuickAddModal />
+        {/* Modals — QuickAdd blocked in read-only mode */}
+        {!isExpiredReadOnly && <QuickAddModal />}
         <InvoiceModal />
       </ResponsiveLayout>
+      </SubscriptionProvider>
     </CRMContext.Provider>
   );
 }

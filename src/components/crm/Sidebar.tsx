@@ -32,6 +32,7 @@ import {
   Wrench,
   BadgeDollarSign,
   TrendingUp,
+  ClipboardList,
 } from 'lucide-react';
 
 interface NavItem {
@@ -54,6 +55,7 @@ const navItems: NavItem[] = [
   { id: 'suppliers', label: 'Suppliers', icon: <Store size={20} /> },
   { id: 'estimates', label: 'Estimates', icon: <FileText size={20} /> },
   { id: 'projects', label: 'Projects', icon: <FolderKanban size={20} /> },
+  { id: 'inspections', label: 'Inspections', icon: <ClipboardList size={20} /> },
   { id: 'crew-schedule', label: 'Crew Schedule', icon: <CalendarClock size={20} /> },
   { id: 'equipment', label: 'Equipment', icon: <Wrench size={20} /> },
   { id: 'work-orders', label: 'Work Orders', icon: <Clipboard size={20} /> },

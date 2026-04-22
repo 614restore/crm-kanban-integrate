@@ -46,7 +46,8 @@ export type ViewType =
   | 'crew-schedule'
   | 'equipment'
   | 'commission-payroll'
-  | 'sales-analytics';
+  | 'sales-analytics'
+  | 'inspections';
 
 export interface CRMState {
   // Current user
