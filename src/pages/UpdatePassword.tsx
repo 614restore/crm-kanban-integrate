@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/authContext';
 import {
     Building2,
     Lock,
@@ -12,6 +13,7 @@ import {
 } from 'lucide-react';
 
 export default function UpdatePassword() {
+    const { clearPasswordReset } = useAuth();
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -74,19 +76,34 @@ export default function UpdatePassword() {
         setLoading(true);
 
         try {
-            const { error } = await supabase.auth.updateUser({ password });
+            // Use the admin-API edge function so must_change_password is cleared
+            // atomically. Direct supabase.auth.updateUser() doesn't clear the flag
+            // which causes the form to re-appear after redirect.
+            const { data: { session } } = await supabase.auth.getSession();
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+            const res = await fetch(`${supabaseUrl}/functions/v1/confirm-password-change`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session?.access_token}`,
+                },
+                body: JSON.stringify({ password }),
+            });
 
-            if (error) {
-                setError(error.message);
-            } else {
-                setSuccess('Password updated successfully! Redirecting...');
-                setTimeout(() => {
-                    try { sessionStorage.removeItem('pending_password_reset'); } catch (e) { console.warn('[UpdatePassword] sessionStorage cleanup failed:', e); }
-                    window.location.href = window.location.origin + (import.meta.env.BASE_URL || '/');
-                }, 2000);
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data?.error || 'Failed to update password.');
             }
+
+            // Clear in-memory flag so AppLayout stops showing this screen immediately
+            clearPasswordReset();
+            setSuccess('Password updated successfully! Redirecting...');
+            setTimeout(() => {
+                try { sessionStorage.removeItem('pending_password_reset'); } catch (e) { console.warn('[UpdatePassword] sessionStorage cleanup failed:', e); }
+                window.location.href = window.location.origin + (import.meta.env.BASE_URL || '/');
+            }, 1500);
         } catch (err: any) {
-            setError('An unexpected error occurred. Please try again.');
+            setError(err.message || 'An unexpected error occurred. Please try again.');
         } finally {
             setLoading(false);
         }

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
-import { supabase, supabaseUrl, isDemoMode } from '@/lib/supabase';
+import { supabase, supabaseUrl, isDemoMode, loginClient } from '@/lib/supabase';
 import { setupNewUser } from '@/lib/setupCompany';
 import type { Session, User } from '@supabase/supabase-js';
 import { logAuthState } from '@/lib/authDebug';
@@ -164,6 +164,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (event === 'TOKEN_REFRESHED') {
         setSession(session);
         setUser(session?.user ?? null);
+        // setSession() (used by loginClient sign-in path) fires TOKEN_REFRESHED.
+        // Load the profile if not yet loaded so sign-in completes fully.
+        if (session?.user) {
+          setProfile(prev => {
+            if (!prev) {
+              loadProfileOnce(session.user.id, session.user.email || '')
+                .then(p => { if (p) { setProfile(p); setLoading(false); } });
+            }
+            return prev;
+          });
+        }
         return;
       }
 
@@ -302,7 +313,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { error: null };
       }
 
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      // Use session-free loginClient so stale tokens in the main client's
+      // localStorage don't block or hang the sign-in attempt.
+      const { data, error } = await loginClient.auth.signInWithPassword({ email, password });
+      if (!error && data.session) {
+        // Propagate the fresh session to the main client, which fires
+        // onAuthStateChange and triggers profile loading.
+        await supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        });
+      }
       return { error };
     } catch (err) {
       return { error: err as Error };

@@ -498,7 +498,17 @@ function CRMApp() {
     // On first render, immediately hydrate state from the last-known cache so the
     // user sees their real data instead of blank/default boards during auth restore.
     const preloaded = preloadCachedData();
-    if (preloaded) return { ...initialState, ...(preloaded as Partial<CRMState>) };
+    if (preloaded) {
+      // Mark as initialized immediately so the loading screen is skipped entirely
+      // on refresh when cached data exists. Fresh data will still fetch in the
+      // background via loadData() and silently update the UI.
+      return {
+        ...initialState,
+        ...(preloaded as Partial<CRMState>),
+        isInitialized: true,
+        isLoading: false,
+      };
+    }
     return initialState;
   });
   const [subscriptionBlocked, setSubscriptionBlocked] = useState(false);
@@ -519,8 +529,7 @@ function CRMApp() {
 
   // Race a DB fetch against a per-query timeout; resolves to fallback on timeout instead of
   // blocking the whole Promise.all. Prevents a single slow Supabase query from stalling the UI.
-  // Increased from 7s to 12s to handle Supabase cold starts better.
-  const withFetchTimeout = <T,>(p: Promise<T>, fallback: T, ms = 12000): Promise<T> =>
+  const withFetchTimeout = <T,>(p: Promise<T>, fallback: T, ms = 8000): Promise<T> =>
     Promise.race([p, new Promise<T>(resolve => setTimeout(() => resolve(fallback), ms))]);
 
   // Load data from database
@@ -1149,7 +1158,7 @@ useEffect(() => {
     if (authLoading) return;
 
     const timer = window.setTimeout(() => {
-      console.warn('Initial CRM data load timed out after 45 s; showing app shell with empty data.');
+      console.warn('Initial CRM data load timed out after 15 s; showing app shell with empty data.');
       dispatch({
         type: 'INITIALIZE_DATA',
         payload: {
@@ -1169,7 +1178,7 @@ useEffect(() => {
           companyGoals: [],
         },
       });
-    }, 45000);
+    }, 15000);
 
     return () => window.clearTimeout(timer);
   }, [state.isLoading, state.isInitialized, authLoading]);

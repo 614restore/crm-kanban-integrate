@@ -78,7 +78,22 @@ const supabase = createClient(
   }
 );
 
+// Session-free client used only for the login call — prevents stale token
+// refresh on the main client from blocking sign-in attempts.
+const loginClient = createClient(
+  supabaseUrl || 'https://demo.supabase.co',
+  supabaseKey || 'demo-key',
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+      detectSessionInUrl: false,
+      storageKey: 'sb-login-tmp',
+    },
+  }
+);
+
 // Export demo mode flag for other components to check
 export const isDemoMode = demoMode;
 
-export { supabase, supabaseUrl, supabaseKey };
+export { supabase, supabaseUrl, supabaseKey, loginClient };

@@ -1,12 +1,11 @@
 // Service worker for TrussCTR CRM
 // This provides offline caching and PWA functionality
 
-const CACHE_NAME = 'trussctr-v1';
+const CACHE_NAME = 'trussctr-v3';
 const urlsToCache = [
   '/',
   '/index.html',
   '/manifest.json',
-  // Static assets will be added by Workbox during build
 ];
 
 // Install event - cache the app shell
@@ -80,15 +79,26 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Never cache HTML - always fetch fresh
+  // Navigation (HTML) — stale-while-revalidate:
+  // Serve cached app shell IMMEDIATELY (so the app never shows a white/blank page),
+  // then fetch fresh HTML in the background and update the cache for next visit.
+  // If no cache yet (first visit), wait for the network response.
   if (url.pathname.endsWith('.html') || url.pathname === '/' || request.mode === 'navigate') {
     event.respondWith(
-      fetch(request, { cache: 'no-store' }).catch(() => {
-        // If offline, serve cached HTML
-        return caches.match(request).then((cachedPage) => {
-          if (cachedPage) return cachedPage;
-          return caches.match('/index.html');
-        });
+      caches.open(CACHE_NAME).then(async (cache) => {
+        const cached = await cache.match(request) || await cache.match('/index.html');
+
+        const networkFetch = fetch(request, { cache: 'no-store' })
+          .then((response) => {
+            if (response.ok) {
+              cache.put(request, response.clone());
+            }
+            return response;
+          })
+          .catch(() => cached || new Response('Offline', { status: 503 }));
+
+        // Serve cache immediately if available; otherwise wait for network.
+        return cached || networkFetch;
       })
     );
     return;
