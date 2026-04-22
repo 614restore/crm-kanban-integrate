@@ -83,27 +83,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (error) { console.error('Error fetching profile:', error); return null; }
 
-      // Separately fetch company data and embed it into the profile object.
-      // Using a direct query (not PostgREST join) avoids RLS policy conflicts
-      // that can occur when resolving the companies relationship through PostgREST.
-      const profileData = data as Profile;
-      if (profileData?.company_id) {
-        try {
-          const { data: companyData } = await supabase
-            .from('companies')
-            .select('*')
-            .eq('id', profileData.company_id)
-            .maybeSingle();
-          if (companyData) {
-            return { ...profileData, companies: companyData };
-          }
-        } catch (companyErr) {
-          console.warn('[Auth] Could not load company data:', companyErr);
-          // Non-fatal — return profile without company data
-        }
-      }
-
-      return profileData;
+      // Return profile immediately — company data is loaded asynchronously via
+      // a separate useEffect below so it never blocks profile.company_id from
+      // being available to loadData and the rest of the app.
+      return data as Profile;
     } catch (err) {
       console.error('Error fetching profile:', err);
       return null;
@@ -312,6 +295,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, 12000); // 12s — allows profile.company_id fetch to complete before giving up
     return () => window.clearTimeout(timer);
   }, [loading]);
+
+  // ── Async company loader ─────────────────────────────────────────────
+  // Runs after profile.company_id is available. Uses the get_my_company SECURITY
+  // DEFINER RPC so it bypasses RLS and never hangs. Non-blocking: profile.company_id
+  // is already set, so loadData() in AppLayout fires immediately while this resolves.
+  useEffect(() => {
+    if (!profile?.company_id || profile.companies || isDemoMode) return;
+
+    let cancelled = false;
+    supabase.rpc('get_my_company')
+      .then(({ data }) => {
+        if (cancelled) return;
+        if (data && data.length > 0) {
+          setProfile(prev => prev ? { ...prev, companies: data[0] } : null);
+        }
+      })
+      .catch(() => {}); // non-fatal — company branding just won't appear
+
+    return () => { cancelled = true; };
+  }, [profile?.company_id]);
 
   // ── Demo helpers ──────────────────────────────────────────────────────
   const generateDemoUserId = (email: string): string => {

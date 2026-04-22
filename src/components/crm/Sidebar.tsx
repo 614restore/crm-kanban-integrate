@@ -106,6 +106,7 @@ export default function Sidebar() {
 
   const loadCompanyBrand = useCallback(async () => {
     if (!profile?.company_id) {
+      setCompanyName('My Company');
       setIsLoadingCompany(false);
       return;
     }

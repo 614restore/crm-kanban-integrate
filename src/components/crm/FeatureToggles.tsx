@@ -180,7 +180,7 @@ export default function FeatureToggles() {
   }, [profile?.company_id]);
 
   async function loadFeatures() {
-    if (!profile?.company_id) return;
+    if (!profile?.company_id) { setLoading(false); return; }
     
     try {
       setLoading(true);
