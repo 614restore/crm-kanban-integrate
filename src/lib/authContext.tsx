@@ -16,6 +16,22 @@ export interface Profile {
   avatar_url?: string;
   is_active?: boolean;
   must_change_password?: boolean;
+  companies?: {
+    id?: string;
+    name?: string;
+    logo_url?: string;
+    address?: string;
+    city?: string;
+    state?: string;
+    zip?: string;
+    phone?: string;
+    email?: string;
+    website?: string;
+    subscription_plan?: string;
+    subscription_status?: string;
+    google_review_url?: string;
+    [key: string]: any;
+  };
 }
 
 interface AuthContextType {
@@ -61,7 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const { data, error } = await supabase
         .from('profiles')
-        .select('*')
+        .select('*, companies(*)')
         .eq('id', userId)
         .single();
 
