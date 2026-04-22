@@ -77,12 +77,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const { data, error } = await supabase
         .from('profiles')
-        .select('*, companies(*)')
+        .select('*')
         .eq('id', userId)
         .single();
 
       if (error) { console.error('Error fetching profile:', error); return null; }
-      return data as Profile;
+
+      // Separately fetch company data and embed it into the profile object.
+      // Using a direct query (not PostgREST join) avoids RLS policy conflicts
+      // that can occur when resolving the companies relationship through PostgREST.
+      const profileData = data as Profile;
+      if (profileData?.company_id) {
+        try {
+          const { data: companyData } = await supabase
+            .from('companies')
+            .select('*')
+            .eq('id', profileData.company_id)
+            .maybeSingle();
+          if (companyData) {
+            return { ...profileData, companies: companyData };
+          }
+        } catch (companyErr) {
+          console.warn('[Auth] Could not load company data:', companyErr);
+          // Non-fatal — return profile without company data
+        }
+      }
+
+      return profileData;
     } catch (err) {
       console.error('Error fetching profile:', err);
       return null;
