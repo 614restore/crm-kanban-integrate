@@ -39,7 +39,7 @@ type WorkOrderRow = Database['public']['Tables']['work_orders']['Row'];
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { profile, loading: loadingAuth } = useAuth();
+  const { profile, user, loading: loadingAuth } = useAuth();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [stats, setStats] = useState({
     pipelineValue: 0,
@@ -166,7 +166,7 @@ export default function Dashboard() {
 
   const totalContacts = (Object.values(stageCounts) as number[]).reduce((a, b) => a + b, 0);
 
-  if (loadingAuth) return (
+  if (loadingAuth || (user && !profile)) return (
     <div className="h-full flex items-center justify-center">
       <div className="animate-spin rounded-full h-8 w-8 border-4 border-accent border-t-transparent"></div>
     </div>
