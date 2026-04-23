@@ -53,7 +53,7 @@ export default function PhotoChecklist({ items, onChange, companyId, contactId }
     setUploading(itemId);
     try {
       // Compress before upload — full-size original stays on the device
-      const compressed = await compressImage(file, { maxPx: 1400, quality: 0.82 });
+      const compressed = await compressImage(file, { maxPx: 1400, quality: 0.82, targetBytes: 1_000_000 });
       const result = await uploadDocument(compressed, companyId, contactId);
       if (result.error) {
         toast.error(`Upload failed: ${result.error}`);

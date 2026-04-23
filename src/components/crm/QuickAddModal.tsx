@@ -444,7 +444,8 @@ export default function QuickAddModal() {
                   <input
                     type="tel"
                     value={formData.phone1}
-                    onChange={(e) => setFormData({ ...formData, phone1: formatPhoneNumber(e.target.value) })}
+                    onChange={(e) => setFormData(prev => ({ ...prev, phone1: formatPhoneNumber(e.target.value) }))}
+                    onBlur={(e) => setFormData(prev => ({ ...prev, phone1: formatPhoneNumber(e.target.value) }))}
                     className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none ${
                       !formData.phone1 ? 'border-red-300 bg-red-50' : 'border-gray-200'
                     }`}
@@ -458,7 +459,8 @@ export default function QuickAddModal() {
                   <input
                     type="tel"
                     value={formData.phone2}
-                    onChange={(e) => setFormData({ ...formData, phone2: formatPhoneNumber(e.target.value) })}
+                    onChange={(e) => setFormData(prev => ({ ...prev, phone2: formatPhoneNumber(e.target.value) }))}
+                    onBlur={(e) => setFormData(prev => ({ ...prev, phone2: formatPhoneNumber(e.target.value) }))}
                     className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                     placeholder="(555) 987-6543"
                   />
@@ -743,7 +745,8 @@ export default function QuickAddModal() {
                   <input
                     type="tel"
                     value={formData.adjusterPhone}
-                    onChange={(e) => setFormData({ ...formData, adjusterPhone: formatPhoneNumber(e.target.value) })}
+                    onChange={(e) => setFormData(prev => ({ ...prev, adjusterPhone: formatPhoneNumber(e.target.value) }))}
+                    onBlur={(e) => setFormData(prev => ({ ...prev, adjusterPhone: formatPhoneNumber(e.target.value) }))}
                     className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                     placeholder="(555) 999-8888"
                   />
