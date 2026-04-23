@@ -283,6 +283,7 @@ export default function RoofrEstimateWizard({
   const [measurements, setMeasurements] = useState<RoofrMeasurements | null>(existingMeasurements ?? null);
   const [roofType, setRoofType]       = useState<RoofType | null>(null);
   const [items, setItems]             = useState<EstimateItem[]>([]);
+  const [importMode, setImportMode]   = useState<'add' | 'replace' | 'remove'>('replace');
   const [title, setTitle]             = useState('');
   const [terms, setTerms]             = useState('');
   const [saving, setSaving]           = useState(false);
@@ -894,6 +895,49 @@ export default function RoofrEstimateWizard({
           {/* ── Step 3: Line items & pricing ─────────────────────────────────── */}
           {step === 3 && roofType && (
             <div className="space-y-5">
+              {/* Import mode selector */}
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Import Mode</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    {
+                      value: 'add',
+                      label: 'Add to Quote',
+                      desc: 'Keeps all existing template items and adds the imported items below them.',
+                    },
+                    {
+                      value: 'replace',
+                      label: 'Replace Roofing Items',
+                      desc: 'Replaces only the roofing line items in your template with the imported items.',
+                    },
+                    {
+                      value: 'remove',
+                      label: 'Remove Imported',
+                      desc: 'Clears all auto-generated items so you can build the list manually.',
+                    },
+                  ] as const).map(opt => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => {
+                        setImportMode(opt.value);
+                        if (opt.value === 'remove') setItems([]);
+                      }}
+                      className={`text-left p-3 rounded-lg border-2 transition-colors ${
+                        importMode === opt.value
+                          ? 'border-green-500 bg-green-50'
+                          : 'border-gray-200 hover:border-gray-300 bg-white'
+                      }`}
+                    >
+                      <p className={`text-xs font-semibold mb-1 ${importMode === opt.value ? 'text-green-700' : 'text-gray-700'}`}>
+                        {opt.label}
+                      </p>
+                      <p className="text-xs text-gray-500 leading-snug">{opt.desc}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Estimate title */}
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Estimate Title</label>

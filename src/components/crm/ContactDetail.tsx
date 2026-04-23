@@ -48,6 +48,7 @@ import {
   validateMentions,
 } from '@/lib/mentions';
 import { uploadDocument, validateDocumentFile, formatFileSize, getDocumentSignedUrl, isHttpUrl, isSupabaseStorageUrl } from '@/lib/storage';
+import { compressImage } from '@/lib/imageUtils';
 import { htmlStringToPdfBlob } from '@/lib/pdfService';
 import { resolveDocumentSignedUrl } from '@/lib/documentAccess';
 import { logActivity } from '@/lib/activityLogger';
@@ -632,7 +633,10 @@ export default function ContactDetail() {
     setShowUploadNameDialog(false);
 
     try {
-      const uploadResult = await uploadDocument(pendingUploadFile, effectiveCompanyId, contactId);
+      const fileToUpload = pendingUploadFile.type.startsWith('image/')
+        ? await compressImage(pendingUploadFile, { maxPx: 1600, quality: 0.85, targetBytes: 1_000_000 })
+        : pendingUploadFile;
+      const uploadResult = await uploadDocument(fileToUpload, effectiveCompanyId, contactId);
 
       if (uploadResult.error) {
         console.error('[ContactDetail] Upload failed:', uploadResult.error);
@@ -646,7 +650,7 @@ export default function ContactDetail() {
         name: pendingUploadName || pendingUploadFile.name,
         type: pendingUploadCategory,
         url: uploadResult.path,
-        size: formatFileSize(pendingUploadFile.size),
+        size: formatFileSize(fileToUpload.size),
         uploaded_by: profile?.id,
       });
 
@@ -664,7 +668,7 @@ export default function ContactDetail() {
         url: created.url,
         uploadedAt: created.created_at,
         uploadedBy: created.uploaded_by || 'Team member',
-        size: created.size || formatFileSize(pendingUploadFile.size),
+        size: created.size || formatFileSize(fileToUpload.size),
       };
 
       setContactDocuments((prev) => [newDoc, ...prev]);
@@ -701,7 +705,8 @@ export default function ContactDetail() {
 
     setIsUploadingAvatar(true);
     try {
-      const uploadResult = await uploadDocument(file, effectiveCompanyId, contactId);
+      const compressed = await compressImage(file, { maxPx: 1600, quality: 0.85, targetBytes: 1_000_000 });
+      const uploadResult = await uploadDocument(compressed, effectiveCompanyId, contactId);
       if (uploadResult.error) {
         toast.error(`Avatar upload failed: ${uploadResult.error}`);
         return;
@@ -713,7 +718,7 @@ export default function ContactDetail() {
         name: '__contact_avatar__',
         type: 'photo',
         url: uploadResult.path,
-        size: formatFileSize(file.size),
+        size: formatFileSize(compressed.size),
         uploaded_by: profile?.id,
       });
 
@@ -1516,6 +1521,9 @@ export default function ContactDetail() {
                         onChange={(e) =>
                           setEditedContact({ ...currentData, phone1: formatPhoneNumber(e.target.value) })
                         }
+                        onBlur={(e) =>
+                          setEditedContact({ ...currentData, phone1: formatPhoneNumber(e.target.value) })
+                        }
                         className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                       />
                     ) : (
@@ -1536,6 +1544,9 @@ export default function ContactDetail() {
                         type="tel"
                         value={currentData.phone2 || ''}
                         onChange={(e) =>
+                          setEditedContact({ ...currentData, phone2: formatPhoneNumber(e.target.value) })
+                        }
+                        onBlur={(e) =>
                           setEditedContact({ ...currentData, phone2: formatPhoneNumber(e.target.value) })
                         }
                         className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
@@ -1762,6 +1773,9 @@ export default function ContactDetail() {
                               type="tel"
                               value={currentData.adjusterPhone || ''}
                               onChange={(e) =>
+                                setEditedContact({ ...currentData, adjusterPhone: formatPhoneNumber(e.target.value) })
+                              }
+                              onBlur={(e) =>
                                 setEditedContact({ ...currentData, adjusterPhone: formatPhoneNumber(e.target.value) })
                               }
                               className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
