@@ -186,16 +186,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(session?.user ?? null);
         // setSession() (used by loginClient sign-in path) fires TOKEN_REFRESHED.
         // Load the profile if not yet loaded so sign-in completes fully.
-        // We must set loading=true here to keep AuthGate on LoadingScreen while
-        // the profile fetches — without it, CRMApp renders immediately with a null
-        // profile, which can cause a blank UI or crash if cached data is present.
         if (session?.user) {
           setProfile(prev => {
             if (!prev) {
-              setLoading(true);
               loadProfileOnce(session.user.id, session.user.email || '')
-                .then(p => { if (p) setProfile(p); })
-                .finally(() => setLoading(false));
+                .then(p => { if (p) { setProfile(p); setLoading(false); } });
             }
             return prev;
           });
