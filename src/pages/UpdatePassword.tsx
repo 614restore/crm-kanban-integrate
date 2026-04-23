@@ -68,8 +68,8 @@ export default function UpdatePassword() {
             return;
         }
 
-        if (password.length < 6) {
-            setError('Password must be at least 6 characters');
+        if (password.length < 8) {
+            setError('Password must be at least 8 characters');
             return;
         }
 
@@ -81,6 +81,8 @@ export default function UpdatePassword() {
             // which causes the form to re-appear after redirect.
             const { data: { session } } = await supabase.auth.getSession();
             const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+            const controller = new AbortController();
+            const fetchTimeout = window.setTimeout(() => controller.abort(), 15000);
             const res = await fetch(`${supabaseUrl}/functions/v1/confirm-password-change`, {
                 method: 'POST',
                 headers: {
@@ -88,19 +90,26 @@ export default function UpdatePassword() {
                     'Authorization': `Bearer ${session?.access_token}`,
                 },
                 body: JSON.stringify({ password }),
+                signal: controller.signal,
             });
+            window.clearTimeout(fetchTimeout);
 
             if (!res.ok) {
                 const data = await res.json().catch(() => ({}));
                 throw new Error(data?.error || 'Failed to update password.');
             }
 
-            // Clear in-memory flag so AppLayout stops showing this screen immediately
+            // Sign out locally BEFORE redirecting so the Supabase client doesn't
+            // carry stale tokens into the reload. The Admin API password change
+            // already invalidated the session server-side; if we skip this step,
+            // the client tries (and hangs) to refresh the revoked tokens on startup,
+            // causing the 12-second white-screen/spinner on mobile and web.
+            try { await supabase.auth.signOut(); } catch { /* best-effort */ }
             clearPasswordReset();
             setSuccess('Password updated successfully! Redirecting...');
             setTimeout(() => {
                 try { sessionStorage.removeItem('pending_password_reset'); } catch (e) { console.warn('[UpdatePassword] sessionStorage cleanup failed:', e); }
-                window.location.href = window.location.origin + (import.meta.env.BASE_URL || '/');
+                window.location.replace(window.location.origin + (import.meta.env.BASE_URL || '/'));
             }, 1500);
         } catch (err: any) {
             setError(err.message || 'An unexpected error occurred. Please try again.');
