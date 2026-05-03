@@ -206,7 +206,7 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen relative flex">
+    <div className="min-h-screen relative flex overflow-y-auto">
       {/* Background with Logo Watermark */}
       <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-900">
         {/* Large Semi-Transparent Logo Watermark */}
@@ -265,18 +265,37 @@ export default function AuthPage() {
       </div>
 
       {/* Right Panel - Auth Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 relative z-10 overflow-y-auto">
+      {/* items-start on mobile so form flows top-to-bottom and is fully reachable */}
+      <div className="w-full lg:w-1/2 flex items-start lg:items-center justify-center px-4 py-8 lg:p-8 relative z-10">
         <div className="w-full max-w-md">
           {/* Mobile Logo */}
-          <div className="lg:hidden flex flex-col items-center justify-center mb-8">
+          <div className="lg:hidden flex flex-col items-center justify-center mb-4">
             <div className="flex items-center gap-3 mb-1">
-              <img src="/trussctr-logo-shield.png" alt="TrussCTR Logo" className="w-16 h-16 object-contain drop-shadow-2xl" />
+              <img src="/trussctr-logo-shield.png" alt="TrussCTR Logo" className="w-12 h-12 object-contain drop-shadow-2xl" />
               <span className="text-xl font-bold text-white drop-shadow-lg">TrussCTR</span>
             </div>
             <p className="text-blue-200 text-sm italic drop-shadow-md">A CRM you can Truss</p>
           </div>
 
-          <div className="bg-white rounded-2xl shadow-2xl p-8">
+          {/* Sign in / Sign up toggle — visible on mobile without scrolling */}
+          {mode !== 'reset' && (
+            <div className="lg:hidden flex rounded-xl overflow-hidden mb-4 border border-white/20">
+              <button
+                onClick={() => { setMode('login'); setError(null); setSuccess(null); }}
+                className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${mode === 'login' ? 'bg-white text-blue-700' : 'bg-white/10 text-white hover:bg-white/20'}`}
+              >
+                Sign In
+              </button>
+              <button
+                onClick={() => { setMode('signup'); setError(null); setSuccess(null); }}
+                className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${mode === 'signup' ? 'bg-white text-blue-700' : 'bg-white/10 text-white hover:bg-white/20'}`}
+              >
+                Sign Up
+              </button>
+            </div>
+          )}
+
+          <div className="bg-white rounded-2xl shadow-2xl p-6 lg:p-8">
             <div className="text-center mb-8">
               <h2 className="text-2xl font-bold text-gray-900">
                 {mode === 'login'
