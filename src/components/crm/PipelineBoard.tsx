@@ -450,19 +450,21 @@ export default function PipelineBoard() {
     // Start dragging if moved enough (prevents accidental drags)
     if ((deltaY > 10 || deltaX > 10) && !touchData.isDragging) {
       setTouchData(prev => ({ ...prev, isDragging: true }));
-      
-      // Add visual feedback
-      touchData.dragElement.style.opacity = '0.7';
+
+      // Visual feedback + make card transparent to pointer events so
+      // elementFromPoint can see the column underneath the finger.
+      touchData.dragElement.style.opacity = '0.6';
       touchData.dragElement.style.transform = 'scale(1.05)';
       touchData.dragElement.style.zIndex = '1000';
-      touchData.dragElement.style.position = 'relative';
+      touchData.dragElement.style.pointerEvents = 'none';
     }
-    
+
     if (touchData.isDragging) {
-      // Find the element under the touch point
+      // With pointer-events:none on the card, elementFromPoint finds the
+      // actual column sitting under the finger — even the card's own column.
       const elementBelow = document.elementFromPoint(touch.clientX, touch.clientY);
       const columnElement = elementBelow?.closest('[data-column-id]');
-      
+
       if (columnElement) {
         const columnId = columnElement.getAttribute('data-column-id');
         setDragOverColumn(columnId);
@@ -486,20 +488,18 @@ export default function PipelineBoard() {
       return;
     }
 
-    const touch = e.changedTouches[0];
-    const elementBelow = document.elementFromPoint(touch.clientX, touch.clientY);
-    const columnElement = elementBelow?.closest('[data-column-id]');
-    
-    // Reset visual feedback
+    // Restore visual feedback + pointer events
     if (touchData.dragElement) {
       touchData.dragElement.style.opacity = '';
       touchData.dragElement.style.transform = '';
       touchData.dragElement.style.zIndex = '';
-      touchData.dragElement.style.position = '';
+      touchData.dragElement.style.pointerEvents = '';
     }
-    
-    if (columnElement && dragOverColumn) {
-      const columnId = columnElement.getAttribute('data-column-id');
+
+    // Use dragOverColumn state as source of truth — it's updated live during
+    // touchMove and is more reliable than re-running elementFromPoint at end.
+    if (dragOverColumn) {
+      const columnId = dragOverColumn;
       
       // Find the column object that matches this ID
       let targetColumn: KanbanColumn | null = null;

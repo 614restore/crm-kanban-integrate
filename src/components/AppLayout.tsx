@@ -1387,10 +1387,11 @@ useEffect(() => {
     return () => window.clearInterval(interval);
   }, [profile?.company_id]);
 
-  // Fail-safe: avoid getting stuck on the loading screen if initial data calls stall
+  // Fail-safe: avoid getting stuck on the loading screen if initial data calls stall.
+  // This effect resets whenever authLoading toggles (mobile reconnects, token refreshes)
+  // which can prevent it from ever firing on unstable connections.
   useEffect(() => {
     if (!state.isLoading || state.isInitialized) return;
-    // Don't start the timeout until auth has finished loading
     if (authLoading) return;
 
     const timer = window.setTimeout(() => {
@@ -1418,6 +1419,38 @@ useEffect(() => {
 
     return () => window.clearTimeout(timer);
   }, [state.isLoading, state.isInitialized, authLoading]);
+
+  // Absolute hard deadline — fires exactly once, 20 s after CRMApp mounts.
+  // This cannot be reset by auth events or network toggling, so the app can
+  // never be stuck on the loading screen indefinitely (e.g. on mobile with an
+  // unstable connection that keeps resetting the soft fail-safe above).
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (state.isInitialized) return; // Already loaded — nothing to do
+      console.warn('[AppLayout] Absolute 20 s loading deadline reached — forcing app shell.');
+      dispatch({
+        type: 'INITIALIZE_DATA',
+        payload: {
+          contacts: [],
+          appointments: [],
+          invoices: [],
+          boards: defaultBoards,
+          leadSources: defaultLeadSources,
+          automations: [],
+          teamMembers: [],
+          suppliers: [],
+          materialOrders: [],
+          estimates: [],
+          projects: [],
+          workOrders: [],
+          documentTemplates: [],
+          companyGoals: [],
+        },
+      });
+    }, 20000);
+    return () => window.clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps — intentional. Runs once on mount, never resets.
 
   // Subscription check — sets read-only mode when trial has expired or subscription is inactive.
   useEffect(() => {
