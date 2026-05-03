@@ -390,6 +390,118 @@ function dbInvoiceToAppInvoice(dbInvoice: any, contacts: Contact[]): Invoice {
   };
 }
 
+// Helper function to convert DB estimate to app estimate
+function dbEstimateToAppEstimate(e: any, contacts: Contact[]): Estimate {
+  const contact = contacts.find(c => c.id === e.contact_id);
+  const contactName = contact ? `${contact.firstName} ${contact.lastName}`.trim() : '';
+  return {
+    id: e.id,
+    contactId: e.contact_id,
+    contactName,
+    jobId: e.job_id,
+    estimateNumber: e.estimate_number,
+    title: e.title,
+    description: e.description,
+    status: e.status,
+    amount: Number(e.subtotal || e.amount || 0),
+    tax: Number(e.tax || 0),
+    total: Number(e.total || 0),
+    validUntil: e.valid_until || e.validity_date,
+    createdAt: e.created_at,
+    sentAt: e.sent_at,
+    viewedAt: e.viewed_at,
+    acceptedAt: e.accepted_at,
+    declinedAt: e.declined_at,
+    signedBy: e.signed_by,
+    signatureData: e.signature_data,
+    items: e.items || [],
+    terms: e.terms || e.terms_and_conditions,
+    notes: e.notes,
+    createdBy: e.created_by,
+    updatedAt: e.updated_at,
+  };
+}
+
+// Helper function to convert DB project to app project
+function dbProjectToAppProject(p: any, contacts: Contact[]): any {
+  const contact = contacts.find(c => c.id === p.contact_id);
+  const contactName = contact ? `${contact.firstName} ${contact.lastName}`.trim() : '';
+  return {
+    id: p.id,
+    projectNumber: p.project_number,
+    name: p.name,
+    contactId: p.contact_id,
+    contactName,
+    estimateId: p.estimate_id,
+    description: p.description,
+    status: p.status,
+    priority: p.priority,
+    startDate: p.start_date,
+    endDate: p.end_date,
+    completedDate: p.completed_date,
+    estimatedBudget: Number(p.estimated_budget || 0),
+    actualCost: Number(p.actual_cost || 0),
+    materialCostGoal: Number(p.material_cost_goal || 0),
+    subcontractorCostGoal: Number(p.subcontractor_cost_goal || 0),
+    salesRepPayGoal: Number(p.labor_cost_goal || 0),
+    otherExpensesGoal: Number(p.other_cost_goal || 0),
+    actualMaterialCost: Number(p.material_cost || 0),
+    actualSubcontractorCost: Number(p.subcontractor_cost || 0),
+    actualSalesRepPay: Number(p.labor_cost || 0),
+    actualOtherExpenses: Number(p.other_cost || 0),
+    address: p.address,
+    city: p.city,
+    state: p.state,
+    zip: p.zip,
+    projectManagerId: p.project_manager_id,
+    projectManagerName: '',
+    notes: p.notes,
+    tags: p.tags || [],
+    createdBy: p.created_by,
+    createdAt: p.created_at,
+    updatedAt: p.updated_at,
+  };
+}
+
+// Helper function to convert DB work order to app work order
+function dbWorkOrderToAppWorkOrder(wo: any, contacts: Contact[], projects: any[]): any {
+  const contact = contacts.find(c => c.id === wo.contact_id);
+  const contactName = contact ? `${contact.firstName} ${contact.lastName}`.trim() : '';
+  const projectName = projects.find((p: any) => p.id === wo.project_id)?.name || '';
+  return {
+    id: wo.id,
+    workOrderNumber: wo.work_order_number,
+    projectId: wo.project_id,
+    projectName,
+    contactId: wo.contact_id,
+    contactName,
+    title: wo.title,
+    description: wo.description,
+    status: wo.status,
+    priority: wo.priority,
+    scheduledDate: wo.scheduled_date,
+    startedAt: wo.started_at,
+    completedAt: wo.completed_at,
+    assignedTo: wo.assigned_to || [],
+    assignedToNames: [],
+    estimatedHours: wo.estimated_hours ? Number(wo.estimated_hours) : undefined,
+    actualHours: wo.actual_hours ? Number(wo.actual_hours) : undefined,
+    laborCost: Number(wo.labor_cost || 0),
+    materialCost: Number(wo.material_cost || 0),
+    totalCost: Number(wo.total_cost || 0),
+    address: wo.address,
+    city: wo.city,
+    state: wo.state,
+    zip: wo.zip,
+    notes: wo.notes,
+    attachments: wo.attachments || [],
+    checklistItems: wo.checklist_items || [],
+    createdBy: wo.created_by,
+    createdAt: wo.created_at,
+    updatedAt: wo.updated_at,
+  };
+}
+
 // Trial banner shown when subscription_status is 'trialing'
 // Days 1-7: shows 50% off launch offer with promo code
 // Days 1-3 of trial (>11 days left on 14-day trial): emphasise urgency
@@ -1123,6 +1235,33 @@ function CRMApp() {
           dispatch({ type: payload.eventType === 'INSERT' ? 'ADD_TEAM_MEMBER' : 'UPDATE_TEAM_MEMBER', payload: teamMember });
         }
       },
+      // Estimates — patch in-place so EstimatesView and Dashboard stay in sync without a full reload
+      onEstimateChange: (payload) => {
+        if (payload.eventType === 'DELETE') {
+          dispatch({ type: 'DELETE_ESTIMATE', payload: payload.old.id });
+        } else {
+          const est = dbEstimateToAppEstimate(payload.new, stateRef.current.contacts);
+          dispatch({ type: payload.eventType === 'INSERT' ? 'ADD_ESTIMATE' : 'UPDATE_ESTIMATE', payload: est });
+        }
+      },
+      // Projects — patch in-place so ProjectsView and Dashboard stay in sync
+      onProjectChange: (payload) => {
+        if (payload.eventType === 'DELETE') {
+          dispatch({ type: 'DELETE_PROJECT', payload: payload.old.id });
+        } else {
+          const proj = dbProjectToAppProject(payload.new, stateRef.current.contacts);
+          dispatch({ type: payload.eventType === 'INSERT' ? 'ADD_PROJECT' : 'UPDATE_PROJECT', payload: proj });
+        }
+      },
+      // Work orders — patch in-place so WorkOrdersView stays current across devices
+      onWorkOrderChange: (payload) => {
+        if (payload.eventType === 'DELETE') {
+          dispatch({ type: 'DELETE_WORK_ORDER', payload: payload.old.id });
+        } else {
+          const wo = dbWorkOrderToAppWorkOrder(payload.new, stateRef.current.contacts, stateRef.current.projects);
+          dispatch({ type: payload.eventType === 'INSERT' ? 'ADD_WORK_ORDER' : 'UPDATE_WORK_ORDER', payload: wo });
+        }
+      },
       onStatusChange: (status, error) => {
         if ((status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') && !realtimeFailedRef.current) {
           realtimeFailedRef.current = true;
@@ -1169,7 +1308,7 @@ function CRMApp() {
       if (realtimeFailedRef.current) {
         requestSoftReload();
       }
-    }, 60000);
+    }, 20000); // 20s — matches the "auto-sync every 20 seconds" message in ConnectionStatusBanner
 
     return () => window.clearInterval(poller);
   }, [profile?.company_id, requestSoftReload]);
@@ -1182,34 +1321,58 @@ useEffect(() => {
 }, [profile?.company_id, authLoading]);
 
   // Track idle time and reload data when the tab regains focus.
-  // Only reload after the tab has been hidden for >5 min so that brief
-  // context switches (e.g. copy-pasting an address, checking a text) never
-  // interrupt an active editing session (template editor, note, form, etc.).
-  // After >30 min dormant, also re-validate the auth session before refreshing.
+  // Two complementary events cover all platforms:
+  //   • visibilitychange — fires when switching browser tabs (desktop + mobile)
+  //   • window focus     — fires when the browser window regains focus from another app
+  //                        (e.g. switching back from Messages on iOS, or from another desktop app)
+  // Both use the same lastHiddenAtRef so a rapid tab-switch + app-switch doesn't double-fire.
+  // Only reload after the tab/app has been hidden for >5 min to avoid interrupting active editing.
+  // After >30 min dormant, re-validate the auth session before refreshing.
   useEffect(() => {
     if (!profile?.company_id) return;
+
+    const maybeSoftReload = () => {
+      const idleMs = lastHiddenAtRef.current ? Date.now() - lastHiddenAtRef.current : 0;
+      // Skip reload for brief switches — anything under 5 minutes is noise
+      if (idleMs < 5 * 60 * 1000) return;
+      // Reset the timer so a second consecutive focus event within the window doesn't re-fire
+      lastHiddenAtRef.current = Date.now();
+
+      if (idleMs > 30 * 60 * 1000) {
+        // Dormant >30 min — re-validate session first, then reload
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          if (session) requestSoftReload();
+          // No session → onAuthStateChange listener handles sign-out automatically
+        });
+      } else {
+        // Dormant 5–30 min — refresh data but skip session re-check
+        requestSoftReload();
+      }
+    };
+
     const handleVisibility = () => {
       if (document.visibilityState === 'hidden') {
         lastHiddenAtRef.current = Date.now();
       } else if (document.visibilityState === 'visible') {
-        const idleMs = lastHiddenAtRef.current ? Date.now() - lastHiddenAtRef.current : 0;
-        // Skip reload for brief tab switches — anything under 5 minutes is noise
-        if (idleMs < 5 * 60 * 1000) return;
-
-        if (idleMs > 30 * 60 * 1000) {
-          // Dormant >30 min — re-validate session first, then reload
-          supabase.auth.getSession().then(({ data: { session } }) => {
-            if (session) requestSoftReload();
-            // No session → onAuthStateChange listener handles sign-out automatically
-          });
-        } else {
-          // Dormant 5–30 min — refresh data but skip session re-check
-          requestSoftReload();
-        }
+        maybeSoftReload();
       }
     };
+
+    // window focus fires when the OS brings the browser window to the front
+    // (covers switching back from a native app on mobile and alt-tab on desktop)
+    const handleWindowFocus = () => {
+      // Only act if the document is visible — avoids double-fire with visibilitychange
+      if (document.visibilityState === 'visible') {
+        maybeSoftReload();
+      }
+    };
+
     document.addEventListener('visibilitychange', handleVisibility);
-    return () => document.removeEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', handleWindowFocus);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', handleWindowFocus);
+    };
   }, [profile?.company_id, requestSoftReload]);
 
   // Keep the Supabase auth token alive during long page sessions.

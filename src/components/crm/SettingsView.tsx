@@ -293,10 +293,22 @@ export default function SettingsView() {
 
   const userRole = (state.currentUser?.role || profile?.role || 'owner') as any;
   const canManageSources = canManageLeadSources(userRole);
-  const effectiveCompanyId = profile?.company_id || state.companyId || null;
+
+  // localStorage is written by AppLayout on every auth resolution — use it as a
+  // reliable fallback so Settings never loses the companyId due to timing issues.
+  const localStorageCompanyId = (() => {
+    try { return localStorage.getItem('crm_last_company_id'); } catch { return null; }
+  })();
+  const effectiveCompanyId = profile?.company_id || state.companyId || localStorageCompanyId || null;
+
+  // Keep a ref so async handlers always read the freshest value even in stale closures.
+  const companyIdRef = useRef<string | null>(effectiveCompanyId);
+  useEffect(() => { companyIdRef.current = effectiveCompanyId; }, [effectiveCompanyId]);
 
   const resolveCompanyId = useCallback(async (): Promise<string | null> => {
-    const currentCompanyId = profile?.company_id || state.companyId || null;
+    // Check ref first — it's always the most current value.
+    if (companyIdRef.current) return companyIdRef.current;
+    const currentCompanyId = profile?.company_id || state.companyId || localStorageCompanyId || null;
     if (currentCompanyId) return currentCompanyId;
 
     const userId = profile?.id || user?.id;
@@ -357,9 +369,9 @@ export default function SettingsView() {
       return null;
     } catch (error) {
       console.warn('resolveCompanyId error:', error);
-      return state.companyId || null;
+      return state.companyId || localStorageCompanyId || null;
     }
-  }, [dispatch, profile?.company_id, profile?.id, profile?.email, state.companyId, user?.id, user?.email]);
+  }, [dispatch, profile?.company_id, profile?.id, profile?.email, state.companyId, user?.id, user?.email, localStorageCompanyId]);
 
   // Combine default and custom lead sources
   const allLeadSources = [...defaultLeadSources, ...state.leadSources.filter((ls) => ls.isCustom)];

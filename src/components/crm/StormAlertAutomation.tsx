@@ -110,14 +110,20 @@ export function StormAlertAutomation({ contacts, onSendAlerts }: StormAlertProps
           try {
             const response = await fetch('/api/eagleview', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: {
+                'Content-Type': 'application/json',
+                ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+              },
               body: JSON.stringify({ action: 'weather', zipCode: zip }),
             });
             if (response.ok) {
               const data = await response.json();
               return { zip, alerts: data.alerts || [], hasStorm: data.hasActiveStorm, location: data.location };
             }
-          } catch (_e) { /* weather check failed for zip — return empty */ }
+            console.warn(`[StormAlert] Weather check failed for zip ${zip}: HTTP ${response.status}`);
+          } catch (e) {
+            console.warn(`[StormAlert] Weather check error for zip ${zip}:`, e);
+          }
           return { zip, alerts: [], hasStorm: false };
         })
       );

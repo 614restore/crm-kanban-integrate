@@ -1,12 +1,11 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import Sidebar from '@/components/crm/Sidebar';
 import MobileNav from './MobileNav';
 import { offlineDB, initializeOfflineDB } from '@/lib/offlineDB';
 import { RefreshCw } from 'lucide-react';
-import { useAuth } from '@/lib/authContext';
-import { db } from '@/lib/database';
+import { useCompanyBrand } from '@/lib/useCompanyBrand';
 
 interface ResponsiveLayoutProps {
   children: React.ReactNode;
@@ -14,43 +13,15 @@ interface ResponsiveLayoutProps {
 
 export default function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
   const isMobile = useIsMobile();
-  const { profile } = useAuth();
   const queryClient = useQueryClient();
   const [isOfflineReady, setIsOfflineReady] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [pullDistance, setPullDistance] = useState(0);
   const [startY, setStartY] = useState(0);
-  const [companyLogoUrl, setCompanyLogoUrl] = useState<string | null>(null);
-
-  // Load company logo
-  const loadCompanyBrand = useCallback(async () => {
-    if (!profile?.company_id) {
-      // Don't reset — keep existing logo during token refresh flicker
-      return;
-    }
-
-    try {
-      const company = await db.getCompany(profile.company_id);
-      if (company?.logo_url) {
-        setCompanyLogoUrl(company.logo_url);
-      }
-    } catch (error) {
-      console.error('Failed to load company logo:', error);
-    }
-  }, [profile?.company_id]);
-
-  useEffect(() => {
-    loadCompanyBrand();
-  }, [loadCompanyBrand]);
-
-  useEffect(() => {
-    const onCompanyUpdated = () => {
-      loadCompanyBrand();
-    };
-
-    window.addEventListener('crm-company-updated', onCompanyUpdated);
-    return () => window.removeEventListener('crm-company-updated', onCompanyUpdated);
-  }, [loadCompanyBrand]);
+  // Instant logo from localStorage — no spinner, no blank header
+  const { logoUrl: companyLogoUrl } = useCompanyBrand();
+  const [logoFailed, setLogoFailed] = useState(false);
+  useEffect(() => { setLogoFailed(false); }, [companyLogoUrl]);
 
   // Initialize offline database on mount
   useEffect(() => {
@@ -140,12 +111,12 @@ export default function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
         >
           <div className="flex items-center justify-between px-4 py-3">
             <div className="flex items-center gap-2">
-              {companyLogoUrl ? (
+              {companyLogoUrl && !logoFailed ? (
                 <img
                   src={companyLogoUrl}
                   alt="Company logo"
                   className="w-8 h-8 rounded-lg object-contain"
-                  onError={() => setCompanyLogoUrl(null)}
+                  onError={() => setLogoFailed(true)}
                 />
               ) : (
                 <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">

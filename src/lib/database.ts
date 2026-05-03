@@ -528,7 +528,10 @@ class DatabaseService {
       const raw = localStorage.getItem(`company_cache_${companyId}`);
       if (!raw) return null;
       const { data, ts } = JSON.parse(raw) as { data: DbCompany; ts: number };
-      if (Date.now() - ts > 5 * 60 * 1000) return null;
+      // 24 h TTL — company name/logo/settings change rarely; stale branding is
+      // far less disruptive than a spinner on every page refresh. The
+      // crm-company-updated event forces an immediate re-fetch when settings are saved.
+      if (Date.now() - ts > 24 * 60 * 60 * 1000) return null;
       return data;
     } catch {
       return null;

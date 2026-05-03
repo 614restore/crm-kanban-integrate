@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useCRM, ViewType, canViewFinancials, canManageTeam } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
-import { db } from '@/lib/database';
+import { useCompanyBrand } from '@/lib/useCompanyBrand';
 import {
   LayoutDashboard,
   Kanban,
@@ -71,71 +71,17 @@ const navItems: NavItem[] = [
   { id: 'settings', label: 'Settings', icon: <Settings size={20} /> },
 ];
 
-function normalizeCompanyName(rawName?: string | null, email?: string | null): string {
-  const trimmed = (rawName || '').trim();
-  const emailLike = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-  if (trimmed && !emailLike.test(trimmed)) {
-    return trimmed;
-  }
-
-  const source = (email || trimmed || '').trim();
-  if (source.includes('@')) {
-    const local = source.split('@')[0].replace(/[._-]+/g, ' ').trim();
-    if (local) {
-      return local
-        .split(/\s+/)
-        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-        .join(' ') + ' Company';
-    }
-  }
-
-  return 'My Company';
-}
-
 export default function Sidebar() {
   const { state, dispatch } = useCRM();
   const { profile, signOut } = useAuth();
   const { currentView, sidebarCollapsed, currentUser } = state;
-  const [companyName, setCompanyName] = useState('Loading...');
-  const [companyLogoUrl, setCompanyLogoUrl] = useState<string | null>(null);
+  const { name: companyName, logoUrl: companyLogoUrl } = useCompanyBrand();
   const [showNotifications, setShowNotifications] = useState(false);
-  const [isLoadingCompany, setIsLoadingCompany] = useState(true);
+  // Track logo load failure so we fall back to the TrussCTR shield without needing a setter
+  const [logoFailed, setLogoFailed] = useState(false);
+  useEffect(() => { setLogoFailed(false); }, [companyLogoUrl]);
 
   const userRole = (currentUser?.role || profile?.role || 'owner') as any;
-
-  const loadCompanyBrand = useCallback(async () => {
-    if (!profile?.company_id) {
-      setCompanyName('My Company');
-      setIsLoadingCompany(false);
-      return;
-    }
-    try {
-      setIsLoadingCompany(true);
-      const company = await db.getCompany(profile.company_id);
-      if (!company) {
-        console.warn('[Sidebar] No company data returned for ID:', profile.company_id);
-        setCompanyName('My Company');
-        setIsLoadingCompany(false);
-        return;
-      }
-      setCompanyName(normalizeCompanyName(company.name, company.email));
-      setCompanyLogoUrl(company.logo_url || null);
-      setIsLoadingCompany(false);
-    } catch (error) {
-      console.error('[Sidebar] Failed to load company branding:', error);
-      setCompanyName('My Company');
-      setIsLoadingCompany(false);
-    }
-  }, [profile?.company_id]);
-
-  useEffect(() => { loadCompanyBrand(); }, [loadCompanyBrand]);
-
-  useEffect(() => {
-    const onCompanyUpdated = () => { loadCompanyBrand(); };
-    window.addEventListener('crm-company-updated', onCompanyUpdated);
-    return () => window.removeEventListener('crm-company-updated', onCompanyUpdated);
-  }, [loadCompanyBrand]);
 
   const filteredNavItems = navItems.filter((item) => {
     if (item.requiresPermission === 'financials') return canViewFinancials(userRole);
@@ -159,8 +105,8 @@ export default function Sidebar() {
       <div className="h-16 flex items-center justify-between px-4 border-b border-slate-700">
         {!sidebarCollapsed && (
           <div className="flex items-center gap-2 min-w-0">
-            {companyLogoUrl ? (
-              <img src={companyLogoUrl} alt="Company logo" className="w-8 h-8 rounded-lg object-contain" onError={() => setCompanyLogoUrl(null)} />
+            {companyLogoUrl && !logoFailed ? (
+              <img src={companyLogoUrl} alt="Company logo" className="w-8 h-8 rounded-lg object-contain" onError={() => setLogoFailed(true)} />
             ) : (
               <img src="/trussctr-logo-shield.png" alt="TrussCTR Logo" className="w-8 h-8 object-contain" />
             )}
