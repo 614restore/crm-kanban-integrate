@@ -45,18 +45,20 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const user = await requireAuth(req, res);
-  if (!user) return;
-
   const { action, address, zipCode } = req.body || {};
 
-  // ── WEATHER — free NOAA, no EagleView account needed ─────────────────────
+  // ── WEATHER — free NOAA public data, no auth needed ──────────────────────
+  // Checked BEFORE requireAuth so the client never needs a session token for
+  // weather lookups. NOAA api.weather.gov is a free, unauthenticated public API.
   if (action === 'weather') {
     if (!zipCode) return res.status(400).json({ error: 'zipCode is required' });
     return await noaaWeather(zipCode, res);
   }
 
-  // ── SEARCH & ORDER — require company EagleView credentials ───────────────
+  // ── SEARCH & ORDER — require auth + company EagleView credentials ─────────
+  const user = await requireAuth(req, res);
+  if (!user) return;
+
   const creds = await getCompanyEagleView(user.id);
   if (!creds) {
     return res.status(503).json({
