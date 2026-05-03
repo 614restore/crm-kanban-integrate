@@ -265,16 +265,15 @@ export default function AuthPage() {
       </div>
 
       {/* Right Panel - Auth Form */}
-      {/* items-start on mobile so form flows top-to-bottom and is fully reachable */}
-      <div className="w-full lg:w-1/2 flex items-start lg:items-center justify-center px-4 py-8 lg:p-8 relative z-10">
+      <div className="w-full lg:w-1/2 flex-1 flex flex-col items-center justify-center px-4 py-6 lg:p-8 relative z-10">
         <div className="w-full max-w-md">
           {/* Mobile Logo */}
-          <div className="lg:hidden flex flex-col items-center justify-center mb-4">
-            <div className="flex items-center gap-3 mb-1">
-              <img src="/trussctr-logo-shield.png" alt="TrussCTR Logo" className="w-12 h-12 object-contain drop-shadow-2xl" />
-              <span className="text-xl font-bold text-white drop-shadow-lg">TrussCTR</span>
+          <div className="lg:hidden flex flex-col items-center justify-center mb-3">
+            <div className="flex items-center gap-2 mb-0.5">
+              <img src="/trussctr-logo-shield.png" alt="TrussCTR Logo" className="w-10 h-10 object-contain drop-shadow-2xl" />
+              <span className="text-lg font-bold text-white drop-shadow-lg">TrussCTR</span>
             </div>
-            <p className="text-blue-200 text-sm italic drop-shadow-md">A CRM you can Truss</p>
+            <p className="text-blue-200 text-xs italic drop-shadow-md">A CRM you can Truss</p>
           </div>
 
           {/* Sign in / Sign up toggle — visible on mobile without scrolling */}
@@ -295,8 +294,8 @@ export default function AuthPage() {
             </div>
           )}
 
-          <div className="bg-white rounded-2xl shadow-2xl p-6 lg:p-8">
-            <div className="text-center mb-8">
+          <div className="bg-white rounded-2xl shadow-2xl p-5 lg:p-8">
+            <div className="text-center mb-5">
               <h2 className="text-2xl font-bold text-gray-900">
                 {mode === 'login'
                   ? 'Welcome back'

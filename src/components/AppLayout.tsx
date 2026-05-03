@@ -121,7 +121,7 @@ const initialState: CRMState = {
   estimates: [],
   projects: [],
   workOrders: [],
-  sidebarCollapsed: false,
+  sidebarCollapsed: typeof window !== 'undefined' && window.innerWidth <= 768,
   searchQuery: '',
   filterStatus: 'all',
   filterAssignee: 'all',

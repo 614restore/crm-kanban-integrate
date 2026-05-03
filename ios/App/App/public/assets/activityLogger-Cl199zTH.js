@@ -1,1 +1,0 @@
-import{o as t}from"./index-TQORfwW5.js";async function n(n){const{error:o}=await t.from("communications").insert({contact_id:n.contactId,company_id:n.companyId,type:"note",direction:"internal",content:n.content,status:"completed",created_by:n.userId??null,created_at:(new Date).toISOString()})}export{n as l};

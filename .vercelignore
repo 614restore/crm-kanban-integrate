@@ -1,0 +1,12 @@
+node_modules
+.claude
+ios
+src-tauri
+playwright-report
+test-results
+backup-april3
+dist
+gh-pages
+*.sql
+*.sh
+*.log
