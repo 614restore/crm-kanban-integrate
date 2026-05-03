@@ -1,6 +1,6 @@
 // api/eagleview.mjs
 // EagleView roof measurement API — uses each company's own EagleView credentials
-// stored in company_integrations (integration_id = 'eagleview').
+// stored in company_integrations (integration_type = 'eagleview').
 //
 // Action: 'weather' falls back to free NOAA data — no credentials needed.
 // Actions: 'search', 'order' require the company to have EagleView configured.
@@ -21,7 +21,7 @@ async function getCompanyEagleView(userId) {
     .from('company_integrations')
     .select('credentials')
     .eq('company_id', profile.company_id)
-    .eq('integration_id', 'eagleview')
+    .eq('integration_type', 'eagleview')
     .single();
 
   if (!row?.credentials) return null;

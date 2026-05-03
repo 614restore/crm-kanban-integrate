@@ -54,6 +54,7 @@ const MaterialOrdersView = lazy(() => import('./crm/MaterialOrdersView'));
 const ExpenseTracker = lazy(() => import('./crm/ExpenseTracker'));
 const DocumentTemplates = lazy(() => import('./crm/DocumentTemplates'));
 const ReportsAnalytics = lazy(() => import('./crm/ReportsAnalytics'));
+const SalesAnalytics = lazy(() => import('./crm/SalesAnalytics'));
 const InsuranceTrackingView = lazy(() => import('./crm/InsuranceTrackingView'));
 const SupplementTrackingView = lazy(() => import('./crm/SupplementTrackingView'));
 const CrewScheduleView = lazy(() => import('./crm/CrewScheduleView'));
@@ -121,7 +122,7 @@ const initialState: CRMState = {
   estimates: [],
   projects: [],
   workOrders: [],
-  sidebarCollapsed: typeof window !== 'undefined' && window.innerWidth <= 768,
+  sidebarCollapsed: false,
   searchQuery: '',
   filterStatus: 'all',
   filterAssignee: 'all',
@@ -197,6 +198,8 @@ function ViewRouter() {
         return <DocumentTemplates />;
       case 'reports':
         return <ReportsAnalytics />;
+      case 'sales-analytics':
+        return <SalesAnalytics />;
       case 'insurance-tracking':
         return <InsuranceTrackingView />;
       case 'supplement-tracking':

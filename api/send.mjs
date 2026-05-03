@@ -51,7 +51,7 @@ async function getCompanyIntegration(companyId, integrationId) {
     .from('company_integrations')
     .select('credentials')
     .eq('company_id', companyId)
-    .eq('integration_id', integrationId)
+    .eq('integration_type', integrationId)
     .single();
   if (!data?.credentials) return null;
   return typeof data.credentials === 'string' ? JSON.parse(data.credentials) : data.credentials;

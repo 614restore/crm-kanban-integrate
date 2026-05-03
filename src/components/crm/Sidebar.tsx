@@ -100,7 +100,6 @@ export default function Sidebar() {
       className={`${
         sidebarCollapsed ? 'w-16' : 'w-64'
       } bg-slate-900 text-white flex flex-col transition-all duration-300 ease-in-out h-screen sticky top-0 flex-shrink-0`}
-      style={{ paddingTop: 'env(safe-area-inset-top)' }}
     >
       {/* Logo */}
       <div className="h-16 flex items-center justify-between px-4 border-b border-slate-700">

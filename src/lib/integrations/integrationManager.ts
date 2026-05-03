@@ -538,12 +538,12 @@ class IntegrationManager {
     for (const integration of this.integrations.values()) {
       await supabase.from('company_integrations').upsert({
         company_id: profile.company_id,
-        integration_id: integration.id,
+        integration_type: integration.id,
         credentials: integration.credentials || {},
         settings: integration.settings || {},
         enabled: integration.enabled,
         updated_at: new Date().toISOString(),
-      }, { onConflict: 'company_id,integration_id' });
+      }, { onConflict: 'company_id,integration_type' });
     }
     // Remove old plaintext localStorage data if present
     localStorage.removeItem('integrations');
@@ -567,7 +567,7 @@ class IntegrationManager {
 
     if (data) {
       for (const row of data) {
-        const existing = this.integrations.get(row.integration_id);
+        const existing = this.integrations.get(row.integration_type);
         if (existing) {
           existing.credentials = row.credentials || {};
           existing.settings = row.settings || {};
