@@ -94,12 +94,12 @@ export default async function handler(req, res) {
 
   // ------------------------------------------------------------------
   // 1. Find the company that owns this Twilio number
-  //    company_integrations stores {integration_type: 'twilio', credentials: {from_number: ...}}
+  //    company_integrations stores {integration_id: 'twilio', credentials: {from_number: ...}}
   // ------------------------------------------------------------------
   const { data: integrations } = await svcDb
     .from('company_integrations')
     .select('company_id, credentials')
-    .eq('integration_type', 'twilio');
+    .eq('integration_id', 'twilio');
 
   let companyId = null;
 
@@ -134,7 +134,7 @@ export default async function handler(req, res) {
     .from('company_integrations')
     .select('credentials')
     .eq('company_id', companyId)
-    .eq('integration_type', 'twilio')
+    .eq('integration_id', 'twilio')
     .single();
 
   const creds = typeof intRow?.credentials === 'string'

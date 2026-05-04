@@ -658,13 +658,13 @@ export class IntegrationManager {
 
       if (data) {
         for (const row of data) {
-          const integration = this.integrations.get(row.integration_type);
+          const integration = this.integrations.get(row.integration_id);
           if (integration) {
             integration.credentials = row.credentials || {};
             integration.settings = row.settings || {};
-            integration.isEnabled = row.is_active ?? false;
+            integration.isEnabled = row.enabled ?? false;
             integration.isConfigured = true;
-            integration.status = row.is_active ? 'connected' : 'disconnected';
+            integration.status = row.enabled ? 'connected' : 'disconnected';
           }
         }
       }
@@ -701,12 +701,12 @@ export class IntegrationManager {
         if (!integration.isConfigured) continue;
         await supabase.from('company_integrations').upsert({
           company_id: profile.company_id,
-          integration_type: integration.id,
-          is_active: integration.isEnabled,
+          integration_id: integration.id,
+          enabled: integration.isEnabled,
           credentials: integration.credentials || {},
           settings: integration.settings || {},
           updated_at: new Date().toISOString(),
-        }, { onConflict: 'company_id,integration_type' });
+        }, { onConflict: 'company_id,integration_id' });
       }
     } catch (error) {
       console.warn('Failed to save integrations to Supabase:', error);
