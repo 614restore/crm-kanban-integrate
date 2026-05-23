@@ -399,6 +399,8 @@ export interface DbEstimate {
   created_by?: string;
   created_at: string;
   updated_at: string;
+  final_offer_sent_at?: string;
+  final_offer_discount_pct?: number;
 }
 
 export interface DbEstimateItem {

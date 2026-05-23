@@ -367,6 +367,8 @@ export interface Estimate {
   notes?: string;
   createdBy: string;
   updatedAt: string;
+  finalOfferSentAt?: string;
+  finalOfferDiscountPct?: number;
 }
 
 export interface EstimateItem {

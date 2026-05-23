@@ -35,6 +35,8 @@ import {
   PenLine,
   Mail,
   Lock,
+  Tag,
+  AlertTriangle,
 } from 'lucide-react';
 import { withTimeout } from '@/lib/utils';
 
@@ -112,6 +114,10 @@ export default function EstimatesView() {
   const [isSaving, setIsSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [viewingEstimate, setViewingEstimate] = useState<Estimate | null>(null);
+  const [showFinalOfferModal, setShowFinalOfferModal] = useState(false);
+  const [finalOfferDiscountInput, setFinalOfferDiscountInput] = useState('');
+  const [finalOfferValidityInput, setFinalOfferValidityInput] = useState('');
+  const [sendingFinalOffer, setSendingFinalOffer] = useState(false);
   const [showSignatureModal, setShowSignatureModal] = useState<Estimate | null>(null);
   const [signerName, setSignerName] = useState('');
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
@@ -899,6 +905,98 @@ export default function EstimatesView() {
     }
   };
 
+  // ── Final Offer ──────────────────────────────────────────────────────────────
+  const finalOfferEnabled = profile?.companies?.final_offer_enabled ?? false;
+  const companyDiscountPct = profile?.companies?.final_offer_discount_pct ?? 10;
+  const companyDaysThreshold = profile?.companies?.final_offer_days_threshold ?? 5;
+  const companyValidityDays = profile?.companies?.final_offer_validity_days ?? 7;
+
+  const openFinalOfferModal = (est: Estimate) => {
+    setViewingEstimate(est);
+    setFinalOfferDiscountInput(String(companyDiscountPct));
+    setFinalOfferValidityInput(String(companyValidityDays));
+    setShowFinalOfferModal(true);
+  };
+
+  const sendFinalOffer = async () => {
+    if (!viewingEstimate) return;
+    const discountPct = parseFloat(finalOfferDiscountInput) || 0;
+    const validityDays = parseInt(finalOfferValidityInput, 10) || 7;
+    if (discountPct <= 0) return;
+
+    setSendingFinalOffer(true);
+    setShowFinalOfferModal(false);
+
+    try {
+      const discountedTotal = viewingEstimate.total * (1 - discountPct / 100);
+      const savings = viewingEstimate.total - discountedTotal;
+      const expiration = new Date(Date.now() + validityDays * 24 * 60 * 60 * 1000);
+      const expiresStr = expiration.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+      const { error } = await supabase
+        .from('estimates')
+        .update({ final_offer_sent_at: new Date().toISOString(), final_offer_discount_pct: discountPct })
+        .eq('id', viewingEstimate.id);
+
+      if (error) throw error;
+
+      // Update local state immediately
+      dispatch({
+        type: 'SET_ESTIMATES',
+        payload: state.estimates.map(e =>
+          e.id === viewingEstimate.id
+            ? { ...e, finalOfferSentAt: new Date().toISOString(), finalOfferDiscountPct: discountPct }
+            : e
+        ),
+      });
+      setViewingEstimate(prev => prev ? { ...prev, finalOfferSentAt: new Date().toISOString(), finalOfferDiscountPct: discountPct } : prev);
+
+      // Open mailto with the pre-written offer email
+      const contact = state.contacts.find(c => c.id === viewingEstimate.contactId);
+      const customerEmail = contact?.email || '';
+      const firstName = contact?.firstName || 'there';
+      const companyName = profile?.companies?.name || '';
+      const companyPhone = profile?.companies?.phone || '';
+      const companyEmail = profile?.companies?.email || '';
+      const formatCur = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+
+      const emailBody = [
+        `Hi ${firstName},`,
+        '',
+        `I hope this message finds you well.`,
+        '',
+        `I was recently going through our outstanding proposals and your project — ${viewingEstimate.title} — came to the top of the list. It is exactly the kind of work our team is passionate about, and we are confident we can deliver outstanding results for you.`,
+        '',
+        `As it happens, a few openings have come available in our schedule and, rather than let that time go to waste, we would like to pass those savings directly on to you.`,
+        '',
+        `We are pleased to extend an exclusive ${discountPct}% discount on your estimate — bringing your total investment from ${formatCur(viewingEstimate.total)} down to ${formatCur(discountedTotal)}, saving you ${formatCur(savings)}.`,
+        '',
+        `There are no conditions attached. This is simply our way of showing how serious we are about earning your business and getting this project started the right way.`,
+        '',
+        `This offer is available exclusively to you and is valid for the next ${validityDays} days, through ${expiresStr}. After that, we will need to return to standard pricing as our schedule fills in.`,
+        '',
+        `If you are ready to move forward or have any questions at all, please do not hesitate to reach out — we would love to hear from you.`,
+        '',
+        companyPhone ? `📞 ${companyPhone}` : '',
+        companyEmail ? `✉️  ${companyEmail}` : '',
+        '',
+        `We sincerely hope to have the opportunity to work with you.`,
+        '',
+        `Warm regards,`,
+        companyName,
+      ].filter(l => l !== undefined).join('\n');
+
+      const subject = encodeURIComponent(`An Exclusive Offer on Your ${viewingEstimate.title} – ${companyName}`);
+      window.location.href = `mailto:${customerEmail}?subject=${subject}&body=${encodeURIComponent(emailBody)}`;
+    } catch (err) {
+      console.error('Error sending final offer:', err);
+      toast.error('Failed to send final offer. Please try again.');
+    } finally {
+      setSendingFinalOffer(false);
+    }
+  };
+  // ─────────────────────────────────────────────────────────────────────────────
+
   // Filter estimates — sales reps only see estimates for contacts assigned to
   // them or estimates they created. Managers/owners/admins see everything.
   const filteredEstimates = state.estimates.filter((estimate) => {
@@ -1148,12 +1246,18 @@ export default function EstimatesView() {
                       </span>
                     )}
                     {estimate.viewedAt && !estimate.signatureData && (
-                      <span 
+                      <span
                         className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700"
                         title="Customer has viewed - editing locked"
                       >
                         <Lock size={11} />
                         Locked
+                      </span>
+                    )}
+                    {estimate.finalOfferSentAt && (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
+                        <Tag size={11} />
+                        Final Offer Sent ({estimate.finalOfferDiscountPct ?? 0}% Off)
                       </span>
                     )}
                   </div>
@@ -1924,6 +2028,39 @@ export default function EstimatesView() {
                   {viewingEstimate?.viewedAt && !canOverrideLock ? 'Viewed — Locked' : 'Edit'}
                 </button>
                 
+                {/* Final Offer — shown when feature is enabled and offer hasn't been sent yet */}
+                {finalOfferEnabled && viewingEstimate && ['sent','viewed'].includes(viewingEstimate.status) && !viewingEstimate.finalOfferSentAt && (
+                  (() => {
+                    const threshold = companyDaysThreshold;
+                    const daysSince = viewingEstimate.viewedAt
+                      ? Math.floor((Date.now() - new Date(viewingEstimate.viewedAt).getTime()) / 86400000)
+                      : viewingEstimate.sentAt
+                      ? Math.floor((Date.now() - new Date(viewingEstimate.sentAt).getTime()) / 86400000)
+                      : 0;
+                    const unlocked = daysSince >= threshold;
+                    return unlocked ? (
+                      <button
+                        onClick={() => openFinalOfferModal(viewingEstimate)}
+                        className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-medium"
+                      >
+                        <Tag size={16} />
+                        Send Final Offer
+                      </button>
+                    ) : (
+                      <span className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-400 rounded-lg text-sm">
+                        <Tag size={16} />
+                        Final Offer in {threshold - daysSince}d
+                      </span>
+                    );
+                  })()
+                )}
+                {viewingEstimate?.finalOfferSentAt && (
+                  <span className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-sm text-emerald-700 font-medium">
+                    <Tag size={14} />
+                    Final Offer Sent ({viewingEstimate.finalOfferDiscountPct ?? 0}% Off)
+                  </span>
+                )}
+
                 {/* Show Change Order button only for viewed estimates */}
                 {viewingEstimate?.viewedAt && (
                   <button
@@ -2068,6 +2205,114 @@ export default function EstimatesView() {
                   }}
                 />
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Final Offer Questionnaire Modal ──────────────────────────────────── */}
+      {showFinalOfferModal && viewingEstimate && (
+        <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-5">
+            {/* Header */}
+            <div className="flex items-start justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Send Final Offer</h2>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Confirm the details for {viewingEstimate.contactName || 'customer'}
+                </p>
+              </div>
+              <button onClick={() => setShowFinalOfferModal(false)} className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg">
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Editable fields */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Discount %</label>
+                <div className="relative">
+                  <input
+                    type="number" min={1} max={50}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-3 pr-7 text-lg font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-400"
+                    value={finalOfferDiscountInput}
+                    onChange={e => setFinalOfferDiscountInput(e.target.value)}
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400">%</span>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Valid For</label>
+                <div className="relative">
+                  <input
+                    type="number" min={1} max={90}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-3 pr-12 text-lg font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-400"
+                    value={finalOfferValidityInput}
+                    onChange={e => setFinalOfferValidityInput(e.target.value)}
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">days</span>
+                </div>
+                <p className="text-[10px] text-gray-400">
+                  Expires {new Date(Date.now() + (parseInt(finalOfferValidityInput, 10) || 7) * 86400000)
+                    .toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </p>
+              </div>
+            </div>
+
+            {/* Live preview */}
+            {(() => {
+              const pct = parseFloat(finalOfferDiscountInput) || 0;
+              const newTotal = viewingEstimate.total * (1 - pct / 100);
+              const saves = viewingEstimate.total - newTotal;
+              const fmt = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+              return (
+                <div className="rounded-xl bg-gray-50 border border-gray-100 p-4 space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Original Total</p>
+                      <p className="text-xl font-black text-gray-900 mt-1">{fmt(viewingEstimate.total)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider">Final Offer Price</p>
+                      <p className="text-xl font-black text-emerald-600 mt-1">{fmt(newTotal)}</p>
+                    </div>
+                  </div>
+                  {saves > 0 && (
+                    <div className="flex items-center gap-2 bg-emerald-500 rounded-lg px-3 py-2">
+                      <Tag size={14} className="text-white shrink-0" />
+                      <span className="text-white text-xs font-bold">Customer saves {fmt(saves)} with this offer</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* 0% warning */}
+            {(parseFloat(finalOfferDiscountInput) || 0) === 0 && (
+              <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3">
+                <AlertTriangle size={15} className="text-amber-500 shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-700 font-medium">
+                  Discount is 0% — the customer would receive no savings. Enter a discount above.
+                </p>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => setShowFinalOfferModal(false)}
+                className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void sendFinalOffer()}
+                disabled={(parseFloat(finalOfferDiscountInput) || 0) === 0 || sendingFinalOffer}
+                className="flex-1 bg-emerald-600 text-white py-3 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Tag size={14} />
+                {sendingFinalOffer ? 'Sending…' : 'Confirm & Send'}
+              </button>
             </div>
           </div>
         </div>

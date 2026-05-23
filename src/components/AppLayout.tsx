@@ -422,6 +422,8 @@ function dbEstimateToAppEstimate(e: any, contacts: Contact[]): Estimate {
     notes: e.notes,
     createdBy: e.created_by,
     updatedAt: e.updated_at,
+    finalOfferSentAt: e.final_offer_sent_at,
+    finalOfferDiscountPct: e.final_offer_discount_pct != null ? Number(e.final_offer_discount_pct) : undefined,
   };
 }
 
