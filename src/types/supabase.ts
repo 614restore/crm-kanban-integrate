@@ -124,6 +124,9 @@ export interface Database {
           total: number
           notes: string | null
           status: 'draft' | 'sent' | 'approved' | 'rejected'
+          estimate_number: string | null
+          final_offer_sent_at: string | null
+          final_offer_discount_pct: number | null
           created_at: string
         }
         Insert: Omit<Database['public']['Tables']['estimates']['Row'], 'id' | 'created_at'>
@@ -202,6 +205,9 @@ export interface Database {
           address: string | null
           logo_url: string | null
           google_review_url: string | null
+          final_offer_enabled: boolean | null
+          final_offer_discount_pct: number | null
+          final_offer_days_threshold: number | null
           created_at: string
         }
         Insert: Partial<Database['public']['Tables']['companies']['Row']>

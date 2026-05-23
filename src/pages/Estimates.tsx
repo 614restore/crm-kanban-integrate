@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calculator, Plus, Search, ChevronLeft, Filter, FileText, DollarSign } from 'lucide-react';
+import { Calculator, Plus, Search, ChevronLeft, Filter, FileText, Tag } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -27,6 +27,8 @@ export default function Estimates() {
         .from('estimates')
         .select(`
           *,
+          final_offer_sent_at,
+          final_offer_discount_pct,
           contacts (
             first_name,
             last_name,
@@ -122,9 +124,17 @@ export default function Estimates() {
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{est.contacts?.first_name} {est.contacts?.last_name}</p>
                   </div>
                 </div>
-                <span className={`text-[10px] font-bold px-2 py-1 rounded-full uppercase text-white ${getStatusColor(est.status)}`}>
-                  {est.status}
-                </span>
+                <div className="flex flex-col items-end gap-1">
+                  <span className={`text-[10px] font-bold px-2 py-1 rounded-full uppercase text-white ${getStatusColor(est.status)}`}>
+                    {est.status}
+                  </span>
+                  {est.final_offer_sent_at && (
+                    <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full bg-emerald-100 text-emerald-700">
+                      <Tag size={10} />
+                      Final Offer Sent{est.final_offer_discount_pct ? ` (${est.final_offer_discount_pct}% Off)` : ''}
+                    </span>
+                  )}
+                </div>
               </div>
 
               <div className="flex justify-between items-end">

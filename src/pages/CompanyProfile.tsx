@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Building2, Mail, Phone, MapPin, Globe, ChevronLeft, Save, Camera } from 'lucide-react';
+import { Building2, Mail, Phone, MapPin, Globe, ChevronLeft, Save, Camera, Tag } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -14,7 +14,12 @@ export default function CompanyProfile() {
     phone: profile?.companies?.phone || '',
     address: profile?.companies?.address || '',
     google_review_url: profile?.companies?.google_review_url || '',
+    final_offer_enabled: profile?.companies?.final_offer_enabled ?? false,
+    final_offer_discount_pct: profile?.companies?.final_offer_discount_pct ?? 10,
+    final_offer_days_threshold: profile?.companies?.final_offer_days_threshold ?? 5,
   });
+
+  const canManageFinalOffer = ['owner', 'admin', 'manager'].includes(profile?.role || '');
 
   const handleSave = async () => {
     if (!profile?.company_id) return;
@@ -24,7 +29,7 @@ export default function CompanyProfile() {
         .from('companies') as any)
         .update(formData)
         .eq('id', profile.company_id);
-      
+
       if (error) throw error;
       await refreshProfile();
       navigate(-1);
@@ -133,7 +138,7 @@ export default function CompanyProfile() {
             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Google Review URL</label>
             <div className="relative">
               <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-              <input 
+              <input
                 type="url"
                 className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-sm focus:ring-2 focus:ring-accent/20"
                 placeholder="https://g.page/r/..."
@@ -143,6 +148,82 @@ export default function CompanyProfile() {
             </div>
           </div>
         </div>
+
+        {/* Final Offer — owner / admin / manager only */}
+        {canManageFinalOffer && (
+          <div className="space-y-4">
+            <div>
+              <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Final Offer</h2>
+              <p className="text-xs text-slate-400 mt-1 ml-1">
+                When enabled, sales reps can send a one-time discounted offer to customers who have viewed but not signed an estimate.
+              </p>
+            </div>
+
+            {/* Toggle */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <Tag size={18} className="text-emerald-500 shrink-0" />
+                <div>
+                  <p className="text-sm font-bold text-primary">Enable Final Offer</p>
+                  <p className="text-xs text-slate-400">Allow reps to send a discounted final offer</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFormData(prev => ({ ...prev, final_offer_enabled: !prev.final_offer_enabled }))}
+                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${formData.final_offer_enabled ? 'bg-emerald-500' : 'bg-slate-200'}`}
+              >
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${formData.final_offer_enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+              </button>
+            </div>
+
+            {formData.final_offer_enabled && (
+              <>
+                {/* Discount % */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
+                    Discount Percentage (%)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={50}
+                    className="w-full bg-white border border-slate-200 rounded-2xl py-4 px-4 text-sm focus:ring-2 focus:ring-accent/20"
+                    placeholder="e.g. 10"
+                    value={formData.final_offer_discount_pct}
+                    onChange={(e) =>
+                      setFormData(prev => ({ ...prev, final_offer_discount_pct: Math.min(50, Math.max(1, Number(e.target.value))) }))
+                    }
+                  />
+                  <p className="text-xs text-slate-400 ml-1">
+                    This discount will be applied to the estimate total when a Final Offer is sent.
+                  </p>
+                </div>
+
+                {/* Days threshold */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
+                    Days Before Final Offer Is Available
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={90}
+                    className="w-full bg-white border border-slate-200 rounded-2xl py-4 px-4 text-sm focus:ring-2 focus:ring-accent/20"
+                    placeholder="e.g. 5"
+                    value={formData.final_offer_days_threshold}
+                    onChange={(e) =>
+                      setFormData(prev => ({ ...prev, final_offer_days_threshold: Math.min(90, Math.max(1, Number(e.target.value))) }))
+                    }
+                  />
+                  <p className="text-xs text-slate-400 ml-1">
+                    The "Send Final Offer" button appears only after this many days since the estimate was sent.
+                  </p>
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

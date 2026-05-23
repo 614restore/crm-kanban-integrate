@@ -5,6 +5,10 @@ import {
   Download,
   Send,
   CheckCircle2,
+  RotateCcw,
+  Tag,
+  X,
+  AlertTriangle,
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -26,6 +30,7 @@ export default function EstimateDetail() {
   const [loading, setLoading] = useState(true);
   const pdfRef = React.useRef<HTMLDivElement | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [showFinalOfferPreview, setShowFinalOfferPreview] = useState(false);
 
   useEffect(() => {
     if (id) fetchEstimateDetail();
@@ -45,6 +50,8 @@ export default function EstimateDetail() {
         .from('estimates')
         .select(`
           *,
+          final_offer_sent_at,
+          final_offer_discount_pct,
           contacts (
             first_name,
             last_name,
@@ -59,7 +66,10 @@ export default function EstimateDetail() {
             name,
             phone,
             email,
-            address
+            address,
+            final_offer_enabled,
+            final_offer_discount_pct,
+            final_offer_days_threshold
           )
         `)
         .eq('id', id)
@@ -108,6 +118,50 @@ export default function EstimateDetail() {
     }
   };
 
+  const resendQuote = () => {
+    if (!estimate) return;
+    const customerEmail = estimate.contacts?.email || '';
+    const subject = encodeURIComponent(`Your Estimate – ${estimate.title}`);
+    const body = encodeURIComponent(
+      `Hi ${customerName || 'there'},\n\nWe wanted to follow up on the estimate we sent you for ${estimate.title}.\n\nTotal: ${formatCurrency(estimate.total)}\n\nPlease don't hesitate to reach out if you have any questions. We'd love to work with you!\n\nBest regards,\n${companyName}`
+    );
+    window.location.href = `mailto:${customerEmail}?subject=${subject}&body=${body}`;
+  };
+
+  const sendFinalOffer = async () => {
+    if (!estimate) return;
+    const discountPct = estimate.companies?.final_offer_discount_pct ?? 0;
+    const discountedTotal = estimate.total * (1 - discountPct / 100);
+    try {
+      const { error } = await (supabase.from('estimates') as any)
+        .update({
+          final_offer_sent_at: new Date().toISOString(),
+          final_offer_discount_pct: discountPct,
+        })
+        .eq('id', id);
+      if (error) throw error;
+
+      setEstimate({
+        ...estimate,
+        final_offer_sent_at: new Date().toISOString(),
+        final_offer_discount_pct: discountPct,
+      });
+
+      // Open mail client with final offer email
+      const customerEmail = estimate.contacts?.email || '';
+      const subject = encodeURIComponent(`Special Final Offer – ${estimate.title}`);
+      const body = encodeURIComponent(
+        `Hi ${customerName || 'there'},\n\nThank you for taking the time to review our estimate for ${estimate.title}.\n\nAfter looking over your project again, we truly believe we are the perfect fit for the job — and we'd love the opportunity to work with you. As a result, we'd like to extend a special final offer:\n\n🏷 ${discountPct}% Off Your Total\nOriginal Total: ${formatCurrency(estimate.total)}\nFinal Offer Price: ${formatCurrency(discountedTotal)}\n\nThis offer is limited and available for a short time. Please reach out or reply to this email to get started.\n\nWe appreciate your consideration and look forward to hearing from you!\n\nBest regards,\n${companyName}\n${companyPhone ? companyPhone : ''}`
+      );
+      window.location.href = `mailto:${customerEmail}?subject=${subject}&body=${body}`;
+
+      showToast(`Final Offer sent — ${discountPct}% off applied`);
+    } catch (err) {
+      console.error('Error sending final offer:', err);
+      showToast('Unable to send final offer. Please try again.');
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -140,6 +194,21 @@ export default function EstimateDetail() {
   const companyEmail = estimate.companies?.email || profile?.companies?.email || '';
   const estimateNumber = getEstimateNumber(estimate);
   const validUntil = quoteMeta.validUntil ? new Date(quoteMeta.validUntil) : null;
+
+  // Final Offer logic
+  const finalOfferEnabled = estimate.companies?.final_offer_enabled ?? profile?.companies?.final_offer_enabled ?? false;
+  const finalOfferDiscountPct = estimate.companies?.final_offer_discount_pct ?? profile?.companies?.final_offer_discount_pct ?? 0;
+  const finalOfferDaysThreshold = estimate.companies?.final_offer_days_threshold ?? profile?.companies?.final_offer_days_threshold ?? 5;
+  const daysSinceSent = estimate.created_at
+    ? Math.floor((Date.now() - new Date(estimate.created_at).getTime()) / (1000 * 60 * 60 * 24))
+    : 0;
+  const isSentOrViewed = ['sent', 'viewed'].includes(String(estimate.status).toLowerCase());
+  const isApproved = ['approved', 'signed'].includes(String(estimate.status).toLowerCase());
+  const finalOfferAlreadySent = !!estimate.final_offer_sent_at;
+  const finalOfferAvailable = finalOfferEnabled && !finalOfferAlreadySent && daysSinceSent >= finalOfferDaysThreshold;
+  const daysUntilFinalOffer = Math.max(0, finalOfferDaysThreshold - daysSinceSent);
+  const discountAmount = (estimate.total ?? 0) * (finalOfferDiscountPct / 100);
+  const discountedTotal = (estimate.total ?? 0) - discountAmount;
 
   const getStatusColor = (status: string) => {
     switch (String(status).toLowerCase()) {
@@ -268,24 +337,72 @@ export default function EstimateDetail() {
         </div>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-md bg-white border-t border-slate-100 p-4 flex gap-3 z-20">
-        <button onClick={downloadEstimate} className="p-4 bg-slate-100 text-primary rounded-2xl active:scale-95 transition-transform">
-          <Download size={20} />
-        </button>
-        <button
-          onClick={() => navigate(`/estimates/${estimate.id}/sign`)}
-          className="bg-slate-100 text-primary py-4 px-4 rounded-2xl text-xs font-bold uppercase tracking-widest active:scale-95 transition-transform flex items-center justify-center gap-2"
-        >
-          <CheckCircle2 size={18} />
-          Sign Quote
-        </button>
-        <button
-          onClick={sendToCustomer}
-          className="flex-1 bg-primary text-white py-4 rounded-2xl text-xs font-bold uppercase tracking-widest active:scale-95 transition-transform flex items-center justify-center gap-2"
-        >
-          <Send size={18} />
-          Send to Customer
-        </button>
+      <div className="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-md bg-white border-t border-slate-100 p-4 z-20 space-y-2">
+        {/* Top row: Download + Sign */}
+        <div className="flex gap-3">
+          <button onClick={downloadEstimate} className="p-4 bg-slate-100 text-primary rounded-2xl active:scale-95 transition-transform">
+            <Download size={20} />
+          </button>
+          <button
+            onClick={() => navigate(`/estimates/${estimate.id}/sign`)}
+            className="flex-1 bg-slate-100 text-primary py-4 px-4 rounded-2xl text-xs font-bold uppercase tracking-widest active:scale-95 transition-transform flex items-center justify-center gap-2"
+          >
+            <CheckCircle2 size={18} />
+            Sign Quote
+          </button>
+        </div>
+
+        {/* Bottom row: context-aware send actions */}
+        {estimate.status === 'draft' && (
+          <button
+            onClick={sendToCustomer}
+            className="w-full bg-primary text-white py-4 rounded-2xl text-xs font-bold uppercase tracking-widest active:scale-95 transition-transform flex items-center justify-center gap-2"
+          >
+            <Send size={18} />
+            Send to Customer
+          </button>
+        )}
+
+        {isSentOrViewed && !isApproved && (
+          <div className="flex gap-2">
+            {/* Resend — always available once sent */}
+            <button
+              onClick={resendQuote}
+              className="flex-1 bg-slate-100 text-primary py-3 rounded-2xl text-xs font-bold uppercase tracking-widest active:scale-95 transition-transform flex items-center justify-center gap-2"
+            >
+              <RotateCcw size={16} />
+              Resend
+            </button>
+
+            {/* Final Offer states */}
+            {finalOfferEnabled && (
+              <>
+                {finalOfferAlreadySent ? (
+                  <div className="flex-1 flex items-center justify-center gap-1 py-3 px-3 rounded-2xl bg-emerald-50 border border-emerald-200">
+                    <Tag size={14} className="text-emerald-600 shrink-0" />
+                    <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider leading-tight text-center">
+                      Final Offer Sent ({estimate.final_offer_discount_pct}% Off)
+                    </span>
+                  </div>
+                ) : finalOfferAvailable ? (
+                  <button
+                    onClick={() => setShowFinalOfferPreview(true)}
+                    className="flex-1 bg-emerald-500 text-white py-3 rounded-2xl text-xs font-bold uppercase tracking-widest active:scale-95 transition-transform flex items-center justify-center gap-2"
+                  >
+                    <Tag size={16} />
+                    Final Offer ({finalOfferDiscountPct}% Off)
+                  </button>
+                ) : (
+                  <div className="flex-1 flex items-center justify-center py-3 px-3 rounded-2xl bg-slate-50 border border-slate-200">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider text-center leading-tight">
+                      Final Offer in {daysUntilFinalOffer}d
+                    </span>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       <AnimatePresence>
@@ -298,6 +415,129 @@ export default function EstimateDetail() {
           >
             <CheckCircle2 size={16} className="text-accent" />
             <p className="text-xs font-bold">{toast}</p>
+          </motion.div>
+        )}
+
+        {showFinalOfferPreview && (
+          <motion.div
+            key="final-offer-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center"
+            onClick={() => setShowFinalOfferPreview(false)}
+          >
+            <motion.div
+              key="final-offer-sheet"
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+              className="w-full max-w-md bg-white rounded-t-3xl p-6 space-y-5 pb-10"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-start justify-between">
+                <div>
+                  <h2 className="text-lg font-bold text-primary">Final Offer Preview</h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Review before sending to {customerName || 'customer'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowFinalOfferPreview(false)}
+                  className="p-2 -mr-1 text-slate-400 active:scale-90 transition-transform"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Side-by-side comparison */}
+              <div className="grid grid-cols-2 gap-3">
+                {/* Original */}
+                <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4 space-y-3">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Original</p>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-500">Subtotal</span>
+                      <span className="font-semibold text-primary">{formatCurrency(estimate.subtotal)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-500">Tax ({estimate.tax_rate ?? 0}%)</span>
+                      <span className="font-semibold text-primary">{formatCurrency(estimate.tax_amount)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs pt-2 border-t border-slate-200">
+                      <span className="font-bold text-slate-600">Total</span>
+                      <span className="font-bold text-primary">{formatCurrency(estimate.total)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Final Offer */}
+                <div className="rounded-2xl bg-emerald-50 border border-emerald-200 p-4 space-y-3">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-600">Final Offer</p>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-500">Subtotal</span>
+                      <span className="font-semibold text-primary">{formatCurrency(estimate.subtotal)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-500">Tax ({estimate.tax_rate ?? 0}%)</span>
+                      <span className="font-semibold text-primary">{formatCurrency(estimate.tax_amount)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-emerald-600 font-medium">Discount ({finalOfferDiscountPct}%)</span>
+                      <span className="font-semibold text-emerald-600">−{formatCurrency(discountAmount)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs pt-2 border-t border-emerald-200">
+                      <span className="font-bold text-emerald-700">Total</span>
+                      <span className="font-bold text-emerald-700">{formatCurrency(discountedTotal)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Savings callout */}
+              <div className="rounded-2xl bg-emerald-500 p-4 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-100">Customer Saves</p>
+                  <p className="text-2xl font-black text-white mt-1">{formatCurrency(discountAmount)}</p>
+                </div>
+                <div className="h-10 w-px bg-emerald-400" />
+                <div className="text-right">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-100">New Total</p>
+                  <p className="text-2xl font-black text-white mt-1">{formatCurrency(discountedTotal)}</p>
+                </div>
+              </div>
+
+              {/* 0% discount warning */}
+              {finalOfferDiscountPct === 0 && (
+                <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 flex items-start gap-2">
+                  <AlertTriangle size={15} className="text-amber-500 shrink-0 mt-0.5" />
+                  <p className="text-xs text-amber-700 font-medium">
+                    Discount is set to 0%. Update it in Company Settings before sending.
+                  </p>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowFinalOfferPreview(false)}
+                  className="flex-1 bg-slate-100 text-primary py-4 rounded-2xl text-xs font-bold uppercase tracking-widest active:scale-95 transition-transform"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => { setShowFinalOfferPreview(false); sendFinalOffer(); }}
+                  disabled={finalOfferDiscountPct === 0}
+                  className="flex-1 bg-emerald-500 text-white py-4 rounded-2xl text-xs font-bold uppercase tracking-widest active:scale-95 transition-transform flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <Tag size={16} />
+                  Confirm & Send
+                </button>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
