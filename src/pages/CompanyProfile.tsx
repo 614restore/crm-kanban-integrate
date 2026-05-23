@@ -17,6 +17,7 @@ export default function CompanyProfile() {
     final_offer_enabled: profile?.companies?.final_offer_enabled ?? false,
     final_offer_discount_pct: profile?.companies?.final_offer_discount_pct ?? 10,
     final_offer_days_threshold: profile?.companies?.final_offer_days_threshold ?? 5,
+    final_offer_validity_days: profile?.companies?.final_offer_validity_days ?? 7,
   });
 
   const canManageFinalOffer = ['owner', 'admin', 'manager'].includes(profile?.role || '');
@@ -218,6 +219,27 @@ export default function CompanyProfile() {
                   />
                   <p className="text-xs text-slate-400 ml-1">
                     The "Send Final Offer" button appears only after this many days since the estimate was sent.
+                  </p>
+                </div>
+
+                {/* Validity days */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
+                    Offer Valid For (Days)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={90}
+                    className="w-full bg-white border border-slate-200 rounded-2xl py-4 px-4 text-sm focus:ring-2 focus:ring-accent/20"
+                    placeholder="e.g. 7"
+                    value={formData.final_offer_validity_days}
+                    onChange={(e) =>
+                      setFormData(prev => ({ ...prev, final_offer_validity_days: Math.min(90, Math.max(1, Number(e.target.value))) }))
+                    }
+                  />
+                  <p className="text-xs text-slate-400 ml-1">
+                    How many days the discount is valid after the offer is sent. An expiration date is included in the offer email so the customer knows it's time-limited.
                   </p>
                 </div>
               </>

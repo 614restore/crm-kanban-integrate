@@ -149,10 +149,38 @@ export default function EstimateDetail() {
 
       // Open mail client with final offer email
       const customerEmail = estimate.contacts?.email || '';
-      const subject = encodeURIComponent(`Special Final Offer – ${estimate.title}`);
-      const body = encodeURIComponent(
-        `Hi ${customerName || 'there'},\n\nThank you for taking the time to review our estimate for ${estimate.title}.\n\nAfter looking over your project again, we truly believe we are the perfect fit for the job — and we'd love the opportunity to work with you. As a result, we'd like to extend a special final offer:\n\n🏷 ${discountPct}% Off Your Total\nOriginal Total: ${formatCurrency(estimate.total)}\nFinal Offer Price: ${formatCurrency(discountedTotal)}\n\nThis offer is limited and available for a short time. Please reach out or reply to this email to get started.\n\nWe appreciate your consideration and look forward to hearing from you!\n\nBest regards,\n${companyName}\n${companyPhone ? companyPhone : ''}`
-      );
+      const firstName = estimate.contacts?.first_name || 'there';
+      const validityDays = finalOfferValidityDays;
+      const expiresStr = offerExpirationStr;
+
+      const emailBody = [
+        `Hi ${firstName},`,
+        '',
+        `I hope this message finds you well.`,
+        '',
+        `I was recently going through our outstanding proposals and your project — ${estimate.title} — came to the top of the list. It is exactly the kind of work our team is passionate about, and we are confident we can deliver outstanding results for you.`,
+        '',
+        `As it happens, a few openings have come available in our schedule and, rather than let that time go to waste, we would like to pass those savings directly on to you.`,
+        '',
+        `We are pleased to extend an exclusive ${discountPct}% discount on your estimate — bringing your total investment from ${formatCurrency(estimate.total)} down to ${formatCurrency(discountedTotal)}, saving you ${formatCurrency(discountAmount)}.`,
+        '',
+        `There are no conditions attached. This is simply our way of showing how serious we are about earning your business and getting this project started the right way.`,
+        '',
+        `This offer is available exclusively to you and is valid for the next ${validityDays} days, through ${expiresStr}. After that, we will need to return to standard pricing as our schedule fills in.`,
+        '',
+        `If you are ready to move forward or have any questions at all, please do not hesitate to reach out — we would love to hear from you.`,
+        '',
+        companyPhone ? `📞 ${companyPhone}` : '',
+        companyEmail ? `✉️  ${companyEmail}` : '',
+        '',
+        `We sincerely hope to have the opportunity to work with you.`,
+        '',
+        `Warm regards,`,
+        companyName,
+      ].filter(l => l !== undefined).join('\n');
+
+      const subject = encodeURIComponent(`An Exclusive Offer on Your ${estimate.title} – ${companyName}`);
+      const body = encodeURIComponent(emailBody);
       window.location.href = `mailto:${customerEmail}?subject=${subject}&body=${body}`;
 
       showToast(`Final Offer sent — ${discountPct}% off applied`);
@@ -204,11 +232,14 @@ export default function EstimateDetail() {
     : 0;
   const isSentOrViewed = ['sent', 'viewed'].includes(String(estimate.status).toLowerCase());
   const isApproved = ['approved', 'signed'].includes(String(estimate.status).toLowerCase());
+  const finalOfferValidityDays = estimate.companies?.final_offer_validity_days ?? profile?.companies?.final_offer_validity_days ?? 7;
   const finalOfferAlreadySent = !!estimate.final_offer_sent_at;
   const finalOfferAvailable = finalOfferEnabled && !finalOfferAlreadySent && daysSinceSent >= finalOfferDaysThreshold;
   const daysUntilFinalOffer = Math.max(0, finalOfferDaysThreshold - daysSinceSent);
   const discountAmount = (estimate.total ?? 0) * (finalOfferDiscountPct / 100);
   const discountedTotal = (estimate.total ?? 0) - discountAmount;
+  const offerExpirationDate = new Date(Date.now() + finalOfferValidityDays * 24 * 60 * 60 * 1000);
+  const offerExpirationStr = offerExpirationDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
   const getStatusColor = (status: string) => {
     switch (String(status).toLowerCase()) {
@@ -508,6 +539,14 @@ export default function EstimateDetail() {
                   <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-100">New Total</p>
                   <p className="text-2xl font-black text-white mt-1">{formatCurrency(discountedTotal)}</p>
                 </div>
+              </div>
+
+              {/* Expiration notice */}
+              <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 flex items-start gap-2">
+                <AlertTriangle size={15} className="text-amber-500 shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-700 font-medium">
+                  This offer will expire on <span className="font-bold">{offerExpirationStr}</span> ({finalOfferValidityDays} days). The expiration date is included in the email sent to the customer.
+                </p>
               </div>
 
               {/* 0% discount warning */}

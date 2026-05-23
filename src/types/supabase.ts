@@ -208,6 +208,7 @@ export interface Database {
           final_offer_enabled: boolean | null
           final_offer_discount_pct: number | null
           final_offer_days_threshold: number | null
+          final_offer_validity_days: number | null
           created_at: string
         }
         Insert: Partial<Database['public']['Tables']['companies']['Row']>
