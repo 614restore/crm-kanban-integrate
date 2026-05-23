@@ -31,6 +31,8 @@ export default function EstimateDetail() {
   const pdfRef = React.useRef<HTMLDivElement | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [showFinalOfferPreview, setShowFinalOfferPreview] = useState(false);
+  const [offerDiscountPct, setOfferDiscountPct] = useState(0);
+  const [offerValidityDays, setOfferValidityDays] = useState(7);
 
   useEffect(() => {
     if (id) fetchEstimateDetail();
@@ -128,10 +130,12 @@ export default function EstimateDetail() {
     window.location.href = `mailto:${customerEmail}?subject=${subject}&body=${body}`;
   };
 
-  const sendFinalOffer = async () => {
+  const sendFinalOffer = async (discountPct: number, validityDays: number) => {
     if (!estimate) return;
-    const discountPct = estimate.companies?.final_offer_discount_pct ?? 0;
-    const discountedTotal = estimate.total * (1 - discountPct / 100);
+    const discountedTotal = (estimate.total ?? 0) * (1 - discountPct / 100);
+    const discountSavings = (estimate.total ?? 0) - discountedTotal;
+    const expirationDate = new Date(Date.now() + validityDays * 24 * 60 * 60 * 1000);
+    const expiresStr = expirationDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
     try {
       const { error } = await (supabase.from('estimates') as any)
         .update({
@@ -150,8 +154,6 @@ export default function EstimateDetail() {
       // Open mail client with final offer email
       const customerEmail = estimate.contacts?.email || '';
       const firstName = estimate.contacts?.first_name || 'there';
-      const validityDays = finalOfferValidityDays;
-      const expiresStr = offerExpirationStr;
 
       const emailBody = [
         `Hi ${firstName},`,
@@ -162,7 +164,7 @@ export default function EstimateDetail() {
         '',
         `As it happens, a few openings have come available in our schedule and, rather than let that time go to waste, we would like to pass those savings directly on to you.`,
         '',
-        `We are pleased to extend an exclusive ${discountPct}% discount on your estimate — bringing your total investment from ${formatCurrency(estimate.total)} down to ${formatCurrency(discountedTotal)}, saving you ${formatCurrency(discountAmount)}.`,
+        `We are pleased to extend an exclusive ${discountPct}% discount on your estimate — bringing your total investment from ${formatCurrency(estimate.total)} down to ${formatCurrency(discountedTotal)}, saving you ${formatCurrency(discountSavings)}.`,
         '',
         `There are no conditions attached. This is simply our way of showing how serious we are about earning your business and getting this project started the right way.`,
         '',
@@ -183,7 +185,7 @@ export default function EstimateDetail() {
       const body = encodeURIComponent(emailBody);
       window.location.href = `mailto:${customerEmail}?subject=${subject}&body=${body}`;
 
-      showToast(`Final Offer sent — ${discountPct}% off applied`);
+      showToast(`Final Offer sent — ${discountPct}% off, valid ${validityDays} days`);
     } catch (err) {
       console.error('Error sending final offer:', err);
       showToast('Unable to send final offer. Please try again.');
@@ -236,10 +238,17 @@ export default function EstimateDetail() {
   const finalOfferAlreadySent = !!estimate.final_offer_sent_at;
   const finalOfferAvailable = finalOfferEnabled && !finalOfferAlreadySent && daysSinceSent >= finalOfferDaysThreshold;
   const daysUntilFinalOffer = Math.max(0, finalOfferDaysThreshold - daysSinceSent);
-  const discountAmount = (estimate.total ?? 0) * (finalOfferDiscountPct / 100);
+  // Computed from the editable modal fields (update live as user types)
+  const discountAmount = (estimate.total ?? 0) * (offerDiscountPct / 100);
   const discountedTotal = (estimate.total ?? 0) - discountAmount;
-  const offerExpirationDate = new Date(Date.now() + finalOfferValidityDays * 24 * 60 * 60 * 1000);
+  const offerExpirationDate = new Date(Date.now() + offerValidityDays * 24 * 60 * 60 * 1000);
   const offerExpirationStr = offerExpirationDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+  const openFinalOfferModal = () => {
+    setOfferDiscountPct(finalOfferDiscountPct);
+    setOfferValidityDays(finalOfferValidityDays);
+    setShowFinalOfferPreview(true);
+  };
 
   const getStatusColor = (status: string) => {
     switch (String(status).toLowerCase()) {
@@ -417,7 +426,7 @@ export default function EstimateDetail() {
                   </div>
                 ) : finalOfferAvailable ? (
                   <button
-                    onClick={() => setShowFinalOfferPreview(true)}
+                    onClick={openFinalOfferModal}
                     className="flex-1 bg-emerald-500 text-white py-3 rounded-2xl text-xs font-bold uppercase tracking-widest active:scale-95 transition-transform flex items-center justify-center gap-2"
                   >
                     <Tag size={16} />
@@ -470,9 +479,9 @@ export default function EstimateDetail() {
               {/* Header */}
               <div className="flex items-start justify-between">
                 <div>
-                  <h2 className="text-lg font-bold text-primary">Final Offer Preview</h2>
+                  <h2 className="text-lg font-bold text-primary">Send Final Offer</h2>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    Review before sending to {customerName || 'customer'}
+                    Confirm the details for {customerName || 'customer'}
                   </p>
                 </div>
                 <button
@@ -482,6 +491,44 @@ export default function EstimateDetail() {
                   <X size={20} />
                 </button>
               </div>
+
+              {/* Editable offer fields */}
+              <div className="space-y-3">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Offer Details</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Discount</label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min={1}
+                        max={50}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-3 pr-7 text-sm font-bold text-primary focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-400"
+                        value={offerDiscountPct}
+                        onChange={e => setOfferDiscountPct(Math.min(50, Math.max(0, Number(e.target.value))))}
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">%</span>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Valid For</label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min={1}
+                        max={90}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-3 pr-10 text-sm font-bold text-primary focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-400"
+                        value={offerValidityDays}
+                        onChange={e => setOfferValidityDays(Math.min(90, Math.max(1, Number(e.target.value))))}
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">days</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="h-px bg-slate-100" />
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest -mb-2">Live Preview</p>
 
               {/* Side-by-side comparison */}
               <div className="grid grid-cols-2 gap-3">
@@ -550,11 +597,11 @@ export default function EstimateDetail() {
               </div>
 
               {/* 0% discount warning */}
-              {finalOfferDiscountPct === 0 && (
+              {offerDiscountPct === 0 && (
                 <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 flex items-start gap-2">
                   <AlertTriangle size={15} className="text-amber-500 shrink-0 mt-0.5" />
                   <p className="text-xs text-amber-700 font-medium">
-                    Discount is set to 0%. Update it in Company Settings before sending.
+                    Discount is 0% — the customer would receive no savings. Adjust the discount above before sending.
                   </p>
                 </div>
               )}
@@ -568,8 +615,8 @@ export default function EstimateDetail() {
                   Cancel
                 </button>
                 <button
-                  onClick={() => { setShowFinalOfferPreview(false); sendFinalOffer(); }}
-                  disabled={finalOfferDiscountPct === 0}
+                  onClick={() => { setShowFinalOfferPreview(false); sendFinalOffer(offerDiscountPct, offerValidityDays); }}
+                  disabled={offerDiscountPct === 0}
                   className="flex-1 bg-emerald-500 text-white py-4 rounded-2xl text-xs font-bold uppercase tracking-widest active:scale-95 transition-transform flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Tag size={16} />
