@@ -98,6 +98,15 @@ export function getNextStep(status: KanbanStatus): NextStep | null {
         textColor: 'text-cyan-700',
         action: 'material-orders',
       };
+    case 'ordering_material':
+      return {
+        label: 'Track Material Order',
+        description: 'Confirm materials are ordered and set an expected delivery date.',
+        iconName: 'Package',
+        bgColor: 'bg-amber-50',
+        textColor: 'text-amber-700',
+        action: 'material-orders',
+      };
     case 'materials_ordered':
       return {
         label: 'Schedule Crew',
