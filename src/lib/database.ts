@@ -1003,6 +1003,48 @@ class DatabaseService {
     return true;
   }
 
+  /**
+   * One-time migration: ensures every production board has the
+   * "Ordering Material" column (status=ordering_material) inserted
+   * between "Sold / New" (status=signed, sort_order 0) and the next column.
+   * Safe to call on every load — exits immediately if already present.
+   */
+  async ensureOrderingMaterialColumn(companyId: string): Promise<void> {
+    if (this.inDemoMode()) return;
+    try {
+      const boards = await this.getKanbanBoards(companyId);
+      const productionBoards = boards.filter(b => b.type === 'production');
+      for (const board of productionBoards) {
+        const result = await this.getKanbanBoardWithColumns(board.id);
+        if (!result) continue;
+        const cols = result.columns;
+        const alreadyExists = cols.some(c => c.status === 'ordering_material');
+        if (alreadyExists) continue;
+        // Find the "signed" (Sold/New) column to anchor our insert
+        const soldCol = cols.find(c => c.status === 'signed');
+        const insertAfterOrder = soldCol ? soldCol.sort_order : -1;
+        // Shift all columns that come after the insert point up by 1
+        const toShift = cols.filter(c => c.sort_order > insertAfterOrder);
+        for (const col of toShift) {
+          await supabase.from('kanban_columns')
+            .update({ sort_order: col.sort_order + 1 })
+            .eq('id', col.id);
+        }
+        // Insert the new column
+        await supabase.from('kanban_columns').insert({
+          board_id: board.id,
+          title: 'Ordering Material',
+          status: 'ordering_material',
+          color: '#f59e0b',
+          sort_order: insertAfterOrder + 1,
+        });
+        console.log(`[Migration] Added "Ordering Material" column to board "${board.name}"`);
+      }
+    } catch (err) {
+      console.error('[Migration] ensureOrderingMaterialColumn failed:', err);
+    }
+  }
+
   // Lead source operations
   async getLeadSources(companyId: string): Promise<DbLeadSource[]> {
     assertCompanyId(companyId, 'getLeadSources');
