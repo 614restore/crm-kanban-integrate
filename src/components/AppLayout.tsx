@@ -749,6 +749,10 @@ function CRMApp() {
     }
 
     try {
+      // Run board column migrations before loading boards so changes are visible
+      // on first load. Each migration is idempotent (no-ops if already applied).
+      await db.ensureOrderingMaterialColumn(profile.company_id);
+
       // Load all data in parallel (including company to pre-warm cache for Sidebar)
       // Each query is individually capped at 7 s to prevent a single slow call from
       // blocking the entire load; timed-out queries fall back to their empty value.

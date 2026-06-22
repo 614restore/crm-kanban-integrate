@@ -1150,6 +1150,36 @@ class DatabaseService {
     return true;
   }
 
+  async ensureOrderingMaterialColumn(companyId: string): Promise<void> {
+    if (this.inDemoMode()) return;
+    try {
+      const boards = await this.getKanbanBoards(companyId);
+      const productionBoards = boards.filter(b => b.type === 'production');
+      for (const board of productionBoards) {
+        const result = await this.getKanbanBoardWithColumns(board.id);
+        if (!result) continue;
+        const cols = result.columns;
+        if (cols.some(c => c.status === 'ordering_material')) continue;
+        const soldCol = cols.find(c => c.status === 'signed');
+        const insertAfterOrder = soldCol ? soldCol.sort_order : -1;
+        const toShift = cols.filter(c => c.sort_order > insertAfterOrder);
+        for (const col of toShift) {
+          await supabase.from('kanban_columns').update({ sort_order: col.sort_order + 1 }).eq('id', col.id);
+        }
+        await supabase.from('kanban_columns').insert({
+          board_id: board.id,
+          title: 'Ordering Material',
+          status: 'ordering_material',
+          color: '#f59e0b',
+          sort_order: insertAfterOrder + 1,
+        });
+        console.log(`[Migration] Added "Ordering Material" column to board "${board.name}"`);
+      }
+    } catch (err) {
+      console.error('[Migration] ensureOrderingMaterialColumn failed:', err);
+    }
+  }
+
   // Lead source operations
   async getLeadSources(companyId: string): Promise<DbLeadSource[]> {
     assertCompanyId(companyId, 'getLeadSources');

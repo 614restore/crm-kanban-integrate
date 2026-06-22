@@ -274,6 +274,7 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [taxRate, setTaxRate] = useState('0');
   const [depositAmount, setDepositAmount] = useState('');
+  const [hidePricing, setHidePricing] = useState(false);
   // Roofr structure selector (when multiple structures detected)
   const [selectedRoofrStructureIdx, setSelectedRoofrStructureIdx] = useState<number>(0); // 0 = combined
   // Ice & water manufacturer (drives unit price + coverage calculation)
@@ -370,6 +371,21 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
         defaults[f.key] = defaults[f.key] ?? f.defaultValue;
       }
     });
+
+    // Apply company-wide saved field values (persists across sessions per company)
+    try {
+      const companyId = profile?.company_id;
+      if (companyId) {
+        const saved = localStorage.getItem(`crm_company_fields_${companyId}`);
+        if (saved) {
+          const savedFields = JSON.parse(saved) as Record<string, string>;
+          const contactKeys = new Set(Object.keys(autoBase));
+          Object.entries(savedFields).forEach(([k, v]) => {
+            if (!contactKeys.has(k)) defaults[k] = v;
+          });
+        }
+      }
+    } catch { /* ignore localStorage errors */ }
 
     // Auto-fill Roofr measurement fields (ROOF_SQUARES, RIDGE_LF, etc.)
     if (roofrData) {
@@ -483,9 +499,30 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
         html = html.replace(/\{\{TOTAL_AMOUNT\}\}/g, `$${fmt(totalAmount)}`);
         html = html.replace(/\{\{DEPOSIT_AMOUNT\}\}/g, depositAmount ? `$${fmt(depositNum)}` : '—');
         html = html.replace(/\{\{BALANCE_DUE\}\}/g, depositAmount ? `$${fmt(balanceDue)}` : '—');
+        // Hide pricing columns if toggled
+        if (hidePricing) {
+          html = html.replace(/<th[^>]*>(?:Unit Price|Price|Rate|Total|Amount)<\/th>/gi, '<th style="display:none"></th>');
+          html = html.replace(/<td[^>]*class="[^"]*(?:price|rate|total|amount)[^"]*"[^>]*>[\s\S]*?<\/td>/gi, '<td style="display:none"></td>');
+        }
       }
       return html;
     })();
+
+    // Persist non-contact field values company-wide for future templates
+    try {
+      if (profile?.company_id) {
+        const autoBase = buildContactOverrides(contact, companyProfile, profile);
+        const contactKeys = new Set(Object.keys(autoBase));
+        const existing = (() => {
+          try { return JSON.parse(localStorage.getItem(`crm_company_fields_${profile.company_id}`) || '{}'); } catch { return {}; }
+        })();
+        const toSave = { ...existing };
+        Object.entries(fieldValues).forEach(([k, v]) => {
+          if (!contactKeys.has(k) && !isCostField(k) && v) toSave[k] = v;
+        });
+        localStorage.setItem(`crm_company_fields_${profile.company_id}`, JSON.stringify(toSave));
+      }
+    } catch { /* ignore */ }
 
     // Check for unfilled vars (non-agreement templates only check fields; agreement skips cost vars)
     const stillUnfilled = getUnfilledVars(finalHtml).filter(v => !isCostField(v) && !TERMS_FIELDS.includes(v) || (!isAgreement));
@@ -1110,6 +1147,15 @@ export default function ContactTemplateModal({ contact, onClose, onDocumentSaved
               <p className="text-xs text-gray-500">Fill in all fields before saving.</p>
             )}
             <div className="flex gap-2">
+              {isAgreement && (
+                <button
+                  onClick={() => setHidePricing(p => !p)}
+                  className={`px-3 py-2 text-sm rounded-lg border transition-colors ${hidePricing ? 'bg-amber-100 border-amber-300 text-amber-800' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}
+                  title="Toggle pricing visibility on saved PDF"
+                >
+                  {hidePricing ? 'Pricing hidden' : 'Hide pricing'}
+                </button>
+              )}
               <button
                 onClick={onClose}
                 disabled={isSaving}
