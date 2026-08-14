@@ -719,8 +719,23 @@ function CRMApp() {
 
   // Race a DB fetch against a per-query timeout; resolves to fallback on timeout instead of
   // blocking the whole Promise.all. Prevents a single slow Supabase query from stalling the UI.
+  // Returns a tagged result so callers can tell if a timeout occurred.
   const withFetchTimeout = <T,>(p: Promise<T>, fallback: T, ms = 8000): Promise<T> =>
     Promise.race([p, new Promise<T>(resolve => setTimeout(() => resolve(fallback), ms))]);
+
+  // Same as withFetchTimeout but tracks whether the timeout fired.
+  // Returns { data, timedOut: true } when the fallback was used.
+  const withFetchTimeoutTracked = <T,>(
+    p: Promise<T>,
+    fallback: T,
+    ms: number,
+    onTimeout: () => void
+  ): Promise<T> => {
+    const timeoutPromise = new Promise<T>(resolve =>
+      setTimeout(() => { onTimeout(); resolve(fallback); }, ms)
+    );
+    return Promise.race([p, timeoutPromise]);
+  };
 
   // Load data from database
   const loadData = useCallback(async (options?: { silent?: boolean }) => {
@@ -748,9 +763,19 @@ function CRMApp() {
       dispatch({ type: 'SET_LOADING', payload: true });
     }
 
+    // Track whether any individual Supabase query was answered by the timeout
+    // fallback rather than by real data. Used below to avoid writing empty cache.
+    let anyQueryTimedOut = false;
+    const markTimedOut = () => { anyQueryTimedOut = true; };
+
+    // Visible (initial) loads get a longer window to handle Supabase cold-start,
+    // which can take 15-20 s on free-tier projects. Silent background refreshes
+    // keep the shorter 8 s window so they don't block the UI.
+    const fetchTimeoutMs = silent ? 8000 : 20000;
+
     try {
       // Load all data in parallel (including company to pre-warm cache for Sidebar)
-      // Each query is individually capped at 7 s to prevent a single slow call from
+      // Each query is individually capped to prevent a single slow call from
       // blocking the entire load; timed-out queries fall back to their empty value.
       const [
         dbContacts,
@@ -768,20 +793,20 @@ function CRMApp() {
         dbSuppliers,
         dbMaterialOrders,
       ] = await Promise.all([
-        withFetchTimeout(db.getContacts(profile.company_id), []),
-        withFetchTimeout(db.getCommunications(profile.company_id), []),
-        withFetchTimeout(db.getAppointments(profile.company_id), []),
-        withFetchTimeout(db.getInvoices(profile.company_id), []),
-        withFetchTimeout(db.getKanbanBoards(profile.company_id), []),
-        withFetchTimeout(db.getLeadSources(profile.company_id), []),
-        withFetchTimeout(db.getAutomations(profile.company_id), []),
-        withFetchTimeout(db.getTeamMembers(profile.company_id), []),
-        withFetchTimeout(db.getCompany(profile.company_id), null), // pre-warm company cache
-        withFetchTimeout(db.getEstimates(profile.company_id), []),
-        withFetchTimeout(db.getProjects(profile.company_id), []),
-        withFetchTimeout(db.getWorkOrders(profile.company_id), []),
-        withFetchTimeout(db.getSuppliers(profile.company_id), []),
-        withFetchTimeout(db.getMaterialOrders(profile.company_id), []),
+        withFetchTimeoutTracked(db.getContacts(profile.company_id), [], fetchTimeoutMs, markTimedOut),
+        withFetchTimeoutTracked(db.getCommunications(profile.company_id), [], fetchTimeoutMs, markTimedOut),
+        withFetchTimeoutTracked(db.getAppointments(profile.company_id), [], fetchTimeoutMs, markTimedOut),
+        withFetchTimeoutTracked(db.getInvoices(profile.company_id), [], fetchTimeoutMs, markTimedOut),
+        withFetchTimeoutTracked(db.getKanbanBoards(profile.company_id), [], fetchTimeoutMs, markTimedOut),
+        withFetchTimeoutTracked(db.getLeadSources(profile.company_id), [], fetchTimeoutMs, markTimedOut),
+        withFetchTimeoutTracked(db.getAutomations(profile.company_id), [], fetchTimeoutMs, markTimedOut),
+        withFetchTimeoutTracked(db.getTeamMembers(profile.company_id), [], fetchTimeoutMs, markTimedOut),
+        withFetchTimeoutTracked(db.getCompany(profile.company_id), null, fetchTimeoutMs, markTimedOut), // pre-warm company cache
+        withFetchTimeoutTracked(db.getEstimates(profile.company_id), [], fetchTimeoutMs, markTimedOut),
+        withFetchTimeoutTracked(db.getProjects(profile.company_id), [], fetchTimeoutMs, markTimedOut),
+        withFetchTimeoutTracked(db.getWorkOrders(profile.company_id), [], fetchTimeoutMs, markTimedOut),
+        withFetchTimeoutTracked(db.getSuppliers(profile.company_id), [], fetchTimeoutMs, markTimedOut),
+        withFetchTimeoutTracked(db.getMaterialOrders(profile.company_id), [], fetchTimeoutMs, markTimedOut),
       ]);
 
       // Convert DB contacts to app contacts
@@ -1058,28 +1083,47 @@ function CRMApp() {
         companyGoals: [],
       };
 
-      // Guard: if we already served from cache and got back zero entities, it
-      // means all Supabase queries timed-out. Don't overwrite good cached data
-      // with empty results, and don't corrupt the cache for the next refresh.
+      // Guard: if all Supabase queries timed-out, don't overwrite good cached
+      // data and don't corrupt the cache for the next refresh.
       const totalEntities = freshPayload.contacts.length + freshPayload.appointments.length +
         freshPayload.invoices.length + freshPayload.teamMembers.length +
         freshPayload.estimates.length + freshPayload.workOrders.length;
-      if (loadedFromCache && totalEntities === 0) {
-        console.warn('[loadData] Fresh fetch returned empty — keeping cached data to avoid data loss.');
-        if (!silent) {
-          // Show warning banner that we're using cached data
-          toast.warning('Using cached data - connection issues detected', {
-            description: 'Your data is safe. We\'ll keep trying to reconnect.',
-            duration: 5000,
-          });
+
+      if (anyQueryTimedOut && totalEntities === 0) {
+        // All queries timed out — data is unreliable.
+        if (loadedFromCache) {
+          // Already showing cached data — keep it and warn.
+          console.warn('[loadData] Fresh fetch timed out — keeping cached data to avoid data loss.');
+          if (!silent) {
+            toast.warning('Using cached data — connection issues detected', {
+              description: 'Your data is safe. We\'ll keep trying to reconnect.',
+              duration: 5000,
+            });
+          }
+        } else {
+          // No cache and queries timed out — dispatch so loading screen clears,
+          // but do NOT write the empty result to localStorage; the next visit
+          // will try a fresh fetch instead of loading a poisoned cache.
+          console.warn('[loadData] Fresh fetch timed out with no existing cache — showing empty shell; will retry.');
+          dispatch({ type: 'INITIALIZE_DATA', payload: freshPayload });
+          if (!silent) {
+            toast.warning('Taking longer than usual to load your data', {
+              description: 'Check your connection. Pull to refresh or reload the page to try again.',
+              duration: 10000,
+            });
+          }
         }
-        return;
+        return; // Do NOT call writeDataCache in either path above.
       }
 
       dispatch({ type: 'INITIALIZE_DATA', payload: freshPayload });
 
-      // Persist to localStorage so next refresh shows data instantly
-      writeDataCache(profile.company_id, freshPayload);
+      // Only persist to localStorage when we have actual data — prevents an empty
+      // Supabase cold-start result from poisoning the cache and causing a blank
+      // screen on every subsequent page load.
+      if (totalEntities > 0) {
+        writeDataCache(profile.company_id, freshPayload);
+      }
 
     } catch (error) {
       console.error('Error loading CRM data:', error);
@@ -1395,12 +1439,23 @@ useEffect(() => {
   // Fail-safe: avoid getting stuck on the loading screen if initial data calls stall.
   // This effect resets whenever authLoading toggles (mobile reconnects, token refreshes)
   // which can prevent it from ever firing on unstable connections.
+  // Increased to 25 s to accommodate the new 20 s fetch timeout on initial loads.
   useEffect(() => {
     if (!state.isLoading || state.isInitialized) return;
     if (authLoading) return;
 
     const timer = window.setTimeout(() => {
-      console.warn('Initial CRM data load timed out after 15 s; showing app shell with empty data.');
+      // Before giving up and showing empty state, try the localStorage cache.
+      // This is the last line of defence for users on very slow connections.
+      const lastCompanyId = profile?.company_id || localStorage.getItem(LAST_COMPANY_KEY);
+      const fallbackCache = lastCompanyId ? readDataCache(lastCompanyId) : null;
+      if (fallbackCache) {
+        console.warn('[AppLayout] 25 s soft timeout — using localStorage cache fallback.');
+        dispatch({ type: 'INITIALIZE_DATA', payload: fallbackCache as any });
+        return;
+      }
+
+      console.warn('[AppLayout] 25 s soft timeout — no cache available; showing empty app shell.');
       dispatch({
         type: 'INITIALIZE_DATA',
         payload: {
@@ -1420,19 +1475,36 @@ useEffect(() => {
           companyGoals: [],
         },
       });
-    }, 15000);
+    }, 25000);
 
     return () => window.clearTimeout(timer);
-  }, [state.isLoading, state.isInitialized, authLoading]);
+  }, [state.isLoading, state.isInitialized, authLoading, profile?.company_id]);
 
-  // Absolute hard deadline — fires exactly once, 20 s after CRMApp mounts.
+  // Absolute hard deadline — fires exactly once, 45 s after CRMApp mounts.
   // This cannot be reset by auth events or network toggling, so the app can
   // never be stuck on the loading screen indefinitely (e.g. on mobile with an
   // unstable connection that keeps resetting the soft fail-safe above).
+  //
+  // IMPORTANT: stateRef.current is used here (not the captured `state`) because
+  // this effect has empty deps and runs exactly once on mount. The captured
+  // `state.isInitialized` would always be the mount-time value (stale closure),
+  // so it would dispatch empty arrays even after data had loaded. stateRef is
+  // kept up-to-date by the effect above (line ~718).
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      if (state.isInitialized) return; // Already loaded — nothing to do
-      console.warn('[AppLayout] Absolute 20 s loading deadline reached — forcing app shell.');
+      if (stateRef.current.isInitialized) return; // Always-current check via ref
+      console.warn('[AppLayout] Absolute 45 s loading deadline reached — checking cache before forcing app shell.');
+
+      // Try the localStorage cache one last time before showing empty state.
+      // This covers the case where auth was slow and loadData hasn't run yet.
+      const lastCompanyId = localStorage.getItem(LAST_COMPANY_KEY);
+      const emergencyCache = lastCompanyId ? readDataCache(lastCompanyId) : null;
+      if (emergencyCache) {
+        console.warn('[AppLayout] 45 s deadline — using localStorage cache fallback.');
+        dispatch({ type: 'INITIALIZE_DATA', payload: emergencyCache as any });
+        return;
+      }
+
       dispatch({
         type: 'INITIALIZE_DATA',
         payload: {
@@ -1452,7 +1524,7 @@ useEffect(() => {
           companyGoals: [],
         },
       });
-    }, 20000);
+    }, 45000);
     return () => window.clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty deps — intentional. Runs once on mount, never resets.
@@ -1564,7 +1636,7 @@ useEffect(() => {
   return (
     <CRMContext.Provider value={{ state, dispatch }}>
       <SubscriptionProvider value={{ isExpiredReadOnly }}>
-      <ResponsiveLayout>
+      <ResponsiveLayout onRefresh={requestSoftReload}>
         <div className="flex flex-col h-full">
           {/* Top bar only on desktop */}
           <div className="hidden md:block">

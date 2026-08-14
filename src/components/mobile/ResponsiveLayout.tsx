@@ -9,9 +9,11 @@ import { RefreshCw, Menu } from 'lucide-react';
 
 interface ResponsiveLayoutProps {
   children: React.ReactNode;
+  /** Called when the user completes a pull-to-refresh gesture. Triggers a CRM data reload. */
+  onRefresh?: () => void;
 }
 
-export default function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
+export default function ResponsiveLayout({ children, onRefresh }: ResponsiveLayoutProps) {
   const isMobile = useIsMobile();
   const queryClient = useQueryClient();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -40,7 +42,11 @@ export default function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
     setIsRefreshing(true);
     setPullDistance(0);
     startYRef.current = 0;
-    await queryClient.invalidateQueries();
+    // Reload CRM data (contacts, invoices, etc.) AND invalidate TanStack Query cache
+    await Promise.all([
+      queryClient.invalidateQueries(),
+      onRefresh ? Promise.resolve(onRefresh()) : Promise.resolve(),
+    ]);
     setIsRefreshing(false);
   };
 
