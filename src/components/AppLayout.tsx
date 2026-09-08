@@ -48,6 +48,7 @@ const SettingsView = lazy(() => import('./crm/SettingsView'));
 const AIAssistant = lazy(() => import('./crm/AIAssistant'));
 const SuppliersView = lazy(() => import('./crm/SuppliersView'));
 const EstimatesView = lazy(() => import('./crm/EstimatesView'));
+const QuotesView = lazy(() => import('./crm/QuotesView'));
 const ProjectsView = lazy(() => import('./crm/ProjectsView'));
 const WorkOrdersView = lazy(() => import('./crm/WorkOrdersView'));
 const MaterialOrdersView = lazy(() => import('./crm/MaterialOrdersView'));
@@ -186,6 +187,8 @@ function ViewRouter() {
         return <SuppliersView />;
       case 'estimates':
         return <EstimatesView />;
+      case 'quotes':
+        return <QuotesView />;
       case 'projects':
         return <ProjectsView />;
       case 'work-orders':

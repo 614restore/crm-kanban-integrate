@@ -36,6 +36,7 @@ export type ViewType =
   | 'settings'
   | 'suppliers'
   | 'estimates'
+  | 'quotes'
   | 'projects'
   | 'work-orders'
   | 'material-orders'
@@ -570,6 +571,9 @@ export function crmReducer(state: CRMState, action: CRMAction): CRMState {
         estimates: action.payload.estimates,
         projects: action.payload.projects,
         workOrders: action.payload.workOrders,
+        // Restore companyId from cache so QuickAdd / saves work immediately
+        // before the auth profile finishes loading on refresh.
+        companyId: (action.payload as any).companyId ?? state.companyId,
         selectedBoardId,
         isInitialized: true,
         isLoading: false,
