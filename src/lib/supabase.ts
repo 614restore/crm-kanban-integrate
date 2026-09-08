@@ -55,6 +55,20 @@ if (demoMode) {
   }
 }
 
+// supabase-js coordinates auth token refresh with a Web Locks lock
+// ("lock:sb-auth-token"). In some sessions that lock is acquired and never
+// released, and then every subsequent write hangs forever waiting on it
+// (reads that already ran are unaffected) — the "stuck on Saving..." bug.
+// Replace it with an in-memory promise-chain lock: it still serializes token
+// operations within this tab, but never touches navigator.locks, so it can
+// never deadlock.
+let authLockChain: Promise<unknown> = Promise.resolve();
+const inMemoryAuthLock = <R,>(_name: string, _acquireTimeout: number, fn: () => Promise<R>): Promise<R> => {
+  const run = authLockChain.then(() => fn());
+  authLockChain = run.then(() => undefined, () => undefined);
+  return run;
+};
+
 const supabase = createClient(
   supabaseUrl || 'https://demo.supabase.co', 
   supabaseKey || 'demo-key', 
@@ -66,6 +80,7 @@ const supabase = createClient(
       storage: typeof window !== 'undefined' ? window.localStorage : undefined,
       storageKey: 'sb-auth-token',
       flowType: 'pkce',
+      lock: inMemoryAuthLock,
     },
     global: {
       headers: {
