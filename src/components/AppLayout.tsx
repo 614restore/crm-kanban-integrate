@@ -3,6 +3,7 @@ import { CRMContext, crmReducer, CRMState, ViewType } from '@/lib/crmStore';
 import { AuthProvider, useAuth } from '@/lib/authContext';
 import { PermissionProvider } from '@/lib/permissions/PermissionProvider';
 import { db, DbCompany } from '@/lib/database';
+import { filterRecentlyDeleted } from '@/lib/recentlyDeleted';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import {
@@ -787,8 +788,11 @@ function CRMApp() {
         withFetchTimeout(db.getMaterialOrders(profile.company_id), [], 8000),
       ]);
 
-      // Convert DB contacts to app contacts
-      const contacts = dbContacts.map(dbContactToAppContact);
+      // Convert DB contacts to app contacts. Drop any contact deleted in the
+      // last minute — this fetch may have started before that delete
+      // committed, and dispatching it below would silently resurrect a row
+      // the user just removed (see recentlyDeleted.ts).
+      const contacts = filterRecentlyDeleted('contact', dbContacts.map(dbContactToAppContact));
 
       // Attach communications to contacts
       const communicationsByContact = (dbCommunications || []).reduce((acc, comm) => {

@@ -1,5 +1,6 @@
 // Database service layer for CRM data persistence
 import { supabase, isDemoMode } from './supabase';
+import { markDeleted } from './recentlyDeleted';
 
 // ── Company ID safety assertion ───────────────────────────────────────────────
 // Defense-in-depth: throws in dev, logs in prod if any method fires without
@@ -826,11 +827,19 @@ class DatabaseService {
 
   async deleteContact(contactId: string): Promise<boolean> {
     try {
-      const { error } = await this.raceTimeout(
-        supabase.from('contacts').delete().eq('id', contactId),
+      // Supabase's delete() returns no error when the WHERE clause + RLS
+      // match zero rows — it's a valid "deleted nothing" response, not a
+      // rejected request. Without count:'exact' that reads as success and
+      // the caller removes the contact from the UI even though it is still
+      // in the database, so it silently reappears on the next reload. Ask
+      // PostgREST for the affected row count and treat zero as a failure.
+      const { error, count } = await this.raceTimeout(
+        supabase.from('contacts').delete({count: 'exact'}).eq('id', contactId),
         10000, 'deleteContact'
       );
       if (error) { console.error('Error deleting contact:', error); return false; }
+      if (!count) { console.error('deleteContact: 0 rows deleted for id', contactId); return false; }
+      markDeleted('contact', contactId);
       return true;
     } catch (err) { console.error('deleteContact timed out or failed:', err); return false; }
   }
