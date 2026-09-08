@@ -101,7 +101,7 @@ const getInitialView = (): ViewType => {
     const saved = localStorage.getItem('crm_current_view');
     if (saved) return saved as ViewType;
   } catch (e) { console.warn('[AppLayout] sessionStorage read failed (private browsing?):', e); }
-  return 'dashboard';
+  return 'contacts';
 };
 
 const initialState: CRMState = {
@@ -749,9 +749,9 @@ function CRMApp() {
     }
 
     try {
-      // Load all data in parallel (including company to pre-warm cache for Sidebar)
-      // Each query is individually capped at 7 s to prevent a single slow call from
-      // blocking the entire load; timed-out queries fall back to their empty value.
+      // Load contacts + appointments first (3 s timeout) so customers appear
+      // immediately. Everything else loads in the same parallel batch with a
+      // longer timeout — they arrive and silently update state when ready.
       const [
         dbContacts,
         dbCommunications,
@@ -768,20 +768,20 @@ function CRMApp() {
         dbSuppliers,
         dbMaterialOrders,
       ] = await Promise.all([
-        withFetchTimeout(db.getContacts(profile.company_id), []),
-        withFetchTimeout(db.getCommunications(profile.company_id), []),
-        withFetchTimeout(db.getAppointments(profile.company_id), []),
-        withFetchTimeout(db.getInvoices(profile.company_id), []),
-        withFetchTimeout(db.getKanbanBoards(profile.company_id), []),
-        withFetchTimeout(db.getLeadSources(profile.company_id), []),
-        withFetchTimeout(db.getAutomations(profile.company_id), []),
-        withFetchTimeout(db.getTeamMembers(profile.company_id), []),
-        withFetchTimeout(db.getCompany(profile.company_id), null), // pre-warm company cache
-        withFetchTimeout(db.getEstimates(profile.company_id), []),
-        withFetchTimeout(db.getProjects(profile.company_id), []),
-        withFetchTimeout(db.getWorkOrders(profile.company_id), []),
-        withFetchTimeout(db.getSuppliers(profile.company_id), []),
-        withFetchTimeout(db.getMaterialOrders(profile.company_id), []),
+        withFetchTimeout(db.getContacts(profile.company_id), [], 3000),
+        withFetchTimeout(db.getCommunications(profile.company_id), [], 8000),
+        withFetchTimeout(db.getAppointments(profile.company_id), [], 3000),
+        withFetchTimeout(db.getInvoices(profile.company_id), [], 8000),
+        withFetchTimeout(db.getKanbanBoards(profile.company_id), [], 8000),
+        withFetchTimeout(db.getLeadSources(profile.company_id), [], 8000),
+        withFetchTimeout(db.getAutomations(profile.company_id), [], 8000),
+        withFetchTimeout(db.getTeamMembers(profile.company_id), [], 8000),
+        withFetchTimeout(db.getCompany(profile.company_id), null, 8000), // pre-warm company cache
+        withFetchTimeout(db.getEstimates(profile.company_id), [], 8000),
+        withFetchTimeout(db.getProjects(profile.company_id), [], 8000),
+        withFetchTimeout(db.getWorkOrders(profile.company_id), [], 8000),
+        withFetchTimeout(db.getSuppliers(profile.company_id), [], 8000),
+        withFetchTimeout(db.getMaterialOrders(profile.company_id), [], 8000),
       ]);
 
       // Convert DB contacts to app contacts
@@ -1056,6 +1056,7 @@ function CRMApp() {
         workOrders,
         documentTemplates: [],
         companyGoals: [],
+        companyId: profile.company_id,
       };
 
       // Guard: if we already served from cache and got back zero entities, it
@@ -1064,8 +1065,17 @@ function CRMApp() {
       const totalEntities = freshPayload.contacts.length + freshPayload.appointments.length +
         freshPayload.invoices.length + freshPayload.teamMembers.length +
         freshPayload.estimates.length + freshPayload.workOrders.length;
-      if (loadedFromCache && totalEntities === 0) {
-        console.warn('[loadData] Fresh fetch returned empty — keeping cached data to avoid data loss.');
+      // Never let a refresh (foreground OR background/silent) replace real data
+      // with an all-empty result — that is the "everything goes blank until I
+      // refresh" bug. Blank only when we genuinely have nothing to preserve.
+      const cur = stateRef.current;
+      const alreadyHaveData =
+        (cur.contacts?.length || 0) + (cur.teamMembers?.length || 0) +
+        (cur.estimates?.length || 0) + (cur.appointments?.length || 0) +
+        (cur.invoices?.length || 0) + (cur.workOrders?.length || 0) +
+        (cur.suppliers?.length || 0) + (cur.projects?.length || 0) > 0;
+      if (totalEntities === 0 && (loadedFromCache || alreadyHaveData)) {
+        console.warn('[loadData] Fresh fetch returned empty — keeping existing data to avoid data loss.');
         if (!silent) {
           // Show warning banner that we're using cached data
           toast.warning('Using cached data - connection issues detected', {

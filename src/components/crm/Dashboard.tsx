@@ -189,7 +189,7 @@ export default function Dashboard() {
                   return (
                     <div key={status} className="flex items-center gap-4">
                       <div className="w-32 text-sm font-medium text-gray-700">
-                        {statusLabels[status as keyof typeof statusLabels]}
+                        {statusLabels[status as keyof typeof statusLabels] ?? status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
                       </div>
                       <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
                         <div
@@ -288,7 +288,7 @@ export default function Dashboard() {
                           statusColors[contact.status]
                         }`}
                       >
-                        {statusLabels[contact.status]}
+                        {statusLabels[contact.status] ?? String(contact.status || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
                       </span>
                       {assignee && (
                         <img
