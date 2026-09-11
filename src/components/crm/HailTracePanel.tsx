@@ -171,15 +171,18 @@ export default function HailTracePanel({ address, city, state, zip, companyId, c
         .eq('integration_id', 'hailtrace')
         .single();
 
+      const coords = await geocode();
+
       if (dbError && dbError.code !== 'PGRST116') {
-        // PGRST116 = no rows found; anything else is a real DB/auth error
-        setError('Failed to load HailTrace configuration. Please try again.');
-        setStatus('idle');
+        // PGRST116 = no rows found, which is normal (no HailTrace configured).
+        // Any other error is unexpected, but NOAA doesn't depend on this
+        // table at all — fall back to it rather than dead-ending the user
+        // on a config-lookup failure that has nothing to do with NOAA.
+        await checkViaNOAA(coords);
         return;
       }
 
       const apiKey = integrationData?.credentials?.apiKey;
-      const coords = await geocode();
 
       // No paid HailTrace key configured — NOAA is the free default, not a
       // gate. Real radar data, no subscription required.
