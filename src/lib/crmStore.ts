@@ -37,6 +37,7 @@ export type ViewType =
   | 'suppliers'
   | 'estimates'
   | 'quotes'
+  | 'storm-search'
   | 'projects'
   | 'work-orders'
   | 'material-orders'

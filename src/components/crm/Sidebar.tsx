@@ -34,6 +34,7 @@ import {
   TrendingUp,
   ClipboardList,
   FileSignature,
+  CloudRain,
 } from 'lucide-react';
 
 interface NavItem {
@@ -56,6 +57,7 @@ const navItems: NavItem[] = [
   { id: 'suppliers', label: 'Suppliers', icon: <Store size={20} /> },
   { id: 'estimates', label: 'Estimates', icon: <FileText size={20} /> },
   { id: 'quotes', label: 'Quotes', icon: <FileSignature size={20} /> },
+  { id: 'storm-search', label: 'Storm Search', icon: <CloudRain size={20} /> },
   { id: 'projects', label: 'Projects', icon: <FolderKanban size={20} /> },
   { id: 'inspections', label: 'Inspections', icon: <ClipboardList size={20} /> },
   { id: 'crew-schedule', label: 'Crew Schedule', icon: <CalendarClock size={20} /> },
