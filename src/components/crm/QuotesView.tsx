@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
+import { db } from '@/lib/database';
 import { supabase } from '@/lib/supabase';
+import { sendEmail } from '@/lib/emailApi';
 import { toast } from 'sonner';
 import { quoteProjectTemplates, TemplateLineItem } from '@/data/quoteTemplates';
 import {
-  FileText, Plus, Search, Trash2, X, Save, User,
+  FileText, Plus, Search, Trash2, X, Save, User, Send, Link2, Eye, ChevronDown,
   Home, Wrench, Hammer, Sun, Droplets, Layers, Grid3x3,
   Scroll, Tablet, PackageOpen, Box,
 } from 'lucide-react';
@@ -45,6 +47,8 @@ interface QuoteRow {
   better_total: number | null;
   best_total: number | null;
   created_at: string;
+  share_token: string | null;
+  cover_page_title: string | null;
 }
 
 const ICON_MAP: Record<string, React.ReactNode> = {
@@ -113,7 +117,7 @@ export default function QuotesView() {
     try {
       const { data, error } = await supabase
         .from('quotes')
-        .select('id, quote_number, status, contact_id, customer_id, project_type, good_total, better_total, best_total, created_at')
+        .select('id, quote_number, status, contact_id, customer_id, project_type, good_total, better_total, best_total, created_at, share_token, cover_page_title')
         .eq('company_id', companyId)
         .eq('is_archived', false)
         .order('created_at', { ascending: false });
@@ -130,6 +134,68 @@ export default function QuotesView() {
     if (!id) return 'No customer';
     const c = state.contacts.find((c) => c.id === id);
     return c ? `${c.firstName} ${c.lastName}`.trim() : 'Unknown';
+  };
+
+  const shareUrl = (token: string) => `${window.location.origin}/quote/${token}`;
+
+  const handleCopyLink = async (q: QuoteRow) => {
+    if (!q.share_token) { toast.error('This quote has no share link yet.'); return; }
+    try {
+      await navigator.clipboard.writeText(shareUrl(q.share_token));
+      toast.success('Link copied');
+    } catch {
+      toast.error('Could not copy the link');
+    }
+  };
+
+  const handleSendQuote = async (q: QuoteRow) => {
+    if (!q.share_token) { toast.error('This quote has no share link yet.'); return; }
+    const contact = state.contacts.find((c) => c.id === (q.contact_id || q.customer_id));
+    if (!contact?.email) { toast.error('This customer has no email on file.'); return; }
+    if (!companyId) return;
+    try {
+      const companyProfile = await db.getCompany(companyId).catch(() => null);
+      const companyName = (companyProfile as any)?.name || 'Your Company';
+      const companyPhone = (companyProfile as any)?.phone || '';
+      const companyAddress = (companyProfile as any)?.address || '';
+      const url = shareUrl(q.share_token);
+
+      await sendEmail({
+        to: contact.email,
+        subject: `${q.cover_page_title || 'Your Proposal'} — ${companyName}`,
+        html: `
+          <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
+            <div style="background:#1e40af;color:white;padding:24px;border-radius:8px 8px 0 0">
+              <h2 style="margin:0;font-size:24px">${companyName}</h2>
+              ${companyAddress ? `<p style="margin:4px 0 0 0;opacity:0.9;font-size:13px">${companyAddress}</p>` : ''}
+              ${companyPhone ? `<p style="margin:2px 0 0 0;opacity:0.9;font-size:13px">${companyPhone}</p>` : ''}
+            </div>
+            <div style="padding:24px;background:#f9fafb">
+              <h3 style="color:#1e40af;margin-top:0">${q.cover_page_title || 'Your Proposal'}</h3>
+              <p>Hi ${contact.firstName},</p>
+              <p>Your quote <strong>${q.quote_number}</strong> is ready to view. Please click below to review the details and sign.</p>
+              <div style="text-align:center;margin:28px 0">
+                <a href="${url}" style="background:#2563eb;color:white;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block">
+                  View & Sign Quote
+                </a>
+              </div>
+              <p style="font-size:12px;color:#6b7280">Or copy this link: ${url}</p>
+            </div>
+          </div>
+        `,
+      });
+
+      const { error } = await supabase
+        .from('quotes')
+        .update({ status: 'sent', sent_at: new Date().toISOString() })
+        .eq('id', q.id);
+      if (error) throw error;
+
+      toast.success('Quote sent to ' + contact.email);
+      loadQuotes();
+    } catch (err: any) {
+      toast.error('Failed to send quote: ' + (err.message || 'unknown error'));
+    }
   };
 
   const filtered = useMemo(() => {
@@ -203,6 +269,7 @@ export default function QuotesView() {
                 <th className="text-right px-4 py-3">Better</th>
                 <th className="text-right px-4 py-3">Best</th>
                 <th className="text-left px-4 py-3">Created</th>
+                <th className="text-right px-4 py-3">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -223,6 +290,35 @@ export default function QuotesView() {
                   <td className="px-4 py-3 text-right text-gray-700">{money(q.better_total)}</td>
                   <td className="px-4 py-3 text-right text-gray-700">{money(q.best_total)}</td>
                   <td className="px-4 py-3 text-gray-500">{new Date(q.created_at).toLocaleDateString()}</td>
+                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-end gap-1">
+                      {q.share_token && (
+                        <a
+                          href={shareUrl(q.share_token)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                          title="View customer page"
+                        >
+                          <Eye size={15} />
+                        </a>
+                      )}
+                      <button
+                        onClick={() => handleCopyLink(q)}
+                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                        title="Copy share link"
+                      >
+                        <Link2 size={15} />
+                      </button>
+                      <button
+                        onClick={() => handleSendQuote(q)}
+                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                        title="Email quote to customer"
+                      >
+                        <Send size={15} />
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -268,6 +364,20 @@ function QuoteBuilderModal({
   const [status, setStatus] = useState('draft');
   const [lineItems, setLineItems] = useState<QuoteLineItemRow[]>([]);
 
+  // Stage 4: contingency agreement, insurance-job linkage, financing note,
+  // and a free-form custom page — the "long tail" fields mobile supports.
+  const [contingencyEnabled, setContingencyEnabled] = useState(false);
+  const [isInsuranceJob, setIsInsuranceJob] = useState(false);
+  const [insuranceCompanyName, setInsuranceCompanyName] = useState('');
+  const [claimNumber, setClaimNumber] = useState('');
+  const [deductibleAmount, setDeductibleAmount] = useState('');
+  const [showFinancing, setShowFinancing] = useState(false);
+  const [financingNote, setFinancingNote] = useState('');
+  const [includeCustomPage, setIncludeCustomPage] = useState(false);
+  const [customPageTitle, setCustomPageTitle] = useState('');
+  const [customPageBody, setCustomPageBody] = useState('');
+  const [showMoreOptions, setShowMoreOptions] = useState(false);
+
   // Load existing quote for editing
   useEffect(() => {
     if (!quoteId) return;
@@ -287,6 +397,16 @@ function QuoteBuilderModal({
         setProjectDescription(quote.project_description || '');
         setNotes(quote.notes || '');
         setStatus(quote.status || 'draft');
+        setContingencyEnabled(!!quote.contingency_enabled);
+        setIsInsuranceJob(!!(quote.insurance_company_name || quote.claim_number || quote.deductible_amount));
+        setInsuranceCompanyName(quote.insurance_company_name || '');
+        setClaimNumber(quote.claim_number || '');
+        setDeductibleAmount(quote.deductible_amount != null ? String(quote.deductible_amount) : '');
+        setShowFinancing(!!quote.show_financing);
+        setFinancingNote(quote.financing_note || '');
+        setIncludeCustomPage(!!quote.include_custom_page);
+        setCustomPageTitle(quote.custom_page_title || '');
+        setCustomPageBody(quote.custom_page_body || '');
         setLineItems(
           (items || []).map((i: any) => ({
             id: i.id,
@@ -404,6 +524,16 @@ function QuoteBuilderModal({
         show_section_totals: true,
         show_quantity: true,
         show_item_descriptions: true,
+        contingency_enabled: contingencyEnabled,
+        insurance_company_name: isInsuranceJob ? (insuranceCompanyName.trim() || null) : null,
+        claim_number: isInsuranceJob ? (claimNumber.trim() || null) : null,
+        deductible_amount: isInsuranceJob && deductibleAmount ? parseFloat(deductibleAmount) : null,
+        deductible_included: isInsuranceJob,
+        show_financing: showFinancing,
+        financing_note: showFinancing ? (financingNote.trim() || null) : null,
+        include_custom_page: includeCustomPage,
+        custom_page_title: includeCustomPage ? (customPageTitle.trim() || null) : null,
+        custom_page_body: includeCustomPage ? (customPageBody.trim() || null) : null,
       };
 
       let savedId = quoteId;
@@ -629,6 +759,103 @@ function QuoteBuilderModal({
                 rows={2}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none resize-none"
               />
+            </div>
+
+            <div className="border border-gray-200 rounded-lg">
+              <button
+                type="button"
+                onClick={() => setShowMoreOptions((v) => !v)}
+                className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-lg"
+              >
+                <span>More options — contingency, insurance, financing, custom page</span>
+                <ChevronDown size={16} className={`transition-transform ${showMoreOptions ? 'rotate-180' : ''}`} />
+              </button>
+              {showMoreOptions && (
+                <div className="px-4 pb-4 space-y-4 border-t border-gray-100 pt-4">
+                  <label className="flex items-start gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={contingencyEnabled}
+                      onChange={(e) => setContingencyEnabled(e.target.checked)}
+                      className="mt-0.5"
+                    />
+                    <span>
+                      Include a contingency agreement — the customer's signature also accepts this
+                      agreement (used for insurance jobs; separate from the standard 3-day right-to-cancel notice).
+                    </span>
+                  </label>
+
+                  <div>
+                    <label className="flex items-center gap-2 text-sm text-gray-700 mb-2">
+                      <input type="checkbox" checked={isInsuranceJob} onChange={(e) => setIsInsuranceJob(e.target.checked)} />
+                      This is an insurance claim
+                    </label>
+                    {isInsuranceJob && (
+                      <div className="grid grid-cols-2 gap-3 pl-6">
+                        <input
+                          value={insuranceCompanyName}
+                          onChange={(e) => setInsuranceCompanyName(e.target.value)}
+                          placeholder="Insurance company"
+                          className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                        />
+                        <input
+                          value={claimNumber}
+                          onChange={(e) => setClaimNumber(e.target.value)}
+                          placeholder="Claim #"
+                          className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                        />
+                        <input
+                          type="number"
+                          value={deductibleAmount}
+                          onChange={(e) => setDeductibleAmount(e.target.value)}
+                          placeholder="Deductible $"
+                          className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none col-span-2"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="flex items-center gap-2 text-sm text-gray-700 mb-2">
+                      <input type="checkbox" checked={showFinancing} onChange={(e) => setShowFinancing(e.target.checked)} />
+                      Show financing note to customer
+                    </label>
+                    {showFinancing && (
+                      <textarea
+                        value={financingNote}
+                        onChange={(e) => setFinancingNote(e.target.value)}
+                        rows={2}
+                        placeholder="e.g. As low as $199/mo with approved credit"
+                        className="w-full pl-6 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none resize-none"
+                      />
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="flex items-center gap-2 text-sm text-gray-700 mb-2">
+                      <input type="checkbox" checked={includeCustomPage} onChange={(e) => setIncludeCustomPage(e.target.checked)} />
+                      Include a custom page
+                    </label>
+                    {includeCustomPage && (
+                      <div className="pl-6 space-y-2">
+                        <input
+                          value={customPageTitle}
+                          onChange={(e) => setCustomPageTitle(e.target.value)}
+                          placeholder="Page title"
+                          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                        />
+                        <textarea
+                          value={customPageBody}
+                          onChange={(e) => setCustomPageBody(e.target.value)}
+                          rows={3}
+                          placeholder="Page content"
+                          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none resize-none"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

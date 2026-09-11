@@ -16,6 +16,7 @@ import PrivacyPolicy from "./pages/PrivacyPolicy";
 import EULA from "./pages/EULA";
 import SignDocument from "./pages/SignDocument";
 import SignEstimate from "./pages/SignEstimate";
+import SignQuote from "./pages/SignQuote";
 import SignChangeOrder from "./pages/SignChangeOrder";
 import SignDocTemplate from "./pages/SignDocTemplate";
 import AcceptInvite from "./pages/AcceptInvite";
@@ -115,6 +116,7 @@ const App = () => {
               <Route path="/sign" element={<SignDocument />} />
               <Route path="/sign-estimate/:token" element={<SignEstimate />} />
               <Route path="/sign-estimate" element={<SignEstimate />} />
+              <Route path="/quote/:token" element={<SignQuote />} />
               <Route path="/sign-change-order" element={<SignChangeOrder />} />
               <Route path="/sign-doc" element={<SignDocTemplate />} />
               <Route path="/accept-invite" element={<AcceptInvite />} />
