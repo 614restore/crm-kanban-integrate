@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { CloudRain, Loader2, AlertTriangle, CheckCircle, Settings, Wind, Copy, Check, FileText, Bell } from 'lucide-react';
-import { HailTraceIntegration } from '@/lib/integrations/weather';
+import { CloudRain, Loader2, AlertTriangle, CheckCircle, Wind, Copy, Check, FileText } from 'lucide-react';
+import { HailTraceIntegration, NOAAWeatherIntegration, NOAAStormEvent } from '@/lib/integrations/weather';
 import { supabase } from '@/lib/supabase';
 import { db } from '@/lib/database';
 import { toast } from 'sonner';
@@ -30,41 +30,6 @@ interface HailEvent {
   distanceMiles?: number;
   location?: string;
 }
-
-const MOCK_EVENTS: HailEvent[] = [
-  {
-    date: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    time: '2:47 PM',
-    severity: 'severe',
-    hailSize: 1.75,
-    windSpeed: 58,
-    windGust: 72,
-    stormId: 'STM-2026-0843',
-    distanceMiles: 0.3,
-    location: 'Direct hit',
-  },
-  {
-    date: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    time: '11:12 AM',
-    severity: 'moderate',
-    hailSize: 1.0,
-    windSpeed: 42,
-    windGust: 55,
-    stormId: 'STM-2026-0671',
-    distanceMiles: 1.2,
-    location: '1.2 miles NE',
-  },
-  {
-    date: new Date(Date.now() - 120 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    time: '6:33 PM',
-    severity: 'minor',
-    hailSize: 0.75,
-    windSpeed: 31,
-    stormId: 'STM-2025-1204',
-    distanceMiles: 2.8,
-    location: '2.8 miles SW',
-  },
-];
 
 const severityConfig = {
   minor:    { label: 'Minor',    className: 'bg-yellow-100 text-yellow-800 border border-yellow-200' },
@@ -111,9 +76,22 @@ export default function HailTracePanel({ address, city, state, zip, companyId, c
   const [months, setMonths] = useState(12);
   const [loading, setLoading] = useState(false);
   const [events, setEvents] = useState<HailEvent[] | null>(null);
-  const [status, setStatus] = useState<'idle' | 'no-config' | 'no-events' | 'events' | 'demo'>('idle');
+  const [status, setStatus] = useState<'idle' | 'no-events' | 'events'>('idle');
+  const [source, setSource] = useState<'hailtrace' | 'noaa' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  function normalizeNoaaEvents(noaaEvents: NOAAStormEvent[]): HailEvent[] {
+    return noaaEvents.map((e) => ({
+      date: e.date,
+      time: e.time,
+      severity: e.severity,
+      hailSize: e.hailSize,
+      distanceMiles: e.distanceMiles,
+      stormId: e.radarStation,
+      location: e.type === 'tornado' ? 'Tornado vortex signature (radar)' : undefined,
+    }));
+  }
 
   async function geocode(): Promise<{ lat: number; lon: number } | null> {
     try {
@@ -130,11 +108,50 @@ export default function HailTracePanel({ address, city, state, zip, companyId, c
     return null;
   }
 
+  async function notifyActionableEvents(normalized: HailEvent[], eventSource: 'hailtrace' | 'noaa') {
+    const actionable = normalized.filter(e => e.severity === 'moderate' || e.severity === 'severe');
+    if (actionable.length === 0) return;
+    const severities = [...new Set(actionable.map(e => e.severity))];
+    const sourceLabel = eventSource === 'noaa' ? ' (NOAA)' : '';
+    const maxHail = Math.max(...actionable.map(e => e.hailSize ?? 0));
+    const maxWind = Math.max(...actionable.map(e => e.windSpeed ?? 0));
+    try {
+      await db.createNotification({
+        company_id: companyId,
+        type: 'hail_event',
+        title: `⚡ Hail Event Detected${sourceLabel}${contactName ? ` — ${contactName}` : ''}`,
+        message: `${actionable.length} actionable storm event${actionable.length > 1 ? 's' : ''} found at ${[address, city, state].filter(Boolean).join(', ')}.${maxHail ? ` Largest hail: ${maxHail}"` : ''}${maxWind ? ` • Max wind: ${maxWind} mph` : ''}. Consider opening an insurance claim.`,
+        related_id: contactId,
+        related_type: 'contact',
+        read: false,
+      });
+    } catch { /* non-critical */ }
+    toast.warning(`${actionable.length} storm event${actionable.length > 1 ? 's' : ''} found! Check insurance tab to open a claim.`, { duration: 6000 });
+    onEventsFound?.(actionable.length, severities);
+  }
+
+  /** Free, no-key fallback/default — real NOAA radar data, not a demo. */
+  async function checkViaNOAA(coords: { lat: number; lon: number } | null) {
+    if (!coords) {
+      setError('Could not locate this address. Check that it is complete and try again.');
+      setStatus('idle');
+      return;
+    }
+    const noaa = new NOAAWeatherIntegration();
+    const noaaEvents = await noaa.getStormHistory(coords.lat, coords.lon, months, 10);
+    const normalized = normalizeNoaaEvents(noaaEvents);
+    setEvents(normalized);
+    setSource('noaa');
+    setStatus(normalized.length > 0 ? 'events' : 'no-events');
+    if (normalized.length > 0) await notifyActionableEvents(normalized, 'noaa');
+  }
+
   async function handleCheck() {
     setLoading(true);
     setError(null);
     setStatus('idle');
     setEvents(null);
+    setSource(null);
     setCopied(false);
 
     try {
@@ -162,9 +179,14 @@ export default function HailTracePanel({ address, city, state, zip, companyId, c
       }
 
       const apiKey = integrationData?.credentials?.apiKey;
-      if (!apiKey) { setStatus('no-config'); return; }
-
       const coords = await geocode();
+
+      // No paid HailTrace key configured — NOAA is the free default, not a
+      // gate. Real radar data, no subscription required.
+      if (!apiKey) {
+        await checkViaNOAA(coords);
+        return;
+      }
 
       try {
         const ht = new HailTraceIntegration(apiKey);
@@ -191,51 +213,16 @@ export default function HailTracePanel({ address, city, state, zip, companyId, c
         }));
 
         setEvents(normalized);
+        setSource('hailtrace');
         setStatus(normalized.length > 0 ? 'events' : 'no-events');
-
-        // Fire notification + callback for actionable events
-        if (normalized.length > 0) {
-          const actionable = normalized.filter(e => e.severity === 'moderate' || e.severity === 'severe');
-          if (actionable.length > 0) {
-            const severities = [...new Set(actionable.map(e => e.severity))];
-            // Create a persistent in-app notification
-            try {
-              await db.createNotification({
-                company_id: companyId,
-                type: 'hail_event',
-                title: `⚡ Hail Event Detected${contactName ? ` — ${contactName}` : ''}`,
-                message: `${actionable.length} actionable storm event${actionable.length > 1 ? 's' : ''} found at ${[address, city, state].filter(Boolean).join(', ')}. Largest hail: ${Math.max(...actionable.map(e => e.hailSize ?? 0))}" • Max wind: ${Math.max(...actionable.map(e => e.windSpeed ?? 0))} mph. Consider opening an insurance claim.`,
-                related_id: contactId,
-                related_type: 'contact',
-                read: false,
-              });
-            } catch { /* non-critical */ }
-            toast.warning(`${actionable.length} storm event${actionable.length > 1 ? 's' : ''} found! Check insurance tab to open a claim.`, { duration: 6000 });
-            onEventsFound?.(actionable.length, severities);
-          }
-        }
+        if (normalized.length > 0) await notifyActionableEvents(normalized, 'hailtrace');
       } catch {
-        setEvents(MOCK_EVENTS);
-        setStatus('demo');
-        // Demo: notify about mock severe event
-        const actionable = MOCK_EVENTS.filter(e => e.severity === 'moderate' || e.severity === 'severe');
-        if (actionable.length > 0) {
-          try {
-            await db.createNotification({
-              company_id: companyId,
-              type: 'hail_event',
-              title: `⚡ Hail Event Detected (Demo)${contactName ? ` — ${contactName}` : ''}`,
-              message: `Demo data: ${actionable.length} storm event${actionable.length > 1 ? 's' : ''} at ${[address, city, state].filter(Boolean).join(', ')}. Consider opening an insurance claim.`,
-              related_id: contactId,
-              related_type: 'contact',
-              read: false,
-            });
-          } catch { /* non-critical */ }
-          onEventsFound?.(actionable.length, ['severe', 'moderate']);
-        }
+        // HailTrace call failed (bad key, outage, etc.) — fall back to real
+        // NOAA data instead of fabricated demo events.
+        await checkViaNOAA(coords);
       }
     } catch {
-      setError('Unexpected error checking hail events.');
+      setError('Unexpected error checking storm events.');
     } finally {
       setLoading(false);
     }
@@ -250,7 +237,7 @@ export default function HailTracePanel({ address, city, state, zip, companyId, c
     });
   }
 
-  const showResults = !loading && (status === 'events' || status === 'demo') && events && events.length > 0;
+  const showResults = !loading && status === 'events' && events && events.length > 0;
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
@@ -312,14 +299,6 @@ export default function HailTracePanel({ address, city, state, zip, companyId, c
         </div>
       )}
 
-      {/* Not configured */}
-      {!loading && status === 'no-config' && (
-        <div className="flex items-start gap-2 bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-500">
-          <Settings size={16} className="mt-0.5 shrink-0" />
-          <span>HailTrace not configured — connect it in Settings → Integrations.</span>
-        </div>
-      )}
-
       {/* No events */}
       {!loading && status === 'no-events' && (
         <div className="flex items-start gap-2 bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-700">
@@ -328,11 +307,20 @@ export default function HailTracePanel({ address, city, state, zip, companyId, c
         </div>
       )}
 
-      {/* Demo banner */}
-      {showResults && status === 'demo' && (
-        <div className="flex items-start gap-2 bg-yellow-50 border border-yellow-200 rounded-lg p-2 text-xs text-yellow-700 mb-3">
-          <AlertTriangle size={14} className="mt-0.5 shrink-0" />
-          Demo data — HailTrace API unavailable. Showing sample results.
+      {/* Source badge — which data source produced these results */}
+      {showResults && source === 'noaa' && (
+        <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg p-2 text-xs text-blue-700 mb-3">
+          <CloudRain size={14} className="mt-0.5 shrink-0" />
+          <span>
+            Source: NOAA (free, radar-derived). For polygon-verified hail swaths and wind speed data,
+            connect HailTrace in Settings → Integrations.
+          </span>
+        </div>
+      )}
+      {showResults && source === 'hailtrace' && (
+        <div className="flex items-start gap-2 bg-gray-50 border border-gray-200 rounded-lg p-2 text-xs text-gray-500 mb-3">
+          <CheckCircle size={14} className="mt-0.5 shrink-0" />
+          Source: HailTrace
         </div>
       )}
 
