@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useCRM, ViewType, canViewFinancials, canManageTeam } from '@/lib/crmStore';
+import type { BoardType } from '@/lib/crmData';
 import { useAuth } from '@/lib/authContext';
 import { useCompanyBrand } from '@/lib/useCompanyBrand';
 import {
@@ -16,15 +17,17 @@ import {
   Bot,
   ChevronLeft,
   ChevronRight,
-  Building2,
+  ChevronDown,
+  MoreHorizontal,
   LogOut,
   Store,
   Bell,
   FolderKanban,
+  FolderOpen,
   Clipboard,
   Package,
   Receipt,
-  FilePlus,
+  Wallet,
   BarChart,
   Shield,
   AlertCircle,
@@ -42,37 +45,79 @@ interface NavItem {
   label: string;
   icon: React.ReactNode;
   requiresPermission?: 'financials' | 'team';
+  /**
+   * Board links all open the Pipeline view; this picks which board it focuses.
+   * Boards are matched by type, not id: each company's boards are seeded with
+   * generated ids, so the fixed ids in defaultBoards only exist offline.
+   */
+  boardType?: BoardType;
 }
 
-const navItems: NavItem[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
-  { id: 'pipeline', label: 'Pipeline', icon: <Kanban size={20} /> },
-  { id: 'contacts', label: 'Contacts', icon: <Users size={20} /> },
-  { id: 'communications', label: 'Communications', icon: <MessageSquare size={20} /> },
-  { id: 'calendar', label: 'Calendar', icon: <Calendar size={20} /> },
-  { id: 'documents', label: 'Documents', icon: <FileText size={20} /> },
-  { id: 'document-templates', label: 'Templates', icon: <FilePlus size={20} /> },
-  { id: 'financial', label: 'Financial', icon: <DollarSign size={20} />, requiresPermission: 'financials' },
-  { id: 'expenses', label: 'Expenses', icon: <Receipt size={20} /> },
-  { id: 'suppliers', label: 'Suppliers', icon: <Store size={20} /> },
-  { id: 'estimates', label: 'Estimates', icon: <FileText size={20} /> },
+interface NavSection {
+  key: string;
+  title?: string;
+  items: NavItem[];
+}
+
+const sections: NavSection[] = [
+  {
+    key: 'primary',
+    items: [
+      { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
+      { id: 'contacts', label: 'Contacts', icon: <Users size={20} /> },
+      { id: 'storm-search', label: 'Storm Data', icon: <CloudRain size={20} /> },
+      { id: 'calendar', label: 'Calendar', icon: <Calendar size={20} /> },
+    ],
+  },
+  {
+    key: 'boards',
+    title: 'Boards',
+    items: [
+      { id: 'pipeline', label: 'Sales Board', icon: <Kanban size={20} />, boardType: 'sales' },
+      { id: 'pipeline', label: 'Project Board', icon: <FolderKanban size={20} />, boardType: 'production' },
+      { id: 'pipeline', label: 'Financial Board', icon: <DollarSign size={20} />, boardType: 'billing', requiresPermission: 'financials' },
+    ],
+  },
+  {
+    key: 'finance',
+    title: 'Finance',
+    items: [
+      { id: 'financial', label: 'Invoices & Payments', icon: <Receipt size={20} />, requiresPermission: 'financials' },
+      { id: 'reports', label: 'Reports', icon: <BarChart size={20} /> },
+    ],
+  },
+  {
+    key: 'communication',
+    title: 'Communication',
+    items: [
+      { id: 'communications', label: 'Messages', icon: <MessageSquare size={20} /> },
+      { id: 'automations', label: 'Automation', icon: <Zap size={20} /> },
+    ],
+  },
+];
+
+// Job tools (estimates, work orders, inspections…) also open from inside a job
+// record; they stay here so the company-wide lists remain one click away.
+// Quotes is the QuoteMGR builder and is not yet reachable from a job record,
+// so this is currently its only entry point.
+// Document templates moved to Settings → Document Templates.
+const moreItems: NavItem[] = [
   { id: 'quotes', label: 'Quotes', icon: <FileSignature size={20} /> },
-  { id: 'storm-search', label: 'Storm Search', icon: <CloudRain size={20} /> },
-  { id: 'projects', label: 'Projects', icon: <FolderKanban size={20} /> },
-  { id: 'inspections', label: 'Inspections', icon: <ClipboardList size={20} /> },
-  { id: 'crew-schedule', label: 'Crew Schedule', icon: <CalendarClock size={20} /> },
-  { id: 'equipment', label: 'Equipment', icon: <Wrench size={20} /> },
+  { id: 'estimates', label: 'Estimates', icon: <FileText size={20} /> },
   { id: 'work-orders', label: 'Work Orders', icon: <Clipboard size={20} /> },
   { id: 'material-orders', label: 'Material Orders', icon: <Package size={20} /> },
+  { id: 'inspections', label: 'Inspections', icon: <ClipboardList size={20} /> },
+  { id: 'documents', label: 'Documents', icon: <FolderOpen size={20} /> },
   { id: 'insurance-tracking', label: 'Insurance', icon: <Shield size={20} /> },
   { id: 'supplement-tracking', label: 'Supplements', icon: <AlertCircle size={20} /> },
-  { id: 'sales-analytics', label: 'Sales Analytics', icon: <TrendingUp size={20} />, requiresPermission: 'financials' },
-  { id: 'reports', label: 'Reports', icon: <BarChart size={20} /> },
+  { id: 'crew-schedule', label: 'Crew Schedule', icon: <CalendarClock size={20} /> },
+  { id: 'equipment', label: 'Equipment', icon: <Wrench size={20} /> },
+  { id: 'suppliers', label: 'Suppliers', icon: <Store size={20} /> },
+  { id: 'expenses', label: 'Expenses', icon: <Wallet size={20} /> },
   { id: 'commission-payroll', label: 'Commission Payroll', icon: <BadgeDollarSign size={20} />, requiresPermission: 'financials' },
+  { id: 'sales-analytics', label: 'Sales Analytics', icon: <TrendingUp size={20} />, requiresPermission: 'financials' },
   { id: 'team', label: 'Team', icon: <UserCog size={20} />, requiresPermission: 'team' },
-  { id: 'automations', label: 'Automations', icon: <Zap size={20} /> },
   { id: 'ai-assistant', label: 'AI Assistant', icon: <Bot size={20} /> },
-  { id: 'settings', label: 'Settings', icon: <Settings size={20} /> },
 ];
 
 export default function Sidebar() {
@@ -87,17 +132,58 @@ export default function Sidebar() {
 
   const userRole = (currentUser?.role || profile?.role || 'owner') as any;
 
-  const filteredNavItems = navItems.filter((item) => {
-    if (item.requiresPermission === 'financials') return canViewFinancials(userRole);
-    if (item.requiresPermission === 'team') return canManageTeam(userRole);
-    return true;
-  });
+  // Same fallback as useCurrentBoard, so the highlighted board matches what Pipeline shows.
+  const selectedBoard = state.boards.find((b) => b.id === state.selectedBoardId) ?? state.boards[0];
 
-  const handleNavClick = (viewId: ViewType) => {
-    dispatch({ type: 'SET_VIEW', payload: viewId });
+  const canSee = (item: NavItem) => {
+    if (item.requiresPermission === 'financials' && !canViewFinancials(userRole)) return false;
+    if (item.requiresPermission === 'team' && !canManageTeam(userRole)) return false;
+    // A board link with no board of that type behind it would select nothing.
+    if (item.boardType && !state.boards.some((b) => b.type === item.boardType)) return false;
+    return true;
+  };
+
+  const isActive = (item: NavItem) =>
+    item.boardType
+      ? currentView === 'pipeline' && selectedBoard?.type === item.boardType
+      : currentView === item.id;
+
+  const visibleMore = moreItems.filter(canSee);
+  const activeInMore = visibleMore.some(isActive);
+  const [moreOpen, setMoreOpen] = useState(activeInMore);
+  // Opening a More screen from elsewhere (e.g. a job record) should reveal where you are.
+  useEffect(() => { if (activeInMore) setMoreOpen(true); }, [activeInMore]);
+
+  const handleNavClick = (item: NavItem) => {
+    if (item.boardType) {
+      const board = state.boards.find((b) => b.type === item.boardType);
+      if (board) dispatch({ type: 'SELECT_BOARD', payload: board.id });
+    }
+    dispatch({ type: 'SET_VIEW', payload: item.id });
   };
 
   const handleSignOut = async () => { await signOut(); };
+
+  const renderItem = (item: NavItem) => {
+    const active = isActive(item);
+    return (
+      <li key={`${item.id}:${item.boardType ?? ''}`}>
+        <button
+          onClick={() => handleNavClick(item)}
+          aria-current={active ? 'page' : undefined}
+          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${
+            active
+              ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
+              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+          }`}
+          title={sidebarCollapsed ? item.label : undefined}
+        >
+          <span className="flex-shrink-0">{item.icon}</span>
+          {!sidebarCollapsed && <span className="font-medium">{item.label}</span>}
+        </button>
+      </li>
+    );
+  };
 
   return (
     <aside
@@ -123,26 +209,60 @@ export default function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 py-4 overflow-y-auto">
-        <ul className="space-y-1 px-2">
-          {filteredNavItems.map((item) => (
-            <li key={item.id}>
-              <button
-                onClick={() => handleNavClick(item.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${
-                  currentView === item.id
-                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
-                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                }`}
-                title={sidebarCollapsed ? item.label : undefined}
-              >
-                <span className="flex-shrink-0">{item.icon}</span>
-                {!sidebarCollapsed && <span className="font-medium">{item.label}</span>}
-              </button>
-            </li>
-          ))}
-        </ul>
+      <nav className="flex-1 py-4 overflow-y-auto" aria-label="Main">
+        {sections.map((section) => {
+          const items = section.items.filter(canSee);
+          if (items.length === 0) return null;
+          return (
+            <div key={section.key} className="mb-4">
+              {section.title && (sidebarCollapsed ? (
+                <div className="mx-3 mb-2 border-t border-slate-700" aria-hidden="true" />
+              ) : (
+                <p className="px-5 mb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">{section.title}</p>
+              ))}
+              <ul className="space-y-1 px-2">{items.map(renderItem)}</ul>
+            </div>
+          );
+        })}
+
+        {visibleMore.length > 0 && (
+          <div>
+            <button
+              onClick={() => setMoreOpen((open) => !open)}
+              aria-expanded={moreOpen}
+              className="w-full flex items-center gap-3 px-5 py-2 text-slate-400 hover:text-white transition-colors"
+              title={sidebarCollapsed ? 'More' : undefined}
+            >
+              {sidebarCollapsed ? (
+                <MoreHorizontal size={20} />
+              ) : (
+                <>
+                  <span className="text-[11px] font-semibold uppercase tracking-wider">More</span>
+                  <ChevronDown size={14} className={`ml-auto transition-transform ${moreOpen ? 'rotate-180' : ''}`} />
+                </>
+              )}
+            </button>
+            {moreOpen && <ul className="space-y-1 px-2 mt-1">{visibleMore.map(renderItem)}</ul>}
+          </div>
+        )}
       </nav>
+
+      {/* Settings */}
+      <div className="px-3 pt-2 border-t border-slate-700">
+        <button
+          onClick={() => dispatch({ type: 'SET_VIEW', payload: 'settings' })}
+          aria-current={currentView === 'settings' ? 'page' : undefined}
+          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${
+            currentView === 'settings'
+              ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
+              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+          }`}
+          title={sidebarCollapsed ? 'Settings' : undefined}
+        >
+          <span className="flex-shrink-0"><Settings size={20} /></span>
+          {!sidebarCollapsed && <span className="font-medium">Settings</span>}
+        </button>
+      </div>
 
       {/* Notifications */}
       <div className="px-3 mb-2 relative">

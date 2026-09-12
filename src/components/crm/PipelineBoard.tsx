@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useCRM, useCurrentBoard, canCreateBoard, canEditBoard } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
@@ -335,6 +335,15 @@ export default function PipelineBoard() {
   const [isSaving, setIsSaving] = useState(false);
   const [showAllBoards, setShowAllBoards] = useState(false);
   const [showCombinedSales, setShowCombinedSales] = useState(false);
+
+  // Focusing a board from outside the picker (the sidebar's board links) has to
+  // leave the All Boards / Combined Sales views, or the new selection stays
+  // hidden behind them. Neither view changes selectedBoardId, so this cannot
+  // undo them.
+  useEffect(() => {
+    setShowAllBoards(false);
+    setShowCombinedSales(false);
+  }, [state.selectedBoardId]);
   const [showPriorityPanel, setShowPriorityPanel] = useState(false);
   const [quickMenuContactId, setQuickMenuContactId] = useState<string | null>(null);
 
