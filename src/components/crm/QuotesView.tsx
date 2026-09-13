@@ -8,11 +8,12 @@ import { supabase } from '@/lib/supabase';
 import { sendEmail } from '@/lib/emailApi';
 import { toast } from 'sonner';
 import WorkOrderPanel from './WorkOrderPanel';
+import ReceiptPanel from './ReceiptPanel';
 import { quoteProjectTemplates, TemplateLineItem } from '@/data/quoteTemplates';
 import {
   FileText, Plus, Search, Trash2, X, Save, User, Send, Link2, Eye, ChevronDown,
   Home, Wrench, Hammer, Sun, Droplets, Layers, Grid3x3,
-  Scroll, Tablet, PackageOpen, Box, ClipboardList,
+  Scroll, Tablet, PackageOpen, Box, ClipboardList, DollarSign,
 } from 'lucide-react';
 
 // ── QuoteMGR-parity quote builder for web ─────────────────────────────────
@@ -134,6 +135,8 @@ export default function QuotesView() {
   const [builderPrefill, setBuilderPrefill] = useState<PendingQuote | null>(null);
   const [workOrderQuote, setWorkOrderQuote] = useState<QuoteRow | null>(null);
   const [workOrderCompany, setWorkOrderCompany] = useState<{ name: string; phone?: string; email?: string; license_number?: string } | null>(null);
+  const [receiptQuote, setReceiptQuote] = useState<any | null>(null);
+  const [receiptCompany, setReceiptCompany] = useState<{ name: string; default_deposit_percent?: number | null; receipt_cc_emails?: string[] | null } | null>(null);
 
   // Another screen asked for a quote: open the builder on it, then clear the
   // request so returning to Quotes later does not reopen it.
@@ -268,6 +271,33 @@ export default function QuotesView() {
     setWorkOrderQuote(q);
   };
 
+  // As in QuoteMGR, any quote can take payments. The receipt needs the tier
+  // names, manual totals and the customer's email, which the list does not load.
+  const openReceipts = async (q: QuoteRow) => {
+    if (!companyId) return;
+    const [{ data: full, error }, company] = await Promise.all([
+      supabase
+        .from('quotes')
+        .select(`id, quote_number, project_description, cover_page_title, selected_tier,
+          include_better, include_best, completion_certificate_enabled,
+          good_total, better_total, best_total, good_tier_name, better_tier_name, best_tier_name,
+          use_manual_totals, manual_good_total, manual_better_total, manual_best_total,
+          customer_id, customer:customers(id, first_name, last_name, email)`)
+        .eq('id', q.id)
+        .single(),
+      db.getCompany(companyId).catch(() => null) as Promise<any>,
+    ]);
+    if (error || !full) { toast.error('Could not load this quote for payments.'); return; }
+    if (!company) { toast.error('Could not load your company details for the receipt.'); return; }
+    if (!full.customer_id) { toast.error('Add a customer to this quote before recording a payment.'); return; }
+    setReceiptCompany({
+      name: company.name || '',
+      default_deposit_percent: company.default_deposit_percent ?? null,
+      receipt_cc_emails: company.receipt_cc_emails ?? null,
+    });
+    setReceiptQuote(full);
+  };
+
   const handleSaved = () => {
     setShowBuilder(false);
     setEditingQuoteId(null);
@@ -374,6 +404,13 @@ export default function QuotesView() {
                       >
                         <Send size={15} />
                       </button>
+                      <button
+                        onClick={() => openReceipts(q)}
+                        className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
+                        title="Payments & receipts"
+                      >
+                        <DollarSign size={15} />
+                      </button>
                       {q.status === 'signed' && (
                         <button
                           onClick={() => openWorkOrder(q)}
@@ -423,6 +460,20 @@ export default function QuotesView() {
           />
         );
       })()}
+
+      {receiptQuote && receiptCompany && companyId && profile?.id && (
+        <ReceiptPanel
+          companyId={companyId}
+          userId={profile.id}
+          userRole={profile.role}
+          quote={receiptQuote}
+          company={receiptCompany}
+          onClose={(paymentSaved?: boolean) => {
+            setReceiptQuote(null);
+            if (paymentSaved) loadQuotes();
+          }}
+        />
+      )}
     </div>
   );
 }
