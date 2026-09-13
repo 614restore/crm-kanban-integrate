@@ -7,11 +7,12 @@ import { db } from '@/lib/database';
 import { supabase } from '@/lib/supabase';
 import { sendEmail } from '@/lib/emailApi';
 import { toast } from 'sonner';
+import WorkOrderPanel from './WorkOrderPanel';
 import { quoteProjectTemplates, TemplateLineItem } from '@/data/quoteTemplates';
 import {
   FileText, Plus, Search, Trash2, X, Save, User, Send, Link2, Eye, ChevronDown,
   Home, Wrench, Hammer, Sun, Droplets, Layers, Grid3x3,
-  Scroll, Tablet, PackageOpen, Box,
+  Scroll, Tablet, PackageOpen, Box, ClipboardList,
 } from 'lucide-react';
 
 // ── QuoteMGR-parity quote builder for web ─────────────────────────────────
@@ -52,6 +53,7 @@ interface QuoteRow {
   created_at: string;
   share_token: string | null;
   cover_page_title: string | null;
+  project_description: string | null;
 }
 
 const ICON_MAP: Record<string, React.ReactNode> = {
@@ -130,6 +132,8 @@ export default function QuotesView() {
   const [showBuilder, setShowBuilder] = useState(false);
   const [editingQuoteId, setEditingQuoteId] = useState<string | null>(null);
   const [builderPrefill, setBuilderPrefill] = useState<PendingQuote | null>(null);
+  const [workOrderQuote, setWorkOrderQuote] = useState<QuoteRow | null>(null);
+  const [workOrderCompany, setWorkOrderCompany] = useState<{ name: string; phone?: string; email?: string; license_number?: string } | null>(null);
 
   // Another screen asked for a quote: open the builder on it, then clear the
   // request so returning to Quotes later does not reopen it.
@@ -153,7 +157,7 @@ export default function QuotesView() {
     try {
       const { data, error } = await supabase
         .from('quotes')
-        .select('id, quote_number, status, contact_id, customer_id, project_type, good_total, better_total, best_total, selected_tier, created_at, share_token, cover_page_title')
+        .select('id, quote_number, status, contact_id, customer_id, project_type, good_total, better_total, best_total, selected_tier, created_at, share_token, cover_page_title, project_description')
         .eq('company_id', companyId)
         .eq('is_archived', false)
         .order('created_at', { ascending: false });
@@ -248,6 +252,21 @@ export default function QuotesView() {
 
   const openNew = () => { setEditingQuoteId(null); setBuilderPrefill(null); setShowBuilder(true); };
   const openEdit = (id: string) => { setEditingQuoteId(id); setBuilderPrefill(null); setShowBuilder(true); };
+
+  // As in QuoteMGR, a signed quote is what becomes a work order. The printed
+  // work order carries the company's name, contact details and license number.
+  const openWorkOrder = async (q: QuoteRow) => {
+    if (!companyId) return;
+    const company: any = await db.getCompany(companyId).catch(() => null);
+    if (!company) { toast.error('Could not load your company details for the work order.'); return; }
+    setWorkOrderCompany({
+      name: company.name || '',
+      phone: company.phone || undefined,
+      email: company.email || undefined,
+      license_number: company.license_number || undefined,
+    });
+    setWorkOrderQuote(q);
+  };
 
   const handleSaved = () => {
     setShowBuilder(false);
@@ -355,6 +374,15 @@ export default function QuotesView() {
                       >
                         <Send size={15} />
                       </button>
+                      {q.status === 'signed' && (
+                        <button
+                          onClick={() => openWorkOrder(q)}
+                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                          title="Create work order"
+                        >
+                          <ClipboardList size={15} />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -374,6 +402,27 @@ export default function QuotesView() {
           onSaved={handleSaved}
         />
       )}
+
+      {workOrderQuote && workOrderCompany && companyId && (() => {
+        const customerId = workOrderQuote.customer_id || workOrderQuote.contact_id;
+        const contact = state.contacts.find((c) => c.id === customerId);
+        const tier = (workOrderQuote.selected_tier || '').toLowerCase();
+        return (
+          <WorkOrderPanel
+            quoteId={workOrderQuote.id}
+            quoteNumber={workOrderQuote.quote_number}
+            companyId={companyId}
+            customerId={customerId || undefined}
+            customerName={contact ? `${contact.firstName} ${contact.lastName}`.trim() : 'Customer'}
+            customerAddress={contact ? [contact.address, contact.city, contact.state, contact.zip].filter(Boolean).join(', ') : ''}
+            projectDescription={workOrderQuote.project_description || workOrderQuote.cover_page_title || ''}
+            signedTier={tier === 'good' || tier === 'better' || tier === 'best' ? tier : undefined}
+            company={workOrderCompany}
+            onClose={() => setWorkOrderQuote(null)}
+            onSaved={() => setWorkOrderQuote(null)}
+          />
+        );
+      })()}
     </div>
   );
 }
