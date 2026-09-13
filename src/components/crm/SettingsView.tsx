@@ -58,6 +58,7 @@ import { supabase, isDemoMode } from '@/lib/supabase';
 import { ensureDefaultLeadSources } from '@/lib/setupCompany';
 import ImageCropDialog from '@/components/ui/ImageCropDialog';
 import DocumentTemplates from '@/components/crm/DocumentTemplates';
+import FinancingOptionsPanel from '@/components/crm/FinancingOptionsPanel';
 
 // ── SMTP provider quick-setup presets ────────────────────────────────────────
 const SMTP_PROVIDERS = [
@@ -1446,7 +1447,7 @@ export default function SettingsView() {
     { id: 'notifications', label: 'Notifications', icon: <Bell size={18} /> },
     { id: 'security', label: 'Security', icon: <Shield size={18} /> },
     { id: 'billing', label: 'Subscription Plan', icon: <CreditCard size={18} /> },
-    { id: 'customer-billing', label: 'Customer Billing', icon: <Receipt size={18} /> },
+    { id: 'customer-billing', label: 'Financing Options', icon: <Receipt size={18} /> },
     { id: 'api', label: 'API Access', icon: <Key size={18} /> },
     { id: 'document-templates', label: 'Document Templates', icon: <FilePlus size={18} /> },
   ];
@@ -2487,27 +2488,19 @@ export default function SettingsView() {
         )}
 
         {/* CUSTOMER BILLING TAB — payment gateway, invoicing, and tax settings */}
+        {/* The gateway, invoice-number and tax fields that used to sit here were
+            never saved anywhere, so they are gone rather than kept as decoration. */}
         {activeTab === 'customer-billing' && (
           <div className="max-w-3xl space-y-6">
             <div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">Customer Billing</h3>
-              <p className="text-sm text-gray-500">Configure how you collect payments from your customers — payment gateway, invoice numbering, and tax settings.</p>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Financing Options</h3>
+              <p className="text-sm text-gray-500">Lenders and programs you can offer customers. Choose which ones apply to each quote in the quote builder.</p>
             </div>
-            <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
-              <h4 className="text-base font-semibold text-gray-900">Payment Gateway</h4>
-              <p className="text-sm text-gray-500">Select the payment processor your customers will use to pay invoices and estimates.</p>
-              <select className="w-full px-3 py-2 border border-gray-300 rounded-lg"><option>Stripe</option><option>Square</option><option>PayPal</option></select>
-            </div>
-            <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
-              <h4 className="text-base font-semibold text-gray-900">Invoice Settings</h4>
-              <p className="text-sm text-gray-500">Customize your invoice numbering format.</p>
-              <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-medium mb-2">Invoice Prefix</label><input type="text" defaultValue="INV-" className="w-full px-3 py-2 border rounded-lg"/></div><div><label className="block text-sm font-medium mb-2">Starting #</label><input type="number" defaultValue="1000" className="w-full px-3 py-2 border rounded-lg"/></div></div>
-            </div>
-            <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
-              <h4 className="text-base font-semibold text-gray-900">Tax Rate</h4>
-              <p className="text-sm text-gray-500">Default tax rate applied to customer invoices and estimates.</p>
-              <input type="number" step="0.01" defaultValue="7.5" className="w-full px-3 py-2 border rounded-lg" placeholder="Tax %"/>
-            </div>
+            {effectiveCompanyId ? (
+              <FinancingOptionsPanel companyId={effectiveCompanyId} />
+            ) : (
+              <p className="text-sm text-gray-500">Loading your company…</p>
+            )}
           </div>
         )}
 

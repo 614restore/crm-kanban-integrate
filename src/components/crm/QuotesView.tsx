@@ -101,6 +101,15 @@ const generateShareToken = (): string => {
 const money = (n: number | null | undefined) =>
   (n || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 
+interface FinancingOptionRow {
+  id: string;
+  lender_name: string;
+  program_name: string | null;
+  apr_low: number | null;
+  apr_high: number | null;
+  term_months: number | null;
+}
+
 const STATUS_COLORS: Record<string, string> = {
   draft: 'bg-gray-100 text-gray-700',
   sent: 'bg-blue-100 text-blue-700',
@@ -406,6 +415,31 @@ function QuoteBuilderModal({
   const [deductibleAmount, setDeductibleAmount] = useState('');
   const [showFinancing, setShowFinancing] = useState(false);
   const [financingNote, setFinancingNote] = useState('');
+  const [availableFinancing, setAvailableFinancing] = useState<FinancingOptionRow[]>([]);
+  const [selectedFinancingIds, setSelectedFinancingIds] = useState<string[]>([]);
+
+  // The company's active programs, managed in Settings → Financing Options.
+  useEffect(() => {
+    supabase
+      .from('financing_options')
+      .select('id, lender_name, program_name, apr_low, apr_high, term_months')
+      .eq('company_id', companyId)
+      .eq('is_active', true)
+      .order('sort_order')
+      .then(({ data }) => setAvailableFinancing((data || []) as FinancingOptionRow[]));
+  }, [companyId]);
+
+  // QuoteMGR's builder restores these only from an unsaved draft. Load them for a
+  // saved quote as well, or reopening it would quietly drop the programs offered.
+  useEffect(() => {
+    if (!quoteId) return;
+    supabase
+      .from('quote_financing')
+      .select('financing_option_id')
+      .eq('quote_id', quoteId)
+      .order('sort_order')
+      .then(({ data }) => setSelectedFinancingIds((data || []).map((r: any) => r.financing_option_id)));
+  }, [quoteId]);
   const [includeCustomPage, setIncludeCustomPage] = useState(false);
   const [customPageTitle, setCustomPageTitle] = useState('');
   const [customPageBody, setCustomPageBody] = useState('');
@@ -615,6 +649,18 @@ function QuoteBuilderModal({
         }
         if (oldIds.length > 0) {
           await supabase.from('quote_line_items').delete().in('id', oldIds);
+        }
+
+        // Same replace-all as QuoteMGR: the quote offers whichever programs are ticked now.
+        if (availableFinancing.length > 0) {
+          await supabase.from('quote_financing').delete().eq('quote_id', savedId);
+          if (selectedFinancingIds.length > 0) {
+            const { error: finErr } = await supabase.from('quote_financing').insert(
+              selectedFinancingIds.map((financing_option_id, sort_order) => ({ quote_id: savedId, financing_option_id, sort_order })),
+            );
+            // The quote and its line items are already saved; say so rather than reporting a failed save.
+            if (finErr) toast.error('Quote saved, but its financing programs could not be saved: ' + finErr.message);
+          }
         }
       }
 
@@ -851,16 +897,46 @@ function QuoteBuilderModal({
                   <div>
                     <label className="flex items-center gap-2 text-sm text-gray-700 mb-2">
                       <input type="checkbox" checked={showFinancing} onChange={(e) => setShowFinancing(e.target.checked)} />
-                      Show financing note to customer
+                      Offer financing to this customer
                     </label>
                     {showFinancing && (
-                      <textarea
-                        value={financingNote}
-                        onChange={(e) => setFinancingNote(e.target.value)}
-                        rows={2}
-                        placeholder="e.g. As low as $199/mo with approved credit"
-                        className="w-full pl-6 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none resize-none"
-                      />
+                      <div className="pl-6 space-y-2">
+                        {availableFinancing.length > 0 ? (
+                          <>
+                            <p className="text-xs text-gray-500">Programs to offer on this quote:</p>
+                            {availableFinancing.map((opt) => (
+                              <label key={opt.id} className="flex items-center gap-3 p-2.5 bg-white rounded-lg border border-gray-200 cursor-pointer hover:border-blue-300">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedFinancingIds.includes(opt.id)}
+                                  onChange={(e) =>
+                                    setSelectedFinancingIds((prev) =>
+                                      e.target.checked ? [...prev, opt.id] : prev.filter((id) => id !== opt.id),
+                                    )
+                                  }
+                                />
+                                <span className="text-sm font-medium text-gray-900">{opt.lender_name}</span>
+                                {opt.program_name && <span className="text-xs text-gray-500">{opt.program_name}</span>}
+                                {opt.apr_low !== null && (
+                                  <span className="text-xs text-gray-400 ml-auto whitespace-nowrap">
+                                    {opt.apr_high !== null && opt.apr_high !== opt.apr_low ? `${opt.apr_low}–${opt.apr_high}% APR` : `${opt.apr_low}% APR`}
+                                    {opt.term_months ? ` · ${opt.term_months} mo` : ''}
+                                  </span>
+                                )}
+                              </label>
+                            ))}
+                          </>
+                        ) : (
+                          <p className="text-xs text-gray-500">No financing programs yet. Add them in Settings → Financing Options.</p>
+                        )}
+                        <textarea
+                          value={financingNote}
+                          onChange={(e) => setFinancingNote(e.target.value)}
+                          rows={2}
+                          placeholder="Optional note, e.g. As low as $199/mo with approved credit"
+                          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none resize-none"
+                        />
+                      </div>
                     )}
                   </div>
 
