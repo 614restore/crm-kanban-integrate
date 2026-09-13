@@ -17,7 +17,7 @@ import {
   LeadSource,
   Automation,
   TeamMember,
-  Estimate,
+  toQuoteSummary,
 } from '@/lib/crmData';
 import { runStaleLeadDetection, detectAndNotifyUnassignedContacts } from '@/lib/staleLeadDetection';
 
@@ -48,7 +48,6 @@ const AutomationsView = lazy(() => import('./crm/AutomationsView'));
 const SettingsView = lazy(() => import('./crm/SettingsView'));
 const AIAssistant = lazy(() => import('./crm/AIAssistant'));
 const SuppliersView = lazy(() => import('./crm/SuppliersView'));
-const EstimatesView = lazy(() => import('./crm/EstimatesView'));
 const QuotesView = lazy(() => import('./crm/QuotesView'));
 const StormSearchView = lazy(() => import('./crm/StormSearchView'));
 const ProjectsView = lazy(() => import('./crm/ProjectsView'));
@@ -122,7 +121,7 @@ const initialState: CRMState = {
   automations: [],
   suppliers: [],
   materialOrders: [],
-  estimates: [],
+  quotes: [],
   projects: [],
   workOrders: [],
   sidebarCollapsed: false,
@@ -134,6 +133,7 @@ const initialState: CRMState = {
   selectedInvoiceId: null,
   invoiceModalPrefill: null,
   pendingAppointmentContactId: null,
+  pendingQuote: null,
   isLoading: true,
   isInitialized: false,
   notifications: [],
@@ -150,7 +150,7 @@ function buildFallbackAvatar(firstName?: string, lastName?: string, email?: stri
 // Views accessible in read-only (expired subscription) mode
 const EXPIRED_ALLOWED_VIEWS = new Set<ViewType>([
   'contacts', 'pipeline', 'contact-detail',
-  'documents', 'financial', 'estimates', 'reports', 'settings',
+  'documents', 'financial', 'estimates', 'quotes', 'reports', 'settings',
 ]);
 
 function ViewRouter() {
@@ -187,8 +187,8 @@ function ViewRouter() {
         return <AutomationsView />;
       case 'suppliers':
         return <SuppliersView />;
+      // Quotes replaced Estimates; older links and saved views still land here.
       case 'estimates':
-        return <EstimatesView />;
       case 'quotes':
         return <QuotesView />;
       case 'storm-search':
@@ -400,39 +400,6 @@ function dbInvoiceToAppInvoice(dbInvoice: any, contacts: Contact[]): Invoice {
   };
 }
 
-// Helper function to convert DB estimate to app estimate
-function dbEstimateToAppEstimate(e: any, contacts: Contact[]): Estimate {
-  const contact = contacts.find(c => c.id === e.contact_id);
-  const contactName = contact ? `${contact.firstName} ${contact.lastName}`.trim() : '';
-  return {
-    id: e.id,
-    contactId: e.contact_id,
-    contactName,
-    jobId: e.job_id,
-    estimateNumber: e.estimate_number,
-    title: e.title,
-    description: e.description,
-    status: e.status,
-    amount: Number(e.subtotal || e.amount || 0),
-    tax: Number(e.tax || 0),
-    total: Number(e.total || 0),
-    validUntil: e.valid_until || e.validity_date,
-    createdAt: e.created_at,
-    sentAt: e.sent_at,
-    viewedAt: e.viewed_at,
-    acceptedAt: e.accepted_at,
-    declinedAt: e.declined_at,
-    signedBy: e.signed_by,
-    signatureData: e.signature_data,
-    items: e.items || [],
-    terms: e.terms || e.terms_and_conditions,
-    notes: e.notes,
-    createdBy: e.created_by,
-    updatedAt: e.updated_at,
-    finalOfferSentAt: e.final_offer_sent_at,
-    finalOfferDiscountPct: e.final_offer_discount_pct != null ? Number(e.final_offer_discount_pct) : undefined,
-  };
-}
 
 // Helper function to convert DB project to app project
 function dbProjectToAppProject(p: any, contacts: Contact[]): any {
@@ -649,8 +616,10 @@ function ExpiredBanner({
         state.projects,
         state.workOrders ?? [],
         state.materialOrders ?? [],
-        state.estimates,
+        state.quotes ?? [],
         state.suppliers ?? [],
+        state.invoices ?? [],
+        state.appointments ?? [],
         'TrussCTR-Export',
       );
     } catch (e) {
@@ -769,7 +738,7 @@ function CRMApp() {
         dbAutomations,
         dbTeamMembers,
         , // getCompany result — pre-warm only, not used directly
-        dbEstimates,
+        dbQuotes,
         dbProjects,
         dbWorkOrders,
         dbSuppliers,
@@ -784,7 +753,7 @@ function CRMApp() {
         withFetchTimeout(db.getAutomations(profile.company_id), [], 8000),
         withFetchTimeout(db.getTeamMembers(profile.company_id), [], 8000),
         withFetchTimeout(db.getCompany(profile.company_id), null, 8000), // pre-warm company cache
-        withFetchTimeout(db.getEstimates(profile.company_id), [], 8000),
+        withFetchTimeout(db.getQuoteSummaries(profile.company_id), [], 8000),
         withFetchTimeout(db.getProjects(profile.company_id), [], 8000),
         withFetchTimeout(db.getWorkOrders(profile.company_id), [], 8000),
         withFetchTimeout(db.getSuppliers(profile.company_id), [], 8000),
@@ -913,32 +882,7 @@ function CRMApp() {
         subcontractor_company: tm.subcontractor_company,
       }));
 
-      const estimates: Estimate[] = (dbEstimates || []).map((e: any) => ({
-        id: e.id,
-        contactId: e.contact_id,
-        contactName: (() => { const _c = enrichedContacts.find(c => c.id === e.contact_id); return _c ? `${_c.firstName} ${_c.lastName}`.trim() : ''; })(),
-        jobId: e.job_id,
-        estimateNumber: e.estimate_number,
-        title: e.title,
-        description: e.description,
-        status: e.status,
-        amount: Number(e.subtotal || e.amount || 0),
-        tax: Number(e.tax || 0),
-        total: Number(e.total || 0),
-        validUntil: e.valid_until || e.validity_date,
-        createdAt: e.created_at,
-        sentAt: e.sent_at,
-        viewedAt: e.viewed_at,
-        acceptedAt: e.accepted_at,
-        declinedAt: e.declined_at,
-        signedBy: e.signed_by,
-        signatureData: e.signature_data,
-        items: e.items || [],
-        terms: e.terms || e.terms_and_conditions,
-        notes: e.notes,
-        createdBy: e.created_by,
-        updatedAt: e.updated_at,
-      }));
+      const quotes = (dbQuotes || []).map(toQuoteSummary);
 
       const projects = (dbProjects || []).map((p: any) => ({
         id: p.id,
@@ -1061,7 +1005,7 @@ function CRMApp() {
         teamMembers,
         suppliers,
         materialOrders,
-        estimates,
+        quotes,
         projects,
         workOrders,
         documentTemplates: [],
@@ -1074,14 +1018,14 @@ function CRMApp() {
       // with empty results, and don't corrupt the cache for the next refresh.
       const totalEntities = freshPayload.contacts.length + freshPayload.appointments.length +
         freshPayload.invoices.length + freshPayload.teamMembers.length +
-        freshPayload.estimates.length + freshPayload.workOrders.length;
+        freshPayload.quotes.length + freshPayload.workOrders.length;
       // Never let a refresh (foreground OR background/silent) replace real data
       // with an all-empty result — that is the "everything goes blank until I
       // refresh" bug. Blank only when we genuinely have nothing to preserve.
       const cur = stateRef.current;
       const alreadyHaveData =
         (cur.contacts?.length || 0) + (cur.teamMembers?.length || 0) +
-        (cur.estimates?.length || 0) + (cur.appointments?.length || 0) +
+        (cur.quotes?.length || 0) + (cur.appointments?.length || 0) +
         (cur.invoices?.length || 0) + (cur.workOrders?.length || 0) +
         (cur.suppliers?.length || 0) + (cur.projects?.length || 0) > 0;
       if (totalEntities === 0 && (loadedFromCache || alreadyHaveData)) {
@@ -1130,7 +1074,7 @@ function CRMApp() {
               teamMembers: [],
               suppliers: [],
               materialOrders: [],
-              estimates: [],
+              quotes: [],
               projects: [],
               workOrders: [],
               documentTemplates: [],
@@ -1258,15 +1202,6 @@ function CRMApp() {
             member_type: tm.member_type,
           };
           dispatch({ type: payload.eventType === 'INSERT' ? 'ADD_TEAM_MEMBER' : 'UPDATE_TEAM_MEMBER', payload: teamMember });
-        }
-      },
-      // Estimates — patch in-place so EstimatesView and Dashboard stay in sync without a full reload
-      onEstimateChange: (payload) => {
-        if (payload.eventType === 'DELETE') {
-          dispatch({ type: 'DELETE_ESTIMATE', payload: payload.old.id });
-        } else {
-          const est = dbEstimateToAppEstimate(payload.new, stateRef.current.contacts);
-          dispatch({ type: payload.eventType === 'INSERT' ? 'ADD_ESTIMATE' : 'UPDATE_ESTIMATE', payload: est });
         }
       },
       // Projects — patch in-place so ProjectsView and Dashboard stay in sync
@@ -1433,7 +1368,7 @@ useEffect(() => {
           teamMembers: [],
           suppliers: [],
           materialOrders: [],
-          estimates: [],
+          quotes: [],
           projects: [],
           workOrders: [],
           documentTemplates: [],
@@ -1465,7 +1400,7 @@ useEffect(() => {
           teamMembers: [],
           suppliers: [],
           materialOrders: [],
-          estimates: [],
+          quotes: [],
           projects: [],
           workOrders: [],
           documentTemplates: [],

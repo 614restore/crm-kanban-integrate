@@ -26,7 +26,7 @@ interface JobStatusTimelineProps {
   jobs?: Job[];
   onStatusChange?: (newStatus: CustomerStatus) => void;
   onScheduleInspection?: () => void;
-  onSendEstimate?: () => void;
+  onCreateQuote?: () => void;
 }
 
 interface PowerStep {
@@ -181,7 +181,7 @@ const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({
   jobs = [],
   onStatusChange,
   onScheduleInspection,
-  onSendEstimate,
+  onCreateQuote,
 }) => {
   const [showRevertModal, setShowRevertModal] = useState(false);
   const [revertTargetStep, setRevertTargetStep] = useState<PowerStep | null>(null);
@@ -467,11 +467,11 @@ const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({
 
           {normalizedStatus === 'inspection_completed' && (
             <button
-              onClick={onSendEstimate}
+              onClick={onCreateQuote}
               className="p-3 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors text-sm font-medium disabled:opacity-50"
-              disabled={!onSendEstimate}
+              disabled={!onCreateQuote}
             >
-              Create Estimate
+              Create Quote
             </button>
           )}
 

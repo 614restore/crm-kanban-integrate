@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { quoteValue } from '@/lib/crmData';
 import { useCRM, useCurrentBoard, canCreateBoard, canEditBoard } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
@@ -634,8 +635,9 @@ export default function PipelineBoard() {
       case 'crew-schedule':
         dispatch({ type: 'SET_VIEW', payload: 'crew-schedule' });
         break;
-      case 'estimates':
-        dispatch({ type: 'SET_VIEW', payload: 'estimates' });
+      case 'quotes':
+        dispatch({ type: 'SET_PENDING_QUOTE', payload: { contactId: contact.id } });
+        dispatch({ type: 'SET_VIEW', payload: 'quotes' });
         break;
       case 'invoice':
         dispatch({ type: 'TOGGLE_INVOICE_MODAL', payload: contact.id });
@@ -895,8 +897,8 @@ export default function PipelineBoard() {
                 const contacts = getPowerColumnContacts(col.statuses);
                 const columnValue = contacts.reduce((sum, c) => {
                   if (c.projectValue && c.projectValue > 0) return sum + c.projectValue;
-                  const bestEstimate = state.estimates.filter(e => e.contactId === c.id && e.status !== 'declined').reduce((max, e) => Math.max(max, Number(e.total || 0)), 0);
-                  return sum + bestEstimate;
+                  const bestQuote = state.quotes.filter(q => q.contactId === c.id && q.status !== 'declined').reduce((max, q) => Math.max(max, quoteValue(q)), 0);
+                  return sum + bestQuote;
                 }, 0);
                 return (
                   <div
@@ -1074,8 +1076,8 @@ export default function PipelineBoard() {
                     const contacts = getColumnContacts(column);
                     const columnValue = contacts.reduce((sum, c) => {
                       if (c.projectValue && c.projectValue > 0) return sum + c.projectValue;
-                      const bestEstimate = state.estimates.filter(e => e.contactId === c.id && e.status !== 'declined').reduce((max, e) => Math.max(max, Number(e.total || 0)), 0);
-                      return sum + bestEstimate;
+                      const bestQuote = state.quotes.filter(q => q.contactId === c.id && q.status !== 'declined').reduce((max, q) => Math.max(max, quoteValue(q)), 0);
+                      return sum + bestQuote;
                     }, 0);
                     return (
                       <div
@@ -1202,8 +1204,8 @@ export default function PipelineBoard() {
               const contacts = getColumnContacts(column);
               const columnValue = contacts.reduce((sum, c) => {
                 if (c.projectValue && c.projectValue > 0) return sum + c.projectValue;
-                const bestEstimate = state.estimates.filter(e => e.contactId === c.id && e.status !== 'declined').reduce((max, e) => Math.max(max, Number(e.total || 0)), 0);
-                return sum + bestEstimate;
+                const bestQuote = state.quotes.filter(q => q.contactId === c.id && q.status !== 'declined').reduce((max, q) => Math.max(max, quoteValue(q)), 0);
+                return sum + bestQuote;
               }, 0);
               return (
                 <div

@@ -170,6 +170,52 @@ export interface TeamMember {
   };
 }
 
+/** A quote as the CRM needs it for lists, pipeline values and financial stats. */
+export interface QuoteSummary {
+  id: string;
+  /** Web quotes set contact_id and customer_id; quotes made in the mobile app set only customer_id. */
+  contactId: string | null;
+  quoteNumber: string;
+  title: string | null;
+  status: string;
+  goodTotal: number;
+  betterTotal: number;
+  bestTotal: number;
+  selectedTier: string | null;
+  createdAt: string;
+}
+
+/** Maps a row from the quotes table to a QuoteSummary. */
+export function toQuoteSummary(row: any): QuoteSummary {
+  return {
+    id: row.id,
+    contactId: row.customer_id ?? row.contact_id ?? null,
+    quoteNumber: row.quote_number ?? '',
+    title: row.cover_page_title ?? null,
+    status: row.status ?? 'draft',
+    goodTotal: Number(row.good_total ?? 0),
+    betterTotal: Number(row.better_total ?? 0),
+    bestTotal: Number(row.best_total ?? 0),
+    selectedTier: row.selected_tier ?? null,
+    createdAt: row.created_at,
+  };
+}
+
+/**
+ * What a quote contributes to pipeline and financial figures. A signed quote is
+ * worth the tier the customer chose. Before signing no tier has been agreed, so
+ * only the Good tier — the lowest — counts, rather than inflating the pipeline
+ * with Better/Best prices nobody accepted.
+ */
+export function quoteValue(q: QuoteSummary): number {
+  if (q.status === 'signed') {
+    const tier = (q.selectedTier || '').toLowerCase();
+    if (tier === 'best') return q.bestTotal;
+    if (tier === 'better') return q.betterTotal;
+  }
+  return q.goodTotal;
+}
+
 export interface KanbanBoard {
   id: string;
   name: string;

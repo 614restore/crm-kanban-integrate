@@ -76,7 +76,7 @@ export default function MobileNav() {
 
   const secondaryNavItems: NavItem[] = [
     { icon: Calendar, label: 'Calendar', path: '/', view: 'calendar', color: 'text-blue-500' },
-    { icon: FileText, label: 'Estimates', path: '/', view: 'estimates', color: 'text-green-500' },
+    { icon: FileText, label: 'Quotes', path: '/', view: 'quotes', color: 'text-green-500' },
     { icon: BarChart3, label: 'Projects', path: '/', view: 'projects', color: 'text-orange-500' },
     { icon: FileText, label: 'Work Orders', path: '/', view: 'work-orders', color: 'text-purple-500' },
     { icon: Upload, label: 'Documents', path: '/', view: 'documents', color: 'text-indigo-500' },

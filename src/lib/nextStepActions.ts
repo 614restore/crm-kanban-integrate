@@ -5,7 +5,7 @@ export type NextStepActionType =
   | 'calendar'        // Navigate to calendar view
   | 'material-orders' // Navigate to material orders view
   | 'crew-schedule'   // Navigate to crew schedule view
-  | 'estimates'       // Navigate to estimates view
+  | 'quotes'          // Open the quote builder for the contact
   | 'documents-tab'   // Open contact → documents tab
   | 'financial-tab'   // Open contact → financial tab
   | 'job-status-tab'  // Open contact → jobStatus tab
@@ -55,12 +55,12 @@ export function getNextStep(status: KanbanStatus): NextStep | null {
       };
     case 'estimating':
       return {
-        label: 'Build Estimate',
+        label: 'Build Quote',
         description: 'Create and send a quote.',
         iconName: 'FileText',
         bgColor: 'bg-sky-50',
         textColor: 'text-sky-700',
-        action: 'estimates',
+        action: 'quotes',
       };
     case 'estimate_sent':
       return {

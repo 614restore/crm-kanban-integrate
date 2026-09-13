@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useCRM } from '@/lib/crmStore';
+import type { PendingQuote, QuoteDraftItem } from '@/lib/crmStore';
+import { toQuoteSummary } from '@/lib/crmData';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
 import { supabase } from '@/lib/supabase';
@@ -43,6 +45,7 @@ interface QuoteRow {
   contact_id: string | null;
   customer_id: string | null;
   project_type: string | null;
+  selected_tier: string | null;
   good_total: number | null;
   better_total: number | null;
   best_total: number | null;
@@ -77,6 +80,18 @@ const emptyLineItem = (): QuoteLineItemRow => ({
   fixed_price: false,
 });
 
+// A draft item carries one price; seed all three tiers with it so the quote is
+// valid as-is and the rep can differentiate the tiers before sending.
+const draftToLineItem = (item: QuoteDraftItem): QuoteLineItemRow => ({
+  ...emptyLineItem(),
+  item_name: item.description,
+  unit: item.unit || 'each',
+  quantity: item.quantity,
+  good_price: item.unitPrice,
+  better_price: item.unitPrice,
+  best_price: item.unitPrice,
+});
+
 const generateShareToken = (): string => {
   const bytes = new Uint8Array(16);
   (window.crypto || (window as any).msCrypto).getRandomValues(bytes);
@@ -96,7 +111,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function QuotesView() {
-  const { state } = useCRM();
+  const { state, dispatch } = useCRM();
   const { profile } = useAuth();
   const companyId = profile?.company_id;
 
@@ -105,6 +120,18 @@ export default function QuotesView() {
   const [search, setSearch] = useState('');
   const [showBuilder, setShowBuilder] = useState(false);
   const [editingQuoteId, setEditingQuoteId] = useState<string | null>(null);
+  const [builderPrefill, setBuilderPrefill] = useState<PendingQuote | null>(null);
+
+  // Another screen asked for a quote: open the builder on it, then clear the
+  // request so returning to Quotes later does not reopen it.
+  useEffect(() => {
+    const pending = state.pendingQuote;
+    if (!pending) return;
+    setEditingQuoteId(pending.quoteId ?? null);
+    setBuilderPrefill(pending.quoteId ? null : pending);
+    setShowBuilder(true);
+    dispatch({ type: 'SET_PENDING_QUOTE', payload: null });
+  }, [state.pendingQuote, dispatch]);
 
   useEffect(() => {
     if (companyId) loadQuotes();
@@ -117,12 +144,14 @@ export default function QuotesView() {
     try {
       const { data, error } = await supabase
         .from('quotes')
-        .select('id, quote_number, status, contact_id, customer_id, project_type, good_total, better_total, best_total, created_at, share_token, cover_page_title')
+        .select('id, quote_number, status, contact_id, customer_id, project_type, good_total, better_total, best_total, selected_tier, created_at, share_token, cover_page_title')
         .eq('company_id', companyId)
         .eq('is_archived', false)
         .order('created_at', { ascending: false });
       if (error) throw error;
       setQuotes((data || []) as QuoteRow[]);
+      // Keep the dashboard and pipeline values in step with what was just loaded.
+      dispatch({ type: 'SET_QUOTES', payload: (data || []).map(toQuoteSummary) });
     } catch (err: any) {
       toast.error('Failed to load quotes: ' + err.message);
     } finally {
@@ -208,8 +237,8 @@ export default function QuotesView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quotes, search, state.contacts]);
 
-  const openNew = () => { setEditingQuoteId(null); setShowBuilder(true); };
-  const openEdit = (id: string) => { setEditingQuoteId(id); setShowBuilder(true); };
+  const openNew = () => { setEditingQuoteId(null); setBuilderPrefill(null); setShowBuilder(true); };
+  const openEdit = (id: string) => { setEditingQuoteId(id); setBuilderPrefill(null); setShowBuilder(true); };
 
   const handleSaved = () => {
     setShowBuilder(false);
@@ -331,6 +360,7 @@ export default function QuotesView() {
           companyId={companyId}
           userId={profile?.id}
           quoteId={editingQuoteId}
+          prefill={builderPrefill}
           onClose={() => setShowBuilder(false)}
           onSaved={handleSaved}
         />
@@ -342,27 +372,30 @@ export default function QuotesView() {
 // ── Builder modal ───────────────────────────────────────────────────────
 
 function QuoteBuilderModal({
-  companyId, userId, quoteId, onClose, onSaved,
+  companyId, userId, quoteId, prefill, onClose, onSaved,
 }: {
   companyId: string;
   userId?: string;
   quoteId: string | null;
+  /** New quote only: preselected customer, and optionally a title and line items. */
+  prefill?: PendingQuote | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const { state } = useCRM();
-  const [step, setStep] = useState<'template' | 'build'>(quoteId ? 'build' : 'template');
+  // Pre-filled items skip the template picker; a customer alone still offers it.
+  const [step, setStep] = useState<'template' | 'build'>(quoteId || prefill?.items?.length ? 'build' : 'template');
   const [loading, setLoading] = useState(!!quoteId);
   const [saving, setSaving] = useState(false);
 
-  const [contactId, setContactId] = useState('');
+  const [contactId, setContactId] = useState(prefill?.contactId ?? '');
   const [quoteNumber, setQuoteNumber] = useState('');
   const [projectType, setProjectType] = useState('exterior');
-  const [coverPageTitle, setCoverPageTitle] = useState('');
+  const [coverPageTitle, setCoverPageTitle] = useState(prefill?.title ?? '');
   const [projectDescription, setProjectDescription] = useState('');
   const [notes, setNotes] = useState('');
   const [status, setStatus] = useState('draft');
-  const [lineItems, setLineItems] = useState<QuoteLineItemRow[]>([]);
+  const [lineItems, setLineItems] = useState<QuoteLineItemRow[]>(() => (prefill?.items ?? []).map(draftToLineItem));
 
   // Stage 4: contingency agreement, insurance-job linkage, financing note,
   // and a free-form custom page — the "long tail" fields mobile supports.

@@ -87,10 +87,10 @@ export default function FinancialDashboard() {
           { Metric: 'Total Collected', Value: formatCurrency(financialStats.totalCollected) },
           { Metric: 'Total Outstanding', Value: formatCurrency(financialStats.totalOutstanding) },
           { Metric: 'Total Revenue', Value: formatCurrency(financialStats.totalRevenue) },
-          { Metric: 'Estimates Sent (count)', Value: String(financialStats.estimatesSentCount) },
-          { Metric: 'Estimates Sent (value)', Value: formatCurrency(financialStats.estimatesSentTotal) },
-          { Metric: 'Estimates Signed (count)', Value: String(financialStats.acceptedEstimatesCount) },
-          { Metric: 'Estimates Signed (value)', Value: formatCurrency(financialStats.acceptedEstimatesTotal) },
+          { Metric: 'Quotes Sent (count)', Value: String(financialStats.quotesSentCount) },
+          { Metric: 'Quotes Sent (value)', Value: formatCurrency(financialStats.quotesSentTotal) },
+          { Metric: 'Quotes Signed (count)', Value: String(financialStats.signedQuotesCount) },
+          { Metric: 'Quotes Signed (value)', Value: formatCurrency(financialStats.signedQuotesTotal) },
           { Metric: 'Total Lost (value)', Value: formatCurrency(financialStats.lostSalesValue) },
           { Metric: 'Outstanding Invoices', Value: formatCurrency(financialStats.outstandingInvoices) },
           { Metric: 'Overdue Invoices', Value: formatCurrency(financialStats.overdueInvoices) },
@@ -385,13 +385,13 @@ export default function FinancialDashboard() {
             <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
               <Send className="text-blue-600" size={24} />
             </div>
-            <span className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded-full">{financialStats.estimatesSentCount} sent</span>
+            <span className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded-full">{financialStats.quotesSentCount} sent</span>
           </div>
           <p className="text-3xl font-bold text-gray-900 mt-4">
-            {formatCurrency(financialStats.estimatesSentTotal)}
+            {formatCurrency(financialStats.quotesSentTotal)}
           </p>
-          <p className="text-gray-500 text-sm mt-1">Estimates Sent</p>
-          <p className="text-xs text-gray-400 mt-0.5">{financialStats.acceptedEstimatesCount} signed · {financialStats.pendingEstimatesCount} pending</p>
+          <p className="text-gray-500 text-sm mt-1">Quotes Sent</p>
+          <p className="text-xs text-gray-400 mt-0.5">{financialStats.signedQuotesCount} signed · {financialStats.pendingQuotesCount} pending</p>
         </div>
 
         <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
@@ -464,17 +464,17 @@ export default function FinancialDashboard() {
         </div>
       </div>
 
-      {/* Estimates Summary */}
-      {financialStats.estimatesSentCount > 0 && (
+      {/* Quotes Summary */}
+      {financialStats.quotesSentCount > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 flex items-center gap-4">
             <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0">
               <Send className="text-blue-600" size={24} />
             </div>
             <div>
-              <p className="text-sm text-blue-700 font-medium">Total Estimates Sent</p>
-              <p className="text-2xl font-bold text-gray-900">{formatCurrency(financialStats.estimatesSentTotal)}</p>
-              <p className="text-xs text-gray-500 mt-0.5">{financialStats.estimatesSentCount} estimate(s) sent</p>
+              <p className="text-sm text-blue-700 font-medium">Total Quotes Sent</p>
+              <p className="text-2xl font-bold text-gray-900">{formatCurrency(financialStats.quotesSentTotal)}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{financialStats.quotesSentCount} quote(s) sent</p>
             </div>
           </div>
           <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5 flex items-center gap-4">
@@ -483,8 +483,8 @@ export default function FinancialDashboard() {
             </div>
             <div>
               <p className="text-sm text-emerald-700 font-medium">Total Signed</p>
-              <p className="text-2xl font-bold text-gray-900">{formatCurrency(financialStats.acceptedEstimatesTotal)}</p>
-              <p className="text-xs text-gray-500 mt-0.5">{financialStats.acceptedEstimatesCount} estimate(s) signed</p>
+              <p className="text-2xl font-bold text-gray-900">{formatCurrency(financialStats.signedQuotesTotal)}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{financialStats.signedQuotesCount} quote(s) signed</p>
             </div>
           </div>
           <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-5 flex items-center gap-4">
@@ -493,8 +493,8 @@ export default function FinancialDashboard() {
             </div>
             <div>
               <p className="text-sm text-yellow-700 font-medium">Awaiting Response</p>
-              <p className="text-2xl font-bold text-gray-900">{formatCurrency(financialStats.pendingEstimatesTotal)}</p>
-              <p className="text-xs text-gray-500 mt-0.5">{financialStats.pendingEstimatesCount} estimate(s) pending</p>
+              <p className="text-2xl font-bold text-gray-900">{formatCurrency(financialStats.pendingQuotesTotal)}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{financialStats.pendingQuotesCount} quote(s) pending</p>
             </div>
           </div>
         </div>

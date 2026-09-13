@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+import { quoteValue, type QuoteSummary } from './crmData';
 import {
   Invoice,
   Contact,
@@ -305,7 +306,7 @@ export function exportAllData(
   projects: Project[],
   workOrders: WorkOrder[],
   materialOrders: MaterialOrder[],
-  estimates: Estimate[],
+  quotes: QuoteSummary[],
   suppliers: Supplier[],
   invoices: Invoice[],
   appointments: Appointment[],
@@ -339,9 +340,13 @@ export function exportAllData(
     'Status': mo.status, 'Amount': mo.totalAmount,
   })));
 
-  addSheet(workbook, 'Estimates', estimates.map(e => ({
-    'Estimate #': e.estimateNumber, 'Customer': e.customerName,
-    'Status': e.status, 'Total': e.total,
+  const customerName = (contactId: string | null) => {
+    const c = contactId ? contacts.find(x => x.id === contactId) : undefined;
+    return c ? `${c.firstName} ${c.lastName}`.trim() : '';
+  };
+  addSheet(workbook, 'Quotes', quotes.map(q => ({
+    'Quote #': q.quoteNumber, 'Customer': customerName(q.contactId),
+    'Status': q.status, 'Value': quoteValue(q),
   })));
 
   addSheet(workbook, 'Suppliers', suppliers.map(s => ({

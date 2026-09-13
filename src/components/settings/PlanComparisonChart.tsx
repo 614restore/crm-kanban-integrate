@@ -95,7 +95,7 @@ const SECTIONS: Section[] = [
   },
   {
     id: 'financials',
-    label: '💵 Estimates, Invoices & Financials',
+    label: '💵 Quotes, Invoices & Financials',
     defaultOpen: false,
     rows: [
       { feature: 'Estimate Builder',                     values: [Y, Y, Y, Y, Y, Y] },

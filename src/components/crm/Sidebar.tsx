@@ -9,7 +9,6 @@ import {
   Users,
   MessageSquare,
   Calendar,
-  FileText,
   DollarSign,
   UserCog,
   Zap,
@@ -96,14 +95,11 @@ const sections: NavSection[] = [
   },
 ];
 
-// Job tools (estimates, work orders, inspections…) also open from inside a job
+// Job tools (quotes, work orders, inspections…) also open from inside a job
 // record; they stay here so the company-wide lists remain one click away.
-// Quotes is the QuoteMGR builder and is not yet reachable from a job record,
-// so this is currently its only entry point.
 // Document templates moved to Settings → Document Templates.
 const moreItems: NavItem[] = [
   { id: 'quotes', label: 'Quotes', icon: <FileSignature size={20} /> },
-  { id: 'estimates', label: 'Estimates', icon: <FileText size={20} /> },
   { id: 'work-orders', label: 'Work Orders', icon: <Clipboard size={20} /> },
   { id: 'material-orders', label: 'Material Orders', icon: <Package size={20} /> },
   { id: 'inspections', label: 'Inspections', icon: <ClipboardList size={20} /> },

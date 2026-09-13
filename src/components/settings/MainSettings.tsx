@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { quoteValue } from '@/lib/crmData';
 import { 
   Settings, 
   Building2, 
@@ -96,7 +97,7 @@ const MainSettings: React.FC = () => {
     {
       id: 'pricing',
       title: 'Material Pricing',
-      description: 'Default unit rates for estimates — underlayment, ice & water, shingles, labor',
+      description: 'Default unit rates for quotes — underlayment, ice & water, shingles, labor',
       icon: Hammer,
       component: MaterialPricingSettings,
     },
@@ -422,6 +423,11 @@ const DataSettings: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
+  const quoteContactName = (contactId: string | null) => {
+    const c = contactId ? state.contacts.find(x => x.id === contactId) : undefined;
+    return c ? `${c.firstName || ''} ${c.lastName || ''}`.trim() : '';
+  };
+
   const handleExportAll = () => {
     downloadCsv('contacts.csv', state.contacts.map(c => ({
       Name: `${c.firstName || ''} ${c.lastName || ''}`.trim(),
@@ -431,13 +437,13 @@ const DataSettings: React.FC = () => {
       Company: c.company || '',
       Address: c.address || '',
     })));
-    downloadCsv('estimates.csv', state.estimates.map(e => ({
-      Number: e.estimateNumber || '',
-      Title: e.title || '',
-      Status: e.status || '',
-      Total: e.total || 0,
-      Contact: e.contactName || '',
-      Created: e.createdAt || '',
+    downloadCsv('quotes.csv', state.quotes.map(q => ({
+      Number: q.quoteNumber || '',
+      Title: q.title || '',
+      Status: q.status || '',
+      Value: quoteValue(q),
+      Contact: quoteContactName(q.contactId),
+      Created: q.createdAt || '',
     })));
     downloadCsv('invoices.csv', state.invoices.map(inv => ({
       Number: inv.invoiceNumber || '',
@@ -460,7 +466,7 @@ const DataSettings: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <button onClick={handleExportAll} className="p-4 border border-gray-300 rounded-lg text-left hover:bg-gray-50">
               <h3 className="font-medium text-gray-900">Export All Data</h3>
-              <p className="text-sm text-gray-600 mt-1">Download contacts, estimates & invoices as CSV</p>
+              <p className="text-sm text-gray-600 mt-1">Download contacts, quotes & invoices as CSV</p>
             </button>
             <button
               onClick={() => downloadCsv('contacts.csv', state.contacts.map(c => ({
@@ -479,21 +485,22 @@ const DataSettings: React.FC = () => {
               <p className="text-sm text-gray-600 mt-1">Customer and lead information only</p>
             </button>
             <button
-              onClick={() => downloadCsv('estimates.csv', state.estimates.map(e => ({
-                Number: e.estimateNumber || '',
-                Title: e.title || '',
-                Status: e.status || '',
-                Subtotal: e.amount || 0,
-                Tax: e.tax || 0,
-                Total: e.total || 0,
-                Contact: e.contactName || '',
-                Created: e.createdAt || '',
-                ValidUntil: e.validUntil || '',
+              onClick={() => downloadCsv('quotes.csv', state.quotes.map(q => ({
+                Number: q.quoteNumber || '',
+                Title: q.title || '',
+                Status: q.status || '',
+                Good: q.goodTotal,
+                Better: q.betterTotal,
+                Best: q.bestTotal,
+                SelectedTier: q.selectedTier || '',
+                Value: quoteValue(q),
+                Contact: quoteContactName(q.contactId),
+                Created: q.createdAt || '',
               })))}
               className="p-4 border border-gray-300 rounded-lg text-left hover:bg-gray-50"
             >
-              <h3 className="font-medium text-gray-900">Export Estimates</h3>
-              <p className="text-sm text-gray-600 mt-1">All estimates and project data</p>
+              <h3 className="font-medium text-gray-900">Export Quotes</h3>
+              <p className="text-sm text-gray-600 mt-1">All quotes and project data</p>
             </button>
             <button
               onClick={() => downloadCsv('invoices.csv', state.invoices.map(inv => ({

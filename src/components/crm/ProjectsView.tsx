@@ -79,7 +79,6 @@ export default function ProjectsView() {
   const [projectNumber, setProjectNumber] = useState('');
   const [name, setName] = useState('');
   const [selectedContactId, setSelectedContactId] = useState('');
-  const [selectedEstimateId, setSelectedEstimateId] = useState('');
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState<Project['status']>('planning');
   const [priority, setPriority] = useState<Project['priority']>('medium');
@@ -175,7 +174,6 @@ export default function ProjectsView() {
       setProjectNumber(project.projectNumber);
       setName(project.name);
       setSelectedContactId(project.contactId);
-      setSelectedEstimateId(project.estimateId || '');
       setDescription(project.description || '');
       setStatus(project.status);
       setPriority(project.priority);
@@ -211,7 +209,6 @@ export default function ProjectsView() {
     setProjectNumber('');
     setName('');
     setSelectedContactId('');
-    setSelectedEstimateId('');
     setDescription('');
     setStatus('planning');
     setPriority('medium');
@@ -255,7 +252,6 @@ export default function ProjectsView() {
         project_number: projectNumber,
         name: name.trim(),
         contact_id: selectedContactId,
-        estimate_id: selectedEstimateId || undefined,
         description: description.trim() || undefined,
         status,
         priority,
@@ -767,26 +763,6 @@ export default function ProjectsView() {
                         {contact.firstName} {contact.lastName}
                       </option>
                     ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Link to Estimate (Optional)
-                  </label>
-                  <select
-                    value={selectedEstimateId}
-                    onChange={(e) => setSelectedEstimateId(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  >
-                    <option value="">No estimate</option>
-                    {state.estimates
-                      .filter(e => e.contactId === selectedContactId)
-                      .map((estimate) => (
-                        <option key={estimate.id} value={estimate.id}>
-                          {estimate.estimateNumber} - {estimate.title}
-                        </option>
-                      ))}
                   </select>
                 </div>
 

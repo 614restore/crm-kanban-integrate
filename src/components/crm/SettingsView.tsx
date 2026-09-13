@@ -2739,19 +2739,19 @@ export default function SettingsView() {
               </div>
             </details>
 
-            {/* Estimates & Documents */}
+            {/* Quotes & Documents */}
             <details className="bg-white rounded-xl border border-gray-200 overflow-hidden">
               <summary className="flex items-center gap-3 p-5 cursor-pointer font-semibold text-gray-800 hover:bg-gray-50 transition-colors">
                 <FileText size={18} className="text-emerald-600 flex-shrink-0" />
-                Estimates & Documents
+                Quotes & Documents
               </summary>
               <div className="px-5 pb-5 text-sm text-gray-600 space-y-3 border-t border-gray-100 pt-4">
-                <p><strong>Creating Estimates:</strong> Go to Estimates, click <strong>+ New Estimate</strong>, select a contact, and add line items. You can use templates to pre-fill common items.</p>
-                <p><strong>Sending:</strong> Click <strong>Send</strong> on an estimate to email it to the customer. They receive a link to view and sign it online — no account needed.</p>
-                <p><strong>Tracking:</strong> When a customer opens the estimate, you get a notification and the status changes to "Viewed." When they sign, status becomes "Accepted" and you get notified again.</p>
+                <p><strong>Creating Quotes:</strong> Go to Quotes, or open a customer and click <strong>New Quote</strong>. Pick a template or start blank, then price each line item at Good, Better and Best.</p>
+                <p><strong>Sending:</strong> Click <strong>Send</strong> on a quote to email the customer a link. They can review it, choose a tier and sign online — no account needed.</p>
+                <p><strong>Tracking:</strong> A quote you have emailed shows as "sent". When the customer signs, it becomes "signed" and records the tier they chose.</p>
                 <p><strong>Documents & Templates:</strong> Create reusable document templates (contracts, change orders, etc.) from the Document Templates section. Templates can be filled per-contact and sent for e-signature.</p>
-                <p><strong>PDF Generation:</strong> All documents and estimates are automatically generated and stored as PDFs when saved or signed.</p>
-                <p><strong>Auto-Save:</strong> When filling out a new estimate, work order, material order, or document template, your progress is automatically saved to your browser. If you close the tab or something crashes, your data will be restored next time you open the form.</p>
+                <p><strong>PDF Generation:</strong> Documents are automatically generated and stored as PDFs when saved or signed.</p>
+                <p><strong>Auto-Save:</strong> When filling out a new work order, material order, or document template, your progress is automatically saved to your browser. If you close the tab or something crashes, your data will be restored next time you open the form.</p>
               </div>
             </details>
 

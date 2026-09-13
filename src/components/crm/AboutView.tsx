@@ -65,7 +65,7 @@ const quizQuestions: QuizQuestion[] = [
       { id: 'pipeline', label: 'Pipeline Visibility' },
       { id: 'speed', label: 'Speed and Simplicity' },
       { id: 'documents', label: 'Docs and Signatures' },
-      { id: 'financials', label: 'Estimates and Invoicing' },
+      { id: 'financials', label: 'Quotes and Invoicing' },
     ],
   },
   {

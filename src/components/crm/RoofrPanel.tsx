@@ -1,13 +1,14 @@
 // RoofrPanel — order aerial roof measurement reports via Roofr for a customer
 // property, poll for completion, display measurements inline, and save the
 // report to the customer's document library.
-// ENHANCED: Now includes PDF upload & auto-estimate generation
+// Also accepts an uploaded Roofr PDF and offers to start a quote from its line items.
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Ruler, Loader2, Settings, CheckCircle, AlertTriangle,
   FileText, Download, RefreshCw, Clock, ExternalLink, Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useCRM } from '@/lib/crmStore';
 import { supabase } from '@/lib/supabase';
 import { db } from '@/lib/database';
 import { RoofrIntegration as RoofrAPI, RoofrReport } from '@/lib/integrations/roofr';
@@ -98,6 +99,38 @@ export default function RoofrPanel({
   const [uploadedPdfFile, setUploadedPdfFile] = useState<File | null>(null);
 
   const fullAddress = [address, city, state, zip].filter(Boolean).join(', ');
+  // Only dispatch: this component's `state` prop is the address's state.
+  const { dispatch } = useCRM();
+
+  // An uploaded report yields priced line items. Offer them to the Quotes
+  // builder instead of making the rep re-enter them; a toast action keeps them
+  // on the job record to review the measurements first.
+  const announceMeasurements = (lineItems: any[], message: string) => {
+    toast.success(message, {
+      duration: 10000,
+      action: lineItems.length > 0
+        ? {
+            label: 'Create quote',
+            onClick: () => {
+              dispatch({
+                type: 'SET_PENDING_QUOTE',
+                payload: {
+                  contactId,
+                  title: `Roofr Quote — ${fullAddress || contactName || 'Roof'}`,
+                  items: lineItems.map((li) => ({
+                    description: li.description,
+                    quantity: li.quantity,
+                    unit: li.unit,
+                    unitPrice: li.rate,
+                  })),
+                },
+              });
+              dispatch({ type: 'SET_VIEW', payload: 'quotes' });
+            },
+          }
+        : undefined,
+    });
+  };
   const repName = contactName || 'Customer';
 
   // ── Load saved order + Roofr credentials ──────────────────────────────────
@@ -136,7 +169,7 @@ export default function RoofrPanel({
     };
     load();
 
-    // Re-read when another component converts a document PDF to an estimate
+    // Re-read when another component loads Roofr measurements from a document PDF
     const onExternalUpdate = (e: Event) => {
       if ((e as CustomEvent).detail?.contactId === contactId) {
         const updated = readOrderFromStorage(contactId);
@@ -409,11 +442,12 @@ export default function RoofrPanel({
               measurements: measurements,
               structures: multiResult?.structures,
             });
-            if (multiResult?.hasMultipleStructures) {
-              toast.success(`Found ${multiResult.structures.length} structures! See measurements below.`);
-            } else {
-              toast.success('Measurements extracted! Navigate to Estimates to create a quote.');
-            }
+            announceMeasurements(
+              lineItems,
+              multiResult?.hasMultipleStructures
+                ? `Found ${multiResult.structures.length} structures! See measurements below.`
+                : 'Measurements extracted.',
+            );
           }}
         />
       </div>
@@ -612,11 +646,12 @@ export default function RoofrPanel({
                   measurements: measurements,
                   structures: multiResult?.structures,
                 });
-                if (multiResult?.hasMultipleStructures) {
-                  toast.success(`Found ${multiResult.structures.length} structures! See measurements below.`);
-                } else {
-                  toast.success('Measurements extracted! Navigate to Estimates to create a quote.');
-                }
+                announceMeasurements(
+                  lineItems,
+                  multiResult?.hasMultipleStructures
+                    ? `Found ${multiResult.structures.length} structures! See measurements below.`
+                    : 'Measurements extracted.',
+                );
               }}
             />
           </div>

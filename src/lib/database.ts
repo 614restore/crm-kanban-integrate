@@ -1422,6 +1422,20 @@ class DatabaseService {
     } catch (err) { console.error('deleteMaterialOrder timed out or failed:', err); return false; }
   }
 
+  // Quote summaries: just the fields lists, pipeline values and financial stats
+  // need. Quotes are created and edited in QuotesView.
+  async getQuoteSummaries(companyId: string): Promise<any[]> {
+    assertCompanyId(companyId, 'getQuoteSummaries');
+    const { data, error } = await supabase
+      .from('quotes')
+      .select('id, quote_number, cover_page_title, status, contact_id, customer_id, good_total, better_total, best_total, selected_tier, created_at')
+      .eq('company_id', companyId)
+      .eq('is_archived', false)
+      .order('created_at', { ascending: false });
+    if (error) { console.error('Error fetching quotes:', error); return []; }
+    return data || [];
+  }
+
   // Estimate operations
   async getEstimates(companyId: string): Promise<DbEstimate[]> {
     assertCompanyId(companyId, 'getEstimates');

@@ -26,7 +26,7 @@ import { useCRM, useCurrentContact } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
 import { supabase } from '@/lib/supabase';
-import { sendEmail } from '@/lib/emailApi';
+import { quoteValue, toQuoteSummary, type QuoteSummary } from '@/lib/crmData';
 import { formatPhoneNumber } from '@/lib/utils';
 import JobStatusTimeline from './JobStatusTimeline';
 import CustomerSurvey from './CustomerSurvey';
@@ -95,7 +95,6 @@ import {
   Tag,
   Loader2,
   Eye,
-  EyeOff,
   Package,
   ClipboardList,
   Truck,
@@ -221,6 +220,17 @@ Best regards,
   }
 ];
 
+// Same palette as QuotesView so a status reads the same in both places.
+const QUOTE_STATUS_COLORS: Record<string, string> = {
+  draft: 'bg-gray-100 text-gray-700',
+  sent: 'bg-blue-100 text-blue-700',
+  viewed: 'bg-purple-100 text-purple-700',
+  signed: 'bg-green-100 text-green-700',
+  declined: 'bg-red-100 text-red-700',
+  expired: 'bg-amber-100 text-amber-700',
+};
+
+
 export default function ContactDetail() {
   const { state, dispatch } = useCRM();
   const { profile } = useAuth();
@@ -256,15 +266,11 @@ export default function ContactDetail() {
 
   // Project-related data
   const [contactProjects, setContactProjects] = useState<any[]>([]);
-  const [contactEstimates, setContactEstimates] = useState<any[]>([]);
   const [contactWorkOrders, setContactWorkOrders] = useState<any[]>([]);
   const [contactMaterialOrders, setContactMaterialOrders] = useState<any[]>([]);
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [viewingProject, setViewingProject] = useState<any>(null);
   const [editingProjectInDetail, setEditingProjectInDetail] = useState<any>(null);
-  const [showEstimateModal, setShowEstimateModal] = useState(false);
-  const [viewingEstimate, setViewingEstimate] = useState<any>(null);
-  const [editingEstimate, setEditingEstimate] = useState<any>(null);
   const [showWorkOrderModal, setShowWorkOrderModal] = useState(false);
   const [contactChangeOrders, setContactChangeOrders] = useState<ChangeOrder[]>([]);
   const [showChangeOrderModal, setShowChangeOrderModal] = useState(false);
@@ -274,15 +280,8 @@ export default function ContactDetail() {
   const [showTemplates, setShowTemplates] = useState(false);
   const [templateMessage, setTemplateMessage] = useState('');
   
-  const [showNewEstimateModal, setShowNewEstimateModal] = useState(false);
   const [showRoofrPicker, setShowRoofrPicker] = useState(false);
-  const [newEstTitle, setNewEstTitle] = useState('');
-  const [newEstItems, setNewEstItems] = useState<{id: string; description: string; quantity: number; unit: string; unitPrice: number; total: number}[]>([{id: crypto.randomUUID(), description: '', quantity: 1, unit: 'ea', unitPrice: 0, total: 0}]);
-  const [newEstNotes, setNewEstNotes] = useState('');
-  const [newEstTax, setNewEstTax] = useState(0);
-  const [isSavingEstimate, setIsSavingEstimate] = useState(false);
-  const [isSharingEstimateId, setIsSharingEstimateId] = useState<string | null>(null);
-  const [showTemplateForEstimate, setShowTemplateForEstimate] = useState(false);
+  const [contactQuotes, setContactQuotes] = useState<QuoteSummary[]>([]);
   const noteInputRef = useRef<HTMLInputElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
@@ -302,127 +301,6 @@ export default function ContactDetail() {
   const contactId = contact?.id;
   const contactNotes = stripSchedulePrefix(contact?.notes);
 
-  const isEstimateLocked = (estimate: any) => {
-    const status = String(estimate?.status || '').toLowerCase();
-    return status === 'sent' || status === 'viewed' || status === 'accepted';
-  };
-
-  const openEstimateEditor = (estimate: any) => {
-    if (isEstimateLocked(estimate)) {
-      toast.error('This estimate has already been shared. Use a change order for any further changes.');
-      return;
-    }
-    setViewingEstimate(null);
-    setEditingEstimate(estimate);
-    setShowEstimateModal(true);
-  };
-
-  const handleShareEstimate = async (estimate: any) => {
-    if (!contact || !profile?.company_id) {
-      toast.error('Missing contact or company information.');
-      return;
-    }
-    if (!contact.email) {
-      toast.error('This contact does not have an email address on file.');
-      return;
-    }
-    if (isEstimateLocked(estimate)) {
-      toast.error('This estimate has already been shared and can no longer be edited.');
-      return;
-    }
-
-    setIsSharingEstimateId(estimate.id);
-    try {
-      const token = crypto.randomUUID();
-      const updated = await db.updateEstimate(estimate.id, {
-        status: 'sent',
-        sent_at: new Date().toISOString(),
-        sign_token: token,
-      });
-
-      if (!updated) {
-        throw new Error('Failed to update estimate status');
-      }
-
-      const appUrl = (import.meta.env.VITE_APP_URL as string | undefined)?.trim() || window.location.origin;
-      const signUrl = `${appUrl}/sign?estimateId=${encodeURIComponent(updated.id)}&token=${encodeURIComponent(token)}`;
-      const company = await db.getCompany(profile.company_id).catch(() => null);
-      const companyName = company?.name || 'Your contractor';
-      const customerName = getContactFullName(contact);
-      const estimateNumber = updated.estimate_number || estimate.estimateNumber || estimate.estimate_number || `EST-${String(updated.id).slice(0, 8).toUpperCase()}`;
-
-      await sendEmail({
-        to: contact.email,
-        subject: `Estimate ${estimateNumber} from ${companyName}`,
-        html: `
-          <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
-            <h2 style="color:#2563eb;margin:0 0 16px;">Estimate Ready for Review</h2>
-            <p>Hi ${customerName},</p>
-            <p>${companyName} has shared <strong>${updated.title || `Estimate ${estimateNumber}`}</strong> for your review.</p>
-            <p><strong>Total:</strong> ${formatCurrency(Number(updated.total || 0))}</p>
-            <p style="margin:24px 0;">
-              <a href="${signUrl}" style="display:inline-block;background:#2563eb;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;">
-                Review &amp; Sign Estimate
-              </a>
-            </p>
-            <p style="font-size:12px;color:#6b7280;">If the button does not work, copy and paste this link into your browser:<br>${signUrl}</p>
-          </div>`,
-      });
-
-      const refreshed = await db.getEstimatesByContact(contact.id);
-      setContactEstimates(refreshed);
-      setViewingEstimate((prev: any) => prev?.id === updated.id ? updated : prev);
-      toast.success('Estimate shared. Editing is now locked; use a change order for future revisions.');
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to share estimate');
-    } finally {
-      setIsSharingEstimateId(null);
-    }
-  };
-
-  const handleDuplicateEstimate = async (estimate: any) => {
-    if (!profile?.company_id || !contactId) return;
-    try {
-      const newNumber = `EST-${Date.now().toString().slice(-6)}`;
-      const created = await db.createEstimate({
-        company_id: profile.company_id,
-        contact_id: contactId,
-        estimate_number: newNumber,
-        title: estimate.title ? `${estimate.title} (Copy)` : undefined,
-        description: estimate.description || undefined,
-        status: 'draft',
-        subtotal: estimate.subtotal || estimate.amount || 0,
-        tax: estimate.tax || 0,
-        total: estimate.total || 0,
-        valid_until: estimate.valid_until || undefined,
-        terms: estimate.terms || undefined,
-        notes: estimate.notes || undefined,
-        created_by: profile.id || undefined,
-      });
-      if (!created) throw new Error('Failed to create duplicate');
-
-      // Copy line items if any
-      const items = await db.getEstimateItems(estimate.id).catch(() => []);
-      await Promise.all(items.map(item =>
-        db.createEstimateItem({
-          company_id: profile.company_id,
-          estimate_id: created.id,
-          description: item.description,
-          quantity: item.quantity,
-          unit: item.unit,
-          unit_price: item.unit_price,
-          total: item.total,
-        })
-      ));
-
-      toast.success(`Estimate duplicated as ${newNumber}`);
-      const estimates = await db.getEstimatesByContact(contactId);
-      setContactEstimates(estimates);
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to duplicate estimate');
-    }
-  };
-
   useEffect(() => {
     if (!contactId) return;
     setQuickNote(contactNotes);
@@ -435,7 +313,7 @@ export default function ContactDetail() {
     if (tab) setActiveTab(tab as TabType);
   }, [contactId]);
 
-  // Load contact projects, estimates, work orders, and material orders
+  // Load contact projects, work orders, material orders and change orders
   useEffect(() => {
     const loadContactRelatedData = async () => {
       if (!contactId || !profile?.company_id) return;
@@ -444,10 +322,6 @@ export default function ContactDetail() {
       // Load projects for this contact
       const projects = state.projects.filter(p => p.contactId === contactId);
       setContactProjects(projects);
-      
-      // Load estimates for this contact
-      const estimates = state.estimates.filter(e => e.contactId === contactId);
-      setContactEstimates(estimates);
       
       // Load work orders for this contact
       const workOrders = state.workOrders.filter(wo => wo.contactId === contactId);
@@ -468,7 +342,7 @@ export default function ContactDetail() {
     };
 
     loadContactRelatedData();
-  }, [contactId, profile?.company_id, state.projects, state.estimates, state.workOrders, state.materialOrders]);
+  }, [contactId, profile?.company_id, state.projects, state.workOrders, state.materialOrders]);
 
   // Load contact documents and signed docs in parallel
   useEffect(() => {
@@ -822,9 +696,9 @@ export default function ContactDetail() {
     }
   };
 
-  const handleConvertToEstimate = async (doc: Document) => {
+  const handleLoadRoofrMeasurements = async (doc: Document) => {
     const isPdf = doc.name?.toLowerCase().endsWith('.pdf') || doc.url?.toLowerCase().includes('.pdf');
-    if (!isPdf) { toast.error('Only PDF files can be converted to estimates'); return; }
+    if (!isPdf) { toast.error('Only PDF files can be read as Roofr reports'); return; }
 
     toast.info(`Parsing ${doc.name}…`);
     try {
@@ -851,15 +725,16 @@ export default function ContactDetail() {
       };
       localStorage.setItem(`roofr_order_${contact.id}`, JSON.stringify(order));
       window.dispatchEvent(new CustomEvent('roofr-order-updated', { detail: { contactId: contact.id } }));
-      toast.success('Measurements extracted! See Roofr panel above for the estimate.');
+      toast.success('Measurements extracted — see the Roofr panel above.');
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       toast.error(`Failed to parse PDF: ${msg}`, { duration: 8000 });
     }
   };
 
-  const handleEstimateFromDoc = async (doc: Document) => {
+  const handleQuoteFromDoc = async (doc: Document) => {
     setShowRoofrPicker(false);
+    if (!contact) return;
     toast.info(`Parsing ${doc.name}…`);
     try {
       let url = doc.url;
@@ -872,23 +747,58 @@ export default function ContactDetail() {
       const { generateEstimateFromMeasurements } = await import('@/lib/roofrEstimateGenerator');
       const result = await parseRoofrPDFFromUrl(url);
       const lineItems = generateEstimateFromMeasurements(result.combinedMeasurements);
-      setNewEstTitle(`Roofr Estimate — ${doc.name.replace(/\.pdf$/i, '')}`);
-      setNewEstItems(lineItems.map(li => ({
-        id: crypto.randomUUID(),
-        description: li.description,
-        quantity: li.quantity,
-        unit: li.unit,
-        unitPrice: li.rate,
-        total: li.amount,
-      })));
-      setNewEstNotes('');
-      setNewEstTax(0);
-      setShowNewEstimateModal(true);
-      toast.success('Measurements loaded — review and save your estimate');
+      // Hand the parsed measurements to the Quotes builder, which assigns the
+      // quote number and share link itself rather than duplicating that here.
+      dispatch({
+        type: 'SET_PENDING_QUOTE',
+        payload: {
+          contactId: contact.id,
+          title: `Roofr Quote — ${doc.name.replace(/\.pdf$/i, '')}`,
+          items: lineItems.map((li) => ({
+            description: li.description,
+            quantity: li.quantity,
+            unit: li.unit,
+            unitPrice: li.rate,
+          })),
+        },
+      });
+      dispatch({ type: 'SET_VIEW', payload: 'quotes' });
+      toast.success('Measurements loaded — review the quote and save it');
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       toast.error(`Failed to parse PDF: ${msg}`, { duration: 8000 });
     }
+  };
+
+  // Quotes made on web set both ids; quotes made in the mobile app set only customer_id.
+  useEffect(() => {
+    if (!contactId || !profile?.company_id) return;
+    let cancelled = false;
+    supabase
+      .from('quotes')
+      .select('id, quote_number, cover_page_title, status, contact_id, customer_id, good_total, better_total, best_total, selected_tier, created_at')
+      .eq('company_id', profile.company_id)
+      .eq('is_archived', false)
+      .or(`customer_id.eq.${contactId},contact_id.eq.${contactId}`)
+      .order('created_at', { ascending: false })
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) { console.error('[ContactDetail] Failed to load quotes:', error); return; }
+        setContactQuotes((data || []).map(toQuoteSummary));
+      });
+    return () => { cancelled = true; };
+  }, [contactId, profile?.company_id]);
+
+  const openNewQuote = () => {
+    if (!contact) return;
+    dispatch({ type: 'SET_PENDING_QUOTE', payload: { contactId: contact.id } });
+    dispatch({ type: 'SET_VIEW', payload: 'quotes' });
+  };
+
+  const openQuote = (quoteId: string) => {
+    if (!contact) return;
+    dispatch({ type: 'SET_PENDING_QUOTE', payload: { contactId: contact.id, quoteId } });
+    dispatch({ type: 'SET_VIEW', payload: 'quotes' });
   };
 
   if (!contact) {
@@ -2374,7 +2284,7 @@ export default function ContactDetail() {
                     <button onClick={() => handleViewDoc(doc)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="View"><Eye size={18} className="text-gray-500" /></button>
                     <button onClick={() => handleDownloadDoc(doc)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="Download"><Download size={18} className="text-gray-500" /></button>
                     {(doc.name?.toLowerCase().endsWith('.pdf') || doc.url?.toLowerCase().includes('.pdf')) && (
-                      <button onClick={() => handleConvertToEstimate(doc)} className="p-2 hover:bg-blue-100 rounded-lg transition-colors" title="Convert to Estimate"><Zap size={18} className="text-blue-500" /></button>
+                      <button onClick={() => handleLoadRoofrMeasurements(doc)} className="p-2 hover:bg-blue-100 rounded-lg transition-colors" title="Load Roofr measurements"><Zap size={18} className="text-blue-500" /></button>
                     )}
                     <button onClick={() => handleDeleteDocument(doc.id)} className="p-2 hover:bg-red-100 rounded-lg transition-colors" title="Delete"><Trash2 size={18} className="text-red-500" /></button>
                   </div>
@@ -2539,39 +2449,15 @@ export default function ContactDetail() {
               </div>
             </div>
 
-            {/* Estimates list */}
-            {contactEstimates.length > 0 && (
-              <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Estimates</h3>
-                <div className="space-y-3">
-                  {contactEstimates.map((est: any) => (
-                    <div key={est.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div>
-                        <p className="font-medium text-gray-900 text-sm">{est.title}</p>
-                        <p className="text-xs text-gray-500">{est.estimateNumber} · <span className="capitalize">{est.status}</span></p>
-                      </div>
-                      <p className="font-bold text-blue-600">{formatCurrency(est.total || 0)}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
             <div className="bg-white rounded-xl border border-gray-200 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Actions</h3>
               <div className="flex flex-wrap gap-3">
                 <button
-                  onClick={() => {
-                    setNewEstTitle('');
-                    setNewEstItems([{id: crypto.randomUUID(), description: '', quantity: 1, unit: 'ea', unitPrice: 0, total: 0}]);
-                    setNewEstNotes('');
-                    setNewEstTax(0);
-                    setShowNewEstimateModal(true);
-                  }}
+                  onClick={openNewQuote}
                   className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
                 >
                   <Plus size={18} />
-                  New Estimate
+                  New Quote
                 </button>
                 {(() => {
                   const pdfs = (contactDocuments || []).filter(d =>
@@ -2585,7 +2471,7 @@ export default function ContactDetail() {
                         className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                       >
                         <Zap size={18} />
-                        Estimate from PDF
+                        Quote from PDF
                       </button>
                       {showRoofrPicker && (
                         <div className="absolute left-0 top-full mt-1 z-50 bg-white border border-gray-200 rounded-xl shadow-lg min-w-[220px]">
@@ -2593,7 +2479,7 @@ export default function ContactDetail() {
                           {pdfs.map(doc => (
                             <button
                               key={doc.id}
-                              onClick={() => handleEstimateFromDoc(doc)}
+                              onClick={() => handleQuoteFromDoc(doc)}
                               className="w-full flex items-center gap-2 px-3 py-2 hover:bg-blue-50 text-left text-sm text-gray-800 last:rounded-b-xl"
                             >
                               <FileText size={14} className="text-blue-500 flex-shrink-0" />
@@ -2619,177 +2505,6 @@ export default function ContactDetail() {
               </div>
             </div>
           </div>
-        )}
-
-        {/* Inline New Estimate Modal */}
-        {showNewEstimateModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-2xl flex flex-col w-full max-w-3xl max-h-[90vh] overflow-hidden">
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-                <div>
-                  <h2 className="text-lg font-bold text-gray-900">New Estimate — {contact.firstName} {contact.lastName}</h2>
-                  <p className="text-sm text-gray-500 mt-0.5">Create a new estimate pre-linked to this customer</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setShowTemplateForEstimate(true)}
-                    className="flex items-center gap-2 px-3 py-2 text-sm border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 transition-colors"
-                  >
-                    <FileText size={16} />
-                    Use Template
-                  </button>
-                  <button onClick={() => setShowNewEstimateModal(false)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-                    <X size={20} className="text-gray-500" />
-                  </button>
-                </div>
-              </div>
-              <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
-                  <input
-                    type="text"
-                    value={newEstTitle}
-                    onChange={e => setNewEstTitle(e.target.value)}
-                    placeholder="e.g. Roof Replacement — 123 Main St"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                  />
-                </div>
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-sm font-medium text-gray-700">Line Items</label>
-                    <button
-                      onClick={() => setNewEstItems(prev => [...prev, {id: crypto.randomUUID(), description: '', quantity: 1, unit: 'ea', unitPrice: 0, total: 0, hidePrice: false}])}
-                      className="text-xs text-blue-600 hover:underline"
-                    >+ Add Row</button>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="grid grid-cols-12 gap-2 text-xs font-medium text-gray-500 px-2">
-                      <span className="col-span-4">Description</span>
-                      <span className="col-span-2 text-center">Qty</span>
-                      <span className="col-span-2">Unit</span>
-                      <span className="col-span-2 text-right">Price</span>
-                      <span className="col-span-2 text-right">Hide $</span>
-                    </div>
-                    {newEstItems.map((item, idx) => (
-                      <div key={item.id} className={`grid grid-cols-12 gap-2 items-center rounded px-1 py-0.5 ${item.hidePrice ? 'bg-amber-50' : ''}`}>
-                        <input value={item.description} onChange={e => { const n=[...newEstItems]; n[idx]={...n[idx],description:e.target.value}; setNewEstItems(n); }} placeholder="Description" className="col-span-4 px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                        <input type="number" value={item.quantity} onChange={e => { const q=Number(e.target.value); const n=[...newEstItems]; n[idx]={...n[idx],quantity:q,total:q*n[idx].unitPrice}; setNewEstItems(n); }} className="col-span-2 px-2 py-1.5 border border-gray-200 rounded text-sm text-center focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                        <select value={item.unit} onChange={e => { const n=[...newEstItems]; n[idx]={...n[idx],unit:e.target.value}; setNewEstItems(n); }} className="col-span-2 px-1 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white">
-                          <option value="ea">ea</option>
-                          <option value="sq">sq</option>
-                          <option value="roll">roll</option>
-                          <option value="lf">lf</option>
-                          <option value="sf">sf</option>
-                          <option value="box">box</option>
-                          <option value="pcs">pcs</option>
-                          <option value="lbs">lbs</option>
-                          <option value="hr">hr</option>
-                          <option value="day">day</option>
-                          <option value="ft">ft</option>
-                          <option value="lot">lot</option>
-                        </select>
-                        <input type="number" value={item.unitPrice} onChange={e => { const p=Number(e.target.value); const n=[...newEstItems]; n[idx]={...n[idx],unitPrice:p,total:n[idx].quantity*p}; setNewEstItems(n); }} className="col-span-2 px-2 py-1.5 border border-gray-200 rounded text-sm text-right focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                        <div className="col-span-2 flex items-center justify-end gap-1">
-                          <button type="button" onClick={() => { const n=[...newEstItems]; n[idx]={...n[idx],hidePrice:!n[idx].hidePrice}; setNewEstItems(n); }} title={item.hidePrice ? 'Price hidden from customer' : 'Show price to customer'} className={`p-1 rounded transition-colors ${item.hidePrice ? 'text-amber-600 bg-amber-100' : 'text-gray-400 hover:text-gray-600'}`}>
-                            {item.hidePrice ? <EyeOff size={13} /> : <Eye size={13} />}
-                          </button>
-                          <button onClick={() => newEstItems.length > 1 && setNewEstItems(prev => prev.filter((_,i)=>i!==idx))} className="text-red-400 hover:text-red-600 p-1"><X size={13} /></button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  {/* Totals */}
-                  <div className="mt-3 pt-3 border-t border-gray-100 space-y-1 text-sm">
-                    {(() => {
-                      const subtotal = newEstItems.reduce((s,i)=>s+i.total,0);
-                      const tax = subtotal*(newEstTax/100);
-                      return (<>
-                        <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
-                        <div className="flex justify-between items-center text-gray-600">
-                          <span>Tax <input type="number" value={newEstTax} onChange={e=>setNewEstTax(Number(e.target.value))} className="w-14 ml-1 px-1 py-0.5 border border-gray-200 rounded text-xs" />%</span>
-                          <span>{formatCurrency(tax)}</span>
-                        </div>
-                        <div className="flex justify-between font-bold text-gray-900 text-base"><span>Total</span><span className="text-blue-600">{formatCurrency(subtotal+tax)}</span></div>
-                      </>);
-                    })()}
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-                  <textarea value={newEstNotes} onChange={e=>setNewEstNotes(e.target.value)} rows={2} placeholder="Optional notes for the customer..." className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none resize-none text-sm" />
-                </div>
-              </div>
-              <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
-                <button onClick={() => setShowNewEstimateModal(false)} className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-sm">Cancel</button>
-                <button
-                  disabled={isSavingEstimate || !newEstTitle.trim()}
-                  onClick={async () => {
-                    if (!profile?.company_id || !newEstTitle.trim()) return;
-                    setIsSavingEstimate(true);
-                    try {
-                      const subtotal = newEstItems.reduce((s,i)=>s+i.total,0);
-                      const tax = subtotal*(newEstTax/100);
-                      const total = subtotal+tax;
-                      const created = await db.createEstimate({
-                        company_id: profile.company_id,
-                        contact_id: contact.id,
-                        estimate_number: `EST-${Date.now().toString().slice(-6)}`,
-                        title: newEstTitle,
-                        items: newEstItems,
-                        subtotal,
-                        tax,
-                        total,
-                        status: 'draft',
-                        notes: newEstNotes || undefined,
-                        created_by: profile.id,
-                      });
-                      if (created) {
-                        const appEst = {
-                          id: created.id,
-                          contactId: created.contact_id,
-                          contactName: `${contact.firstName} ${contact.lastName}`,
-                          estimateNumber: created.estimate_number,
-                          title: created.title,
-                          description: created.description,
-                          status: created.status as any,
-                          amount: Number(created.subtotal || 0),
-                          tax: Number(created.tax || 0),
-                          total: Number(created.total || 0),
-                          validUntil: created.valid_until || created.validity_date,
-                          createdAt: created.created_at,
-                          items: created.items || [],
-                          terms: created.terms || created.terms_and_conditions,
-                          notes: created.notes,
-                          createdBy: created.created_by,
-                          updatedAt: created.updated_at,
-                        };
-                        dispatch({ type: 'ADD_ESTIMATE', payload: appEst });
-                        setContactEstimates(prev => [appEst, ...prev]);
-                        toast.success('Estimate created — go to Estimates to send it');
-                        setShowNewEstimateModal(false);
-                      } else { toast.error('Failed to create estimate'); }
-                    } catch (err: any) { toast.error(err?.message || 'Failed to create estimate'); }
-                    finally { setIsSavingEstimate(false); }
-                  }}
-                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm disabled:opacity-50"
-                >
-                  {isSavingEstimate ? <><Loader2 size={16} className="animate-spin" /> Saving…</> : <><Save size={16} /> Save Estimate</>}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ContactTemplateModal triggered for estimate creation */}
-        {showTemplateForEstimate && (
-          <ContactTemplateModal
-            contact={contact}
-            onClose={() => setShowTemplateForEstimate(false)}
-            onDocumentSaved={(doc) => {
-              setContactDocuments(prev => [doc, ...prev]);
-              setShowTemplateForEstimate(false);
-            }}
-          />
         )}
 
 
@@ -2902,110 +2617,56 @@ export default function ContactDetail() {
               )}
             </div>
 
-            {/* Estimates Section */}
+            {/* Quotes Section */}
             <div>
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                   <FileText size={20} />
-                  Estimates ({contactEstimates.length})
+                  Quotes ({contactQuotes.length})
                 </h3>
                 <button
-                  onClick={() => { setEditingEstimate(null); setShowEstimateModal(true); }}
+                  onClick={openNewQuote}
                   className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
                 >
                   <Plus size={18} />
-                  New Estimate
+                  New Quote
                 </button>
               </div>
 
-              {contactEstimates.length > 0 ? (
-                <div className="grid gap-4">
-                  {contactEstimates.map((estimate) => (
-                    <div key={estimate.id} className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg transition-shadow">
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex-1">
-                          <h4 className="text-lg font-semibold text-gray-900">Estimate #{estimate.estimateNumber || estimate.estimate_number}</h4>
-                          <p className="text-sm text-gray-500 mt-1">
-                            {estimate.title && <span className="mr-2">{estimate.title}</span>}
-                            Created {formatDate(estimate.createdAt || estimate.created_at)}
+              {contactQuotes.length > 0 ? (
+                <div className="grid gap-3">
+                  {contactQuotes.map((q) => {
+                    return (
+                      <button
+                        key={q.id}
+                        onClick={() => openQuote(q.id)}
+                        className="w-full text-left bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow"
+                      >
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="min-w-0">
+                            <p className="font-semibold text-gray-900">{q.quoteNumber}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">{new Date(q.createdAt).toLocaleDateString()}</p>
+                          </div>
+                          <span className={`text-xs px-2 py-1 rounded-full font-medium ${QUOTE_STATUS_COLORS[q.status] || 'bg-gray-100 text-gray-700'}`}>
+                            {q.status}
+                          </span>
+                          <p className="font-bold text-blue-600 whitespace-nowrap">
+                            {q.status === 'signed' ? formatCurrency(quoteValue(q)) : `From ${formatCurrency(q.goodTotal)}`}
                           </p>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`px-3 py-1 rounded-full text-sm font-medium ${
-                              estimate.status === 'accepted'
-                                ? 'bg-green-100 text-green-800'
-                                : estimate.status === 'sent'
-                                ? 'bg-blue-100 text-blue-800'
-                                : estimate.status === 'viewed'
-                                ? 'bg-purple-100 text-purple-800'
-                                : estimate.status === 'declined'
-                                ? 'bg-red-100 text-red-800'
-                                : 'bg-gray-100 text-gray-800'
-                            }`}
-                          >
-                            {estimate.status}
-                          </span>
-                          <button
-                            onClick={() => setViewingEstimate(estimate)}
-                            className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                            title="View estimate"
-                          >
-                            <Eye size={16} />
-                          </button>
-                          <button
-                            onClick={() => handleDuplicateEstimate(estimate)}
-                            className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
-                            title="Duplicate estimate"
-                          >
-                            <Copy size={16} />
-                          </button>
-                          {!isEstimateLocked(estimate) && (
-                            <>
-                              <button
-                                onClick={() => openEstimateEditor(estimate)}
-                                className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                title="Edit estimate"
-                              >
-                                <Edit2 size={16} />
-                              </button>
-                              <button
-                                onClick={() => handleShareEstimate(estimate)}
-                                disabled={isSharingEstimateId === estimate.id}
-                                className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors disabled:opacity-50"
-                                title="Share estimate"
-                              >
-                                {isSharingEstimateId === estimate.id ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <p className="text-gray-500">Total Amount</p>
-                          <p className="text-xl font-bold text-gray-900">{formatCurrency(estimate.total || 0)}</p>
-                        </div>
-                        {estimate.acceptedAt && (
-                          <div>
-                            <p className="text-gray-500">Accepted On</p>
-                            <p className="font-medium text-green-600">{formatDate(estimate.acceptedAt)}</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                      </button>
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
                   <FileText size={32} className="mx-auto mb-2 text-gray-400" />
-                  <p className="text-gray-500">No estimates yet</p>
+                  <p className="text-gray-500">No quotes yet</p>
                   <button
-                    onClick={() => { setEditingEstimate(null); setShowEstimateModal(true); }}
+                    onClick={openNewQuote}
                     className="mt-4 text-green-600 hover:text-green-700 font-medium"
                   >
-                    Create your first estimate
+                    Create your first quote
                   </button>
                 </div>
               )}
@@ -3295,7 +2956,7 @@ export default function ContactDetail() {
               }))}
               onStatusChange={handleStatusChange}
               onScheduleInspection={() => setShowAppointmentModal(true)}
-              onSendEstimate={() => { setEditingEstimate(null); setShowEstimateModal(true); }}
+              onCreateQuote={openNewQuote}
             />
           </div>
         )}
@@ -3785,125 +3446,6 @@ export default function ContactDetail() {
         </div>
       )}
 
-      {/* View Estimate Detail Modal */}
-      {viewingEstimate && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <div>
-                <h2 className="text-xl font-bold text-gray-900">{viewingEstimate.title || `Estimate #${viewingEstimate.estimateNumber || viewingEstimate.estimate_number}`}</h2>
-                <p className="text-sm text-gray-500 mt-1">{viewingEstimate.estimateNumber || viewingEstimate.estimate_number} · {contact ? getContactFullName(contact) : ""}</p>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                  viewingEstimate.status === 'accepted' ? 'bg-green-100 text-green-800' :
-                  viewingEstimate.status === 'sent' ? 'bg-blue-100 text-blue-800' :
-                  viewingEstimate.status === 'viewed' ? 'bg-purple-100 text-purple-800' :
-                  viewingEstimate.status === 'declined' ? 'bg-red-100 text-red-800' :
-                  'bg-gray-100 text-gray-800'
-                }`}>{viewingEstimate.status}</span>
-                <button onClick={() => setViewingEstimate(null)} className="text-gray-400 hover:text-gray-600">
-                  <X size={24} />
-                </button>
-              </div>
-            </div>
-            <div className="p-6 space-y-6">
-              {viewingEstimate.description && (
-                <p className="text-gray-600">{viewingEstimate.description}</p>
-              )}
-              {viewingEstimate.items && viewingEstimate.items.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">Line Items</h3>
-                  <div className="border border-gray-200 rounded-lg overflow-hidden">
-                    <table className="w-full text-sm">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="text-left px-4 py-3 font-medium text-gray-600">Description</th>
-                          <th className="text-right px-4 py-3 font-medium text-gray-600">Qty</th>
-                          <th className="text-right px-4 py-3 font-medium text-gray-600">Unit Price</th>
-                          <th className="text-right px-4 py-3 font-medium text-gray-600">Total</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {viewingEstimate.items.map((item: any, i: number) => (
-                          <tr key={i} className="hover:bg-gray-50">
-                            <td className="px-4 py-3 text-gray-900">{item.description}</td>
-                            <td className="px-4 py-3 text-right text-gray-600">{item.quantity}</td>
-                            <td className="px-4 py-3 text-right text-gray-600">{formatCurrency(item.unitPrice || item.unit_price || 0)}</td>
-                            <td className="px-4 py-3 text-right font-medium text-gray-900">{formatCurrency(item.total || 0)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-              <div className="flex justify-end">
-                <div className="w-64 space-y-2 text-sm">
-                  <div className="flex justify-between text-gray-600">
-                    <span>Subtotal</span>
-                    <span>{formatCurrency(viewingEstimate.amount || viewingEstimate.subtotal || 0)}</span>
-                  </div>
-                  <div className="flex justify-between text-gray-600">
-                    <span>Tax</span>
-                    <span>{formatCurrency(viewingEstimate.tax || 0)}</span>
-                  </div>
-                  <div className="flex justify-between font-bold text-gray-900 text-base border-t border-gray-200 pt-2">
-                    <span>Total</span>
-                    <span className="text-blue-600">{formatCurrency(viewingEstimate.total || 0)}</span>
-                  </div>
-                </div>
-              </div>
-              {(viewingEstimate.notes || viewingEstimate.terms || viewingEstimate.terms_and_conditions) && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {viewingEstimate.notes && (
-                    <div className="bg-gray-50 rounded-lg p-4">
-                      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Notes</h4>
-                      <p className="text-sm text-gray-700 whitespace-pre-wrap">{viewingEstimate.notes}</p>
-                    </div>
-                  )}
-                  {(viewingEstimate.terms || viewingEstimate.terms_and_conditions) && (
-                    <div className="bg-gray-50 rounded-lg p-4">
-                      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Terms & Conditions</h4>
-                      <p className="text-sm text-gray-700 whitespace-pre-wrap">{viewingEstimate.terms || viewingEstimate.terms_and_conditions}</p>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-            <div className="p-6 border-t border-gray-200 bg-gray-50 rounded-b-xl">
-              <div className="flex flex-wrap gap-3">
-                {!isEstimateLocked(viewingEstimate) && (
-                  <>
-                    <button
-                      onClick={() => openEstimateEditor(viewingEstimate)}
-                      className="px-4 py-2 text-blue-700 border border-blue-300 rounded-lg hover:bg-white transition-colors text-sm"
-                    >
-                      Edit Estimate
-                    </button>
-                    <button
-                      onClick={() => handleShareEstimate(viewingEstimate)}
-                      disabled={isSharingEstimateId === viewingEstimate.id}
-                      className="px-4 py-2 text-purple-700 border border-purple-300 rounded-lg hover:bg-white transition-colors text-sm disabled:opacity-50"
-                    >
-                      {isSharingEstimateId === viewingEstimate.id ? 'Sharing…' : 'Share Estimate'}
-                    </button>
-                  </>
-                )}
-                {isEstimateLocked(viewingEstimate) && (
-                  <div className="px-4 py-2 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg">
-                    This estimate has already been shared. Further revisions should be handled with a change order.
-                  </div>
-                )}
-                <button onClick={() => setViewingEstimate(null)} className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-white transition-colors text-sm">
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Project View Modal */}
       {viewingProject && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -4073,201 +3615,6 @@ export default function ContactDetail() {
                 </button>
               </div>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Estimate Modal */}
-      {showEstimateModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-gray-900">{editingEstimate ? 'Edit Estimate' : 'Create Estimate'}</h2>
-                <button
-                  onClick={() => {
-                    setShowEstimateModal(false);
-                    setEditingEstimate(null);
-                  }}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <X size={24} />
-                </button>
-              </div>
-            </div>
-
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                const formData = new FormData(e.currentTarget);
-                const amount = parseFloat(formData.get('amount') as string) || 0;
-                const taxRate = parseFloat(formData.get('tax_rate') as string) || 0;
-                const tax = amount * (taxRate / 100);
-                const total = amount + tax;
-
-                if (!profile?.company_id) {
-                  toast.error('Profile not loaded. Please try again.');
-                  return;
-                }
-
-                const estimateData = {
-                  company_id: profile.company_id,
-                  contact_id: contactId,
-                  estimate_number: editingEstimate?.estimate_number || editingEstimate?.estimateNumber || `EST-${Date.now()}`,
-                  title: formData.get('title') as string,
-                  description: (formData.get('description') as string) || undefined,
-                  status: editingEstimate?.status || 'draft',
-                  subtotal: amount,
-                  tax: tax,
-                  total: total,
-                  valid_until: (formData.get('valid_until') as string) || undefined,
-                  terms: (formData.get('terms') as string) || undefined,
-                  notes: (formData.get('notes') as string) || undefined,
-                  created_by: editingEstimate?.created_by || profile.id || undefined,
-                };
-
-                let savedEstimate = null;
-                try {
-                  savedEstimate = editingEstimate
-                    ? await db.updateEstimate(editingEstimate.id, estimateData)
-                    : await db.createEstimate(estimateData);
-                } catch (err: any) {
-                  toast.error(`Failed to ${editingEstimate ? 'update' : 'create'} estimate: ${err.message || 'Unknown error'}`);
-                  return;
-                }
-                if (savedEstimate) {
-                  toast.success(`Estimate ${editingEstimate ? 'updated' : 'created'} successfully`);
-                  setShowEstimateModal(false);
-                  setEditingEstimate(null);
-                  // Reload data
-                  const estimates = await db.getEstimatesByContact(contactId!);
-                  setContactEstimates(estimates);
-                } else {
-                  toast.error(`Failed to ${editingEstimate ? 'update' : 'create'} estimate`);
-                }
-              }}
-              className="p-6 space-y-4"
-            >
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Estimate Title *
-                </label>
-                <input
-                  type="text"
-                  name="title"
-                  required
-                  defaultValue={editingEstimate?.title || ''}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="Enter estimate title"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Description
-                </label>
-                <textarea
-                  name="description"
-                  rows={3}
-                  defaultValue={editingEstimate?.description || ''}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="Estimate description"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Amount *
-                  </label>
-                  <input
-                    type="number"
-                    name="amount"
-                    required
-                    step="0.01"
-                    min="0"
-                    defaultValue={editingEstimate ? Number(editingEstimate.subtotal || editingEstimate.amount || 0) : undefined}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    placeholder="0.00"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Tax Rate (%)
-                  </label>
-                  <input
-                    type="number"
-                    name="tax_rate"
-                    step="0.01"
-                    min="0"
-                    max="100"
-                    defaultValue={editingEstimate && Number(editingEstimate.subtotal || editingEstimate.amount || 0) > 0
-                      ? (((Number(editingEstimate.tax || 0) / Number(editingEstimate.subtotal || editingEstimate.amount || 0)) * 100).toFixed(2))
-                      : '0'}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    placeholder="0.00"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Valid Until
-                </label>
-                <input
-                  type="date"
-                  name="valid_until"
-                  defaultValue={editingEstimate?.valid_until || editingEstimate?.validUntil || editingEstimate?.validity_date || ''}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Terms & Conditions
-                </label>
-                <textarea
-                  name="terms"
-                  rows={2}
-                  defaultValue={editingEstimate?.terms || editingEstimate?.terms_and_conditions || ''}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="Payment terms, conditions, etc."
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Notes
-                </label>
-                <textarea
-                  name="notes"
-                  rows={2}
-                  defaultValue={editingEstimate?.notes || ''}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="Internal notes"
-                />
-              </div>
-
-              <div className="flex gap-3 pt-4 border-t border-gray-200">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowEstimateModal(false);
-                    setEditingEstimate(null);
-                  }}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                >
-                  {editingEstimate ? 'Save Changes' : 'Create Estimate'}
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}

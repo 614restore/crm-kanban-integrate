@@ -420,9 +420,9 @@ export default function Dashboard() {
             </p>
           </div>
           <div>
-            <p className="text-slate-400 text-sm">Signed Estimates</p>
+            <p className="text-slate-400 text-sm">Signed Quotes</p>
             <p className="text-2xl font-bold mt-1 text-emerald-400">
-              {formatCurrency(financialStats.acceptedEstimatesTotal)}
+              {formatCurrency(financialStats.signedQuotesTotal)}
             </p>
           </div>
           <div>

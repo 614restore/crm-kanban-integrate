@@ -1,6 +1,7 @@
 // CRM State Management using React Context
 import { createContext, useContext } from 'react';
 import { isSoldStatus, isLostStatus } from './statusDefinitions';
+import { quoteValue } from './crmData';
 import type {
   Contact,
   TeamMember,
@@ -13,12 +14,31 @@ import type {
   UserRole,
   Supplier,
   MaterialOrder,
-  Estimate,
+  QuoteSummary,
   Project,
   WorkOrder,
   DocumentTemplate,
   CompanyGoals,
 } from './crmData';
+
+/** A line item handed to the quote builder from elsewhere (e.g. a parsed Roofr report). */
+export interface QuoteDraftItem {
+  description: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+}
+
+/**
+ * Asks the Quotes view to open its builder when it mounts: on an existing quote,
+ * or on a new quote for a contact, optionally pre-filled.
+ */
+export interface PendingQuote {
+  contactId: string;
+  quoteId?: string | null;
+  title?: string;
+  items?: QuoteDraftItem[];
+}
 
 export type ViewType =
   | 'dashboard'
@@ -71,7 +91,7 @@ export interface CRMState {
   automations: Automation[];
   suppliers: Supplier[];
   materialOrders: MaterialOrder[];
-  estimates: Estimate[];
+  quotes: QuoteSummary[];
   projects: Project[];
   workOrders: WorkOrder[];
   documentTemplates: DocumentTemplate[];
@@ -87,6 +107,7 @@ export interface CRMState {
   selectedInvoiceId: string | null;
   invoiceModalPrefill: { contactId?: string; items?: any[]; notes?: string } | null;
   pendingAppointmentContactId: string | null;
+  pendingQuote: PendingQuote | null;
   
   // Loading states
   isLoading: boolean;
@@ -116,6 +137,7 @@ export type CRMAction =
   | { type: 'TOGGLE_QUICK_ADD' }
   | { type: 'TOGGLE_INVOICE_MODAL'; payload?: string | null; prefill?: { contactId?: string; items?: any[]; notes?: string } | null }
   | { type: 'SET_PENDING_APPOINTMENT_CONTACT'; payload: string | null }
+  | { type: 'SET_PENDING_QUOTE'; payload: PendingQuote | null }
   | { type: 'ADD_CONTACT'; payload: Contact }
   | { type: 'UPDATE_CONTACT'; payload: Contact }
   | { type: 'DELETE_CONTACT'; payload: string }
@@ -156,10 +178,7 @@ export type CRMAction =
   | { type: 'UPDATE_MATERIAL_ORDER'; payload: MaterialOrder }
   | { type: 'DELETE_MATERIAL_ORDER'; payload: string }
   | { type: 'SET_MATERIAL_ORDERS'; payload: MaterialOrder[] }
-  | { type: 'ADD_ESTIMATE'; payload: Estimate }
-  | { type: 'UPDATE_ESTIMATE'; payload: Estimate }
-  | { type: 'DELETE_ESTIMATE'; payload: string }
-  | { type: 'SET_ESTIMATES'; payload: Estimate[] }
+  | { type: 'SET_QUOTES'; payload: QuoteSummary[] }
   | { type: 'ADD_PROJECT'; payload: Project }
   | { type: 'UPDATE_PROJECT'; payload: Project }
   | { type: 'DELETE_PROJECT'; payload: string }
@@ -185,7 +204,7 @@ export type CRMAction =
       teamMembers: TeamMember[];
       suppliers: Supplier[];
       materialOrders: MaterialOrder[];
-      estimates: Estimate[];
+      quotes: QuoteSummary[];
       projects: Project[];
       workOrders: WorkOrder[];
       documentTemplates: DocumentTemplate[];
@@ -224,6 +243,9 @@ export function crmReducer(state: CRMState, action: CRMAction): CRMState {
     
     case 'SET_PENDING_APPOINTMENT_CONTACT':
       return { ...state, pendingAppointmentContactId: action.payload };
+
+    case 'SET_PENDING_QUOTE':
+      return { ...state, pendingQuote: action.payload };
 
     case 'TOGGLE_INVOICE_MODAL':
       return { 
@@ -413,22 +435,8 @@ export function crmReducer(state: CRMState, action: CRMAction): CRMState {
     case 'SET_MATERIAL_ORDERS':
       return { ...state, materialOrders: action.payload };
     
-    case 'ADD_ESTIMATE':
-      return { ...state, estimates: [...state.estimates, action.payload] };
-    
-    case 'UPDATE_ESTIMATE':
-      return {
-        ...state,
-        estimates: state.estimates.map((e) =>
-          e.id === action.payload.id ? action.payload : e
-        ),
-      };
-    
-    case 'DELETE_ESTIMATE':
-      return { ...state, estimates: state.estimates.filter((e) => e.id !== action.payload) };
-    
-    case 'SET_ESTIMATES':
-      return { ...state, estimates: action.payload };
+    case 'SET_QUOTES':
+      return { ...state, quotes: action.payload };
     
     case 'ADD_TEAM_MEMBER':
       return { ...state, teamMembers: [...state.teamMembers, action.payload] };
@@ -569,7 +577,7 @@ export function crmReducer(state: CRMState, action: CRMAction): CRMState {
         teamMembers: action.payload.teamMembers,
         suppliers: action.payload.suppliers,
         materialOrders: action.payload.materialOrders,
-        estimates: action.payload.estimates,
+        quotes: action.payload.quotes,
         projects: action.payload.projects,
         workOrders: action.payload.workOrders,
         // Restore companyId from cache so QuickAdd / saves work immediately
@@ -748,19 +756,20 @@ export function useFinancialStats() {
     outstandingInvoices: 0,
     overdueInvoices: 0,
 
-    // ── Estimates ────────────────────────────────────────────────────────────
-    /** Dollar value of estimates with status accepted/signed */
-    acceptedEstimatesTotal: 0,
-    /** Count of accepted/signed estimates */
-    acceptedEstimatesCount: 0,
-    /** Dollar value of estimates sent (sent + viewed, awaiting response) */
-    pendingEstimatesTotal: 0,
-    /** Count of sent/viewed estimates */
-    pendingEstimatesCount: 0,
-    /** Dollar value of ALL estimates ever sent (sent + viewed + accepted + declined) */
-    estimatesSentTotal: 0,
-    /** Count of ALL estimates ever sent */
-    estimatesSentCount: 0,
+    // ── Quotes ───────────────────────────────────────────────────────────────
+    // Valued with quoteValue(): the chosen tier once signed, the Good tier before.
+    /** Value of signed quotes */
+    signedQuotesTotal: 0,
+    /** Count of signed quotes */
+    signedQuotesCount: 0,
+    /** Value of quotes sent and awaiting a signature (sent + viewed) */
+    pendingQuotesTotal: 0,
+    /** Count of quotes sent and awaiting a signature */
+    pendingQuotesCount: 0,
+    /** Value of every quote that has gone to a customer (sent + viewed + signed + declined) */
+    quotesSentTotal: 0,
+    /** Count of every quote that has gone to a customer */
+    quotesSentCount: 0,
 
     // ── Costs ────────────────────────────────────────────────────────────────
     deliveredMaterialCost: 0,
@@ -845,20 +854,18 @@ export function useFinancialStats() {
     }, 0);
   stats.totalOutstanding = stats.pendingPayments + stats.outstandingInvoices + stats.overdueInvoices;
 
-  state.estimates.forEach((est) => {
-    if (est.status === 'accepted') {
-      stats.acceptedEstimatesTotal += est.total;
-      stats.acceptedEstimatesCount += 1;
-      stats.estimatesSentTotal += est.total;
-      stats.estimatesSentCount += 1;
-    } else if (est.status === 'sent' || est.status === 'viewed') {
-      stats.pendingEstimatesTotal += est.total;
-      stats.pendingEstimatesCount += 1;
-      stats.estimatesSentTotal += est.total;
-      stats.estimatesSentCount += 1;
-    } else if (est.status === 'declined') {
-      stats.estimatesSentTotal += est.total;
-      stats.estimatesSentCount += 1;
+  state.quotes.forEach((q) => {
+    // Drafts have not been seen by the customer, so they are not pipeline yet.
+    if (!['sent', 'viewed', 'signed', 'declined'].includes(q.status)) return;
+    const value = quoteValue(q);
+    stats.quotesSentTotal += value;
+    stats.quotesSentCount += 1;
+    if (q.status === 'signed') {
+      stats.signedQuotesTotal += value;
+      stats.signedQuotesCount += 1;
+    } else if (q.status === 'sent' || q.status === 'viewed') {
+      stats.pendingQuotesTotal += value;
+      stats.pendingQuotesCount += 1;
     }
   });
 
