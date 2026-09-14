@@ -9,6 +9,7 @@ import { uploadCompanyLogo, uploadUserAvatar, validateImageFile } from '@/lib/st
 import useIntegrations from '@/hooks/useIntegrations';
 import IntegrationConfigDialog from '@/components/IntegrationConfigDialog';
 import AIEstimatingPanel from '@/components/AIEstimatingPanel';
+import MapProviderSettings from '@/components/settings/MapProviderSettings';
 import { formatPhoneNumber } from '@/lib/utils';
 import SubscriptionView from '@/components/crm/SubscriptionView';
 import FeatureToggles from '@/components/crm/FeatureToggles';
@@ -42,6 +43,7 @@ import {
   RotateCcw,
   AlertCircle,
   Zap,
+  Layers,
   Target,
   DollarSign,
   Receipt,
@@ -157,7 +159,7 @@ function detectSmtpProvider(host: string) {
   return null;
 }
 
-type SettingsTab = 'company' | 'profile' | 'integrations' | 'ai-assistant' | 'notifications' | 'security' | 'billing' | 'customer-billing' | 'api' | 'features' | 'document-templates' | 'pipeline' | 'guidebook';
+type SettingsTab = 'company' | 'profile' | 'integrations' | 'ai-assistant' | 'maps' | 'notifications' | 'security' | 'billing' | 'customer-billing' | 'api' | 'features' | 'document-templates' | 'pipeline' | 'guidebook';
 
 interface CompanyFormData {
   name: string;
@@ -1443,6 +1445,7 @@ export default function SettingsView() {
     { id: 'guidebook', label: 'User Guidebook', icon: <HelpCircle size={18} /> },
     { id: 'integrations', label: 'Integrations', icon: <Link size={18} /> },
     { id: 'ai-assistant', label: 'AI Assistant', icon: <Zap size={18} /> },
+    { id: 'maps', label: 'Map Provider', icon: <Layers size={18} /> },
     { id: 'notifications', label: 'Notifications', icon: <Bell size={18} /> },
     { id: 'security', label: 'Security', icon: <Shield size={18} /> },
     { id: 'billing', label: 'Subscription Plan', icon: <CreditCard size={18} /> },
@@ -2296,6 +2299,21 @@ export default function SettingsView() {
               companyId={effectiveCompanyId || ''}
               canManageTeamKey={state.currentUser?.role === 'admin' || state.currentUser?.role === 'owner'}
             />
+          </div>
+        )}
+
+        {activeTab === 'maps' && (
+          <div className="max-w-3xl">
+            {/* Like the AI keys: a personal map provider first, then the team's (owners and admins), then the free map. */}
+            {effectiveCompanyId ? (
+              <MapProviderSettings
+                companyId={effectiveCompanyId}
+                userId={user?.id ?? null}
+                canManageTeam={state.currentUser?.role === 'admin' || state.currentUser?.role === 'owner'}
+              />
+            ) : (
+              <p className="text-sm text-gray-500">Loading your company…</p>
+            )}
           </div>
         )}
 
