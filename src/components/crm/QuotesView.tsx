@@ -10,6 +10,10 @@ import { toast } from 'sonner';
 import WorkOrderPanel from './WorkOrderPanel';
 import ReceiptPanel from './ReceiptPanel';
 import InvoiceBuilder from './InvoiceBuilder';
+import QuoteBuilder from '@/components/QuoteBuilder';
+import QuotePreview from '@/components/QuotePreview';
+import type { Company, TeamMember } from '@/data/quoteData';
+import { quoteUrl } from '@/lib/appUrl';
 import { quoteProjectTemplates, TemplateLineItem } from '@/data/quoteTemplates';
 import {
   FileText, Plus, Search, Trash2, X, Save, User, Send, Link2, Eye, ChevronDown,
@@ -140,6 +144,13 @@ export default function QuotesView() {
   const [receiptCompany, setReceiptCompany] = useState<{ name: string; default_deposit_percent?: number | null; receipt_cc_emails?: string[] | null } | null>(null);
   const [invoiceQuote, setInvoiceQuote] = useState<any | null>(null);
   const [invoiceCompany, setInvoiceCompany] = useState<{ name: string; email?: string; phone?: string; address?: string; logo_url?: string } | null>(null);
+  // QuoteMGR's quote builder and preview open full page inside Quotes.
+  const [previewQuoteId, setPreviewQuoteId] = useState<string | null>(null);
+  const [previewReturnStep, setPreviewReturnStep] = useState<number | null>(null);
+  const [builderNonce, setBuilderNonce] = useState(0);
+  const [quoteCompany, setQuoteCompany] = useState<Company | null>(null);
+  const [teamMember, setTeamMember] = useState<TeamMember | null>(null);
+  const [builderContextError, setBuilderContextError] = useState<string | null>(null);
 
   // Another screen asked for a quote: open the builder on it, then clear the
   // request so returning to Quotes later does not reopen it.
@@ -148,7 +159,15 @@ export default function QuotesView() {
     if (!pending) return;
     setEditingQuoteId(pending.quoteId ?? null);
     setBuilderPrefill(pending.quoteId ? null : pending);
+    setPreviewQuoteId(null);
+    setPreviewReturnStep(null);
+    setBuilderNonce((n) => n + 1);
     setShowBuilder(true);
+    if (!pending.quoteId && pending.items?.length) {
+      // QuoteMGR's builder imports measurement reports itself, in its Line Items
+      // step, so rows parsed elsewhere are not carried over.
+      toast.info('Upload the measurement report in the Line Items step to add it to this quote.');
+    }
     dispatch({ type: 'SET_PENDING_QUOTE', payload: null });
   }, [state.pendingQuote, dispatch]);
 
@@ -156,6 +175,34 @@ export default function QuotesView() {
     if (companyId) loadQuotes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId]);
+
+  // The builder and preview take QuoteMGR's company and team-member rows.
+  useEffect(() => {
+    if (!companyId || !profile?.id) return;
+    let cancelled = false;
+    const failed = () => {
+      if (!cancelled) setBuilderContextError('Could not load your company or team profile for the quote builder. Refresh and try again.');
+    };
+    setBuilderContextError(null);
+    Promise.all([
+      db.getCompany(companyId),
+      supabase
+        .from('team_members')
+        .select('*')
+        .eq('company_id', companyId)
+        .eq('user_id', profile.id)
+        .eq('is_active', true)
+        .maybeSingle(),
+    ])
+      .then(([company, member]) => {
+        if (cancelled) return;
+        if (!company || member.error || !member.data) { failed(); return; }
+        setQuoteCompany(company as unknown as Company);
+        setTeamMember(member.data as TeamMember);
+      })
+      .catch(failed);
+    return () => { cancelled = true; };
+  }, [companyId, profile?.id]);
 
   const loadQuotes = async () => {
     if (!companyId) return;
@@ -184,7 +231,8 @@ export default function QuotesView() {
     return c ? `${c.firstName} ${c.lastName}`.trim() : 'Unknown';
   };
 
-  const shareUrl = (token: string) => `${window.location.origin}/quote/${token}`;
+  // Same link format as QuoteMGR and the backend's quote emails: /?token=<share_token>.
+  const shareUrl = (token: string) => quoteUrl(token);
 
   const handleCopyLink = async (q: QuoteRow) => {
     if (!q.share_token) { toast.error('This quote has no share link yet.'); return; }
@@ -256,8 +304,17 @@ export default function QuotesView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quotes, search, state.contacts]);
 
-  const openNew = () => { setEditingQuoteId(null); setBuilderPrefill(null); setShowBuilder(true); };
-  const openEdit = (id: string) => { setEditingQuoteId(id); setBuilderPrefill(null); setShowBuilder(true); };
+  const openNew = () => {
+    setEditingQuoteId(null); setBuilderPrefill(null); setPreviewQuoteId(null); setPreviewReturnStep(null);
+    setBuilderNonce((n) => n + 1); setShowBuilder(true);
+  };
+  const openEdit = (id: string) => {
+    setEditingQuoteId(id); setBuilderPrefill(null); setPreviewQuoteId(null); setPreviewReturnStep(null); setShowBuilder(true);
+  };
+  const openPreview = (id: string) => { setPreviewReturnStep(null); setPreviewQuoteId(id); };
+  const closeBuilder = () => {
+    setShowBuilder(false); setEditingQuoteId(null); setBuilderPrefill(null); setPreviewReturnStep(null); loadQuotes();
+  };
 
   // As in QuoteMGR, a signed quote is what becomes a work order. The printed
   // work order carries the company's name, contact details and license number.
@@ -359,6 +416,57 @@ export default function QuotesView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.pendingQuoteAction, loading, quotes]);
 
+  if (previewQuoteId || showBuilder) {
+    if (builderContextError) {
+      return <div className="p-8 text-sm text-red-600">{builderContextError}</div>;
+    }
+    if (!quoteCompany || !teamMember || !companyId) {
+      return (
+        <div className="flex items-center justify-center py-20">
+          <div className="w-8 h-8 border-4 border-gray-200 border-t-blue-600 rounded-full animate-spin" />
+        </div>
+      );
+    }
+  }
+
+  if (previewQuoteId && quoteCompany) {
+    const currentPreviewId = previewQuoteId;
+    return (
+      <QuotePreview
+        quoteId={currentPreviewId}
+        company={quoteCompany}
+        currentUser={teamMember}
+        onBack={() => {
+          setPreviewQuoteId(null);
+          // Opened from the list: go back to it. Opened from the builder: the
+          // builder is still mounted underneath and returns at the same step.
+          if (previewReturnStep === null) { setShowBuilder(false); loadQuotes(); }
+        }}
+        onEdit={() => openEdit(currentPreviewId)}
+      />
+    );
+  }
+
+  if (showBuilder && quoteCompany && teamMember && companyId) {
+    return (
+      <QuoteBuilder
+        key={editingQuoteId ?? `new-${builderNonce}`}
+        companyId={companyId}
+        userId={teamMember.id}
+        currentUser={teamMember}
+        company={quoteCompany}
+        editQuoteId={editingQuoteId}
+        prefilledCustomerId={builderPrefill?.contactId ?? null}
+        initialStep={previewReturnStep ?? 0}
+        onSave={(id) => setEditingQuoteId(id)}
+        onSent={closeBuilder}
+        onPreview={(id, step) => { setEditingQuoteId(id); setPreviewReturnStep(step); setPreviewQuoteId(id); }}
+        onBack={closeBuilder}
+        onOpenSettings={() => dispatch({ type: 'SET_VIEW', payload: 'settings' })}
+      />
+    );
+  }
+
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-6">
@@ -446,6 +554,13 @@ export default function QuotesView() {
                         </a>
                       )}
                       <button
+                        onClick={() => openPreview(q.id)}
+                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                        title="Preview quote"
+                      >
+                        <FileText size={15} />
+                      </button>
+                      <button
                         onClick={() => handleCopyLink(q)}
                         className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
                         title="Copy share link"
@@ -491,17 +606,6 @@ export default function QuotesView() {
             </tbody>
           </table>
         </div>
-      )}
-
-      {showBuilder && companyId && (
-        <QuoteBuilderModal
-          companyId={companyId}
-          userId={profile?.id}
-          quoteId={editingQuoteId}
-          prefill={builderPrefill}
-          onClose={() => setShowBuilder(false)}
-          onSaved={handleSaved}
-        />
       )}
 
       {workOrderQuote && workOrderCompany && companyId && (() => {
@@ -576,621 +680,6 @@ export default function QuotesView() {
           />
         );
       })()}
-    </div>
-  );
-}
-
-// ── Builder modal ───────────────────────────────────────────────────────
-
-function QuoteBuilderModal({
-  companyId, userId, quoteId, prefill, onClose, onSaved,
-}: {
-  companyId: string;
-  userId?: string;
-  quoteId: string | null;
-  /** New quote only: preselected customer, and optionally a title and line items. */
-  prefill?: PendingQuote | null;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const { state } = useCRM();
-  // Pre-filled items skip the template picker; a customer alone still offers it.
-  const [step, setStep] = useState<'template' | 'build'>(quoteId || prefill?.items?.length ? 'build' : 'template');
-  const [loading, setLoading] = useState(!!quoteId);
-  const [saving, setSaving] = useState(false);
-
-  const [contactId, setContactId] = useState(prefill?.contactId ?? '');
-  const [quoteNumber, setQuoteNumber] = useState('');
-  const [projectType, setProjectType] = useState('exterior');
-  const [coverPageTitle, setCoverPageTitle] = useState(prefill?.title ?? '');
-  const [projectDescription, setProjectDescription] = useState('');
-  const [notes, setNotes] = useState('');
-  const [status, setStatus] = useState('draft');
-  const [lineItems, setLineItems] = useState<QuoteLineItemRow[]>(() => (prefill?.items ?? []).map(draftToLineItem));
-
-  // Stage 4: contingency agreement, insurance-job linkage, financing note,
-  // and a free-form custom page — the "long tail" fields mobile supports.
-  const [contingencyEnabled, setContingencyEnabled] = useState(false);
-  const [isInsuranceJob, setIsInsuranceJob] = useState(false);
-  const [insuranceCompanyName, setInsuranceCompanyName] = useState('');
-  const [claimNumber, setClaimNumber] = useState('');
-  const [deductibleAmount, setDeductibleAmount] = useState('');
-  const [showFinancing, setShowFinancing] = useState(false);
-  const [financingNote, setFinancingNote] = useState('');
-  const [availableFinancing, setAvailableFinancing] = useState<FinancingOptionRow[]>([]);
-  const [selectedFinancingIds, setSelectedFinancingIds] = useState<string[]>([]);
-
-  // The company's active programs, managed in Settings → Financing Options.
-  useEffect(() => {
-    supabase
-      .from('financing_options')
-      .select('id, lender_name, program_name, apr_low, apr_high, term_months')
-      .eq('company_id', companyId)
-      .eq('is_active', true)
-      .order('sort_order')
-      .then(({ data }) => setAvailableFinancing((data || []) as FinancingOptionRow[]));
-  }, [companyId]);
-
-  // QuoteMGR's builder restores these only from an unsaved draft. Load them for a
-  // saved quote as well, or reopening it would quietly drop the programs offered.
-  useEffect(() => {
-    if (!quoteId) return;
-    supabase
-      .from('quote_financing')
-      .select('financing_option_id')
-      .eq('quote_id', quoteId)
-      .order('sort_order')
-      .then(({ data }) => setSelectedFinancingIds((data || []).map((r: any) => r.financing_option_id)));
-  }, [quoteId]);
-  const [includeCustomPage, setIncludeCustomPage] = useState(false);
-  const [customPageTitle, setCustomPageTitle] = useState('');
-  const [customPageBody, setCustomPageBody] = useState('');
-  const [showMoreOptions, setShowMoreOptions] = useState(false);
-
-  // Load existing quote for editing
-  useEffect(() => {
-    if (!quoteId) return;
-    (async () => {
-      setLoading(true);
-      try {
-        const [{ data: quote, error: qErr }, { data: items, error: iErr }] = await Promise.all([
-          supabase.from('quotes').select('*').eq('id', quoteId).single(),
-          supabase.from('quote_line_items').select('*').eq('quote_id', quoteId).order('sort_order'),
-        ]);
-        if (qErr) throw qErr;
-        if (iErr) throw iErr;
-        setContactId(quote.contact_id || quote.customer_id || '');
-        setQuoteNumber(quote.quote_number || '');
-        setProjectType(quote.project_type || 'exterior');
-        setCoverPageTitle(quote.cover_page_title || '');
-        setProjectDescription(quote.project_description || '');
-        setNotes(quote.notes || '');
-        setStatus(quote.status || 'draft');
-        setContingencyEnabled(!!quote.contingency_enabled);
-        setIsInsuranceJob(!!(quote.insurance_company_name || quote.claim_number || quote.deductible_amount));
-        setInsuranceCompanyName(quote.insurance_company_name || '');
-        setClaimNumber(quote.claim_number || '');
-        setDeductibleAmount(quote.deductible_amount != null ? String(quote.deductible_amount) : '');
-        setShowFinancing(!!quote.show_financing);
-        setFinancingNote(quote.financing_note || '');
-        setIncludeCustomPage(!!quote.include_custom_page);
-        setCustomPageTitle(quote.custom_page_title || '');
-        setCustomPageBody(quote.custom_page_body || '');
-        setLineItems(
-          (items || []).map((i: any) => ({
-            id: i.id,
-            category: i.category || 'Roofing',
-            item_name: i.item_name,
-            description: i.description || '',
-            unit: i.unit || 'each',
-            quantity: Number(i.quantity) || 0,
-            good_price: Number(i.good_price) || 0,
-            better_price: Number(i.better_price) || 0,
-            best_price: Number(i.best_price) || 0,
-            fixed_price: !!i.fixed_price,
-          }))
-        );
-      } catch (err: any) {
-        toast.error('Failed to load quote: ' + err.message);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [quoteId]);
-
-  // Generate the next quote number the same way mobile does: QT-{year}-{count+1}
-  useEffect(() => {
-    if (quoteId) return;
-    (async () => {
-      const year = new Date().getFullYear();
-      const { count } = await supabase
-        .from('quotes')
-        .select('*', { count: 'exact', head: true })
-        .eq('company_id', companyId);
-      setQuoteNumber(`QT-${year}-${String((count || 0) + 1).padStart(3, '0')}`);
-    })();
-  }, [companyId, quoteId]);
-
-  const applyTemplate = (templateId: string) => {
-    if (templateId === 'blank') {
-      setStep('build');
-      return;
-    }
-    const template = quoteProjectTemplates.find((t) => t.id === templateId);
-    if (!template) return;
-    setCoverPageTitle(template.coverPageTitle);
-    setProjectDescription(template.projectDescription);
-    setProjectType(template.projectType === 'both' ? 'exterior' : template.projectType);
-    setLineItems(
-      template.lineItems.map((li: TemplateLineItem) => ({
-        category: li.category,
-        item_name: li.item_name,
-        description: li.description,
-        unit: li.unit,
-        quantity: li.quantity,
-        good_price: li.good_price,
-        better_price: li.better_price,
-        best_price: li.best_price,
-        fixed_price: li.fixed_price || false,
-      }))
-    );
-    setStep('build');
-  };
-
-  const totals = useMemo(
-    () =>
-      lineItems.reduce(
-        (acc, item) => ({
-          good: acc.good + (item.quantity || 0) * (item.good_price || 0),
-          better: acc.better + (item.quantity || 0) * (item.better_price || 0),
-          best: acc.best + (item.quantity || 0) * (item.best_price || 0),
-        }),
-        { good: 0, better: 0, best: 0 }
-      ),
-    [lineItems]
-  );
-
-  const updateLineItem = (index: number, patch: Partial<QuoteLineItemRow>) => {
-    setLineItems((prev) => prev.map((li, i) => (i === index ? { ...li, ...patch } : li)));
-  };
-  const removeLineItem = (index: number) => {
-    setLineItems((prev) => prev.filter((_, i) => i !== index));
-  };
-  const addLineItem = () => setLineItems((prev) => [...prev, emptyLineItem()]);
-
-  const handleSave = async () => {
-    if (!contactId) {
-      toast.error('Please select a customer');
-      return;
-    }
-    setSaving(true);
-    try {
-      const contact = state.contacts.find((c) => c.id === contactId);
-      const basePayload = {
-        company_id: companyId,
-        created_by: userId,
-        contact_id: contactId,
-        customer_id: contactId,
-        quote_number: quoteNumber,
-        status,
-        project_type: projectType,
-        project_description: projectDescription,
-        cover_page_title: coverPageTitle || `${projectType} Project Proposal`,
-        notes,
-        good_total: totals.good,
-        better_total: totals.better,
-        best_total: totals.best,
-        quote_structure_type: 'tiered',
-        show_good_tier: true,
-        show_better_tier: true,
-        show_best_tier: true,
-        include_better: true,
-        include_best: true,
-        good_tier_name: 'Good',
-        better_tier_name: 'Better',
-        best_tier_name: 'Best',
-        show_line_item_prices: true,
-        show_section_totals: true,
-        show_quantity: true,
-        show_item_descriptions: true,
-        contingency_enabled: contingencyEnabled,
-        insurance_company_name: isInsuranceJob ? (insuranceCompanyName.trim() || null) : null,
-        claim_number: isInsuranceJob ? (claimNumber.trim() || null) : null,
-        deductible_amount: isInsuranceJob && deductibleAmount ? parseFloat(deductibleAmount) : null,
-        deductible_included: isInsuranceJob,
-        show_financing: showFinancing,
-        financing_note: showFinancing ? (financingNote.trim() || null) : null,
-        include_custom_page: includeCustomPage,
-        custom_page_title: includeCustomPage ? (customPageTitle.trim() || null) : null,
-        custom_page_body: includeCustomPage ? (customPageBody.trim() || null) : null,
-      };
-
-      let savedId = quoteId;
-      if (quoteId) {
-        const { error } = await supabase.from('quotes').update(basePayload).eq('id', quoteId);
-        if (error) throw error;
-      } else {
-        const { data, error } = await supabase
-          .from('quotes')
-          .insert({
-            ...basePayload,
-            valid_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-            share_token: generateShareToken(),
-          })
-          .select()
-          .single();
-        if (error) throw error;
-        savedId = data.id;
-      }
-
-      if (savedId) {
-        // Insert-before-delete: capture the old row ids first, write the new
-        // set, then delete only those captured ids. A failed insert can never
-        // leave the quote with zero items (same pattern as mobile).
-        const { data: oldRows } = quoteId
-          ? await supabase.from('quote_line_items').select('id').eq('quote_id', savedId)
-          : { data: [] as { id: string }[] };
-        const oldIds = (oldRows || []).map((r) => r.id);
-
-        if (lineItems.length > 0) {
-          const toInsert = lineItems.map((item, index) => ({
-            quote_id: savedId,
-            category: item.category,
-            item_name: item.item_name,
-            description: item.description,
-            unit: item.unit,
-            quantity: item.quantity,
-            good_price: item.good_price,
-            better_price: item.better_price,
-            best_price: item.best_price,
-            sort_order: index,
-            fixed_price: item.fixed_price,
-          }));
-          const { error: insErr } = await supabase.from('quote_line_items').insert(toInsert);
-          if (insErr) throw insErr;
-        }
-        if (oldIds.length > 0) {
-          await supabase.from('quote_line_items').delete().in('id', oldIds);
-        }
-
-        // Same replace-all as QuoteMGR: the quote offers whichever programs are ticked now.
-        if (availableFinancing.length > 0) {
-          await supabase.from('quote_financing').delete().eq('quote_id', savedId);
-          if (selectedFinancingIds.length > 0) {
-            const { error: finErr } = await supabase.from('quote_financing').insert(
-              selectedFinancingIds.map((financing_option_id, sort_order) => ({ quote_id: savedId, financing_option_id, sort_order })),
-            );
-            // The quote and its line items are already saved; say so rather than reporting a failed save.
-            if (finErr) toast.error('Quote saved, but its financing programs could not be saved: ' + finErr.message);
-          }
-        }
-      }
-
-      toast.success(quoteId ? 'Quote updated' : 'Quote created');
-      onSaved();
-    } catch (err: any) {
-      toast.error('Failed to save quote: ' + err.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between p-5 border-b border-gray-100">
-          <h2 className="text-lg font-semibold text-gray-900">
-            {quoteId ? `Edit ${quoteNumber}` : step === 'template' ? 'New Quote — Choose a Template' : 'New Quote'}
-          </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <X size={22} />
-          </button>
-        </div>
-
-        {loading ? (
-          <div className="p-16 text-center text-gray-400">Loading...</div>
-        ) : step === 'template' ? (
-          <div className="p-6 overflow-y-auto">
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {quoteProjectTemplates.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => applyTemplate(t.id)}
-                  className="text-left p-4 border border-gray-200 rounded-xl hover:border-blue-400 hover:bg-blue-50/50 transition-colors"
-                >
-                  <div className="text-blue-600 mb-2">{ICON_MAP[t.icon] || <FileText size={28} />}</div>
-                  <div className="font-medium text-gray-900 text-sm mb-1">{t.name}</div>
-                  <div className="text-xs text-gray-500 line-clamp-2">{t.description}</div>
-                </button>
-              ))}
-              <button
-                onClick={() => applyTemplate('blank')}
-                className="text-left p-4 border-2 border-dashed border-gray-300 rounded-xl hover:border-blue-400 flex flex-col items-center justify-center text-gray-500 hover:text-blue-600 transition-colors"
-              >
-                <Plus size={28} className="mb-2" />
-                <span className="text-sm font-medium">Start Blank</span>
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="flex-1 overflow-y-auto p-6 space-y-5">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  <User size={14} className="inline mr-1" /> Customer *
-                </label>
-                <select
-                  value={contactId}
-                  onChange={(e) => setContactId(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                >
-                  <option value="">Select a customer...</option>
-                  {state.contacts.map((c) => (
-                    <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Quote #</label>
-                <input
-                  type="text"
-                  value={quoteNumber}
-                  onChange={(e) => setQuoteNumber(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Cover Title</label>
-              <input
-                type="text"
-                value={coverPageTitle}
-                onChange={(e) => setCoverPageTitle(e.target.value)}
-                placeholder="e.g. Roof Replacement Proposal"
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Project Description</label>
-              <textarea
-                value={projectDescription}
-                onChange={(e) => setProjectDescription(e.target.value)}
-                rows={2}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none resize-none"
-              />
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-sm font-medium text-gray-700">Line Items</label>
-                <button
-                  onClick={addLineItem}
-                  className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
-                >
-                  <Plus size={14} /> Add Item
-                </button>
-              </div>
-              <div className="border border-gray-200 rounded-lg overflow-x-auto">
-                <table className="w-full text-xs min-w-[720px]">
-                  <thead className="bg-gray-50 text-gray-500">
-                    <tr>
-                      <th className="text-left px-2 py-2 w-32">Category</th>
-                      <th className="text-left px-2 py-2">Item</th>
-                      <th className="text-left px-2 py-2 w-16">Unit</th>
-                      <th className="text-right px-2 py-2 w-14">Qty</th>
-                      <th className="text-right px-2 py-2 w-20">Good</th>
-                      <th className="text-right px-2 py-2 w-20">Better</th>
-                      <th className="text-right px-2 py-2 w-20">Best</th>
-                      <th className="w-8"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {lineItems.map((item, i) => (
-                      <tr key={i}>
-                        <td className="px-1 py-1">
-                          <input value={item.category} onChange={(e) => updateLineItem(i, { category: e.target.value })}
-                            className="w-full px-1.5 py-1 border border-gray-200 rounded text-xs" />
-                        </td>
-                        <td className="px-1 py-1">
-                          <input value={item.item_name} onChange={(e) => updateLineItem(i, { item_name: e.target.value })}
-                            placeholder="Item name" className="w-full px-1.5 py-1 border border-gray-200 rounded text-xs" />
-                        </td>
-                        <td className="px-1 py-1">
-                          <input value={item.unit} onChange={(e) => updateLineItem(i, { unit: e.target.value })}
-                            className="w-full px-1.5 py-1 border border-gray-200 rounded text-xs" />
-                        </td>
-                        <td className="px-1 py-1">
-                          <input type="number" value={item.quantity} onChange={(e) => updateLineItem(i, { quantity: parseFloat(e.target.value) || 0 })}
-                            className="w-full px-1.5 py-1 border border-gray-200 rounded text-xs text-right" />
-                        </td>
-                        <td className="px-1 py-1">
-                          <input type="number" value={item.good_price} onChange={(e) => updateLineItem(i, { good_price: parseFloat(e.target.value) || 0 })}
-                            className="w-full px-1.5 py-1 border border-gray-200 rounded text-xs text-right" />
-                        </td>
-                        <td className="px-1 py-1">
-                          <input type="number" value={item.better_price} onChange={(e) => updateLineItem(i, { better_price: parseFloat(e.target.value) || 0 })}
-                            className="w-full px-1.5 py-1 border border-gray-200 rounded text-xs text-right" />
-                        </td>
-                        <td className="px-1 py-1">
-                          <input type="number" value={item.best_price} onChange={(e) => updateLineItem(i, { best_price: parseFloat(e.target.value) || 0 })}
-                            className="w-full px-1.5 py-1 border border-gray-200 rounded text-xs text-right" />
-                        </td>
-                        <td className="px-1 py-1 text-center">
-                          <button onClick={() => removeLineItem(i)} className="text-gray-400 hover:text-red-600">
-                            <Trash2 size={14} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                    {lineItems.length === 0 && (
-                      <tr><td colSpan={8} className="text-center py-6 text-gray-400">No line items yet</td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={2}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none resize-none"
-              />
-            </div>
-
-            <div className="border border-gray-200 rounded-lg">
-              <button
-                type="button"
-                onClick={() => setShowMoreOptions((v) => !v)}
-                className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-lg"
-              >
-                <span>More options — contingency, insurance, financing, custom page</span>
-                <ChevronDown size={16} className={`transition-transform ${showMoreOptions ? 'rotate-180' : ''}`} />
-              </button>
-              {showMoreOptions && (
-                <div className="px-4 pb-4 space-y-4 border-t border-gray-100 pt-4">
-                  <label className="flex items-start gap-2 text-sm text-gray-700">
-                    <input
-                      type="checkbox"
-                      checked={contingencyEnabled}
-                      onChange={(e) => setContingencyEnabled(e.target.checked)}
-                      className="mt-0.5"
-                    />
-                    <span>
-                      Include a contingency agreement — the customer's signature also accepts this
-                      agreement (used for insurance jobs; separate from the standard 3-day right-to-cancel notice).
-                    </span>
-                  </label>
-
-                  <div>
-                    <label className="flex items-center gap-2 text-sm text-gray-700 mb-2">
-                      <input type="checkbox" checked={isInsuranceJob} onChange={(e) => setIsInsuranceJob(e.target.checked)} />
-                      This is an insurance claim
-                    </label>
-                    {isInsuranceJob && (
-                      <div className="grid grid-cols-2 gap-3 pl-6">
-                        <input
-                          value={insuranceCompanyName}
-                          onChange={(e) => setInsuranceCompanyName(e.target.value)}
-                          placeholder="Insurance company"
-                          className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                        />
-                        <input
-                          value={claimNumber}
-                          onChange={(e) => setClaimNumber(e.target.value)}
-                          placeholder="Claim #"
-                          className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                        />
-                        <input
-                          type="number"
-                          value={deductibleAmount}
-                          onChange={(e) => setDeductibleAmount(e.target.value)}
-                          placeholder="Deductible $"
-                          className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none col-span-2"
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="flex items-center gap-2 text-sm text-gray-700 mb-2">
-                      <input type="checkbox" checked={showFinancing} onChange={(e) => setShowFinancing(e.target.checked)} />
-                      Offer financing to this customer
-                    </label>
-                    {showFinancing && (
-                      <div className="pl-6 space-y-2">
-                        {availableFinancing.length > 0 ? (
-                          <>
-                            <p className="text-xs text-gray-500">Programs to offer on this quote:</p>
-                            {availableFinancing.map((opt) => (
-                              <label key={opt.id} className="flex items-center gap-3 p-2.5 bg-white rounded-lg border border-gray-200 cursor-pointer hover:border-blue-300">
-                                <input
-                                  type="checkbox"
-                                  checked={selectedFinancingIds.includes(opt.id)}
-                                  onChange={(e) =>
-                                    setSelectedFinancingIds((prev) =>
-                                      e.target.checked ? [...prev, opt.id] : prev.filter((id) => id !== opt.id),
-                                    )
-                                  }
-                                />
-                                <span className="text-sm font-medium text-gray-900">{opt.lender_name}</span>
-                                {opt.program_name && <span className="text-xs text-gray-500">{opt.program_name}</span>}
-                                {opt.apr_low !== null && (
-                                  <span className="text-xs text-gray-400 ml-auto whitespace-nowrap">
-                                    {opt.apr_high !== null && opt.apr_high !== opt.apr_low ? `${opt.apr_low}–${opt.apr_high}% APR` : `${opt.apr_low}% APR`}
-                                    {opt.term_months ? ` · ${opt.term_months} mo` : ''}
-                                  </span>
-                                )}
-                              </label>
-                            ))}
-                          </>
-                        ) : (
-                          <p className="text-xs text-gray-500">No financing programs yet. Add them in Settings → Financing Options.</p>
-                        )}
-                        <textarea
-                          value={financingNote}
-                          onChange={(e) => setFinancingNote(e.target.value)}
-                          rows={2}
-                          placeholder="Optional note, e.g. As low as $199/mo with approved credit"
-                          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none resize-none"
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="flex items-center gap-2 text-sm text-gray-700 mb-2">
-                      <input type="checkbox" checked={includeCustomPage} onChange={(e) => setIncludeCustomPage(e.target.checked)} />
-                      Include a custom page
-                    </label>
-                    {includeCustomPage && (
-                      <div className="pl-6 space-y-2">
-                        <input
-                          value={customPageTitle}
-                          onChange={(e) => setCustomPageTitle(e.target.value)}
-                          placeholder="Page title"
-                          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                        />
-                        <textarea
-                          value={customPageBody}
-                          onChange={(e) => setCustomPageBody(e.target.value)}
-                          rows={3}
-                          placeholder="Page content"
-                          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none resize-none"
-                        />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {step === 'build' && !loading && (
-          <div className="border-t border-gray-100 p-5 flex items-center justify-between bg-gray-50 rounded-b-xl">
-            <div className="flex gap-6 text-sm">
-              <div><span className="text-gray-500">Good</span> <span className="font-semibold text-gray-900">{money(totals.good)}</span></div>
-              <div><span className="text-gray-500">Better</span> <span className="font-semibold text-gray-900">{money(totals.better)}</span></div>
-              <div><span className="text-gray-500">Best</span> <span className="font-semibold text-gray-900">{money(totals.best)}</span></div>
-            </div>
-            <div className="flex gap-2">
-              <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">Cancel</button>
-              <button
-                onClick={handleSave}
-                disabled={saving || !contactId}
-                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-              >
-                <Save size={16} /> {saving ? 'Saving...' : 'Save Draft'}
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
     </div>
   );
 }

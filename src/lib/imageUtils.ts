@@ -1,108 +1,173 @@
+// Copied from QuoteMGR src/lib/imageUtils.ts (read-only reference).
 /**
- * Image compression utility.
+ * Client-side image compression utility.
  *
- * Resizes and compresses images before upload so Supabase storage never
- * holds 30 MP originals. The original photo stays on the device at full
- * resolution; the app uploads a web-optimised copy.
+ * Resizes + re-encodes any image to stay within dimension and byte limits.
+ * Uses a canvas to draw the image then iterates quality down until the
+ * blob fits the target size. Falls back to the original file on any error.
  *
- * Targets (per user spec):
- *   - Max dimension: 1 280 px on the longest side  (≈ 1280 × 720 landscape)
- *   - Target size:   < 200 KB, ideally < 100 KB
- *   - Format:        JPEG (universal, smaller than PNG for photos)
- *
- * Approach:
- *   1. Resize to maxPx on the longest side.
- *   2. Encode at initial quality (0.80).
- *   3. If still over targetBytes, reduce quality in steps until under
- *      targetBytes or quality floor (0.40) is reached.
+ * HEIC/HEIF files (iPhone default format) are converted to JPEG via heic2any
+ * before canvas processing because most browsers cannot natively decode HEIC.
  */
+
+const isHeicFile = (file: File): boolean => {
+  const name = file.name.toLowerCase();
+  return (
+    file.type === 'image/heic' ||
+    file.type === 'image/heif' ||
+    // Chrome/Windows reports type="" for HEIC — fall back to extension
+    name.endsWith('.heic') ||
+    name.endsWith('.heif')
+  );
+};
+
+/** Convert a HEIC/HEIF file to a JPEG blob using heic2any. */
+const heicToJpeg = async (file: File): Promise<File> => {
+  try {
+    const heic2any = (await import('heic2any')).default;
+    const result = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 });
+    const blob = Array.isArray(result) ? result[0] : result;
+    return new File([blob], file.name.replace(/\.hei[cf]$/i, '.jpg'), {
+      type: 'image/jpeg',
+      lastModified: Date.now(),
+    });
+  } catch {
+    // If conversion fails, return the original and let the canvas try
+    return file;
+  }
+};
 
 export interface CompressOptions {
-  /** Max px on the longest side. Default: 1280 */
-  maxPx?: number;
-  /** Starting JPEG quality 0–1. Default: 0.80 */
-  quality?: number;
-  /** Target file size in bytes. Iterates quality downward if exceeded. Default: 150_000 (150 KB) */
+  /** Longest side in pixels (default 1500). */
+  maxSide?: number;
+  /** Target byte size (default 1 MB). */
   targetBytes?: number;
-  /** Minimum quality floor. Default: 0.40 */
+  /** Starting JPEG quality, 0–1 (default 0.85). */
+  quality?: number;
+  /** Minimum JPEG quality before giving up (default 0.45). */
   minQuality?: number;
+  /** Quality step to reduce per iteration (default 0.08). */
+  qualityStep?: number;
 }
 
-/**
- * Compress an image File to a web-optimised JPEG.
- * Falls back to the original if anything fails.
- */
-export async function compressImage(
+export const compressImage = async (
   file: File,
-  options: CompressOptions = {},
-): Promise<File> {
-  const {
-    maxPx      = 1280,
-    quality    = 0.80,
-    targetBytes = 150_000,   // 150 KB
-    minQuality  = 0.40,
-  } = options;
-
-  // Only process image files
-  if (!file.type.startsWith('image/')) return file;
+  {
+    maxSide    = 1500,
+    targetBytes = 1_048_576,
+    quality     = 0.85,
+    minQuality  = 0.45,
+    qualityStep = 0.08,
+  }: CompressOptions = {}
+): Promise<File> => {
+  // Convert HEIC/HEIF to JPEG before canvas processing — browsers can't
+  // decode HEIC natively (except Safari) and file.type is "" on Chrome.
+  if (isHeicFile(file)) {
+    file = await heicToJpeg(file);
+  }
 
   return new Promise((resolve) => {
-    const img = new Image();
-    const objectUrl = URL.createObjectURL(file);
+    const safetyTimer = setTimeout(() => resolve(file), 15_000);
+
+    const img   = new Image();
+    const objUrl = URL.createObjectURL(file);
+
+    img.onerror = () => { clearTimeout(safetyTimer); URL.revokeObjectURL(objUrl); resolve(file); };
 
     img.onload = () => {
-      URL.revokeObjectURL(objectUrl);
+      clearTimeout(safetyTimer);
+      URL.revokeObjectURL(objUrl);
 
-      // ── Step 1: resize ───────────────────────────────────────────────────
-      const longestSide = Math.max(img.width, img.height);
-      const scale = longestSide > maxPx ? maxPx / longestSide : 1;
-      const w = Math.round(img.width * scale);
-      const h = Math.round(img.height * scale);
+      // Always resize if over maxSide — even if the file is already small,
+      // a 4000px image served at 800px wide wastes egress.
+      let { width, height } = img;
+      if (width > maxSide || height > maxSide) {
+        if (width >= height) {
+          height = Math.round((height / width) * maxSide);
+          width  = maxSide;
+        } else {
+          width  = Math.round((width / height) * maxSide);
+          height = maxSide;
+        }
+      }
 
       const canvas = document.createElement('canvas');
-      canvas.width  = w;
-      canvas.height = h;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) { resolve(file); return; }
-      ctx.drawImage(img, 0, 0, w, h);
-
-      // ── Step 2: encode, then reduce quality until under targetBytes ──────
-      const name = file.name.replace(/\.[^.]+$/, '') + '.jpg';
+      canvas.width  = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, 0, 0, width, height);
 
       const tryEncode = (q: number) => {
         canvas.toBlob(
           (blob) => {
             if (!blob) { resolve(file); return; }
-
-            // Still over limit and we have room to reduce quality
-            if (blob.size > targetBytes && q - 0.08 >= minQuality) {
-              tryEncode(q - 0.08);
-              return;
+            // Accept if within target OR we've hit minimum quality
+            if (blob.size <= targetBytes || q <= minQuality) {
+              resolve(new File([blob], file.name, { type: 'image/jpeg', lastModified: Date.now() }));
+            } else {
+              tryEncode(Math.max(q - qualityStep, minQuality));
             }
-
-            resolve(new File([blob], name, {
-              type: 'image/jpeg',
-              lastModified: file.lastModified,
-            }));
           },
           'image/jpeg',
-          q,
+          q
         );
       };
+
+      // If already under target AND no resize needed, skip re-encoding
+      if (file.size <= targetBytes && img.naturalWidth <= maxSide && img.naturalHeight <= maxSide) {
+        resolve(file);
+        return;
+      }
 
       tryEncode(quality);
     };
 
-    img.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      resolve(file);
-    };
-
-    img.src = objectUrl;
+    img.src = objUrl;
   });
-}
+};
 
-/** Human-readable file size, e.g. "94 KB" */
+/**
+ * Recommended presets for each upload type.
+ *
+ * Usage:
+ *   import { compressImage, COMPRESS_PRESETS } from '@/lib/imageUtils';
+ *   const compressed = await compressImage(file, COMPRESS_PRESETS.quotePhoto);
+ */
+export const COMPRESS_PRESETS = {
+  /** Inspection / proposal photos — shown ~800px wide in UI and PDF.
+   * targetBytes kept well under the old 1MB: a quote's PDF embeds every
+   * photo at full stored resolution regardless of its ~200px on-page
+   * thumbnail size, so with 20-30+ photos on one quote the per-photo byte
+   * budget is what actually decides whether the exported PDF stays a few
+   * MB or balloons past 30MB. 350KB still holds plenty of detail for
+   * inspection/damage documentation photos at this resolution. */
+  quotePhoto: { maxSide: 1500, targetBytes: 350_000 } as CompressOptions,
+
+  /** Sales rep headshot — shown ~160px in PDF sidebar */
+  salesRepPhoto: { maxSide: 800, targetBytes: 250_000 } as CompressOptions,
+
+  /** Company logo — shown ~120px in header */
+  companyLogo: { maxSide: 600, targetBytes: 150_000 } as CompressOptions,
+
+  /** Cover / hero photo — shown full-width in PDF cover page */
+  coverPhoto: { maxSide: 1800, targetBytes: 700_000 } as CompressOptions,
+} as const;
+
+/**
+ * One-year browser cache control string for Supabase storage uploads.
+ * Set this on every upload call so customers don't re-download photos on
+ * every quote view — the single biggest egress reducer available for free.
+ *
+ * Usage:
+ *   supabase.storage.from('bucket').upload(path, file, {
+ *     contentType: 'image/jpeg',
+ *     cacheControl: STORAGE_CACHE_CONTROL,
+ *     upsert: true,
+ *   });
+ */
+export const STORAGE_CACHE_CONTROL = '31536000'; // 1 year in seconds
+
+// TrussCTR addition, used by ImageUpload.
 export function formatFileSize(bytes: number): string {
   if (bytes < 1024)           return `${bytes} B`;
   if (bytes < 1024 * 1024)   return `${(bytes / 1024).toFixed(0)} KB`;

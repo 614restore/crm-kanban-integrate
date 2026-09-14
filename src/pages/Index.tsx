@@ -1,7 +1,10 @@
 
-import React, { useEffect } from 'react';
+import React, { Suspense, lazy, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { AppProvider } from '@/contexts/AppContext';
+
+// Loaded only when a customer opens a quote link, so the app bundle stays lean.
+const CustomerQuotePortal = lazy(() => import('@/components/CustomerQuotePortal'));
 
 const CheckoutHandler: React.FC = () => {
   useEffect(() => {
@@ -64,6 +67,15 @@ const CheckoutHandler: React.FC = () => {
 };
 
 const Index: React.FC = () => {
+  // Customer quote links (/?token=…) open the quote without signing in, as in QuoteMGR.
+  if (new URLSearchParams(window.location.search).has('token')) {
+    return (
+      <Suspense fallback={<div className="min-h-screen bg-gray-50" />}>
+        <CustomerQuotePortal />
+      </Suspense>
+    );
+  }
+
   return (
     <AppProvider>
       <CheckoutHandler />

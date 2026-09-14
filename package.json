@@ -95,6 +95,7 @@
     "embla-carousel-react": "^8.3.0",
     "exceljs": "^4.4.0",
     "framer-motion": "^11.0.0",
+    "heic2any": "^0.0.4",
     "highlight.js": "^11.9.0",
     "html2pdf.js": "^0.14.0",
     "input-otp": "^1.2.4",

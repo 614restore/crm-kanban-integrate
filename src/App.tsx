@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
 import { ThemeProvider } from "@/components/theme-provider";
 import { useServiceWorker } from "@/lib/serviceWorker";
 import { useEffect } from "react";
@@ -16,13 +16,19 @@ import PrivacyPolicy from "./pages/PrivacyPolicy";
 import EULA from "./pages/EULA";
 import SignDocument from "./pages/SignDocument";
 import SignEstimate from "./pages/SignEstimate";
-import SignQuote from "./pages/SignQuote";
 import SignChangeOrder from "./pages/SignChangeOrder";
 import SignDocTemplate from "./pages/SignDocTemplate";
 import AcceptInvite from "./pages/AcceptInvite";
 import WorkOrders from "./pages/WorkOrders";
 import QuickBooksCallback from "./pages/QuickBooksCallback";
 import { supabase } from '@/lib/supabase';
+
+// Quote links used to open /quote/<token>. Customer quotes now open on the home
+// page (/?token=<token>), QuoteMGR's format, so old links keep working.
+function LegacyQuoteLinkRedirect() {
+  const { token } = useParams();
+  return <Navigate to={`/?token=${encodeURIComponent(token ?? "")}`} replace />;
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -116,7 +122,7 @@ const App = () => {
               <Route path="/sign" element={<SignDocument />} />
               <Route path="/sign-estimate/:token" element={<SignEstimate />} />
               <Route path="/sign-estimate" element={<SignEstimate />} />
-              <Route path="/quote/:token" element={<SignQuote />} />
+              <Route path="/quote/:token" element={<LegacyQuoteLinkRedirect />} />
               <Route path="/sign-change-order" element={<SignChangeOrder />} />
               <Route path="/sign-doc" element={<SignDocTemplate />} />
               <Route path="/accept-invite" element={<AcceptInvite />} />

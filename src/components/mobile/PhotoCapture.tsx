@@ -204,7 +204,7 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({
     }
 
     // Compress before storing — full-size original stays in the device gallery
-    const compressed = await compressImage(file, { maxPx: 1280, quality: 0.78, targetBytes: 1_000_000 });
+    const compressed = await compressImage(file, { maxSide: 1280, quality: 0.78, targetBytes: 1_000_000 });
     const url = URL.createObjectURL(compressed);
     setPreviewUrl(url);
 

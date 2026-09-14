@@ -508,7 +508,7 @@ export default function ContactDetail() {
 
     try {
       const fileToUpload = pendingUploadFile.type.startsWith('image/')
-        ? await compressImage(pendingUploadFile, { maxPx: 1600, quality: 0.85, targetBytes: 1_000_000 })
+        ? await compressImage(pendingUploadFile, { maxSide: 1600, quality: 0.85, targetBytes: 1_000_000 })
         : pendingUploadFile;
       const uploadResult = await uploadDocument(fileToUpload, effectiveCompanyId, contactId);
 
@@ -579,7 +579,7 @@ export default function ContactDetail() {
 
     setIsUploadingAvatar(true);
     try {
-      const compressed = await compressImage(file, { maxPx: 1600, quality: 0.85, targetBytes: 1_000_000 });
+      const compressed = await compressImage(file, { maxSide: 1600, quality: 0.85, targetBytes: 1_000_000 });
       const uploadResult = await uploadDocument(compressed, effectiveCompanyId, contactId);
       if (uploadResult.error) {
         toast.error(`Avatar upload failed: ${uploadResult.error}`);
