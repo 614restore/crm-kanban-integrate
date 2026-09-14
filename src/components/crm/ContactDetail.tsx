@@ -801,6 +801,12 @@ export default function ContactDetail() {
     dispatch({ type: 'SET_VIEW', payload: 'quotes' });
   };
 
+  const openQuoteAction = (action: 'invoice' | 'payment') => {
+    if (!contact) return;
+    dispatch({ type: 'SET_PENDING_QUOTE_ACTION', payload: { contactId: contact.id, action } });
+    dispatch({ type: 'SET_VIEW', payload: 'quotes' });
+  };
+
   if (!contact) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -2492,13 +2498,13 @@ export default function ContactDetail() {
                   );
                 })()}
                 <button
-                  onClick={() => dispatch({ type: 'TOGGLE_INVOICE_MODAL' })}
+                  onClick={() => openQuoteAction('invoice')}
                   className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                 >
                   <Plus size={18} />
                   Create Invoice
                 </button>
-                <button onClick={() => { dispatch({ type: 'SET_VIEW', payload: 'financial' }); dispatch({ type: 'TOGGLE_INVOICE_MODAL' }); }} className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                <button onClick={() => openQuoteAction('payment')} className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
                   <DollarSign size={18} />
                   Record Payment
                 </button>

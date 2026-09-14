@@ -341,7 +341,7 @@ export default function FinancialDashboard() {
             <span className="font-medium">Export PDF</span>
           </button>
           <button
-            onClick={() => dispatch({ type: 'TOGGLE_INVOICE_MODAL' })}
+            onClick={() => { toast.info('Invoices are created from signed quotes. Open a signed quote and choose Create invoice.'); dispatch({ type: 'SET_VIEW', payload: 'quotes' }); }}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             <Plus size={18} />

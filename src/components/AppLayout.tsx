@@ -27,7 +27,6 @@ import TopBar from './crm/TopBar';
 import AuthPage from './crm/AuthPage';
 import UpdatePassword from '@/pages/UpdatePassword';
 import QuickAddModal from './crm/QuickAddModal';
-import InvoiceModal from './crm/InvoiceModal';
 import ResponsiveLayout from './mobile/ResponsiveLayout';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { Building2, Loader2, Zap, X, Tag, WifiOff, AlertTriangle, Download } from 'lucide-react';
@@ -135,6 +134,7 @@ const initialState: CRMState = {
   invoiceModalPrefill: null,
   pendingAppointmentContactId: null,
   pendingQuote: null,
+  pendingQuoteAction: null,
   isLoading: true,
   isInitialized: false,
   notifications: [],
@@ -1550,7 +1550,6 @@ useEffect(() => {
         
         {/* Modals — QuickAdd blocked in read-only mode */}
         {!isExpiredReadOnly && <QuickAddModal />}
-        <InvoiceModal />
       </ResponsiveLayout>
       </SubscriptionProvider>
     </CRMContext.Provider>

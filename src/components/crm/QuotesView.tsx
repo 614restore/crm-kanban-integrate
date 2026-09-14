@@ -331,6 +331,34 @@ export default function QuotesView() {
     loadQuotes();
   };
 
+  // Another screen asked to invoice a customer's job or take a payment on it.
+  // As in QuoteMGR both start from a quote: invoices from the newest signed quote,
+  // payments from the newest quote of any status.
+  useEffect(() => {
+    const request = state.pendingQuoteAction;
+    if (!request || loading) return;
+    dispatch({ type: 'SET_PENDING_QUOTE_ACTION', payload: null });
+    const customerQuotes = quotes.filter((q) => (q.customer_id || q.contact_id) === request.contactId);
+    const target = request.action === 'invoice'
+      ? customerQuotes.find((q) => q.status === 'signed')
+      : customerQuotes[0];
+    if (target) {
+      if (request.action === 'invoice') openInvoice(target); else openReceipts(target);
+      return;
+    }
+    if (request.action === 'invoice' && customerQuotes.length > 0) {
+      toast.info('Invoices are created from a signed quote. Get this customer\'s quote signed first.');
+      return;
+    }
+    toast.info(request.action === 'invoice'
+      ? 'Invoices are created from a signed quote. Start by building a quote for this customer.'
+      : 'Payments are recorded against a quote. Start by building a quote for this customer.');
+    setEditingQuoteId(null);
+    setBuilderPrefill({ contactId: request.contactId });
+    setShowBuilder(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.pendingQuoteAction, loading, quotes]);
+
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-6">

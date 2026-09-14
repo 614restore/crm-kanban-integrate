@@ -640,7 +640,8 @@ export default function PipelineBoard() {
         dispatch({ type: 'SET_VIEW', payload: 'quotes' });
         break;
       case 'invoice':
-        dispatch({ type: 'TOGGLE_INVOICE_MODAL', payload: contact.id });
+        dispatch({ type: 'SET_PENDING_QUOTE_ACTION', payload: { contactId: contact.id, action: 'invoice' } });
+        dispatch({ type: 'SET_VIEW', payload: 'quotes' });
         break;
       case 'documents-tab':
         setPendingContactTab('documents');

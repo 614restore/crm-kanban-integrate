@@ -40,6 +40,12 @@ export interface PendingQuote {
   items?: QuoteDraftItem[];
 }
 
+/** Another screen asked to invoice a customer's job or record a payment on it. */
+export interface PendingQuoteAction {
+  contactId: string;
+  action: 'invoice' | 'payment';
+}
+
 export type ViewType =
   | 'dashboard'
   | 'pipeline'
@@ -109,6 +115,7 @@ export interface CRMState {
   invoiceModalPrefill: { contactId?: string; items?: any[]; notes?: string } | null;
   pendingAppointmentContactId: string | null;
   pendingQuote: PendingQuote | null;
+  pendingQuoteAction: PendingQuoteAction | null;
   
   // Loading states
   isLoading: boolean;
@@ -139,6 +146,7 @@ export type CRMAction =
   | { type: 'TOGGLE_INVOICE_MODAL'; payload?: string | null; prefill?: { contactId?: string; items?: any[]; notes?: string } | null }
   | { type: 'SET_PENDING_APPOINTMENT_CONTACT'; payload: string | null }
   | { type: 'SET_PENDING_QUOTE'; payload: PendingQuote | null }
+  | { type: 'SET_PENDING_QUOTE_ACTION'; payload: PendingQuoteAction | null }
   | { type: 'ADD_CONTACT'; payload: Contact }
   | { type: 'UPDATE_CONTACT'; payload: Contact }
   | { type: 'DELETE_CONTACT'; payload: string }
@@ -247,6 +255,8 @@ export function crmReducer(state: CRMState, action: CRMAction): CRMState {
 
     case 'SET_PENDING_QUOTE':
       return { ...state, pendingQuote: action.payload };
+    case 'SET_PENDING_QUOTE_ACTION':
+      return { ...state, pendingQuoteAction: action.payload };
 
     case 'TOGGLE_INVOICE_MODAL':
       return { 
