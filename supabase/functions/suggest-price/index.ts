@@ -17,51 +17,53 @@ const SUPABASE_URL            = Deno.env.get('SUPABASE_URL')            || '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
 /**
- * Resolve a Groq API key to use for this request.
- *
- * Priority:
- *  1. The authenticated company's own Groq key (from ai_configurations) — so every
- *     company uses their own key and we don't need a separate platform secret.
- *  2. The GROQ_API_KEY Supabase secret — fallback for unauthenticated calls or
- *     companies that haven't configured Groq as their AI provider.
+ * Resolve the Groq key for the signed-in caller. Every company brings its own key:
+ *  1. The caller's personal key (user_ai_configs), so their usage stays separate.
+ *  2. Their company's key (ai_configurations), set by an owner or admin for the team.
+ * TrussCTR change from QuoteMGR: no platform-wide GROQ_API_KEY fallback. A shared
+ * key would split one free-tier quota across every company using the app.
  */
 async function resolveGroqKey(authHeader: string | null): Promise<string | null> {
-  if (authHeader && SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
-    const token = authHeader.replace(/^Bearer\s+/i, '');
-    try {
-      const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-        auth: { autoRefreshToken: false, persistSession: false },
-      });
+  if (!authHeader || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
+  const token = authHeader.replace(/^Bearer\s+/i, '');
+  try {
+    const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
 
-      const { data: { user } } = await admin.auth.getUser(token);
-      if (user) {
-        const { data: member } = await admin
-          .from('team_members')
-          .select('company_id')
-          .eq('user_id', user.id)
-          .eq('is_active', true)
-          .limit(1)
-          .maybeSingle();
+    const { data: { user } } = await admin.auth.getUser(token);
+    if (!user) return null;
 
-        if (member?.company_id) {
-          const { data: aiConfig } = await admin
-            .from('ai_configurations')
-            .select('provider, api_key, enabled')
-            .eq('company_id', member.company_id)
-            .maybeSingle();
-
-          if (aiConfig?.enabled && aiConfig.provider === 'groq' && aiConfig.api_key) {
-            return aiConfig.api_key as string;
-          }
-        }
-      }
-    } catch (err) {
-      console.warn('[suggest-price] Could not resolve company Groq key:', err);
+    const { data: personal } = await admin
+      .from('user_ai_configs')
+      .select('provider, api_key, enabled')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (personal?.enabled && personal.provider === 'groq' && personal.api_key) {
+      return personal.api_key as string;
     }
-  }
 
-  // Fall back to platform-level secret (for non-Groq companies or unauthenticated calls)
-  return Deno.env.get('GROQ_API_KEY') || null;
+    const { data: member } = await admin
+      .from('team_members')
+      .select('company_id')
+      .eq('user_id', user.id)
+      .eq('is_active', true)
+      .limit(1)
+      .maybeSingle();
+    if (!member?.company_id) return null;
+
+    const { data: aiConfig } = await admin
+      .from('ai_configurations')
+      .select('provider, api_key, enabled')
+      .eq('company_id', member.company_id)
+      .maybeSingle();
+    if (aiConfig?.enabled && aiConfig.provider === 'groq' && aiConfig.api_key) {
+      return aiConfig.api_key as string;
+    }
+  } catch (err) {
+    console.warn('[suggest-price] Could not resolve Groq key:', err);
+  }
+  return null;
 }
 
 serve(async (req) => {
@@ -73,7 +75,7 @@ serve(async (req) => {
     const groqKey = await resolveGroqKey(req.headers.get('authorization'));
     if (!groqKey) {
       return new Response(
-        JSON.stringify({ error: 'No Groq API key available. Configure Groq as your AI provider in Settings → AI Estimating.' }),
+        JSON.stringify({ error: 'No Groq API key set. Add your own in Settings → AI Assistant, or ask an owner to add the team key.' }),
         { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }

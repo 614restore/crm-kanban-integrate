@@ -7,9 +7,8 @@ import { db } from '@/lib/database';
 import { uploadCompanyLogo, uploadUserAvatar, validateImageFile } from '@/lib/storage';
 import useIntegrations from '@/hooks/useIntegrations';
 import IntegrationConfigDialog from '@/components/IntegrationConfigDialog';
-import AIConfigDialog from '@/components/AIConfigDialog';
+import AIEstimatingPanel from '@/components/AIEstimatingPanel';
 import { formatPhoneNumber } from '@/lib/utils';
-import AIApprovalPanel from '@/components/AIApprovalPanel';
 import SubscriptionView from '@/components/crm/SubscriptionView';
 import FeatureToggles from '@/components/crm/FeatureToggles';
 import {
@@ -231,7 +230,6 @@ export default function SettingsView() {
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   
   // AI Assistant state
-  const [aiConfigDialogOpen, setAiConfigDialogOpen] = useState(false);
   
   // Company form state - will be populated from database
   const [companyForm, setCompanyForm] = useState<CompanyFormData>({
@@ -2290,94 +2288,13 @@ export default function SettingsView() {
         )}
 
         {activeTab === 'ai-assistant' && (
-          <div className="max-w-4xl space-y-8">
-            <div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">AI Assistant</h3>
-              <p className="text-sm text-gray-500">
-                Configure AI providers (OpenAI, Claude, Gemini) for smart business automation
-              </p>
-            </div>
-
-            {/* User Configuration */}
-            <div>
-              <h4 className="text-lg font-semibold text-gray-900 mb-4">Your AI Configuration</h4>
-              <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <p className="text-sm text-gray-600">
-                      Set up your own AI API key to enable AI features for your account
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setAiConfigDialogOpen(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-                  >
-                    <Zap size={16} />
-                    Add AI Configuration
-                  </button>
-                </div>
-                <p className="text-xs text-gray-500">
-                  💡 Your API key is encrypted and stored securely. Team admins must approve access.
-                </p>
-              </div>
-            </div>
-
-            {/* Admin Approval Panel */}
-            {(state.currentUser?.role === 'admin' || state.currentUser?.role === 'owner') && (
-              <div>
-                <h4 className="text-lg font-semibold text-gray-900 mb-4">Admin Panel - Approve Access</h4>
-                <AIApprovalPanel companyId={state.companyId || ''} />
-              </div>
-            )}
-
-            {/* Feature Overview */}
-            <div>
-              <h4 className="text-lg font-semibold text-gray-900 mb-4">Available Features</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-white rounded-xl border border-gray-200 p-4">
-                  <p className="font-semibold text-gray-900 flex items-center gap-2 mb-1">
-                    <Mail size={16} />
-                    Email Drafting
-                  </p>
-                  <p className="text-sm text-gray-600">Generate professional email responses from customer inquiries</p>
-                </div>
-
-                <div className="bg-white rounded-xl border border-gray-200 p-4">
-                  <p className="font-semibold text-gray-900 flex items-center gap-2 mb-1">
-                    <Users size={16} />
-                    Customer Support  
-                  </p>
-                  <p className="text-sm text-gray-600">AI-powered chat for answering customer questions</p>
-                </div>
-
-                <div className="bg-white rounded-xl border border-gray-200 p-4">
-                  <p className="font-semibold text-gray-900 flex items-center gap-2 mb-1">
-                    <Target size={16} />
-                    Lead Scoring
-                  </p>
-                  <p className="text-sm text-gray-600">Analyze and rank leads by quality and conversion probability</p>
-                </div>
-
-                <div className="bg-white rounded-xl border border-gray-200 p-4">
-                  <p className="font-semibold text-gray-900 flex items-center gap-2 mb-1">
-                    <DollarSign size={16} />
-                    Estimate Optimization
-                  </p>
-                  <p className="text-sm text-gray-600">AI-powered pricing recommendations and competitive analysis</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Security Notice */}
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-6">
-              <p className="font-semibold text-blue-900 mb-2">🔒 Security & Privacy</p>
-              <ul className="text-sm text-blue-800 space-y-1">
-                <li>✓ API keys are encrypted before storage</li>
-                <li>✓ Access requires team admin approval</li>
-                <li>✓ Usage is tracked and logged</li>
-                <li>✓ Team members can only use approved configurations</li>
-              </ul>
-            </div>
+          <div className="max-w-4xl">
+            {/* QuoteMGR's AI settings. Each person can add their own key; an owner or admin
+                adds the team key everyone else uses. There is no shared platform key. */}
+            <AIEstimatingPanel
+              companyId={effectiveCompanyId || ''}
+              canManageTeamKey={state.currentUser?.role === 'admin' || state.currentUser?.role === 'owner'}
+            />
           </div>
         )}
 
@@ -2888,14 +2805,6 @@ export default function SettingsView() {
           }}
         />
       )}
-
-      <AIConfigDialog
-        open={aiConfigDialogOpen}
-        onOpenChange={setAiConfigDialogOpen}
-        onSave={() => {
-          // Refresh the AI configurations in the approval panel
-        }}
-      />
 
       </div>{/* end main content row */}
     </div>

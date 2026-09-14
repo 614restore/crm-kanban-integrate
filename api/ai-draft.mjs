@@ -1,4 +1,40 @@
 import { requireAuth } from './_auth-middleware.mjs';
+import { createClient } from '@supabase/supabase-js';
+
+// Each company brings its own Groq key; there is no shared platform key, which
+// would split one free-tier quota across every company. The caller's personal
+// key (user_ai_configs) wins, then their company's key (ai_configurations).
+async function resolveGroqKey(userId) {
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return null;
+  const admin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+
+  const { data: personal } = await admin
+    .from('user_ai_configs')
+    .select('provider, api_key, enabled')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (personal?.enabled && personal.provider === 'groq' && personal.api_key) return personal.api_key;
+
+  const { data: member } = await admin
+    .from('team_members')
+    .select('company_id')
+    .eq('user_id', userId)
+    .eq('is_active', true)
+    .limit(1)
+    .maybeSingle();
+  if (!member?.company_id) return null;
+
+  const { data: company } = await admin
+    .from('ai_configurations')
+    .select('provider, api_key, enabled')
+    .eq('company_id', member.company_id)
+    .maybeSingle();
+  if (company?.enabled && company.provider === 'groq' && company.api_key) return company.api_key;
+
+  return null;
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -9,11 +45,11 @@ export default async function handler(req, res) {
   const user = await requireAuth(req, res);
   if (!user) return;
 
-  const apiKey = process.env.GROQ_API_KEY;
+  const apiKey = await resolveGroqKey(user.id).catch(() => null);
   if (!apiKey) {
     return res.status(503).json({
       error: 'AI not configured',
-      message: 'Add GROQ_API_KEY to your Vercel environment variables to enable AI drafting.',
+      message: 'Add a Groq API key in Settings → AI Assistant: your own, or ask an owner to add the team key.',
     });
   }
 

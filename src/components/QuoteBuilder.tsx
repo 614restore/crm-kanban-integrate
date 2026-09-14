@@ -932,8 +932,14 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
   // Check AI configuration
   useEffect(() => {
     if (companyId) {
-      supabase.from('ai_configurations').select('enabled').eq('company_id', companyId).eq('enabled', true).maybeSingle()
-        .then(({ data }) => setAiEnabled(!!data));
+      // TrussCTR change: company AI keys are readable by owners and admins only, so
+      // ask get_my_ai_config, which answers for anyone on the team (their personal
+      // key, else the company's) without exposing the key.
+      supabase.rpc('get_my_ai_config', { p_company_id: companyId })
+        .then(({ data }) => {
+          const row: any = Array.isArray(data) ? data[0] : data;
+          setAiEnabled(!!row?.enabled);
+        });
     }
   }, [companyId]);
 
