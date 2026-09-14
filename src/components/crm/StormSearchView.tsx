@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AlertTriangle, Check, CheckCircle, CloudHail, CloudRain, ExternalLink, Loader2, MapPin, Search, Tornado, Waves, Wind,
+  AlertTriangle, Check, CheckCircle, CloudHail, CloudRain, ExternalLink, History, Loader2, MapPin, Radio, Search, Tornado, Waves, Wind,
   type LucideIcon,
 } from 'lucide-react';
 import StormMap, { STORM_CATEGORY_COLORS, WARNING_COLORS } from '@/components/crm/StormMap';
+import LiveRadarPanel from '@/components/crm/LiveRadarPanel';
 import { geocodeAddress } from '@/lib/geocode';
 import {
   fetchStormWarnings,
@@ -113,6 +114,7 @@ function warningSummary(w: StormWarning): string {
 }
 
 export default function StormSearchView() {
+  const [mode, setMode] = useState<'live' | 'history'>('live');
   const [address, setAddress] = useState('');
   const [months, setMonths] = useState(12);
   const [radius, setRadius] = useState(10);
@@ -189,6 +191,7 @@ export default function StormSearchView() {
     const applyFocus = () => {
       const focus = takePendingStormFocus();
       if (!focus) return;
+      setMode('history');
       const focusMonths = focus.months ?? 1;
       const focusRadius = focus.radiusMiles ?? 10;
       setAddress(focus.label ?? '');
@@ -319,9 +322,34 @@ export default function StormSearchView() {
           <CloudRain className="text-blue-600" size={26} /> Storm Search
         </h1>
         <p className="text-sm text-gray-500 mt-1">
-          Storm reports near any address: hail, wind, tornadoes and more from the National Weather Service, plus NOAA radar hail.
+          Live radar and active warnings, or the storm history of any address: hail, wind, tornadoes and more from the National
+          Weather Service and NOAA.
         </p>
       </div>
+
+      <div className="mb-5 inline-flex rounded-lg bg-gray-100 p-1">
+        {([
+          ['live', 'Live radar', Radio],
+          ['history', 'Storm history', History],
+        ] as const).map(([id, label, TabIcon]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setMode(id)}
+            aria-pressed={mode === id}
+            className={`flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+              mode === id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            <TabIcon size={15} /> {label}
+          </button>
+        ))}
+      </div>
+
+      {mode === 'live' ? (
+        <LiveRadarPanel />
+      ) : (
+      <>
 
       <div className="bg-white border border-gray-200 rounded-xl p-5 mb-6">
         <label className="block text-xs font-medium text-gray-500 mb-1">Address</label>
@@ -673,6 +701,8 @@ export default function StormSearchView() {
             </>
           )}
         </div>
+      )}
+      </>
       )}
     </div>
   );

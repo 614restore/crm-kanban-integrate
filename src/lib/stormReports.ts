@@ -121,6 +121,11 @@ export function toStateCode(value?: string | null): string | null {
   return STATE_CODES[v.toLowerCase()] ?? null;
 }
 
+/** A state and its neighbors, for queries around an address near a state line. */
+export function statesAround(stateCode: string): string[] {
+  return [stateCode, ...(STATE_NEIGHBORS[stateCode] ?? [])];
+}
+
 // ── Geometry ──────────────────────────────────────────────────────────────────
 
 const toRad = (d: number) => (d * Math.PI) / 180;
@@ -258,9 +263,14 @@ async function fetchGroundReports(
     }
   });
 
+  return { reports: lsrFeaturesToReports(pages.flat(), lat, lon, radiusMiles), complete };
+}
+
+/** Turns IEM Local Storm Report GeoJSON features into reports within a radius of a point. */
+export function lsrFeaturesToReports(features: any[], lat: number, lon: number, radiusMiles: number): StormReport[] {
   const latSlack = radiusMiles / 69 + 0.01;
   const byId = new Map<string, StormReport>();
-  for (const feature of pages.flat()) {
+  for (const feature of features) {
     const p = feature?.properties ?? {};
     const evLat = Number(p.lat);
     const evLon = Number(p.lon);
@@ -298,7 +308,7 @@ async function fetchGroundReports(
       wfo: p.wfo ?? null,
     });
   }
-  return { reports: [...byId.values()], complete };
+  return [...byId.values()];
 }
 
 async function fetchRadarReports(lat: number, lon: number, months: number, radiusMiles: number): Promise<StormReport[]> {
