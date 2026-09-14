@@ -235,23 +235,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(session?.user ?? null);
 
       if (session?.user) {
-        // Share the same promise with getSession below — only one fetch runs
-        const profileData = await loadProfileOnce(session.user.id, session.user.email || '');
-        setProfile(profileData);
-        // isPasswordReset is derived from profile?.must_change_password — no setter needed
+        const signedInUser = session.user;
+        // Load the profile after this callback returns, never inside it. supabase-js
+        // runs this callback while holding its auth lock, and every query first asks
+        // for the session, which waits for that same lock. Awaiting a query here
+        // deadlocked: the profile request was never sent, the 12s fail-safe let the
+        // app render, and everything ran with no company.
+        // https://supabase.com/docs/reference/javascript/auth-onauthstatechange
+        setTimeout(async () => {
+          // Share the same promise with getSession below — only one fetch runs
+          const profileData = await loadProfileOnce(signedInUser.id, signedInUser.email || '');
+          setProfile(profileData);
+          // isPasswordReset is derived from profile?.must_change_password — no setter needed
 
-        // Clean up auth URL parameters after successful sign-in
-        try {
-          if (sessionStorage.getItem('auth_url_cleanup_pending') === 'true') {
-            sessionStorage.removeItem('auth_url_cleanup_pending');
-            const cleanUrl = window.location.origin + window.location.pathname;
-            window.history.replaceState({}, '', cleanUrl);
-          }
-        } catch { /* ignore */ }
-      } else {
-        setProfile(null);
+          // Clean up auth URL parameters after successful sign-in
+          try {
+            if (sessionStorage.getItem('auth_url_cleanup_pending') === 'true') {
+              sessionStorage.removeItem('auth_url_cleanup_pending');
+              const cleanUrl = window.location.origin + window.location.pathname;
+              window.history.replaceState({}, '', cleanUrl);
+            }
+          } catch { /* ignore */ }
+
+          setLoading(false);
+        }, 0);
+        return;
       }
 
+      setProfile(null);
       setLoading(false);
     });
 
