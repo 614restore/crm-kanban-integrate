@@ -1,10 +1,11 @@
 import { requireAuth } from './_auth-middleware.mjs';
 import { createClient } from '@supabase/supabase-js';
 
-// Each company brings its own Groq key; there is no shared platform key, which
+// Each company brings its own AI key; there is no shared platform key, which
 // would split one free-tier quota across every company. The caller's personal
 // key (user_ai_configs) wins, then their company's key (ai_configurations).
-async function resolveGroqKey(userId) {
+// Any provider the AI settings offer works: Groq, OpenAI, Anthropic or Google.
+async function resolveAIConfig(userId) {
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return null;
   const admin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -12,10 +13,10 @@ async function resolveGroqKey(userId) {
 
   const { data: personal } = await admin
     .from('user_ai_configs')
-    .select('provider, api_key, enabled')
+    .select('provider, api_key, model, enabled')
     .eq('user_id', userId)
     .maybeSingle();
-  if (personal?.enabled && personal.provider === 'groq' && personal.api_key) return personal.api_key;
+  if (personal?.enabled && personal.api_key) return personal;
 
   const { data: member } = await admin
     .from('team_members')
@@ -28,12 +29,75 @@ async function resolveGroqKey(userId) {
 
   const { data: company } = await admin
     .from('ai_configurations')
-    .select('provider, api_key, enabled')
+    .select('provider, api_key, model, enabled')
     .eq('company_id', member.company_id)
     .maybeSingle();
-  if (company?.enabled && company.provider === 'groq' && company.api_key) return company.api_key;
+  if (company?.enabled && company.api_key) return company;
 
   return null;
+}
+
+// Sends one system + user prompt to the configured provider and returns the text.
+async function callProvider(config, systemPrompt, userPrompt) {
+  const { provider, api_key: key } = config;
+  const model = config.model || (provider === 'groq' ? 'llama-3.3-70b-versatile' : null);
+  if (!model) {
+    throw Object.assign(new Error('Choose a model for your AI key in Settings → AI Assistant.'), { status: 400 });
+  }
+
+  let response;
+  if (provider === 'groq' || provider === 'openai') {
+    const url = provider === 'groq'
+      ? 'https://api.groq.com/openai/v1/chat/completions'
+      : 'https://api.openai.com/v1/chat/completions';
+    response = await fetch(url, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        temperature: 0.7,
+        max_tokens: 600,
+      }),
+    });
+  } else if (provider === 'anthropic') {
+    response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        max_tokens: 600,
+        temperature: 0.7,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      }),
+    });
+  } else if (provider === 'google') {
+    response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+      method: 'POST',
+      headers: { 'x-goog-api-key': key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+        generationConfig: { temperature: 0.7, maxOutputTokens: 600 },
+      }),
+    });
+  } else {
+    throw Object.assign(new Error(`Unsupported AI provider: ${provider}`), { status: 400 });
+  }
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw Object.assign(new Error(data.error?.message || `Error from ${provider}`), { status: 502 });
+  }
+  if (provider === 'anthropic') return (data.content?.[0]?.text || '').trim();
+  if (provider === 'google') {
+    return (data.candidates?.[0]?.content?.parts?.map((part) => part.text || '').join('') || '').trim();
+  }
+  return (data.choices?.[0]?.message?.content || '').trim();
 }
 
 export default async function handler(req, res) {
@@ -45,11 +109,11 @@ export default async function handler(req, res) {
   const user = await requireAuth(req, res);
   if (!user) return;
 
-  const apiKey = await resolveGroqKey(user.id).catch(() => null);
-  if (!apiKey) {
+  const aiConfig = await resolveAIConfig(user.id).catch(() => null);
+  if (!aiConfig) {
     return res.status(503).json({
       error: 'AI not configured',
-      message: 'Add a Groq API key in Settings → AI Assistant: your own, or ask an owner to add the team key.',
+      message: 'Add an AI key in Settings → AI Assistant: your own (Groq, OpenAI, Anthropic or Google), or ask an owner to add the team key.',
     });
   }
 
@@ -76,33 +140,15 @@ ${safeContext ? `<context>${safeContext}</context>` : ''}
 Reply ONLY with JSON: { "subject": "...", "body": "..." }`;
 
   try {
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        temperature: 0.7,
-        max_tokens: 600,
-      }),
-    });
-
-    if (!response.ok) {
-      const err = await response.json();
-      return res.status(502).json({
-        error: 'Groq error',
-        message: err.error?.message || 'Unknown error from Groq',
+    let raw;
+    try {
+      raw = await callProvider(aiConfig, systemPrompt, userPrompt);
+    } catch (providerErr) {
+      return res.status(providerErr.status || 502).json({
+        error: 'AI provider error',
+        message: providerErr.message || 'Unknown error from the AI provider',
       });
     }
-
-    const data = await response.json();
-    const raw = data.choices?.[0]?.message?.content?.trim() || '';
 
     // Strip ```json fences if present
     const json = raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/, '');
