@@ -352,3 +352,121 @@ export async function searchStormReports(opts: {
   const reports = [...ground.reports, ...radar].sort((a, b) => a.distanceMiles - b.distanceMiles);
   return { reports, groundReportsAvailable: ground.complete };
 }
+
+// ── NWS warnings: the area a storm threatened ─────────────────────────────────
+
+export interface StormWarning {
+  id: string;
+  /** e.g. "Severe Thunderstorm Warning". */
+  title: string;
+  /** NWS phenomena code: SV severe thunderstorm, TO tornado, EW extreme wind, SQ snow squall, FF flash flood. */
+  phenomena: string;
+  wfo: string | null;
+  issued: string | null;
+  polygonBegin: string | null;
+  polygonEnd: string | null;
+  windMph: number | null;
+  hailInches: number | null;
+  /** e.g. RADAR INDICATED or OBSERVED. */
+  tornado: string | null;
+  /** e.g. CONSIDERABLE or DESTRUCTIVE. */
+  damage: string | null;
+  windThreat: string | null;
+  hailThreat: string | null;
+  href: string | null;
+  geometry: { type: 'Polygon' | 'MultiPolygon'; coordinates: any };
+  containsReport: boolean;
+  containsAddress: boolean;
+}
+
+const WARNING_PHENOMENA = new Set(['SV', 'TO', 'EW', 'SQ', 'FF']);
+
+function pointInRing(lat: number, lon: number, ring: number[][]): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    if (yi > lat !== yj > lat && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+function pointInGeometry(geometry: StormWarning['geometry'], lat: number, lon: number): boolean {
+  const polygons: number[][][][] = geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.coordinates;
+  return polygons.some((polygon) => polygon.length > 0 && pointInRing(lat, lon, polygon[0]));
+}
+
+const numberOrNull = (v: unknown) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
+
+/**
+ * NWS storm-based warnings in effect around a report's time that covered the
+ * report's spot or the searched address, from the Iowa Environmental Mesonet
+ * archive. Report ground reports carry their NWS office, which narrows the query.
+ */
+export async function fetchStormWarnings(
+  report: StormReport,
+  address: { lat: number; lon: number },
+): Promise<StormWarning[]> {
+  const t = Date.parse(report.validUtc);
+  if (Number.isNaN(t)) return [];
+  const iso = (ms: number) => new Date(ms).toISOString().slice(0, 16) + 'Z';
+  const params = new URLSearchParams({ sts: iso(t - 3 * 3600e3), ets: iso(t + 3600e3) });
+  if (report.wfo) params.set('wfos', report.wfo);
+  const res = await fetch(`https://mesonet.agron.iastate.edu/geojson/sbw.geojson?${params.toString()}`);
+  if (!res.ok) throw new Error(`Warnings request failed (HTTP ${res.status})`);
+  const body = await res.json();
+
+  // A warning counts if it was in effect within half an hour of the report.
+  const slack = 30 * 60000;
+  const seen = new Set<string>();
+  const warnings: StormWarning[] = [];
+  for (const feature of body?.features ?? []) {
+    const p = feature?.properties ?? {};
+    const geometry = feature?.geometry;
+    if (!geometry || (geometry.type !== 'Polygon' && geometry.type !== 'MultiPolygon')) continue;
+    if (!WARNING_PHENOMENA.has(p.phenomena) || p.significance !== 'W') continue;
+    const begin = Date.parse(p.polygon_begin ?? p.issue ?? '');
+    const end = Date.parse(p.polygon_end ?? p.expire_utc ?? p.expire ?? '');
+    if (Number.isFinite(begin) && begin > t + slack) continue;
+    if (Number.isFinite(end) && end < t - slack) continue;
+
+    const containsReport = pointInGeometry(geometry, report.lat, report.lon);
+    const containsAddress = pointInGeometry(geometry, address.lat, address.lon);
+    if (!containsReport && !containsAddress) continue;
+
+    const id = String(feature.id ?? `${p.wfo}.${p.phenomena}.${p.eventid}.${p.polygon_begin}`);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    warnings.push({
+      id,
+      title: String(p.ps ?? 'Warning'),
+      phenomena: String(p.phenomena),
+      wfo: p.wfo ?? null,
+      issued: p.issue ?? null,
+      polygonBegin: p.polygon_begin ?? null,
+      polygonEnd: p.polygon_end ?? p.expire_utc ?? null,
+      windMph: numberOrNull(p.max_windtag ?? p.windtag),
+      hailInches: numberOrNull(p.max_hailtag ?? p.hailtag),
+      tornado: p.tornadotag ?? null,
+      damage: p.damagetag ?? null,
+      windThreat: p.windthreat ?? null,
+      hailThreat: p.hailthreat ?? null,
+      href: typeof p.href === 'string' && p.href.startsWith('https://') ? p.href : null,
+      geometry,
+      containsReport,
+      containsAddress,
+    });
+  }
+  return warnings.sort((a, b) => Number(b.containsReport) - Number(a.containsReport));
+}
+
+/** Other reports from the same storm: within 25 miles and 90 minutes of the report. */
+export function reportsFromSameStorm(report: StormReport, reports: StormReport[]): StormReport[] {
+  const t = Date.parse(report.validUtc);
+  if (Number.isNaN(t)) return [];
+  return reports.filter((r) => {
+    if (r.id === report.id) return false;
+    const rt = Date.parse(r.validUtc);
+    return Math.abs(rt - t) <= 90 * 60000 && haversineMiles(report.lat, report.lon, r.lat, r.lon) <= 25;
+  });
+}

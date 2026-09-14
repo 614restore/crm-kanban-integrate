@@ -1,10 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AlertTriangle, CheckCircle, CloudHail, CloudRain, ExternalLink, Loader2, MapPin, Search, Tornado, Waves, Wind, type LucideIcon,
+  AlertTriangle, Check, CheckCircle, CloudHail, CloudRain, ExternalLink, Loader2, MapPin, Search, Tornado, Waves, Wind,
+  type LucideIcon,
 } from 'lucide-react';
-import StormMap, { STORM_CATEGORY_COLORS } from '@/components/crm/StormMap';
+import StormMap, { STORM_CATEGORY_COLORS, WARNING_COLORS } from '@/components/crm/StormMap';
 import { geocodeAddress } from '@/lib/geocode';
 import {
+  fetchStormWarnings,
+  reportsFromSameStorm,
   searchStormReports,
   takePendingStormFocus,
   toStateCode,
@@ -13,13 +16,15 @@ import {
   type StormCategory,
   type StormReport,
   type StormSeverity,
+  type StormWarning,
 } from '@/lib/stormReports';
 
 // Storm history for any address, no contact required: useful for canvassing or
 // checking a lead's property before they're in the CRM. Shows every National
 // Weather Service storm report (hail, wind, tornado, flooding…) and NOAA radar
 // hail and tornado signatures on a map, with where each happened relative to
-// the address and everything the report says. Storm alerts open here too.
+// the address and everything the report says. Selecting a report shows the
+// area the storm hit. Storm alerts open here too.
 
 const severityConfig: Record<StormSeverity, { label: string; className: string }> = {
   minor:    { label: 'Minor',    className: 'bg-yellow-100 text-yellow-800 border border-yellow-200' },
@@ -38,8 +43,12 @@ const CATEGORY_ICONS: Record<StormCategory, LucideIcon> = {
 
 const CATEGORY_ORDER: StormCategory[] = ['hail', 'wind', 'damage', 'tornado', 'flood', 'other'];
 const RADIUS_OPTIONS = [5, 10, 15, 25, 50, 100];
+const WIND_OPTIONS = [0, 30, 35, 40, 50, 58, 65, 75];
+const HAIL_OPTIONS = [0, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 const PAGE_SIZE = 150;
 const QUALIFIER_LABELS: Record<string, string> = { M: 'Measured', E: 'Estimated', U: 'Unknown' };
+
+type SourceFilter = 'all' | 'ground' | 'radar';
 
 interface SearchCenter {
   lat: number;
@@ -48,9 +57,16 @@ interface SearchCenter {
   state: string | null;
 }
 
-const formatWhen = (iso: string) => {
+const formatWhen = (iso: string | null | undefined) => {
+  if (!iso) return '';
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+};
+
+const formatTime = (iso: string | null | undefined) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 };
 
 const placeText = (r: StormReport) =>
@@ -85,6 +101,17 @@ function reportDetails(r: StormReport): Array<[string, React.ReactNode]> {
   return rows;
 }
 
+function warningSummary(w: StormWarning): string {
+  return [
+    w.windMph != null ? `Wind up to ${w.windMph} mph${w.windThreat ? ` (${w.windThreat.toLowerCase()})` : ''}` : null,
+    w.hailInches != null ? `hail up to ${w.hailInches}"${w.hailThreat ? ` (${w.hailThreat.toLowerCase()})` : ''}` : null,
+    w.tornado ? `tornado ${w.tornado.toLowerCase()}` : null,
+    w.damage ? `${w.damage.toLowerCase()} damage threat` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
 export default function StormSearchView() {
   const [address, setAddress] = useState('');
   const [months, setMonths] = useState(12);
@@ -96,12 +123,22 @@ export default function StormSearchView() {
   const [searchedMonths, setSearchedMonths] = useState(12);
   const [reports, setReports] = useState<StormReport[] | null>(null);
   const [groundAvailable, setGroundAvailable] = useState(true);
-  const [hiddenCategories, setHiddenCategories] = useState<Set<StormCategory>>(() => new Set<StormCategory>(['other']));
-  const [showGround, setShowGround] = useState(true);
-  const [showRadar, setShowRadar] = useState(true);
+
+  // Filters
+  const [hiddenCategories, setHiddenCategories] = useState<Set<StormCategory>>(() => new Set<StormCategory>());
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
+  const [minWind, setMinWind] = useState(0);
+  const [minHail, setMinHail] = useState(0);
   const [sortBy, setSortBy] = useState<'distance' | 'newest'>('distance');
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [warningState, setWarningState] = useState<{
+    reportId: string;
+    loading: boolean;
+    failed: boolean;
+    warnings: StormWarning[];
+  } | null>(null);
   const mapWrapRef = useRef<HTMLDivElement>(null);
 
   const runSearch = useCallback(async (where: SearchCenter, lookbackMonths: number, radiusMiles: number) => {
@@ -168,24 +205,55 @@ export default function StormSearchView() {
     return () => window.removeEventListener(STORM_FOCUS_EVENT, applyFocus);
   }, [runSearch]);
 
+  // Everything except the category switches, so each chip can say how many it would show.
+  const passesSourceAndThresholds = useCallback(
+    (r: StormReport) => {
+      if (sourceFilter !== 'all' && r.source !== sourceFilter) return false;
+      if (r.category === 'wind' && minWind > 0 && !(r.magnitude != null && r.magnitude >= minWind)) return false;
+      if (r.category === 'hail' && minHail > 0 && !(r.magnitude != null && r.magnitude >= minHail)) return false;
+      return true;
+    },
+    [sourceFilter, minWind, minHail],
+  );
+
   const counts = useMemo(() => {
-    const byCategory = Object.fromEntries(CATEGORY_ORDER.map((c) => [c, 0])) as Record<StormCategory, number>;
+    const total = Object.fromEntries(CATEGORY_ORDER.map((c) => [c, 0])) as Record<StormCategory, number>;
+    const matching = Object.fromEntries(CATEGORY_ORDER.map((c) => [c, 0])) as Record<StormCategory, number>;
     let ground = 0;
     let radar = 0;
     for (const r of reports ?? []) {
-      byCategory[r.category]++;
+      total[r.category]++;
+      if (passesSourceAndThresholds(r)) matching[r.category]++;
       if (r.source === 'ground') ground++;
       else radar++;
     }
-    return { byCategory, ground, radar };
-  }, [reports]);
+    return { total, matching, ground, radar };
+  }, [reports, passesSourceAndThresholds]);
 
   const visible = useMemo(() => {
-    const list = (reports ?? []).filter(
-      (r) => !hiddenCategories.has(r.category) && (r.source === 'ground' ? showGround : showRadar),
-    );
+    const list = (reports ?? []).filter((r) => !hiddenCategories.has(r.category) && passesSourceAndThresholds(r));
     return sortBy === 'newest' ? [...list].sort((a, b) => b.validUtc.localeCompare(a.validUtc)) : list;
-  }, [reports, hiddenCategories, showGround, showRadar, sortBy]);
+  }, [reports, hiddenCategories, passesSourceAndThresholds, sortBy]);
+
+  const filtersChanged = hiddenCategories.size > 0 || sourceFilter !== 'all' || minWind > 0 || minHail > 0;
+  const resetFilters = () => {
+    setHiddenCategories(new Set());
+    setSourceFilter('all');
+    setMinWind(0);
+    setMinHail(0);
+  };
+
+  /** Why the current filters hide every report, in plain words. */
+  const emptyReasons = useMemo(() => {
+    const reasons: string[] = [];
+    const hidden = CATEGORY_ORDER.filter((c) => hiddenCategories.has(c) && counts.total[c] > 0);
+    if (hidden.length) reasons.push(`${hidden.map((c) => STORM_CATEGORY_LABELS[c]).join(', ')} ${hidden.length === 1 ? 'is' : 'are'} switched off`);
+    if (sourceFilter === 'radar') reasons.push('only radar estimates are shown, and radar only detects hail and tornadoes, so wind, wind damage and flooding reports are hidden');
+    if (sourceFilter === 'ground') reasons.push('only ground reports are shown, so radar estimates are hidden');
+    if (minWind > 0) reasons.push(`wind reports under ${minWind} mph are hidden`);
+    if (minHail > 0) reasons.push(`hail under ${minHail}" is hidden`);
+    return reasons;
+  }, [hiddenCategories, sourceFilter, minWind, minHail, counts]);
 
   const toggleCategory = (category: StormCategory) =>
     setHiddenCategories((prev) => {
@@ -195,10 +263,38 @@ export default function StormSearchView() {
       return next;
     });
 
+  const showOnly = (category: StormCategory) =>
+    setHiddenCategories(new Set(CATEGORY_ORDER.filter((c) => c !== category)));
+
   const selectFromList = (id: string) => {
     setSelectedId(id);
     mapWrapRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
+
+  const selectedReport = useMemo(() => (reports ?? []).find((r) => r.id === selectedId) ?? null, [reports, selectedId]);
+  const sameStorm = useMemo(
+    () => (selectedReport ? reportsFromSameStorm(selectedReport, visible) : []),
+    [selectedReport, visible],
+  );
+  const relatedIds = useMemo(() => (selectedReport ? new Set(sameStorm.map((r) => r.id)) : null), [selectedReport, sameStorm]);
+
+  // The NWS warnings that covered the selected report.
+  useEffect(() => {
+    if (!selectedReport || !center) {
+      setWarningState(null);
+      return;
+    }
+    let cancelled = false;
+    const reportId = selectedReport.id;
+    setWarningState({ reportId, loading: true, failed: false, warnings: [] });
+    fetchStormWarnings(selectedReport, center)
+      .then((warnings) => { if (!cancelled) setWarningState({ reportId, loading: false, failed: false, warnings }); })
+      .catch(() => { if (!cancelled) setWarningState({ reportId, loading: false, failed: true, warnings: [] }); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedReport?.id, center?.lat, center?.lon]);
+
+  const currentWarnings = warningState && warningState.reportId === selectedId ? warningState.warnings : [];
 
   const radiusOptions = RADIUS_OPTIONS.includes(radius) ? RADIUS_OPTIONS : [...RADIUS_OPTIONS, radius].sort((a, b) => a - b);
 
@@ -214,10 +310,7 @@ export default function StormSearchView() {
     </div>
   );
 
-  const chipClass = (on: boolean) =>
-    `inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-      on ? 'bg-white border-gray-300 text-gray-900' : 'bg-gray-100 border-transparent text-gray-400'
-    }`;
+  const selectClass = 'px-2.5 py-1.5 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none';
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -254,11 +347,7 @@ export default function StormSearchView() {
         <div className="flex flex-wrap items-end gap-4 mt-4">
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">Look back</label>
-            <select
-              value={months}
-              onChange={(e) => setMonths(Number(e.target.value))}
-              className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-            >
+            <select value={months} onChange={(e) => setMonths(Number(e.target.value))} className={selectClass}>
               {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
                 <option key={m} value={m}>{m} {m === 1 ? 'month' : 'months'}</option>
               ))}
@@ -266,11 +355,7 @@ export default function StormSearchView() {
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">Radius</label>
-            <select
-              value={radius}
-              onChange={(e) => setRadius(Number(e.target.value))}
-              className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-            >
+            <select value={radius} onChange={(e) => setRadius(Number(e.target.value))} className={selectClass}>
               {radiusOptions.map((r) => (
                 <option key={r} value={r}>{r} miles</option>
               ))}
@@ -310,25 +395,107 @@ export default function StormSearchView() {
           )}
 
           {reports.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2">
-              {CATEGORY_ORDER.filter((c) => counts.byCategory[c] > 0).map((c) => {
-                const Icon = CATEGORY_ICONS[c];
-                const on = !hiddenCategories.has(c);
-                return (
-                  <button key={c} type="button" onClick={() => toggleCategory(c)} className={chipClass(on)}>
-                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: on ? STORM_CATEGORY_COLORS[c] : '#d1d5db' }} />
-                    <Icon size={13} />
-                    {STORM_CATEGORY_LABELS[c]} ({counts.byCategory[c]})
+            <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-medium text-gray-500 mr-1">Show</span>
+                {CATEGORY_ORDER.filter((c) => counts.total[c] > 0).map((c) => {
+                  const Icon = CATEGORY_ICONS[c];
+                  const on = !hiddenCategories.has(c);
+                  return (
+                    <span
+                      key={c}
+                      className={`inline-flex items-center rounded-full border text-xs font-medium transition-colors ${
+                        on ? 'bg-white border-gray-300 text-gray-900' : 'bg-gray-100 border-gray-100 text-gray-400'
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => toggleCategory(c)}
+                        aria-pressed={on}
+                        title={on ? `Hide ${STORM_CATEGORY_LABELS[c]}` : `Show ${STORM_CATEGORY_LABELS[c]}`}
+                        className="inline-flex items-center gap-1.5 pl-2.5 pr-2 py-1.5"
+                      >
+                        <span
+                          className="flex h-3.5 w-3.5 items-center justify-center rounded-sm"
+                          style={{ backgroundColor: on ? STORM_CATEGORY_COLORS[c] : '#d1d5db' }}
+                        >
+                          {on && <Check size={10} className="text-white" strokeWidth={3} />}
+                        </span>
+                        <Icon size={13} />
+                        {STORM_CATEGORY_LABELS[c]} ({counts.matching[c]})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => showOnly(c)}
+                        title={`Show only ${STORM_CATEGORY_LABELS[c]}`}
+                        className="border-l border-gray-200 px-2 py-1.5 text-[11px] text-gray-500 hover:text-blue-600"
+                      >
+                        only
+                      </button>
+                    </span>
+                  );
+                })}
+                {hiddenCategories.size > 0 && (
+                  <button type="button" onClick={() => setHiddenCategories(new Set())} className="text-xs font-medium text-blue-600 hover:underline">
+                    Show all types
                   </button>
-                );
-              })}
-              <span className="mx-1 h-5 w-px bg-gray-200" />
-              <button type="button" onClick={() => setShowGround((v) => !v)} className={chipClass(showGround)}>
-                Ground reports ({counts.ground})
-              </button>
-              <button type="button" onClick={() => setShowRadar((v) => !v)} className={chipClass(showRadar)}>
-                Radar estimates ({counts.radar})
-              </button>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-end gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Source</label>
+                  <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value as SourceFilter)} className={selectClass}>
+                    <option value="all">Ground reports and radar ({counts.ground + counts.radar})</option>
+                    <option value="ground">Ground reports only ({counts.ground})</option>
+                    <option value="radar">Radar estimates only ({counts.radar})</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Minimum wind</label>
+                  <select value={minWind} onChange={(e) => setMinWind(Number(e.target.value))} className={selectClass}>
+                    {WIND_OPTIONS.map((w) => (
+                      <option key={w} value={w}>{w === 0 ? 'Any speed' : `${w}+ mph`}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Minimum hail</label>
+                  <select value={minHail} onChange={(e) => setMinHail(Number(e.target.value))} className={selectClass}>
+                    {HAIL_OPTIONS.map((h) => (
+                      <option key={h} value={h}>{h === 0 ? 'Any size' : `${h}"+`}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Sort</label>
+                  <select value={sortBy} onChange={(e) => setSortBy(e.target.value as 'distance' | 'newest')} className={selectClass}>
+                    <option value="distance">Nearest first</option>
+                    <option value="newest">Newest first</option>
+                  </select>
+                </div>
+                {filtersChanged && (
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100"
+                  >
+                    Reset filters
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {reports.length > 0 && visible.length === 0 && (
+            <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+              <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+              <div>
+                No reports match the filters: {emptyReasons.join('; ') || 'the filters hide every report'}.{' '}
+                <button type="button" onClick={resetFilters} className="font-semibold underline">
+                  Reset filters
+                </button>
+              </div>
             </div>
           )}
 
@@ -340,12 +507,14 @@ export default function StormSearchView() {
               selectedId={selectedId}
               onSelect={setSelectedId}
               renderPopup={renderPopup}
+              warnings={currentWarnings}
+              relatedIds={relatedIds}
             />
           </div>
           <p className="text-xs text-gray-400">
             The dark dot is the searched address. Solid dots are ground reports from the National Weather Service (trained spotters,
             emergency managers, weather stations). Faded dots are NOAA radar estimates, which mark the storm cell overhead rather than a
-            confirmed impact. Click a dot or a report for details.
+            confirmed impact. Select a report to see the radar at that moment, the NWS warning area, and the rest of that storm.
           </p>
 
           {reports.length === 0 ? (
@@ -355,22 +524,9 @@ export default function StormSearchView() {
             </div>
           ) : (
             <>
-              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500 px-1">
-                <span>
-                  {visible.length} of {reports.length} report{reports.length === 1 ? '' : 's'} shown · within {searchedRadius} mi · last{' '}
-                  {searchedMonths} {searchedMonths === 1 ? 'month' : 'months'}
-                </span>
-                <label className="flex items-center gap-1.5">
-                  Sort
-                  <select
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value as 'distance' | 'newest')}
-                    className="px-2 py-1 border border-gray-200 rounded-md text-xs bg-white"
-                  >
-                    <option value="distance">Nearest first</option>
-                    <option value="newest">Newest first</option>
-                  </select>
-                </label>
+              <div className="text-xs text-gray-500 px-1">
+                {visible.length} of {reports.length} report{reports.length === 1 ? '' : 's'} shown · within {searchedRadius} mi · last{' '}
+                {searchedMonths} {searchedMonths === 1 ? 'month' : 'months'}
               </div>
 
               <div className="space-y-3">
@@ -385,6 +541,7 @@ export default function StormSearchView() {
                       tabIndex={0}
                       onClick={() => selectFromList(r.id)}
                       onKeyDown={(e) => {
+                        if (e.target !== e.currentTarget) return;
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault();
                           selectFromList(r.id);
@@ -421,16 +578,83 @@ export default function StormSearchView() {
                       {r.remark && <p className="mt-2 text-sm text-gray-700 italic">"{r.remark}"</p>}
 
                       {selected ? (
-                        <dl className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
-                          {reportDetails(r).map(([label, value], i) => (
-                            <div key={i} className="flex gap-2">
-                              <dt className="text-gray-400 w-32 shrink-0">{label}</dt>
-                              <dd className="text-gray-700">{value}</dd>
-                            </div>
-                          ))}
-                        </dl>
+                        <div className="cursor-default" onClick={(e) => e.stopPropagation()}>
+                          <dl className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
+                            {reportDetails(r).map(([label, value], i) => (
+                              <div key={i} className="flex gap-2">
+                                <dt className="text-gray-400 w-32 shrink-0">{label}</dt>
+                                <dd className="text-gray-700">{value}</dd>
+                              </div>
+                            ))}
+                          </dl>
+
+                          <div className="mt-4 border-t border-blue-200 pt-3 space-y-2">
+                            <div className="text-xs font-semibold text-gray-900">National Weather Service warnings for this storm</div>
+                            {!warningState || warningState.reportId !== r.id || warningState.loading ? (
+                              <div className="flex items-center gap-2 text-xs text-gray-500">
+                                <Loader2 size={12} className="animate-spin" /> Checking warnings…
+                              </div>
+                            ) : warningState.failed ? (
+                              <p className="text-xs text-gray-500">The warning archive could not be reached. Select the report again to retry.</p>
+                            ) : warningState.warnings.length === 0 ? (
+                              <p className="text-xs text-gray-500">
+                                No severe thunderstorm, tornado or flash flood warning covered this spot or the searched address at the time.
+                              </p>
+                            ) : (
+                              warningState.warnings.map((w) => (
+                                <div key={w.id} className="rounded-lg border border-gray-200 bg-white p-2.5 text-xs space-y-0.5">
+                                  <div className="flex items-center gap-2 font-semibold text-gray-900">
+                                    <span className="h-2.5 w-2.5 rounded-sm border-2" style={{ borderColor: WARNING_COLORS[w.phenomena] ?? '#f59e0b' }} />
+                                    {w.title}
+                                    {w.wfo && <span className="font-normal text-gray-500">· NWS {w.wfo}</span>}
+                                  </div>
+                                  <div className="text-gray-600">
+                                    {formatWhen(w.polygonBegin ?? w.issued)} to {formatTime(w.polygonEnd)}
+                                  </div>
+                                  {warningSummary(w) && <div className="text-gray-600">{warningSummary(w)}</div>}
+                                  <div className="text-gray-500">
+                                    {[w.containsReport ? 'Covered this report' : null, w.containsAddress ? 'Covered the searched address' : null]
+                                      .filter(Boolean)
+                                      .join(' · ')}
+                                  </div>
+                                  {w.href && (
+                                    <a
+                                      href={w.href}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+                                    >
+                                      Warning details and text <ExternalLink size={11} />
+                                    </a>
+                                  )}
+                                </div>
+                              ))
+                            )}
+
+                            <div className="text-xs font-semibold text-gray-900 pt-2">Other reports from this storm ({sameStorm.length})</div>
+                            {sameStorm.length === 0 ? (
+                              <p className="text-xs text-gray-500">No other reports within 25 miles and 90 minutes with the current filters.</p>
+                            ) : (
+                              <ul className="space-y-1 text-xs">
+                                {sameStorm.slice(0, 15).map((o) => (
+                                  <li key={o.id} className="flex flex-wrap items-center gap-x-2">
+                                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: STORM_CATEGORY_COLORS[o.category] }} />
+                                    <button type="button" onClick={() => selectFromList(o.id)} className="font-medium text-blue-600 hover:underline">
+                                      {o.title}
+                                    </button>
+                                    <span className="text-gray-500">
+                                      {o.distanceMiles} mi {o.direction} of the address · {formatTime(o.validUtc)}
+                                      {o.source === 'radar' ? ' · radar' : o.place ? ` · ${o.place}` : ''}
+                                    </span>
+                                  </li>
+                                ))}
+                                {sameStorm.length > 15 && <li className="text-gray-500">…and {sameStorm.length - 15} more on the map</li>}
+                              </ul>
+                            )}
+                          </div>
+                        </div>
                       ) : (
-                        <div className="mt-2 text-xs text-blue-600">Show on map and all details</div>
+                        <div className="mt-2 text-xs text-blue-600">Show the storm on the map and all details</div>
                       )}
                     </div>
                   );

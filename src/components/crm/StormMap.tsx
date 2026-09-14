@@ -1,15 +1,16 @@
 // Map for Storm Search: the searched address, the search radius, and each storm
 // report where it happened. Ground reports are solid dots; radar estimates are
-// faded. Selecting a report overlays the NOAA NEXRAD radar picture from that
-// moment (Iowa Environmental Mesonet's archived national composite, 5-minute
-// steps), with a time slider to watch the storm cross the area.
+// faded. Selecting a report shows the area the storm hit: the NWS warning
+// outlines that covered it, the other reports from the same storm (the rest
+// fade), and the NOAA NEXRAD radar picture from that moment (Iowa Environmental
+// Mesonet's archived national composite, 5-minute steps) with a time slider.
 // OpenStreetMap tiles, no API key.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Pause, Play } from 'lucide-react';
-import { Circle, CircleMarker, MapContainer, Popup, TileLayer, Tooltip, useMap } from 'react-leaflet';
-import type { StormCategory, StormReport } from '@/lib/stormReports';
+import { Circle, CircleMarker, GeoJSON, MapContainer, Popup, TileLayer, Tooltip, useMap } from 'react-leaflet';
+import type { StormCategory, StormReport, StormWarning } from '@/lib/stormReports';
 
 export const STORM_CATEGORY_COLORS: Record<StormCategory, string> = {
   hail: '#2563eb',
@@ -18,6 +19,14 @@ export const STORM_CATEGORY_COLORS: Record<StormCategory, string> = {
   tornado: '#dc2626',
   flood: '#0891b2',
   other: '#6b7280',
+};
+
+export const WARNING_COLORS: Record<string, string> = {
+  SV: '#f59e0b',
+  TO: '#dc2626',
+  EW: '#c026d3',
+  SQ: '#6366f1',
+  FF: '#16a34a',
 };
 
 const METERS_PER_MILE = 1609.34;
@@ -39,6 +48,12 @@ function radarFrame(iso: string, offsetMinutes: number): { stamp: string; time: 
   return { stamp, time };
 }
 
+const formatWhen = (iso: string | null) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+};
+
 interface StormMapProps {
   center: { lat: number; lon: number; label: string };
   radiusMiles: number;
@@ -46,6 +61,10 @@ interface StormMapProps {
   selectedId: string | null;
   onSelect: (id: string) => void;
   renderPopup: (report: StormReport) => React.ReactNode;
+  /** NWS warnings that covered the selected report. */
+  warnings?: StormWarning[];
+  /** Reports from the same storm as the selected one; the others fade. */
+  relatedIds?: Set<string> | null;
 }
 
 function FitToSearch({ lat, lon, radiusMiles }: { lat: number; lon: number; radiusMiles: number }) {
@@ -66,7 +85,25 @@ function FocusSelected({ report, markers }: { report: StormReport | null; marker
   return null;
 }
 
-export default function StormMap({ center, radiusMiles, reports, selectedId, onSelect, renderPopup }: StormMapProps) {
+/** Once a report's warnings load, zoom out enough to show their outlines. */
+function FitWarnings({ report, warnings }: { report: StormReport | null; warnings: StormWarning[] }) {
+  const map = useMap();
+  const key = warnings.map((w) => w.id).join('|');
+  useEffect(() => {
+    if (!report || warnings.length === 0) return;
+    const bounds = L.latLngBounds([[report.lat, report.lon]]);
+    for (const w of warnings) {
+      bounds.extend(L.geoJSON({ type: 'Feature', properties: {}, geometry: w.geometry } as any).getBounds());
+    }
+    map.fitBounds(bounds, { padding: [24, 24], maxZoom: 11 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, report?.id, key]);
+  return null;
+}
+
+export default function StormMap({
+  center, radiusMiles, reports, selectedId, onSelect, renderPopup, warnings = [], relatedIds = null,
+}: StormMapProps) {
   const markers = useRef(new Map<string, L.CircleMarker>());
   const selected = useMemo(() => reports.find((r) => r.id === selectedId) ?? null, [reports, selectedId]);
   // Radar first so ground reports draw on top of them.
@@ -102,8 +139,10 @@ export default function StormMap({ center, radiusMiles, reports, selectedId, onS
     setPlaying((p) => !p);
   };
 
+  const warningKinds = [...new Set(warnings.map((w) => w.phenomena))];
+
   return (
-    <div className="relative isolate h-[480px] w-full overflow-hidden rounded-xl border border-gray-200">
+    <div className="relative isolate h-[520px] w-full overflow-hidden rounded-xl border border-gray-200">
       <MapContainer center={[center.lat, center.lon]} zoom={10} scrollWheelZoom className="h-full w-full">
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -113,7 +152,7 @@ export default function StormMap({ center, radiusMiles, reports, selectedId, onS
           <TileLayer
             key="radar"
             url={`https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::USCOMP-N0Q-${frame.stamp}/{z}/{x}/{y}.png`}
-            attribution='Radar: NOAA NEXRAD via <a href="https://mesonet.agron.iastate.edu/">Iowa Environmental Mesonet</a>'
+            attribution='Radar and warnings: NOAA/NWS via <a href="https://mesonet.agron.iastate.edu/">Iowa Environmental Mesonet</a>'
             opacity={0.65}
             maxNativeZoom={10}
             zIndex={10}
@@ -125,10 +164,31 @@ export default function StormMap({ center, radiusMiles, reports, selectedId, onS
           radius={radiusMiles * METERS_PER_MILE}
           pathOptions={{ color: '#1e3a5f', weight: 1, fillOpacity: 0.04, dashArray: '4 4' }}
         />
+        {warnings.map((w) => (
+          <GeoJSON
+            key={w.id}
+            data={{ type: 'Feature', properties: {}, geometry: w.geometry } as any}
+            style={{ color: WARNING_COLORS[w.phenomena] ?? '#f59e0b', weight: 2.5, fillOpacity: 0.1 }}
+          >
+            <Popup>
+              <div className="text-xs space-y-1 min-w-[200px]">
+                <div className="font-semibold text-sm text-gray-900">{w.title}</div>
+                <div className="text-gray-600">{formatWhen(w.polygonBegin ?? w.issued)} to {formatWhen(w.polygonEnd)}</div>
+                {(w.windMph != null || w.hailInches != null) && (
+                  <div className="text-gray-600">
+                    {[w.windMph != null ? `Wind up to ${w.windMph} mph` : null, w.hailInches != null ? `hail up to ${w.hailInches}"` : null].filter(Boolean).join(', ')}
+                  </div>
+                )}
+                {w.tornado && <div className="text-gray-600">Tornado: {w.tornado.toLowerCase()}</div>}
+              </div>
+            </Popup>
+          </GeoJSON>
+        ))}
         {ordered.map((r) => {
           const color = STORM_CATEGORY_COLORS[r.category];
           const isSelected = r.id === selectedId;
           const isRadar = r.source === 'radar';
+          const faded = !!selectedId && !isSelected && !!relatedIds && !relatedIds.has(r.id);
           return (
             <CircleMarker
               key={r.id}
@@ -141,8 +201,9 @@ export default function StormMap({ center, radiusMiles, reports, selectedId, onS
               pathOptions={{
                 color: isSelected ? '#111827' : color,
                 weight: isSelected ? 3 : isRadar ? 1 : 2,
+                opacity: faded ? 0.2 : 1,
                 fillColor: color,
-                fillOpacity: isRadar ? 0.25 : 0.85,
+                fillOpacity: faded ? 0.08 : isRadar ? 0.25 : 0.85,
               }}
               eventHandlers={{ click: () => onSelect(r.id) }}
             >
@@ -158,10 +219,11 @@ export default function StormMap({ center, radiusMiles, reports, selectedId, onS
           <Tooltip direction="top" offset={[0, -8]}>{center.label}</Tooltip>
         </CircleMarker>
         <FocusSelected report={selected} markers={markers} />
+        <FitWarnings report={selected} warnings={warnings} />
       </MapContainer>
 
-      {/* Radar controls sit above the map panes. */}
-      <div className="absolute left-3 bottom-3 z-[1000] w-[min(360px,calc(100%-24px))] rounded-lg bg-white/95 shadow-md border border-gray-200 p-3 text-xs">
+      {/* Radar controls and legend sit above the map panes. */}
+      <div className="absolute left-3 bottom-3 z-[1000] w-[min(380px,calc(100%-24px))] rounded-lg bg-white/95 shadow-md border border-gray-200 p-3 text-xs">
         {frame ? (
           <>
             <div className="flex items-center justify-between gap-2">
@@ -210,9 +272,21 @@ export default function StormMap({ center, radiusMiles, reports, selectedId, onS
               <span className="h-2 w-10 rounded-sm" style={{ background: 'linear-gradient(90deg,#04e9e7,#019ff4,#02fd02,#fdf802,#fd9500,#fd0000,#bc0000,#f800fd)' }} />
               Light rain → heavy rain and hail. Drag to see the storm before and after.
             </div>
+            {warningKinds.length > 0 && (
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-gray-500">
+                {warnings
+                  .filter((w, i, all) => all.findIndex((x) => x.phenomena === w.phenomena) === i)
+                  .map((w) => (
+                    <span key={w.phenomena} className="flex items-center gap-1">
+                      <span className="h-2.5 w-2.5 rounded-sm border-2" style={{ borderColor: WARNING_COLORS[w.phenomena] ?? '#f59e0b' }} />
+                      {w.title} area
+                    </span>
+                  ))}
+              </div>
+            )}
           </>
         ) : (
-          <span className="text-gray-600">Select a report to see the radar picture from that moment.</span>
+          <span className="text-gray-600">Select a report to see the radar, the warning area and the rest of that storm.</span>
         )}
       </div>
     </div>
