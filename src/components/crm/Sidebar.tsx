@@ -40,7 +40,10 @@ import {
   ClipboardList,
   FileSignature,
   CloudRain,
+  Radio,
 } from 'lucide-react';
+import { openLiveRadar, openStormHistory } from '@/lib/stormNavigation';
+import { getStormSearchMode, STORM_MODE_EVENT, type StormSearchMode } from '@/lib/stormReports';
 
 interface NavItem {
   id: ViewType;
@@ -53,6 +56,8 @@ interface NavItem {
    * generated ids, so the fixed ids in defaultBoards only exist offline.
    */
   boardType?: BoardType;
+  /** Storm Search opens on this tab: Live Radar or Storm Data. */
+  stormMode?: StormSearchMode;
 }
 
 interface NavSection {
@@ -68,7 +73,8 @@ const sections: NavSection[] = [
       { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
       { id: 'contacts', label: 'Contacts', icon: <Users size={20} /> },
       { id: 'quotes', label: 'Quotes', icon: <FileSignature size={20} /> },
-      { id: 'storm-search', label: 'Storm Data', icon: <CloudRain size={20} /> },
+      { id: 'storm-search', label: 'Live Radar', icon: <Radio size={20} />, stormMode: 'live' },
+      { id: 'storm-search', label: 'Storm Data', icon: <CloudRain size={20} />, stormMode: 'history' },
       { id: 'calendar', label: 'Calendar', icon: <Calendar size={20} /> },
     ],
   },
@@ -147,10 +153,19 @@ export default function Sidebar() {
     return true;
   };
 
+  const [stormMode, setStormMode] = useState<StormSearchMode>(getStormSearchMode);
+  useEffect(() => {
+    const sync = () => setStormMode(getStormSearchMode());
+    window.addEventListener(STORM_MODE_EVENT, sync);
+    return () => window.removeEventListener(STORM_MODE_EVENT, sync);
+  }, []);
+
   const isActive = (item: NavItem) =>
     item.boardType
       ? currentView === 'pipeline' && selectedBoard?.type === item.boardType
-      : currentView === item.id;
+      : item.stormMode
+        ? currentView === 'storm-search' && stormMode === item.stormMode
+        : currentView === item.id;
 
   const visibleMore = moreItems.filter(canSee);
   const activeInMore = visibleMore.some(isActive);
@@ -159,6 +174,8 @@ export default function Sidebar() {
   useEffect(() => { if (activeInMore) setMoreOpen(true); }, [activeInMore]);
 
   const handleNavClick = (item: NavItem) => {
+    if (item.stormMode === 'live') return openLiveRadar(dispatch);
+    if (item.stormMode === 'history') return openStormHistory(dispatch);
     if (item.boardType) {
       const board = state.boards.find((b) => b.type === item.boardType);
       if (board) dispatch({ type: 'SELECT_BOARD', payload: board.id });
@@ -171,7 +188,7 @@ export default function Sidebar() {
   const renderItem = (item: NavItem) => {
     const active = isActive(item);
     return (
-      <li key={`${item.id}:${item.boardType ?? ''}`}>
+      <li key={`${item.id}:${item.boardType ?? ''}:${item.stormMode ?? ''}`}>
         <button
           onClick={() => handleNavClick(item)}
           aria-current={active ? 'page' : undefined}

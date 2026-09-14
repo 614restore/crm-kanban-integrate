@@ -16,7 +16,7 @@ import {
   fetchRecentStormReports,
   type LiveAlert,
 } from '@/lib/liveWeather';
-import { toStateCode, type StormReport } from '@/lib/stormReports';
+import { toStateCode, type LiveRadarFocus, type StormReport } from '@/lib/stormReports';
 
 const ALERT_REFRESH_MS = 2 * 60000;
 const RADAR_REFRESH_MS = 5 * 60000;
@@ -60,7 +60,12 @@ function alertThreats(a: LiveAlert): string {
     .join(' · ');
 }
 
-export default function LiveRadarPanel() {
+interface LiveRadarPanelProps {
+  /** A place to center on (e.g. a contact's address); a new key re-centers. */
+  focus?: (LiveRadarFocus & { key: number }) | null;
+}
+
+export default function LiveRadarPanel({ focus = null }: LiveRadarPanelProps) {
   const { state } = useCRM();
   const companyId = state.companyId;
 
@@ -111,6 +116,43 @@ export default function LiveRadarPanel() {
     })();
     return () => { cancelled = true; };
   }, [companyId]);
+
+  // Opened for a specific place, e.g. from a contact.
+  useEffect(() => {
+    if (!focus) return;
+    let cancelled = false;
+    if (focus.lat != null && focus.lon != null) {
+      setAddress(focus.label ?? '');
+      setPointAlerts(null);
+      setReports(null);
+      setCenter({ lat: focus.lat, lon: focus.lon, label: focus.label || 'Selected location', state: toStateCode(focus.state), zoom: 9 });
+      return;
+    }
+    const query = (focus.address ?? '').trim();
+    if (!query) return;
+    setAddress(query);
+    setLocating(true);
+    setError(null);
+    geocodeAddress(query).then((found) => {
+      if (cancelled) return;
+      setLocating(false);
+      if (!found) {
+        setError(`Could not locate ${query}. Check that the address is complete (street, city, state).`);
+        return;
+      }
+      setPointAlerts(null);
+      setReports(null);
+      setCenter({
+        lat: found.lat,
+        lon: found.lon,
+        label: focus.label || found.displayName,
+        state: toStateCode(found.state ?? focus.state),
+        zoom: 9,
+      });
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus?.key]);
 
   const refresh = useCallback(async (where: LiveCenter, radarToo: boolean) => {
     const id = ++requestId.current;

@@ -34,6 +34,7 @@ import AppointmentModal from './AppointmentModal';
 import ContactTemplateModal from './ContactTemplateModal';
 import ChangeOrderModal, { ChangeOrder } from './ChangeOrderModal';
 import HailTracePanel from './HailTracePanel';
+import { openLiveRadar } from '@/lib/stormNavigation';
 import WeatherWidget from '@/components/integrations/WeatherWidget';
 import EagleViewPanel from './EagleViewPanel';
 import RoofrPanel from './RoofrPanel';
@@ -102,6 +103,7 @@ import {
   Star,
   Zap,
   CloudLightning,
+  Radio,
   Wind,
   RefreshCw,
   Camera,
@@ -1588,6 +1590,21 @@ export default function ContactDetail() {
                       <span className="text-gray-900">
                         {contact.address ? `${contact.address}, ${contact.city}, ${contact.state} ${contact.zip}` : '-'}
                       </span>
+                      {contact.address && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const propertyAddress = [contact.address, contact.city, [contact.state, contact.zip].filter(Boolean).join(' ')]
+                              .filter(Boolean)
+                              .join(', ');
+                            openLiveRadar(dispatch, { address: propertyAddress, label: propertyAddress, state: contact.state || null });
+                          }}
+                          title="View live radar for this address"
+                          className="ml-1 inline-flex shrink-0 items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                        >
+                          <Radio size={12} /> Live radar
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -3020,6 +3037,31 @@ export default function ContactDetail() {
 
         {activeTab === 'insurance' && (
           <div className="space-y-6">
+            {(() => {
+              const propertyAddress = [contact.address, contact.city, [contact.state, contact.zip].filter(Boolean).join(' ')]
+                .filter(Boolean)
+                .join(', ');
+              return (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-100 bg-blue-50 p-4">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">Live radar for this property</p>
+                    <p className="text-xs text-gray-600">
+                      {propertyAddress
+                        ? `Current radar, active warnings and today's storm reports around ${propertyAddress}.`
+                        : 'Add an address to this contact to see live radar for the property.'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={!propertyAddress}
+                    onClick={() => openLiveRadar(dispatch, { address: propertyAddress, label: propertyAddress, state: contact.state || null })}
+                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    <Radio size={16} /> View live radar
+                  </button>
+                </div>
+              );
+            })()}
             <HailTracePanel
               address={contact.address || ''}
               city={contact.city || ''}

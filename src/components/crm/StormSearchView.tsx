@@ -10,10 +10,16 @@ import {
   fetchStormWarnings,
   reportsFromSameStorm,
   searchStormReports,
+  getStormSearchMode,
+  peekPendingStormMode,
+  reportStormSearchMode,
+  takePendingLiveRadarFocus,
   takePendingStormFocus,
+  takePendingStormHistory,
   toStateCode,
   STORM_CATEGORY_LABELS,
   STORM_FOCUS_EVENT,
+  type LiveRadarFocus,
   type StormCategory,
   type StormReport,
   type StormSeverity,
@@ -114,7 +120,8 @@ function warningSummary(w: StormWarning): string {
 }
 
 export default function StormSearchView() {
-  const [mode, setMode] = useState<'live' | 'history'>('live');
+  const [mode, setMode] = useState<'live' | 'history'>(() => peekPendingStormMode() ?? getStormSearchMode());
+  const [liveFocus, setLiveFocus] = useState<(LiveRadarFocus & { key: number }) | null>(null);
   const [address, setAddress] = useState('');
   const [months, setMonths] = useState(12);
   const [radius, setRadius] = useState(10);
@@ -186,9 +193,21 @@ export default function StormSearchView() {
     );
   };
 
-  // A storm alert can open this view centered on its location.
+  // The sidebar highlights Live Radar or Storm Data by the open tab.
+  useEffect(() => {
+    reportStormSearchMode(mode);
+  }, [mode]);
+
+  // A storm alert can open this view centered on its location; the sidebar,
+  // top bar and contacts can open a tab, or the live radar on a place.
   useEffect(() => {
     const applyFocus = () => {
+      const live = takePendingLiveRadarFocus();
+      if (live) {
+        setMode('live');
+        setLiveFocus({ ...live, key: Date.now() });
+      }
+      if (takePendingStormHistory()) setMode('history');
       const focus = takePendingStormFocus();
       if (!focus) return;
       setMode('history');
@@ -347,7 +366,7 @@ export default function StormSearchView() {
       </div>
 
       {mode === 'live' ? (
-        <LiveRadarPanel />
+        <LiveRadarPanel focus={liveFocus} />
       ) : (
       <>
 

@@ -5,6 +5,7 @@ import { useAuth } from '@/lib/authContext';
 import { useNotificationFeed, type FeedNotification } from '@/hooks/useNotificationFeed';
 import { openNotificationTarget } from '@/lib/notificationNavigation';
 import NotificationDetailDialog from './NotificationDetailDialog';
+import { openLiveRadar } from '@/lib/stormNavigation';
 import {
   Search,
   Bell,
@@ -17,6 +18,7 @@ import {
   Info,
   AlertTriangle,
   RefreshCw,
+  Radio,
 } from 'lucide-react';
 import { statusLabels, CustomerStatus } from '@/lib/crmData';
 
@@ -207,6 +209,18 @@ export default function TopBar() {
             </div>
           )}
         </div>
+
+        {/* Live radar, one click from anywhere */}
+        <button
+          type="button"
+          onClick={() => openLiveRadar(dispatch)}
+          title="Live radar"
+          aria-label="Live radar"
+          className="flex items-center gap-1.5 p-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
+        >
+          <Radio size={20} />
+          <span className="hidden xl:inline text-sm font-medium">Live radar</span>
+        </button>
 
         {/* Notifications */}
         <div className="relative">

@@ -480,3 +480,64 @@ export function reportsFromSameStorm(report: StormReport, reports: StormReport[]
     return Math.abs(rt - t) <= 90 * 60000 && haversineMiles(report.lat, report.lon, r.lat, r.lon) <= 25;
   });
 }
+
+// ── Which Storm Search tab opens ──────────────────────────────────────────────
+
+export type StormSearchMode = 'live' | 'history';
+
+/** A place to center the live radar on: coordinates, or an address to look up. */
+export interface LiveRadarFocus {
+  address?: string | null;
+  label?: string | null;
+  lat?: number | null;
+  lon?: number | null;
+  state?: string | null;
+}
+
+/** Fired when the open Storm Search tab changes, so the sidebar can highlight it. */
+export const STORM_MODE_EVENT = 'trussctr:storm-mode';
+
+let pendingLiveFocus: LiveRadarFocus | null = null;
+let pendingHistory = false;
+let currentMode: StormSearchMode = 'live';
+
+/** Opens (or switches Storm Search to) the live radar, optionally centered on a place. */
+export function focusLiveRadar(focus: LiveRadarFocus = {}) {
+  pendingLiveFocus = focus;
+  pendingHistory = false;
+  window.dispatchEvent(new Event(STORM_FOCUS_EVENT));
+}
+
+/** Opens (or switches Storm Search to) the storm history tab. */
+export function focusStormHistory() {
+  pendingHistory = true;
+  pendingLiveFocus = null;
+  window.dispatchEvent(new Event(STORM_FOCUS_EVENT));
+}
+
+export function takePendingLiveRadarFocus(): LiveRadarFocus | null {
+  const focus = pendingLiveFocus;
+  pendingLiveFocus = null;
+  return focus;
+}
+
+export function takePendingStormHistory(): boolean {
+  const pending = pendingHistory;
+  pendingHistory = false;
+  return pending;
+}
+
+/** The tab a pending request will open, without taking it. */
+export function peekPendingStormMode(): StormSearchMode | null {
+  if (pendingFocus || pendingHistory) return 'history';
+  if (pendingLiveFocus) return 'live';
+  return null;
+}
+
+export const getStormSearchMode = () => currentMode;
+
+export function reportStormSearchMode(mode: StormSearchMode) {
+  if (currentMode === mode) return;
+  currentMode = mode;
+  window.dispatchEvent(new Event(STORM_MODE_EVENT));
+}
