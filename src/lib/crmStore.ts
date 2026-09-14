@@ -114,6 +114,8 @@ export interface CRMState {
   selectedInvoiceId: string | null;
   invoiceModalPrefill: { contactId?: string; items?: any[]; notes?: string } | null;
   pendingAppointmentContactId: string | null;
+  /** A notification asked the calendar to open this appointment. */
+  pendingAppointmentId: string | null;
   pendingQuote: PendingQuote | null;
   pendingQuoteAction: PendingQuoteAction | null;
   
@@ -132,6 +134,11 @@ export interface Notification {
   message: string;
   timestamp: string;
   read: boolean;
+  /** The notification's own kind, e.g. hail_event. */
+  kind?: string;
+  /** What it is about, so clicking it can open that record. */
+  relatedType?: string;
+  relatedId?: string;
 }
 
 export type CRMAction =
@@ -145,6 +152,7 @@ export type CRMAction =
   | { type: 'TOGGLE_QUICK_ADD' }
   | { type: 'TOGGLE_INVOICE_MODAL'; payload?: string | null; prefill?: { contactId?: string; items?: any[]; notes?: string } | null }
   | { type: 'SET_PENDING_APPOINTMENT_CONTACT'; payload: string | null }
+  | { type: 'SET_PENDING_APPOINTMENT_ID'; payload: string | null }
   | { type: 'SET_PENDING_QUOTE'; payload: PendingQuote | null }
   | { type: 'SET_PENDING_QUOTE_ACTION'; payload: PendingQuoteAction | null }
   | { type: 'ADD_CONTACT'; payload: Contact }
@@ -252,6 +260,8 @@ export function crmReducer(state: CRMState, action: CRMAction): CRMState {
     
     case 'SET_PENDING_APPOINTMENT_CONTACT':
       return { ...state, pendingAppointmentContactId: action.payload };
+    case 'SET_PENDING_APPOINTMENT_ID':
+      return { ...state, pendingAppointmentId: action.payload };
 
     case 'SET_PENDING_QUOTE':
       return { ...state, pendingQuote: action.payload };

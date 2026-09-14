@@ -133,6 +133,7 @@ const initialState: CRMState = {
   selectedInvoiceId: null,
   invoiceModalPrefill: null,
   pendingAppointmentContactId: null,
+  pendingAppointmentId: null,
   pendingQuote: null,
   pendingQuoteAction: null,
   isLoading: true,
@@ -1145,6 +1146,8 @@ function CRMApp() {
               message: `${newContact.firstName} ${newContact.lastName} was added by a team member.`,
               timestamp: new Date().toISOString(),
               read: false,
+              relatedType: 'contact',
+              relatedId: newContact.id,
             },
           });
         } else if (payload.eventType === 'UPDATE') {

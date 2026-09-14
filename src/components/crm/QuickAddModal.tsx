@@ -320,6 +320,8 @@ export default function QuickAddModal() {
           message: `${formData.firstName} ${formData.lastName} has been added to the CRM.`,
           timestamp: new Date().toISOString(),
           read: false,
+          relatedType: 'contact',
+          relatedId: dbContact.id,
         },
       });
 

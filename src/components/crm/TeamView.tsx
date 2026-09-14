@@ -237,6 +237,7 @@ export default function TeamView() {
           message: `${name} (${email}) was added and emailed a set-password link.`,
           timestamp: new Date().toISOString(),
           read: false,
+          relatedType: 'team',
         },
       });
 

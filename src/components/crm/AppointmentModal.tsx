@@ -371,6 +371,9 @@ export default function AppointmentModal({
                 message: `"${title.trim()}" with ${contactName} needs to be assigned to a team member.`,
                 timestamp: notification.created_at,
                 read: false,
+                kind: 'unassigned_appointment',
+                relatedType: 'appointment',
+                relatedId: created.id,
               },
             });
           }

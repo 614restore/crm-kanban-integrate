@@ -3,6 +3,8 @@ import { useCRM, ViewType, canViewFinancials, canManageTeam } from '@/lib/crmSto
 import type { BoardType } from '@/lib/crmData';
 import { useAuth } from '@/lib/authContext';
 import { useCompanyBrand } from '@/lib/useCompanyBrand';
+import { useNotificationFeed } from '@/hooks/useNotificationFeed';
+import { openNotificationTarget } from '@/lib/notificationNavigation';
 import {
   LayoutDashboard,
   Kanban,
@@ -123,6 +125,8 @@ export default function Sidebar() {
   const { currentView, sidebarCollapsed, currentUser } = state;
   const { name: companyName, logoUrl: companyLogoUrl } = useCompanyBrand();
   const [showNotifications, setShowNotifications] = useState(false);
+  // Same list as the top bar bell, including notifications saved in the database.
+  const { items: notificationFeed, unreadCount, markRead, markAllRead } = useNotificationFeed();
   // Track logo load failure so we fall back to the TrussCTR shield without needing a setter
   const [logoFailed, setLogoFailed] = useState(false);
   useEffect(() => { setLogoFailed(false); }, [companyLogoUrl]);
@@ -270,16 +274,16 @@ export default function Sidebar() {
         >
           <span className="flex-shrink-0 relative">
             <Bell size={20} />
-            {state.notifications.filter(n => !n.read).length > 0 && (
+            {unreadCount > 0 && (
               <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[10px] font-bold flex items-center justify-center text-white">
-                {state.notifications.filter(n => !n.read).length > 9 ? '9+' : state.notifications.filter(n => !n.read).length}
+                {unreadCount > 9 ? '9+' : unreadCount}
               </span>
             )}
           </span>
           {!sidebarCollapsed && <span className="font-medium">Notifications</span>}
-          {!sidebarCollapsed && state.notifications.filter(n => !n.read).length > 0 && (
+          {!sidebarCollapsed && unreadCount > 0 && (
             <span className="ml-auto bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-              {state.notifications.filter(n => !n.read).length}
+              {unreadCount}
             </span>
           )}
         </button>
@@ -289,21 +293,30 @@ export default function Sidebar() {
             <div className={`absolute bottom-full mb-2 ${sidebarCollapsed ? 'left-full ml-2' : 'left-0'} w-80 bg-white rounded-xl shadow-xl border border-gray-200 z-50`}>
               <div className="flex items-center justify-between p-4 border-b border-gray-100">
                 <h3 className="font-semibold text-gray-900">Notifications</h3>
-                {state.notifications.length > 0 && (
-                  <button onClick={() => { dispatch({ type: 'CLEAR_NOTIFICATIONS' }); setShowNotifications(false); }} className="text-sm text-blue-600 hover:text-blue-700">Clear all</button>
+                {unreadCount > 0 && (
+                  <button onClick={markAllRead} className="text-sm text-blue-600 hover:text-blue-700">Mark all read</button>
                 )}
               </div>
               <div className="max-h-80 overflow-y-auto">
-                {state.notifications.length === 0 ? (
+                {notificationFeed.length === 0 ? (
                   <div className="p-8 text-center text-gray-500"><Bell size={32} className="mx-auto mb-2 opacity-50" /><p>No notifications</p></div>
                 ) : (
-                  state.notifications.map((notification) => (
-                    <div key={notification.id} onClick={() => dispatch({ type: 'MARK_NOTIFICATION_READ', payload: notification.id })} className={`p-4 border-b border-gray-50 hover:bg-gray-50 cursor-pointer transition-colors ${!notification.read ? 'bg-blue-50/50' : ''}`}>
+                  notificationFeed.map((notification) => (
+                    <div
+                      key={notification.id}
+                      onClick={() => {
+                        markRead(notification);
+                        if (openNotificationTarget(notification, dispatch)) setShowNotifications(false);
+                      }}
+                      className={`p-4 border-b border-gray-50 hover:bg-gray-50 cursor-pointer transition-colors ${!notification.read ? 'bg-blue-50/50' : ''}`}
+                    >
                       <div className="flex gap-3">
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-gray-900">{notification.title}</p>
                           <p className="text-sm text-gray-500 truncate">{notification.message}</p>
-                          <p className="text-xs text-gray-400 mt-1">{new Date(notification.timestamp).toLocaleTimeString()}</p>
+                          <p className="text-xs text-gray-400 mt-1">
+                            {new Date(notification.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                          </p>
                         </div>
                         {!notification.read && <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-2" />}
                       </div>

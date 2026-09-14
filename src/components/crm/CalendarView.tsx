@@ -104,6 +104,23 @@ export default function CalendarView() {
       dispatch({ type: 'SET_PENDING_APPOINTMENT_CONTACT', payload: null });
     }
   }, [state.pendingAppointmentContactId]);
+
+  // A notification asked to open a specific appointment.
+  useEffect(() => {
+    const appointmentId = state.pendingAppointmentId;
+    if (!appointmentId) return;
+    const appointment = state.appointments.find((a) => a.id === appointmentId);
+    if (!appointment && !state.isInitialized) return; // appointments still loading
+    dispatch({ type: 'SET_PENDING_APPOINTMENT_ID', payload: null });
+    if (!appointment) {
+      toast.error('That appointment no longer exists.');
+      return;
+    }
+    setPendingContactId(null);
+    setEditingAppointment(appointment);
+    setShowModal(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.pendingAppointmentId, state.appointments, state.isInitialized]);
   const mentionTargets = getMentionTargets(state.teamMembers);
 
   const allAppointments = [...state.appointments];

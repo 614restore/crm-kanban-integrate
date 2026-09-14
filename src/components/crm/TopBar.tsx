@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { db, DbNotification } from '@/lib/database';
 import { useAuth } from '@/lib/authContext';
+import { useNotificationFeed, type FeedNotification } from '@/hooks/useNotificationFeed';
+import { openNotificationTarget } from '@/lib/notificationNavigation';
 import {
   Search,
   Bell,
@@ -22,7 +24,6 @@ export default function TopBar() {
   const { profile } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
-  const [dbNotifications, setDbNotifications] = useState<DbNotification[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleRefresh = () => {
@@ -31,46 +32,12 @@ export default function TopBar() {
     setTimeout(() => setIsRefreshing(false), 1000);
   };
 
-  useEffect(() => {
-    if (!state.companyId) return;
-    db.getNotifications(state.companyId).then((rows) => {
-      const userId = profile?.id;
-      setDbNotifications(rows.filter((n) => !n.user_id || n.user_id === userId));
-    });
-  }, [state.companyId, profile?.id]);
+  // Same list as the sidebar bell. Clicking a notification opens what it is about.
+  const { items: allNotifications, unreadCount, markRead, markAllRead } = useNotificationFeed();
 
-  // Merge: DB is authoritative; include in-memory notifications not yet in DB (transient)
-  const dbIds = new Set(dbNotifications.map((n) => n.id));
-  const inMemoryOnly = state.notifications.filter((n) => !dbIds.has(n.id));
-  const allNotifications = [
-    ...inMemoryOnly.map((n) => ({
-      id: n.id,
-      type: n.type,
-      title: n.title,
-      message: n.message,
-      timestamp: n.timestamp,
-      read: n.read,
-      isDb: false,
-    })),
-    ...dbNotifications.map((n) => ({
-      id: n.id,
-      type: n.type,
-      title: n.title,
-      message: n.message,
-      timestamp: n.created_at,
-      read: n.read,
-      isDb: true,
-    })),
-  ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-
-  const unreadCount = allNotifications.filter((n) => !n.read).length;
-
-  const handleMarkRead = async (id: string, isDb: boolean) => {
-    dispatch({ type: 'MARK_NOTIFICATION_READ', payload: id });
-    if (isDb) {
-      await db.markNotificationRead(id);
-      setDbNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
-    }
+  const handleNotificationClick = (notification: FeedNotification) => {
+    markRead(notification);
+    if (openNotificationTarget(notification, dispatch)) setShowNotifications(false);
   };
 
   const getNotificationIcon = (type: string) => {
@@ -255,12 +222,12 @@ export default function TopBar() {
             <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-200 z-50">
               <div className="flex items-center justify-between p-4 border-b border-gray-100">
                 <h3 className="font-semibold text-gray-900">Notifications</h3>
-                {allNotifications.length > 0 && (
+                {unreadCount > 0 && (
                   <button
-                    onClick={() => dispatch({ type: 'CLEAR_NOTIFICATIONS' })}
+                    onClick={markAllRead}
                     className="text-sm text-blue-600 hover:text-blue-700"
                   >
-                    Clear all
+                    Mark all read
                   </button>
                 )}
               </div>
@@ -275,7 +242,7 @@ export default function TopBar() {
                   allNotifications.map((notification) => (
                     <div
                       key={notification.id}
-                      onClick={() => handleMarkRead(notification.id, notification.isDb)}
+                      onClick={() => handleNotificationClick(notification)}
                       className={`p-4 border-b border-gray-50 hover:bg-gray-50 cursor-pointer transition-colors ${
                         !notification.read ? 'bg-blue-50/50' : ''
                       }`}

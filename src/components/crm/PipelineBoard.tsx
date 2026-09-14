@@ -417,6 +417,8 @@ export default function PipelineBoard() {
                 message: `${getContactFullName(draggedContact)} moved to ${column.title}`,
                 timestamp: new Date().toISOString(),
                 read: false,
+                relatedType: 'contact',
+                relatedId: draggedContact.id,
               },
             });
             // Auto-progression is handled inside updateContactStatus via enhancedAutoProgression
