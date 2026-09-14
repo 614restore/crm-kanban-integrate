@@ -206,20 +206,3 @@ export function radarTileUrl(template: string, time: Date): string {
     .replace(/\{unix\}/g, String(Math.floor(time.getTime() / 1000)))
     .replace(/\{iso\}/g, `${time.toISOString().slice(0, 19)}Z`);
 }
-
-/** Loads one tile (central Ohio, zoom 10) to check a provider works. Resolves the tile URL on success. */
-export function testTileUrl(template: string, subdomains = 'abc'): Promise<string | null> {
-  const url = template
-    .replace(/\{s\}/g, subdomains.charAt(0) || 'a')
-    .replace(/\{r\}/g, '')
-    .replace(/\{z\}/g, '10')
-    .replace(/\{x\}/g, '275')
-    .replace(/\{y\}/g, '387');
-  return new Promise((resolve) => {
-    const img = new Image();
-    const timer = window.setTimeout(() => resolve(null), 10000);
-    img.onload = () => { window.clearTimeout(timer); resolve(url); };
-    img.onerror = () => { window.clearTimeout(timer); resolve(null); };
-    img.src = url;
-  });
-}

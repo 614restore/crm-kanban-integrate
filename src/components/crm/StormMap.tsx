@@ -186,7 +186,8 @@ export default function StormMap({
     setPlaying((p) => !p);
   };
 
-  const showProviderNote = !mapSettings.loading && mapSettings.tilesSource === 'free' && usingDefaultRadar && !noteDismissed;
+  const showProviderNote =
+    !mapSettings.loading && !mapSettings.providerProblem && mapSettings.tilesSource === 'free' && usingDefaultRadar && !noteDismissed;
 
   return (
     <div className="relative isolate h-[520px] w-full overflow-hidden rounded-xl border border-gray-200">
@@ -291,6 +292,15 @@ export default function StormMap({
             <AlertTriangle size={14} className="mt-0.5 shrink-0" />
             <span>
               {mapSettings.providerName} didn't load, so the free map is showing. Check the key in{' '}
+              <button type="button" onClick={openMapSettings} className="font-semibold underline">Settings → Map Provider</button>.
+            </span>
+          </div>
+        )}
+        {mapSettings.providerProblem && (
+          <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50/95 p-2.5 text-xs text-amber-800 shadow-md">
+            <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+            <span>
+              {mapSettings.providerProblem} Showing the free map until it's fixed in{' '}
               <button type="button" onClick={openMapSettings} className="font-semibold underline">Settings → Map Provider</button>.
             </span>
           </div>

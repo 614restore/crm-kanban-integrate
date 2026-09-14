@@ -148,6 +148,12 @@ export default function LiveRadarMap({
             {mapSettings.providerName} didn't load, so the free map is showing. Check the key in Settings → Map Provider.
           </div>
         )}
+        {mapSettings.providerProblem && (
+          <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50/95 p-2.5 text-xs text-amber-800 shadow-md">
+            <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+            <span>{mapSettings.providerProblem} Showing the free map until it's fixed in Settings → Map Provider.</span>
+          </div>
+        )}
         {!mapSettings.loading && !providerFailed && mapSettings.tilesSource !== 'free' && (
           <div className="rounded-full border border-gray-200 bg-white/90 px-2.5 py-1 text-[11px] text-gray-600 shadow-sm">
             Map: {mapSettings.providerName} ({mapSettings.tilesSource === 'personal' ? 'yours' : 'team'})

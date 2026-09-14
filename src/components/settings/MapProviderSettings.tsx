@@ -7,6 +7,7 @@ import { CheckCircle, ExternalLink, Layers, Loader2, Radar, ShieldAlert, XCircle
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { MAP_SETTINGS_CHANGED_EVENT } from '@/hooks/useMapSettings';
+import { checkTileUrl } from '@/lib/mapTileCheck';
 import {
   buildTileConfig,
   getMapProvider,
@@ -15,7 +16,6 @@ import {
   MAP_PROVIDERS,
   MAP_SETTINGS_COLUMNS,
   radarTileUrl,
-  testTileUrl,
   type MapProviderId,
   type MapSettingsRow,
 } from '@/lib/mapProviders';
@@ -132,12 +132,9 @@ function MapSettingsSection({
       return;
     }
     setMapTest({ status: 'testing' });
-    const previewUrl = await testTileUrl(config.url, config.subdomains);
-    setMapTest(
-      previewUrl
-        ? { status: 'ok', previewUrl }
-        : { status: 'failed', message: 'The provider did not return a map. Check the key, and that it allows this web address.' },
-    );
+    // Checked server-side: a rejected key still returns an "Invalid key" image to the browser.
+    const result = await checkTileUrl(config.url, config.subdomains, true);
+    setMapTest(result.ok ? { status: 'ok', previewUrl: result.sampleUrl } : { status: 'failed', message: result.message });
   };
 
   const runRadarTest = async () => {
@@ -149,12 +146,8 @@ function MapSettingsSection({
     setRadarTest({ status: 'testing' });
     const step = 5 * 60000;
     const time = new Date(Math.floor((Date.now() - 3600e3) / step) * step);
-    const previewUrl = await testTileUrl(radarTileUrl(form.radarUrl.trim(), time));
-    setRadarTest(
-      previewUrl
-        ? { status: 'ok', previewUrl }
-        : { status: 'failed', message: 'The radar service did not return an image for an hour ago. Check the address and key.' },
-    );
+    const result = await checkTileUrl(radarTileUrl(form.radarUrl.trim(), time), 'abc', true);
+    setRadarTest(result.ok ? { status: 'ok', previewUrl: result.sampleUrl } : { status: 'failed', message: result.message });
   };
 
   const save = async () => {
