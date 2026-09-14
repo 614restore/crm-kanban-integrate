@@ -16,6 +16,8 @@ export interface FeedNotification extends NotificationTarget {
   timestamp: string;
   read: boolean;
   isDb: boolean;
+  /** For note @mentions: the note, whose full text the notification does not keep. */
+  noteId?: string;
 }
 
 const SEVERITY_BY_KIND: Record<string, FeedNotification['type']> = {
@@ -67,6 +69,7 @@ export function useNotificationFeed() {
         isDb: true,
         relatedType: mentionOnCustomer ? 'contact' : (n.related_type ?? undefined),
         relatedId: mentionOnCustomer ? data.entity_id : (n.related_id ?? undefined),
+        noteId: n.type === 'note_mention' && data?.note_id ? data.note_id : undefined,
       };
     });
     const sessionOnly: FeedNotification[] = state.notifications

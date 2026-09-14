@@ -245,6 +245,9 @@ export default function ContactDetail() {
   const [isSavingQuickNote, setIsSavingQuickNote] = useState(false);
   const [mentionStart, setMentionStart] = useState<number | null>(null);
   const [mentionSuggestions, setMentionSuggestions] = useState<ReturnType<typeof getMentionTargets>>([]);
+  // Notes from the shared notes table, which the mobile app writes too.
+  const [teamNotes, setTeamNotes] = useState<Communication[]>([]);
+  const [teamNotesVersion, setTeamNotesVersion] = useState(0);
   const [isUploadingDocument, setIsUploadingDocument] = useState(false);
   const [contactDocuments, setContactDocuments] = useState<Document[]>([]);
   const [salesFolderOpen, setSalesFolderOpen] = useState(true);
@@ -312,6 +315,38 @@ export default function ContactDetail() {
     const tab = consumePendingContactTab();
     if (tab) setActiveTab(tab as TabType);
   }, [contactId]);
+
+  // Notes live in the shared notes table: the mobile app writes them there, and an
+  // @mention in one notifies the people tagged (notify_note_mentions trigger).
+  useEffect(() => {
+    if (!contactId) return;
+    let cancelled = false;
+    supabase
+      .from('notes')
+      .select('id, body, created_at, author_id, tags, author:team_members(full_name)')
+      .eq('entity_type', 'customer')
+      .eq('entity_id', contactId)
+      .order('created_at', { ascending: false })
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          console.warn('[ContactDetail] notes load failed:', error.message);
+          return;
+        }
+        setTeamNotes((data || []).map((row: any) => ({
+          id: `note-${row.id}`,
+          contactId,
+          type: 'note' as const,
+          direction: 'outbound' as const,
+          content: row.body ?? '',
+          timestamp: row.created_at,
+          userId: row.author_id ?? '',
+          userName: row.author?.full_name ?? 'Team member',
+          mentions: row.tags ?? [],
+        })));
+      });
+    return () => { cancelled = true; };
+  }, [contactId, teamNotesVersion]);
 
   // Load contact projects, work orders, material orders and change orders
   useEffect(() => {
@@ -1045,46 +1080,51 @@ export default function ContactDetail() {
     }
 
     try {
-      if (!effectiveCompanyId) {
+      if (!effectiveCompanyId || !profile?.id) {
         toast.error('No company context available. Please refresh and sign in again.');
         return;
       }
 
-      const createdCommunication = await db.createCommunication({
-        company_id: effectiveCompanyId,
-        contact_id: contact.id,
-        type: 'note',
-        direction: 'outbound',
-        content: newNote,
-        user_id: profile?.id,
-      });
-
-      if (!createdCommunication) {
-        toast.error('Failed to save note');
+      // Notes go to the shared notes table, as on mobile. The notify_note_mentions
+      // trigger notifies everyone in tags, which holds team_members ids; mention
+      // targets carry sign-in user ids, so map the mentioned handles to members.
+      const { valid } = validateMentions(newNote, mentionTargets);
+      const mentionedUserIds = mentionTargets
+        .filter((target) => valid.includes(target.handle.toLowerCase()))
+        .map((target) => target.id);
+      const { data: members, error: membersError } = await supabase
+        .from('team_members')
+        .select('id, user_id')
+        .eq('company_id', effectiveCompanyId)
+        .eq('is_active', true)
+        .in('user_id', Array.from(new Set([profile.id, ...mentionedUserIds])));
+      if (membersError) throw membersError;
+      const author = (members || []).find((m: any) => m.user_id === profile.id);
+      if (!author) {
+        toast.error('Your team profile could not be found. Please refresh and try again.');
         return;
       }
+      const tags = (members || [])
+        .filter((m: any) => mentionedUserIds.includes(m.user_id) && m.id !== author.id)
+        .map((m: any) => m.id as string);
 
-      const newComm: Communication = {
-        id: createdCommunication.id,
-        contactId: contact.id,
-        type: 'note',
-        direction: 'outbound',
-        content: newNote,
-        timestamp: createdCommunication.created_at || new Date().toISOString(),
-        userId: state.currentUser?.id || 'unknown',
-        userName: state.currentUser?.name || 'Unknown User',
-      };
+      const { error: insertError } = await supabase.from('notes').insert({
+        company_id: effectiveCompanyId,
+        entity_type: 'customer',
+        entity_id: contact.id,
+        author_id: author.id,
+        body: newNote.trim(),
+        tags,
+      });
+      if (insertError) throw insertError;
 
-      const updatedContact = {
-        ...contact,
-        communications: [...(contact.communications || []), newComm],
-        updatedAt: new Date().toISOString(),
-      };
-      dispatch({ type: 'UPDATE_CONTACT', payload: updatedContact });
       setNewNote('');
       setMentionStart(null);
       setMentionSuggestions([]);
-      toast.success('Note saved');
+      setTeamNotesVersion((v) => v + 1);
+      toast.success(tags.length > 0
+        ? `Note saved. ${tags.length === 1 ? '1 teammate was' : `${tags.length} teammates were`} notified.`
+        : 'Note saved');
     } catch (error) {
       console.error('Error adding note:', error);
       toast.error('Failed to save note');
@@ -2078,7 +2118,7 @@ export default function ContactDetail() {
                         void handleAddNote();
                       }
                     }}
-                    placeholder="Add a note... use @jnewell to tag teammates"
+                    placeholder="Add a note… type @ to tag a teammate and notify them"
                     className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                   />
                   {mentionSuggestions.length > 0 && (
@@ -2109,7 +2149,7 @@ export default function ContactDetail() {
               </div>
 
               <div className="space-y-4">
-                {(contact.communications || [])
+                {[...(contact.communications || []), ...teamNotes]
                   .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
                   .map((comm) => (
                     <div key={comm.id} className="flex gap-4 p-4 bg-gray-50 rounded-lg">
@@ -2152,7 +2192,7 @@ export default function ContactDetail() {
                       </div>
                     </div>
                   ))}
-                {(!contact.communications || contact.communications.length === 0) && (
+                {(contact.communications?.length ?? 0) + teamNotes.length === 0 && (
                   <div className="text-center py-8 text-gray-500">
                     <Clock size={32} className="mx-auto mb-2 opacity-50" />
                     <p>No activity yet</p>

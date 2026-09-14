@@ -4,6 +4,7 @@ import { db, DbNotification } from '@/lib/database';
 import { useAuth } from '@/lib/authContext';
 import { useNotificationFeed, type FeedNotification } from '@/hooks/useNotificationFeed';
 import { openNotificationTarget } from '@/lib/notificationNavigation';
+import NotificationDetailDialog from './NotificationDetailDialog';
 import {
   Search,
   Bell,
@@ -35,9 +36,12 @@ export default function TopBar() {
   // Same list as the sidebar bell. Clicking a notification opens what it is about.
   const { items: allNotifications, unreadCount, markRead, markAllRead } = useNotificationFeed();
 
+  // Clicking opens the whole notification; the list cuts long messages off.
+  const [openedNotification, setOpenedNotification] = useState<FeedNotification | null>(null);
   const handleNotificationClick = (notification: FeedNotification) => {
     markRead(notification);
-    if (openNotificationTarget(notification, dispatch)) setShowNotifications(false);
+    setShowNotifications(false);
+    setOpenedNotification(notification);
   };
 
   const getNotificationIcon = (type: string) => {
@@ -288,6 +292,14 @@ export default function TopBar() {
           }}
         />
       )}
+      <NotificationDetailDialog
+        notification={openedNotification}
+        onClose={() => setOpenedNotification(null)}
+        onOpenTarget={(notification) => {
+          setOpenedNotification(null);
+          openNotificationTarget(notification, dispatch);
+        }}
+      />
     </header>
   );
 }

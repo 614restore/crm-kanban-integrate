@@ -44,3 +44,21 @@ export function openNotificationTarget(target: NotificationTarget, dispatch: Dis
       return false;
   }
 }
+
+/** Label for the button that goes where a notification leads, or null if it leads nowhere. */
+export function describeNotificationTarget(target: NotificationTarget): string | null {
+  switch (target.relatedType) {
+    case 'contact':
+    case 'customer':
+      return target.relatedId ? 'Open contact' : null;
+    case 'appointment':
+      return target.relatedId ? 'Open appointment' : null;
+    case 'stale_leads':
+    case 'stale_leads_user':
+      return 'View contacts';
+    case 'team':
+      return 'Open team';
+    default:
+      return null;
+  }
+}

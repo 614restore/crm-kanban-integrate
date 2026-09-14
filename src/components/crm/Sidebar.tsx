@@ -3,7 +3,8 @@ import { useCRM, ViewType, canViewFinancials, canManageTeam } from '@/lib/crmSto
 import type { BoardType } from '@/lib/crmData';
 import { useAuth } from '@/lib/authContext';
 import { useCompanyBrand } from '@/lib/useCompanyBrand';
-import { useNotificationFeed } from '@/hooks/useNotificationFeed';
+import { useNotificationFeed, type FeedNotification } from '@/hooks/useNotificationFeed';
+import NotificationDetailDialog from './NotificationDetailDialog';
 import { openNotificationTarget } from '@/lib/notificationNavigation';
 import {
   LayoutDashboard,
@@ -127,6 +128,8 @@ export default function Sidebar() {
   const [showNotifications, setShowNotifications] = useState(false);
   // Same list as the top bar bell, including notifications saved in the database.
   const { items: notificationFeed, unreadCount, markRead, markAllRead } = useNotificationFeed();
+  // Clicking opens the whole notification; the list cuts long messages off.
+  const [openedNotification, setOpenedNotification] = useState<FeedNotification | null>(null);
   // Track logo load failure so we fall back to the TrussCTR shield without needing a setter
   const [logoFailed, setLogoFailed] = useState(false);
   useEffect(() => { setLogoFailed(false); }, [companyLogoUrl]);
@@ -306,7 +309,8 @@ export default function Sidebar() {
                       key={notification.id}
                       onClick={() => {
                         markRead(notification);
-                        if (openNotificationTarget(notification, dispatch)) setShowNotifications(false);
+                        setShowNotifications(false);
+                        setOpenedNotification(notification);
                       }}
                       className={`p-4 border-b border-gray-50 hover:bg-gray-50 cursor-pointer transition-colors ${!notification.read ? 'bg-blue-50/50' : ''}`}
                     >
@@ -392,6 +396,14 @@ export default function Sidebar() {
           </button>
         )}
       </div>
+      <NotificationDetailDialog
+        notification={openedNotification}
+        onClose={() => setOpenedNotification(null)}
+        onOpenTarget={(notification) => {
+          setOpenedNotification(null);
+          openNotificationTarget(notification, dispatch);
+        }}
+      />
     </aside>
   );
 }
