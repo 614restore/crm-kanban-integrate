@@ -362,8 +362,22 @@ export default function Sidebar() {
                 <p className="text-xs text-slate-400 capitalize">{currentUser.role}</p>
               </div>
             )}
+            <button onClick={handleSignOut} className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors flex-shrink-0" title="Sign out">
+              <LogOut size={16} />
+            </button>
           </div>
-        ) : null}
+        ) : (
+          // No profile yet, or it failed to load: keep sign-out reachable so
+          // nobody is stuck in a half-loaded session with no way out.
+          <button
+            onClick={handleSignOut}
+            className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-2 px-2'} py-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors`}
+            title="Sign out"
+          >
+            <LogOut size={16} />
+            {!sidebarCollapsed && <span className="text-sm font-medium">Sign out</span>}
+          </button>
+        )}
       </div>
     </aside>
   );
