@@ -64,6 +64,7 @@ const sections: NavSection[] = [
     items: [
       { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
       { id: 'contacts', label: 'Contacts', icon: <Users size={20} /> },
+      { id: 'quotes', label: 'Quotes', icon: <FileSignature size={20} /> },
       { id: 'storm-search', label: 'Storm Data', icon: <CloudRain size={20} /> },
       { id: 'calendar', label: 'Calendar', icon: <Calendar size={20} /> },
     ],
@@ -96,11 +97,10 @@ const sections: NavSection[] = [
   },
 ];
 
-// Job tools (quotes, work orders, inspections…) also open from inside a job
+// Job tools (work orders, inspections…) also open from inside a job
 // record; they stay here so the company-wide lists remain one click away.
 // Document templates moved to Settings → Document Templates.
 const moreItems: NavItem[] = [
-  { id: 'quotes', label: 'Quotes', icon: <FileSignature size={20} /> },
   { id: 'work-orders', label: 'Work Orders', icon: <Clipboard size={20} /> },
   { id: 'material-orders', label: 'Material Orders', icon: <Package size={20} /> },
   { id: 'inspections', label: 'Inspections', icon: <ClipboardList size={20} /> },
