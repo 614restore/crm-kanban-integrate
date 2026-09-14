@@ -81,7 +81,8 @@ const sections: NavSection[] = [
     key: 'finance',
     title: 'Finance',
     items: [
-      { id: 'financial', label: 'Invoices & Payments', icon: <Receipt size={20} />, requiresPermission: 'financials' },
+      { id: 'invoices', label: 'Invoices', icon: <Receipt size={20} />, requiresPermission: 'financials' },
+      { id: 'financial', label: 'Financial Overview', icon: <Wallet size={20} />, requiresPermission: 'financials' },
       { id: 'reports', label: 'Reports', icon: <BarChart size={20} /> },
     ],
   },

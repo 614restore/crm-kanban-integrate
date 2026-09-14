@@ -50,6 +50,7 @@ export type ViewType =
   | 'documents'
   | 'document-templates'
   | 'financial'
+  | 'invoices'
   | 'expenses'
   | 'team'
   | 'automations'

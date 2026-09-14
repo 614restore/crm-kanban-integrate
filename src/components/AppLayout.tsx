@@ -43,6 +43,7 @@ const CommunicationHub = lazy(() => import('./crm/CommunicationHub'));
 const CalendarView = lazy(() => import('./crm/CalendarView'));
 const DocumentCenter = lazy(() => import('./crm/DocumentCenter'));
 const FinancialDashboard = lazy(() => import('./crm/FinancialDashboard'));
+const InvoicesPage = lazy(() => import('./crm/InvoicesPage'));
 const TeamView = lazy(() => import('./crm/TeamView'));
 const AutomationsView = lazy(() => import('./crm/AutomationsView'));
 const SettingsView = lazy(() => import('./crm/SettingsView'));
@@ -150,7 +151,7 @@ function buildFallbackAvatar(firstName?: string, lastName?: string, email?: stri
 // Views accessible in read-only (expired subscription) mode
 const EXPIRED_ALLOWED_VIEWS = new Set<ViewType>([
   'contacts', 'pipeline', 'contact-detail',
-  'documents', 'financial', 'estimates', 'quotes', 'reports', 'settings',
+  'documents', 'financial', 'invoices', 'estimates', 'quotes', 'reports', 'settings',
 ]);
 
 function ViewRouter() {
@@ -181,6 +182,8 @@ function ViewRouter() {
         return <DocumentCenter />;
       case 'financial':
         return <FinancialDashboard />;
+      case 'invoices':
+        return <InvoicesPage />;
       case 'team':
         return <TeamView />;
       case 'automations':

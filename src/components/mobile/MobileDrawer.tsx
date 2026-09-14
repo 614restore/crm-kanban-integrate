@@ -35,6 +35,7 @@ const navItems: NavItem[] = [
   { id: 'suppliers',           label: 'Suppliers',        icon: <Store size={20} />,            group: 'Operations' },
   { id: 'insurance-tracking',  label: 'Insurance',        icon: <Shield size={20} />,           group: 'Finance', requiresPermission: 'financials' },
   { id: 'supplement-tracking', label: 'Supplements',      icon: <AlertCircle size={20} />,      group: 'Finance', requiresPermission: 'financials' },
+  { id: 'invoices',            label: 'Invoices',         icon: <FileText size={20} />,         group: 'Finance', requiresPermission: 'financials' },
   { id: 'financial',           label: 'Financial',        icon: <DollarSign size={20} />,       group: 'Finance', requiresPermission: 'financials' },
   { id: 'expenses',            label: 'Expenses',         icon: <Receipt size={20} />,          group: 'Finance' },
   { id: 'commission-payroll',  label: 'Payroll',          icon: <BadgeDollarSign size={20} />,  group: 'Finance', requiresPermission: 'financials' },

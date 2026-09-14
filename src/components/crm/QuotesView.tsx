@@ -9,6 +9,7 @@ import { sendEmail } from '@/lib/emailApi';
 import { toast } from 'sonner';
 import WorkOrderPanel from './WorkOrderPanel';
 import ReceiptPanel from './ReceiptPanel';
+import InvoiceBuilder from './InvoiceBuilder';
 import { quoteProjectTemplates, TemplateLineItem } from '@/data/quoteTemplates';
 import {
   FileText, Plus, Search, Trash2, X, Save, User, Send, Link2, Eye, ChevronDown,
@@ -137,6 +138,8 @@ export default function QuotesView() {
   const [workOrderCompany, setWorkOrderCompany] = useState<{ name: string; phone?: string; email?: string; license_number?: string } | null>(null);
   const [receiptQuote, setReceiptQuote] = useState<any | null>(null);
   const [receiptCompany, setReceiptCompany] = useState<{ name: string; default_deposit_percent?: number | null; receipt_cc_emails?: string[] | null } | null>(null);
+  const [invoiceQuote, setInvoiceQuote] = useState<any | null>(null);
+  const [invoiceCompany, setInvoiceCompany] = useState<{ name: string; email?: string; phone?: string; address?: string; logo_url?: string } | null>(null);
 
   // Another screen asked for a quote: open the builder on it, then clear the
   // request so returning to Quotes later does not reopen it.
@@ -271,10 +274,10 @@ export default function QuotesView() {
     setWorkOrderQuote(q);
   };
 
-  // As in QuoteMGR, any quote can take payments. The receipt needs the tier
-  // names, manual totals and the customer's email, which the list does not load.
-  const openReceipts = async (q: QuoteRow) => {
-    if (!companyId) return;
+  // Receipts and invoices need the tier names, manual totals and the customer's
+  // contact details, which the list does not load.
+  const loadFullQuote = async (q: QuoteRow): Promise<{ full: any; company: any } | null> => {
+    if (!companyId) return null;
     const [{ data: full, error }, company] = await Promise.all([
       supabase
         .from('quotes')
@@ -282,13 +285,21 @@ export default function QuotesView() {
           include_better, include_best, completion_certificate_enabled,
           good_total, better_total, best_total, good_tier_name, better_tier_name, best_tier_name,
           use_manual_totals, manual_good_total, manual_better_total, manual_best_total,
-          customer_id, customer:customers(id, first_name, last_name, email)`)
+          customer_id, customer:customers(id, first_name, last_name, email, address, city, state, zip)`)
         .eq('id', q.id)
         .single(),
       db.getCompany(companyId).catch(() => null) as Promise<any>,
     ]);
-    if (error || !full) { toast.error('Could not load this quote for payments.'); return; }
-    if (!company) { toast.error('Could not load your company details for the receipt.'); return; }
+    if (error || !full) { toast.error('Could not load this quote.'); return null; }
+    if (!company) { toast.error('Could not load your company details.'); return null; }
+    return { full, company };
+  };
+
+  // As in QuoteMGR, any quote can take payments.
+  const openReceipts = async (q: QuoteRow) => {
+    const loaded = await loadFullQuote(q);
+    if (!loaded) return;
+    const { full, company } = loaded;
     if (!full.customer_id) { toast.error('Add a customer to this quote before recording a payment.'); return; }
     setReceiptCompany({
       name: company.name || '',
@@ -296,6 +307,22 @@ export default function QuotesView() {
       receipt_cc_emails: company.receipt_cc_emails ?? null,
     });
     setReceiptQuote(full);
+  };
+
+  // As in QuoteMGR, a signed quote is what gets invoiced.
+  const openInvoice = async (q: QuoteRow) => {
+    const loaded = await loadFullQuote(q);
+    if (!loaded) return;
+    const { full, company } = loaded;
+    if (!full.customer_id) { toast.error('Add a customer to this quote before invoicing it.'); return; }
+    setInvoiceCompany({
+      name: company.name || '',
+      email: company.email || undefined,
+      phone: company.phone || undefined,
+      address: [company.address, company.city, company.state, company.zip].filter(Boolean).join(', ') || undefined,
+      logo_url: company.logo_url || undefined,
+    });
+    setInvoiceQuote(full);
   };
 
   const handleSaved = () => {
@@ -413,6 +440,15 @@ export default function QuotesView() {
                       </button>
                       {q.status === 'signed' && (
                         <button
+                          onClick={() => openInvoice(q)}
+                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                          title="Create invoice"
+                        >
+                          <FileText size={15} />
+                        </button>
+                      )}
+                      {q.status === 'signed' && (
+                        <button
                           onClick={() => openWorkOrder(q)}
                           className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
                           title="Create work order"
@@ -474,6 +510,44 @@ export default function QuotesView() {
           }}
         />
       )}
+
+      {invoiceQuote && invoiceCompany && companyId && (() => {
+        const iq = invoiceQuote;
+        const st = iq.selected_tier;
+        // Same tier choice as QuoteMGR: a multi-tier or unset selection invoices the
+        // highest tier the quote offers.
+        const tier: 'good' | 'better' | 'best' =
+          st === 'good' || st === 'better' || st === 'best' ? st
+            : iq.include_better === false && iq.include_best === false ? 'good'
+            : iq.include_best === false ? 'better' : 'best';
+        const tierTotal = (manual: number | null, stored: number | null) =>
+          iq.use_manual_totals && manual != null ? Number(manual) : stored != null ? Number(stored) : undefined;
+        const cust = iq.customer;
+        return (
+          <InvoiceBuilder
+            quoteId={iq.id}
+            quoteNumber={iq.quote_number}
+            selectedTier={tier}
+            includeBetter={iq.include_better !== false}
+            includeBest={iq.include_best !== false}
+            goodTotal={tierTotal(iq.manual_good_total, iq.good_total)}
+            betterTotal={tierTotal(iq.manual_better_total, iq.better_total)}
+            bestTotal={tierTotal(iq.manual_best_total, iq.best_total)}
+            useManualTotal={!!iq.use_manual_totals}
+            goodTierName={iq.good_tier_name || 'Good'}
+            betterTierName={iq.better_tier_name || 'Better'}
+            bestTierName={iq.best_tier_name || 'Best'}
+            companyId={companyId}
+            customerId={iq.customer_id ?? cust?.id}
+            customerName={cust ? `${cust.first_name || ''} ${cust.last_name || ''}`.trim() || 'Customer' : 'Customer'}
+            customerEmail={cust?.email || ''}
+            customerAddress={cust ? [cust.address, cust.city, cust.state, cust.zip].filter(Boolean).join(', ') : ''}
+            company={invoiceCompany}
+            onClose={() => setInvoiceQuote(null)}
+            onSaved={() => setInvoiceQuote(null)}
+          />
+        );
+      })()}
     </div>
   );
 }
