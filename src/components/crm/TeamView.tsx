@@ -41,6 +41,7 @@ export default function TeamView() {
   const [showPermissionsModal, setShowPermissionsModal] = useState(false);
   const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
   const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteName, setInviteName] = useState('');
   const [inviteRole, setInviteRole] = useState<UserRole>('sales_rep');
   const [copied, setCopied] = useState(false);
   const [isSendingInvite, setIsSendingInvite] = useState(false);
@@ -81,27 +82,13 @@ export default function TeamView() {
   // Effective limit = plan limit + any bonus seats granted by platform admin
   const planLimit = basePlanLimit === Infinity ? Infinity : basePlanLimit + bonusSeats;
   const activeSeats = state.teamMembers.length;
-  const pendingSeats = pendingInvites.filter(i => !i.accepted).length;
+  // Members are created active straight away (see handleInvite), so no seats are pending.
+  const pendingSeats = 0;
   const atSeatLimit = planLimit !== Infinity && (activeSeats + pendingSeats) >= planLimit;
 
   // Debug logging for team members
   useEffect(() => {
   }, [state.teamMembers, state.companyId, profile]);
-
-  // Load pending invites
-  useEffect(() => {
-    if (!state.companyId || !canManageTeam(userRole)) return;
-    setIsLoadingInvites(true);
-    supabase
-      .from('invitations')
-      .select('id, email, role, created_at, expires_at, accepted')
-      .eq('company_id', state.companyId)
-      .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        if (data) setPendingInvites(data);
-        setIsLoadingInvites(false);
-      });
-  }, [state.companyId, userRole]);
 
   // Filter team members
   const filteredMembers = state.teamMembers.filter((tm) => {
@@ -150,6 +137,11 @@ export default function TeamView() {
       return;
     }
 
+    if (!inviteName.trim()) {
+      toast.error('Please enter their name.');
+      return;
+    }
+
     if (!inviteEmail.trim()) {
       toast.error('Please enter an email address.');
       return;
@@ -165,121 +157,96 @@ export default function TeamView() {
     const bonus = (companyRow as any)?.bonus_seats ?? bonusSeats ?? 0;
     const limit = baseLimit === Infinity ? Infinity : baseLimit + bonus;
 
-    if (limit !== Infinity) {
+    if (limit !== Infinity && state.teamMembers.length >= limit) {
       const activeCount = state.teamMembers.length;
-      const pendingCount = pendingInvites.filter(i => !i.accepted).length;
-      const totalSeats = activeCount + pendingCount;
-
-      if (totalSeats >= limit) {
-        toast.error(
-          `Your ${plan} plan allows up to ${limit} user${limit === 1 ? '' : 's'}. ` +
-          `You currently have ${activeCount} active member${activeCount === 1 ? '' : 's'} ` +
-          `and ${pendingCount} pending invite${pendingCount === 1 ? '' : 's'}. ` +
-          `Upgrade your plan to add more team members.`
-        );
-        return;
-      }
+      toast.error(
+        `Your ${plan} plan allows up to ${limit} user${limit === 1 ? '' : 's'} and you have ${activeCount}. ` +
+        `Upgrade your plan to add more team members.`
+      );
+      return;
     }
 
     setIsSendingInvite(true);
-
-    const timeoutId = setTimeout(() => {
-      setIsSendingInvite(false);
-      toast.error('Request timed out. Please try again.');
-    }, 15000);
-
+    const name = inviteName.trim();
+    const email = inviteEmail.trim().toLowerCase();
     try {
-      const token = globalThis.crypto?.randomUUID?.() || `invite-${Date.now()}`;
+      // As in QuoteMGR, the member is created straight away by create-team-member,
+      // which emails them a link to set their own password. The random password
+      // below is never shown or sent; the account just needs one until they pick theirs.
+      const bytes = new Uint8Array(24);
+      globalThis.crypto.getRandomValues(bytes);
+      const placeholderPassword = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('') + 'Aa1!';
 
-      // Insert directly via supabase client
-      const { data: inviteRecord, error: inviteError } = await supabase
-        .from('invitations')
-        .insert({
-          company_id: effectiveCompanyId,
-          email: inviteEmail.trim().toLowerCase(),
-          role: inviteRole,
-          invited_by: profile?.id,
-          token,
-          accepted: false,
-          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-        })
-        .select()
-        .single();
+      const { data, error } = await withTimeout(
+        supabase.functions.invoke('create-team-member', {
+          body: {
+            company_id: effectiveCompanyId,
+            full_name: name,
+            email,
+            password: placeholderPassword,
+            role: inviteRole,
+            app_name: 'TrussCTR',
+            redirect_to: window.location.origin,
+          },
+        }),
+        20000,
+        'Add team member'
+      );
 
-      if (inviteError || !inviteRecord) {
-        clearTimeout(timeoutId);
-        setIsSendingInvite(false);
-        toast.error(`Failed to save invite: ${inviteError?.message || 'Unknown error'}`);
+      let failure: string | null = (data as any)?.error ?? null;
+      if (error) {
+        failure = error.message;
+        try {
+          const body = await (error as any).context?.json?.();
+          if (body?.error) failure = body.error;
+        } catch { /* keep the generic message */ }
+      }
+      if (failure) {
+        toast.error(`Could not add ${email}: ${failure}`);
         return;
       }
 
-
-      // Send email via our Vercel API (Resend)
-      // Use proper query params so AuthPage can detect the invite on load.
-      // The #/join?token= format puts params in the hash which window.location.search cannot read.
-      const inviteUrl = `${window.location.origin}/?invite=${token}&company=${effectiveCompanyId}`;
-      const displayCompany = companyName || state.currentUser?.name || 'TrussCTR';
-      const displayRole = inviteRole.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-      const emailRes = await fetch(`${window.location.origin}/api/send`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token || ''}`,
-        },
-        body: JSON.stringify({
-          to: inviteEmail.trim().toLowerCase(),
-          subject: `You've been invited to join ${displayCompany} on TrussCTR`,
-          html: `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;background:#f9fafb;padding:32px">
-            <div style="background:white;border-radius:12px;padding:32px;border:1px solid #e5e7eb">
-              <h2 style="margin:0 0 8px;color:#111827;font-size:22px">You've been invited!</h2>
-              <p style="color:#6b7280;margin:0 0 24px;font-size:15px">
-                <strong style="color:#111827">${state.currentUser?.name || 'Someone'}</strong> has invited you to join
-                <strong style="color:#111827">${displayCompany}</strong> on TrussCTR as a
-                <strong style="color:#2563eb">${displayRole}</strong>.
-              </p>
-              <a href="${inviteUrl}" style="display:inline-block;padding:13px 28px;background:#2563eb;color:white;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Create Your Account</a>
-              <p style="color:#9ca3af;font-size:12px;margin:24px 0 0">This invite expires in 7 days. If you weren't expecting this, you can safely ignore it.</p>
-            </div>
-          </div>`,
-        }),
+      const dbMembers = await db.getTeamMembers(effectiveCompanyId);
+      dispatch({
+        type: 'SET_TEAM_MEMBERS',
+        payload: dbMembers.map((tm: any) => ({
+          id: tm.id,
+          name: `${tm.first_name || ''} ${tm.last_name || ''}`.trim() || tm.email,
+          email: tm.email,
+          role: (tm.role || 'sales') as any,
+          avatar: tm.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(`${tm.first_name || ''} ${tm.last_name || ''}`.trim() || tm.email || 'User')}&background=random`,
+          phone: tm.phone || '',
+          department: tm.department || 'General',
+          isActive: tm.is_active,
+          commission_rate: tm.commission_rate,
+          commission_rate_self_gen: tm.commission_rate_self_gen,
+          commission_rate_company: tm.commission_rate_company,
+          commission_rate_custom: tm.commission_rate_custom,
+          member_type: tm.member_type,
+          subcontractor_company: tm.subcontractor_company,
+        })),
       });
 
-      if (!emailRes.ok) {
-        clearTimeout(timeoutId);
-        toast.error('Failed to send invitation email.');
-        return;
-      }
-      
-      toast.success(`Invitation email sent to ${inviteEmail}!`);
-
+      toast.success(`${name} was added. They'll get an email with a link to set their password.`);
       dispatch({
         type: 'ADD_NOTIFICATION',
         payload: {
           id: `notif-${Date.now()}`,
           type: 'success',
-          title: 'Invitation Sent',
-          message: `Invitation email sent to ${inviteEmail}.`,
+          title: 'Team member added',
+          message: `${name} (${email}) was added and emailed a set-password link.`,
           timestamp: new Date().toISOString(),
           read: false,
         },
       });
 
       setShowInviteModal(false);
+      setInviteName('');
       setInviteEmail('');
       setInviteRole('sales');
-      clearTimeout(timeoutId);
-      // Refresh pending invites list
-      const { data } = await supabase
-        .from('invitations')
-        .select('id, email, role, created_at, expires_at, accepted')
-        .eq('company_id', state.companyId)
-        .order('created_at', { ascending: false });
-      if (data) setPendingInvites(data);
     } catch (error: unknown) {
-      clearTimeout(timeoutId);
-      console.error('Failed to send invitation:', error);
-      const message = error instanceof Error ? error.message : 'Failed to send invitation';
-      toast.error(message);
+      console.error('Failed to add team member:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to add team member');
     } finally {
       setIsSendingInvite(false);
     }
@@ -430,14 +397,6 @@ export default function TeamView() {
     }
   };
 
-  const handleRevokeInvite = async (inviteId: string, email: string) => {
-    if (!confirm(`Revoke invite for ${email}?`)) return;
-    const { error } = await supabase.from('invitations').delete().eq('id', inviteId);
-    if (error) { toast.error('Failed to revoke invite'); return; }
-    setPendingInvites(prev => prev.filter(i => i.id !== inviteId));
-    toast.success(`Invite for ${email} revoked`);
-  };
-
   // Calculate team stats
   const totalLeads = state.teamMembers.reduce(
     (sum, tm) => sum + (tm.performance?.leadsGenerated || 0),
@@ -540,7 +499,7 @@ export default function TeamView() {
                   <p className="text-slate-400 text-sm">Company ID</p>
                   <p className="text-2xl font-mono font-bold mt-1">{companyId}</p>
                   <p className="text-slate-400 text-sm mt-2">
-                    Share this ID with team members to join your organization
+                    Your company's ID. Quote it if you contact support.
                   </p>
                 </div>
                 <button
@@ -715,67 +674,6 @@ export default function TeamView() {
         </div>
       ))}
 
-      {/* Pending Invites */}
-      {canManage && (
-        <div className="bg-white rounded-xl border border-gray-200">
-          <div className="p-5 border-b border-gray-100 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Mail size={18} className="text-blue-600" />
-              <h3 className="font-semibold text-gray-900">Pending Invites</h3>
-              {pendingInvites.filter(i => !i.accepted).length > 0 && (
-                <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-medium rounded-full">
-                  {pendingInvites.filter(i => !i.accepted).length} pending
-                </span>
-              )}
-            </div>
-          </div>
-          {isLoadingInvites ? (
-            <div className="p-6 text-center text-gray-400 text-sm">Loading invites...</div>
-          ) : pendingInvites.length === 0 ? (
-            <div className="p-6 text-center text-gray-400 text-sm">No invites sent yet</div>
-          ) : (
-            <div className="divide-y divide-gray-100">
-              {pendingInvites.map(invite => {
-                const isExpired = new Date(invite.expires_at) < new Date();
-                return (
-                  <div key={invite.id} className="flex items-center justify-between px-5 py-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
-                        <Mail size={14} className="text-gray-500" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">{invite.email}</p>
-                        <p className="text-xs text-gray-500 capitalize">{invite.role.replace('_', ' ')} · Sent {new Date(invite.created_at).toLocaleDateString()}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0 ml-3">
-                      {invite.accepted ? (
-                        <span className="flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full">
-                          <CheckCircle size={12} /> Accepted
-                        </span>
-                      ) : isExpired ? (
-                        <span className="px-2 py-1 bg-red-100 text-red-700 text-xs font-medium rounded-full">Expired</span>
-                      ) : (
-                        <span className="px-2 py-1 bg-amber-100 text-amber-700 text-xs font-medium rounded-full">Pending</span>
-                      )}
-                      {!invite.accepted && (
-                        <button
-                          onClick={() => handleRevokeInvite(invite.id, invite.email)}
-                          className="p-1 text-gray-400 hover:text-red-500 rounded transition-colors"
-                          title="Revoke invite"
-                        >
-                          <X size={14} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Invite Modal */}
       {showInviteModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -790,6 +688,16 @@ export default function TeamView() {
               </button>
             </div>
             <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                <input
+                  type="text"
+                  value={inviteName}
+                  onChange={(e) => setInviteName(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                  placeholder="Jordan Smith"
+                />
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
                 <input
@@ -816,8 +724,8 @@ export default function TeamView() {
               </div>
               <div className="p-4 bg-gray-50 rounded-lg">
                 <p className="text-sm text-gray-600">
-                  The invited member will receive an email with instructions to join your team using
-                  the company ID: <span className="font-mono font-bold">{companyId}</span>
+                  They're added to your team right away and get an email with a link to set their
+                  password and sign in.
                 </p>
               </div>
             </div>
@@ -830,15 +738,15 @@ export default function TeamView() {
               </button>
               <button
                 onClick={handleInvite}
-                disabled={!inviteEmail || isSendingInvite}
+                disabled={!inviteEmail.trim() || !inviteName.trim() || isSendingInvite}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50"
               >
                 {isSendingInvite ? (
                   <span className="inline-flex items-center gap-2">
-                    <Loader2 size={16} className="animate-spin" /> Sending...
+                    <Loader2 size={16} className="animate-spin" /> Adding...
                   </span>
                 ) : (
-                  'Send Invitation'
+                  'Add & Email Invite'
                 )}
               </button>
             </div>

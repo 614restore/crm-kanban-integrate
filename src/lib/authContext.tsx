@@ -117,8 +117,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
-        // Still no company_id — run first-time setup
-        if (profileData && !profileData.company_id) {
+        // Still no company — run first-time setup. On the shared backend someone who
+        // signed up but never got a company has no profile row at all, so a missing
+        // profile counts too. ensureUserHasCompany refuses if they already have one.
+        if (!profileData?.company_id) {
           const ok = await setupNewUser(userId, email);
           if (ok) {
             await new Promise(r => setTimeout(r, 400));
@@ -412,7 +414,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!profileUpdateSuccess) console.error('[Auth] Failed to update profile role after all attempts');
 
         if (!metadata?.company_id) {
-          await setupNewUser(data.user.id, data.user.email || email, metadata?.company_name);
+          await setupNewUser(
+            data.user.id,
+            data.user.email || email,
+            metadata?.company_name,
+            [metadata?.first_name, metadata?.last_name].filter(Boolean).join(' '),
+          );
         }
 
         const freshProfile = await fetchProfile(data.user.id);

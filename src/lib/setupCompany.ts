@@ -3,93 +3,43 @@ import { supabase } from './supabase';
 import { db } from './database';
 
 /**
- * Sets up a default company for the user if they don't have one
- * This runs automatically on first login
+ * Creates the signed-up user's company and makes them its owner.
+ *
+ * On the shared backend people belong to companies through team_members, and
+ * `profiles` (which this used to write to) is a read-only view over it. So the
+ * company and the owner's membership are created together by
+ * create_company_and_owner, the function QuoteMGR's sign-up uses. It is given
+ * the new user's id because right after sign-up, with email confirmation on,
+ * there is no session yet; without a session it refuses users who already
+ * belong to a company.
  */
-export async function ensureUserHasCompany(userId: string, userEmail: string, companyName?: string): Promise<boolean> {
+export async function ensureUserHasCompany(userId: string, userEmail: string, companyName?: string, ownerName?: string): Promise<boolean> {
   try {
-    // Check if user already has a company
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('company_id')
-      .eq('id', userId)
-      .single();
-
-    if (profileError) {
-      console.error('Error checking profile:', profileError);
-      return false;
-    }
-
-    // If user already has a company, we're done
-    if (profile?.company_id) {
-      return true;
-    }
-
-
-    // Create a new company
-    const derivedName = userEmail.split('@')[0] || 'My Company';
-    const finalCompanyName = companyName || `${derivedName}'s Company`;
-    const { data: newCompany, error: companyError } = await supabase
-      .from('companies')
-      .insert({
-        name: finalCompanyName,
-        email: userEmail,
-        phone: '',
-        address: '',
-        city: '',
-        state: '',
-        zip: '',
-        website: '',
-      })
-      .select()
-      .single();
-
-    if (companyError || !newCompany) {
-      console.error('Error creating company:', companyError);
-      return false;
-    }
-
-
-    // Link the company to the user profile with retry logic
-    let updateAttempts = 0;
-    let updateSuccess = false;
-    
-    while (updateAttempts < 3 && !updateSuccess) {
-      updateAttempts++;
-      
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ company_id: newCompany.id, role: 'owner' })
-        .eq('id', userId);
-
-      if (!updateError) {
-        updateSuccess = true;
-      } else {
-        console.error(`Error linking company to profile (attempt ${updateAttempts}):`, updateError);
-        if (updateAttempts < 3) {
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (sessionData.session) {
+      // Signed in: only create a company if they have none. If that check
+      // fails, stop rather than risk giving them a second company.
+      const { data: ids, error } = await supabase.rpc('get_my_company_ids');
+      if (error) {
+        console.error('Error checking for an existing company:', error);
+        return false;
       }
+      if (Array.isArray(ids) && ids.length > 0) return true;
     }
 
-    if (!updateSuccess) {
-      console.error('❌ Failed to link company to profile after all attempts');
+    const derivedName = userEmail.split('@')[0] || 'My';
+    const { error } = await supabase.rpc('create_company_and_owner', {
+      company_name: companyName?.trim() || `${derivedName}'s Company`,
+      company_email: userEmail,
+      owner_full_name: ownerName?.trim() || derivedName,
+      owner_email: userEmail,
+      owner_user_id: userId,
+    });
+    if (error) {
+      console.error('Error creating company:', error);
       return false;
     }
-
-    // Verify the update
-    const { data: verifyProfile } = await supabase
-      .from('profiles')
-      .select('company_id')
-      .eq('id', userId)
-      .single();
-
-    if (verifyProfile?.company_id === newCompany.id) {
-      return true;
-    } else {
-      console.error('❌ Company update verification failed');
-      return false;
-    }
+    return true;
   } catch (error) {
     console.error('Error in ensureUserHasCompany:', error);
     return false;
@@ -121,11 +71,11 @@ export async function ensureDefaultLeadSources(companyId: string): Promise<boole
 
     // Create default lead sources
     const defaultSources = [
-      { name: 'Website', is_custom: false },
-      { name: 'Referral', is_custom: false },
-      { name: 'Google Ads', is_custom: false },
-      { name: 'Social Media', is_custom: false },
-      { name: 'Direct Mail', is_custom: false },
+      { name: 'Website' },
+      { name: 'Referral' },
+      { name: 'Google Ads' },
+      { name: 'Social Media' },
+      { name: 'Direct Mail' },
     ];
 
     const { error: insertError } = await supabase
@@ -152,10 +102,10 @@ export async function ensureDefaultLeadSources(companyId: string): Promise<boole
 /**
  * Complete first-time setup for a new user
  */
-export async function setupNewUser(userId: string, userEmail: string, companyName?: string): Promise<boolean> {
+export async function setupNewUser(userId: string, userEmail: string, companyName?: string, ownerName?: string): Promise<boolean> {
 
   // Step 1: Ensure user has a company
-  const companySetup = await ensureUserHasCompany(userId, userEmail, companyName);
+  const companySetup = await ensureUserHasCompany(userId, userEmail, companyName, ownerName);
   if (!companySetup) {
     console.error('❌ Failed to set up company');
     return false;
@@ -166,11 +116,12 @@ export async function setupNewUser(userId: string, userEmail: string, companyNam
     .from('profiles')
     .select('company_id')
     .eq('id', userId)
-    .single();
+    .maybeSingle();
 
+  // No session yet (email confirmation pending): the company exists, but its
+  // lead sources can only be written once the owner signs in.
   if (!profile?.company_id) {
-    console.error('❌ Could not get company ID');
-    return false;
+    return true;
   }
 
   // Step 3: Set up default lead sources
