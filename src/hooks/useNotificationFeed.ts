@@ -25,6 +25,8 @@ const SEVERITY_BY_KIND: Record<string, FeedNotification['type']> = {
   warning: 'warning',
   error: 'error',
   unassigned_appointment: 'warning',
+  storm_alert: 'warning',
+  storm_area_alert: 'warning',
 };
 
 export function useNotificationFeed() {
@@ -70,6 +72,7 @@ export function useNotificationFeed() {
         relatedType: mentionOnCustomer ? 'contact' : (n.related_type ?? undefined),
         relatedId: mentionOnCustomer ? data.entity_id : (n.related_id ?? undefined),
         noteId: n.type === 'note_mention' && data?.note_id ? data.note_id : undefined,
+        data,
       };
     });
     const sessionOnly: FeedNotification[] = state.notifications

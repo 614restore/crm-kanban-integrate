@@ -4,6 +4,8 @@ export interface GeocodeResult {
   lat: number;
   lon: number;
   displayName: string;
+  /** Two-letter state code when the lookup knows it. */
+  state: string | null;
 }
 
 /**
@@ -21,7 +23,12 @@ export async function geocodeAddress(query: string): Promise<GeocodeResult | nul
     if (!res.ok) return null;
     const data = await res.json();
     if (typeof data?.lat !== 'number' || typeof data?.lon !== 'number') return null;
-    return { lat: data.lat, lon: data.lon, displayName: data.displayName ?? q };
+    return {
+      lat: data.lat,
+      lon: data.lon,
+      displayName: data.displayName ?? q,
+      state: typeof data.state === 'string' ? data.state : null,
+    };
   } catch {
     return null;
   }

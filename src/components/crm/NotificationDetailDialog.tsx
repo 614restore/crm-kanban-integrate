@@ -11,7 +11,8 @@ import {
 } from '@/components/ui/dialog';
 import { supabase } from '@/lib/supabase';
 import type { FeedNotification } from '@/hooks/useNotificationFeed';
-import { describeNotificationTarget } from '@/lib/notificationNavigation';
+import { describeNotificationTarget, openStormMap } from '@/lib/notificationNavigation';
+import { useCRM } from '@/lib/crmStore';
 
 interface NotificationDetailDialogProps {
   notification: FeedNotification | null;
@@ -20,6 +21,7 @@ interface NotificationDetailDialogProps {
 }
 
 export default function NotificationDetailDialog({ notification, onClose, onOpenTarget }: NotificationDetailDialogProps) {
+  const { dispatch } = useCRM();
   const [fullNote, setFullNote] = useState<{ body: string; author: string | null } | null>(null);
 
   useEffect(() => {
@@ -66,6 +68,18 @@ export default function NotificationDetailDialog({ notification, onClose, onOpen
               >
                 Close
               </button>
+              {notification.kind === 'storm_alert' && notification.data?.center && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    openStormMap(notification.data, dispatch);
+                    onClose();
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+                >
+                  View on storm map
+                </button>
+              )}
               {targetLabel && (
                 <button
                   type="button"

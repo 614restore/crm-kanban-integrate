@@ -346,6 +346,8 @@ export interface NOAAStormEvent {
   lon: number;
   radarStation: string;
   source: 'noaa';
+  hailProbability?: number;   // %, radar hail cells only
+  severeProbability?: number; // %, chance the hail is severe
 }
 
 const EARTH_RADIUS_MILES = 3958.8;
@@ -457,6 +459,8 @@ export class NOAAWeatherIntegration {
           type: 'hail' as const,
           severity: hailSeverity(size || 0),
           hailSize: size,
+          hailProbability: Number.isFinite(parseFloat(row.PROB)) ? parseFloat(row.PROB) : undefined,
+          severeProbability: Number.isFinite(parseFloat(row.SEVPROB)) ? parseFloat(row.SEVPROB) : undefined,
           distanceMiles: Math.round(dist * 10) / 10,
           lat: evLat,
           lon: evLon,

@@ -40,18 +40,30 @@ async function censusLookup(q: string) {
   const data = await res.json();
   const match = data?.result?.addressMatches?.[0];
   if (!match?.coordinates) return null;
-  return { lat: match.coordinates.y, lon: match.coordinates.x, displayName: match.matchedAddress as string };
+  return {
+    lat: match.coordinates.y,
+    lon: match.coordinates.x,
+    displayName: match.matchedAddress as string,
+    state: (match.addressComponents?.state as string | undefined) ?? null,
+  };
 }
 
 async function nominatimLookup(q: string) {
   const res = await fetch(
-    `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&countrycodes=us`,
+    `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&countrycodes=us&addressdetails=1`,
     { headers: { 'User-Agent': 'TrussCTR/1.0 (https://trussctr.614restore.com)', 'Accept-Language': 'en' } },
   );
   if (!res.ok) return null;
   const data = await res.json();
   if (!Array.isArray(data) || data.length === 0) return null;
-  return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon), displayName: data[0].display_name as string };
+  // ISO3166-2-lvl4 is e.g. "US-OH".
+  const iso = data[0].address?.['ISO3166-2-lvl4'];
+  return {
+    lat: parseFloat(data[0].lat),
+    lon: parseFloat(data[0].lon),
+    displayName: data[0].display_name as string,
+    state: typeof iso === 'string' && iso.startsWith('US-') ? iso.slice(3) : null,
+  };
 }
 
 export default async function handler(req: Request): Promise<Response> {

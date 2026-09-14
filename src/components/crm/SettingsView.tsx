@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useCRM, canManageLeadSources } from '@/lib/crmStore';
+import StormAlertSettings from '@/components/settings/StormAlertSettings';
 import { useAuth } from '@/lib/authContext';
 import { defaultLeadSources } from '@/lib/crmData';
 import { toast } from 'sonner';
@@ -2374,6 +2375,7 @@ export default function SettingsView() {
               <h3 className="text-xl font-semibold text-gray-900 mb-2">Notification Settings</h3>
               <p className="text-sm text-gray-500">Configure when and how you receive notifications.</p>
             </div>
+            {effectiveCompanyId && <StormAlertSettings companyId={effectiveCompanyId} userRole={userRole} />}
             <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
               <h4 className="text-base font-semibold text-gray-900">Email Notifications</h4>
               <div className="space-y-3">
