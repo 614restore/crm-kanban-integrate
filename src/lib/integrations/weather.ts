@@ -1,5 +1,6 @@
 // Weather API Integrations
 import { IntegrationTestResult } from './apiTypes';
+import { geocodeAddress as lookupAddress } from '@/lib/geocode';
 
 /**
  * OpenWeather API Integration
@@ -487,21 +488,10 @@ export class NOAAWeatherIntegration {
     return [...hailEvents, ...tvsEvents].sort((a, b) => a.distanceMiles - b.distanceMiles);
   }
 
-  /** Free geocode via the US Census Bureau geocoder — no key, US addresses only. */
+  /** Geocodes through /api/geocode: the Census geocoder can't be called from the browser. */
   async geocodeAddress(address: string, city: string, state: string, zip: string): Promise<{ lat: number; lon: number } | null> {
-    try {
-      const oneLine = encodeURIComponent(`${address}, ${city}, ${state} ${zip}`);
-      const res = await fetch(
-        `https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address=${oneLine}&benchmark=Public_AR_Current&format=json`
-      );
-      if (!res.ok) return null;
-      const data = await res.json();
-      const match = data?.result?.addressMatches?.[0];
-      if (!match) return null;
-      return { lat: match.coordinates.y, lon: match.coordinates.x };
-    } catch {
-      return null;
-    }
+    const found = await lookupAddress(`${address}, ${city}, ${state} ${zip}`);
+    return found ? { lat: found.lat, lon: found.lon } : null;
   }
 }
 

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { geocodeAddress } from '@/lib/geocode';
 import { CloudRain, Loader2, AlertTriangle, CheckCircle, Wind, Copy, Check, FileText } from 'lucide-react';
 import { HailTraceIntegration, NOAAWeatherIntegration, NOAAStormEvent } from '@/lib/integrations/weather';
 import { supabase } from '@/lib/supabase';
@@ -94,18 +95,8 @@ export default function HailTracePanel({ address, city, state, zip, companyId, c
   }
 
   async function geocode(): Promise<{ lat: number; lon: number } | null> {
-    try {
-      const q = encodeURIComponent(`${address} ${city} ${state} ${zip}`);
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1`,
-        { headers: { 'Accept-Language': 'en' } }
-      );
-      const data = await res.json();
-      if (data && data.length > 0) {
-        return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
-      }
-    } catch { /* fall back */ }
-    return null;
+    const found = await geocodeAddress(`${address}, ${city}, ${state} ${zip}`);
+    return found ? { lat: found.lat, lon: found.lon } : null;
   }
 
   async function notifyActionableEvents(normalized: HailEvent[], eventSource: 'hailtrace' | 'noaa') {

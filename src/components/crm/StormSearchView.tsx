@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { CloudRain, Search, Loader2, AlertTriangle, CheckCircle, Wind, MapPin } from 'lucide-react';
 import { NOAAWeatherIntegration, NOAAStormEvent } from '@/lib/integrations/weather';
+import { geocodeAddress } from '@/lib/geocode';
 
 // Standalone NOAA storm-history search — the "any address, no contact
 // required" counterpart to the per-contact Hail & Wind Event Lookup panel
@@ -13,20 +14,6 @@ const severityConfig = {
   moderate: { label: 'Moderate', className: 'bg-orange-100 text-orange-800 border border-orange-200' },
   severe:   { label: 'Severe',   className: 'bg-red-100 text-red-800 border border-red-200' },
 };
-
-async function geocode(query: string): Promise<{ lat: number; lon: number; displayName: string } | null> {
-  try {
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`,
-      { headers: { 'Accept-Language': 'en' } }
-    );
-    const data = await res.json();
-    if (data && data.length > 0) {
-      return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon), displayName: data[0].display_name };
-    }
-  } catch { /* fall through */ }
-  return null;
-}
 
 export default function StormSearchView() {
   const [address, setAddress] = useState('');
@@ -45,7 +32,7 @@ export default function StormSearchView() {
     setEvents(null);
     setSearched(false);
     try {
-      const coords = await geocode(address.trim());
+      const coords = await geocodeAddress(address);
       if (!coords) {
         setError('Could not locate that address. Check that it is complete (street, city, state) and try again.');
         return;
