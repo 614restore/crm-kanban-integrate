@@ -96,6 +96,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // ── Deduplicated, retrying profile loader ─────────────────────────────
   // Returns the same in-flight promise if called concurrently (fixes reload race).
   // Retries with faster backoff if company_id is missing (only happens for new users).
+  // The auth user whose profile is currently loaded (profiles.id is the auth user id).
+  const loadedProfileUserIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    loadedProfileUserIdRef.current = profile?.id ?? null;
+  }, [profile]);
+
   const loadProfileOnce = (userId: string, email: string): Promise<Profile | null> => {
     if (profileFetchPromise.current) return profileFetchPromise.current;
 
@@ -226,13 +232,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       if (recoveryEventFired || pendingReset) return;
 
+      setSession(session);
+      setUser(session?.user ?? null);
+
+      // supabase-js re-emits SIGNED_IN for the same user whenever the tab regains
+      // focus. Treating that as a fresh sign-in put the loading screen up, which
+      // unmounts the whole app: open forms closed and the page being opened was
+      // lost. When this user's profile is already loaded there is nothing to do.
+      if (session?.user && loadedProfileUserIdRef.current === session.user.id) {
+        return;
+      }
+
       // If a user is signing in, ensure loading stays true while the profile
       // fetches. Without this, a prior SIGNED_OUT (loading=false) + SIGNED_IN
       // sequence briefly renders CRMApp before the profile arrives.
       if (session?.user) setLoading(true);
-
-      setSession(session);
-      setUser(session?.user ?? null);
 
       if (session?.user) {
         const signedInUser = session.user;
