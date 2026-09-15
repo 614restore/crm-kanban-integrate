@@ -723,7 +723,8 @@ export default function CrewScheduleView({ contactFilterId }: { contactFilterId?
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   const getSchedulesFor = (crewMemberId: string, date: string): CrewSchedule[] =>
-    schedules.filter(s => s.crew_member_id === crewMemberId && s.scheduled_date === date);
+    // scheduled_date comes back as a timestamp on the shared backend; compare its date part.
+    schedules.filter(s => s.crew_member_id === crewMemberId && s.scheduled_date?.slice(0, 10) === date);
 
   const openModal = (member: CrewRow, date: string, existing?: CrewSchedule) => {
     setModalCrewMember(member);

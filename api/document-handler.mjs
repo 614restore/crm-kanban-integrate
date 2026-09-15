@@ -170,7 +170,7 @@ export default async function handler(req, res) {
     if (req.method === 'GET') {
       const { token } = req.query;
       if (!token) return res.status(400).json({ error: 'Missing token' });
-      const { data: co } = await db.from('change_orders').select('id,change_order_number,title,description,total,subtotal,tax,notes,items,status,signed_by_name,signed_at,sign_token,companies(name,from_email,phone,address,city,state,zip)').eq('sign_token', token).single();
+      const { data: co } = await db.from('change_orders').select('id,change_order_number,title,description,total,subtotal,tax,notes,items,status,signed_by_name,signed_at,sign_token,companies(name,from_email:email,phone,address,city,state,zip)').eq('sign_token', token).single();
       if (!co) return res.status(404).json({ error: 'Change order not found' });
       return res.status(200).json({ changeOrder: co, alreadySigned: co.status === 'signed' });
     }

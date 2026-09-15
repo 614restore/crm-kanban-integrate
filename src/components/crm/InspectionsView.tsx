@@ -300,23 +300,25 @@ function NewInspectionPanel({ preselectedContact, companyId, userId, onDone, onC
     setUploadingElev(activeElev);
     try {
       const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/heic|heif/, 'jpg');
-      const path = `${selectedContact.id}/inspection_${activeElev}_${Date.now()}.${ext}`;
+      // The shared backend has no 'documents' bucket; company files live in 'company-files'.
+      const path = `${companyId}/${selectedContact.id}/inspection_${activeElev}_${Date.now()}.${ext}`;
       const { error: upErr } = await supabase.storage
-        .from('documents')
+        .from('company-files')
         .upload(path, file, { upsert: false });
       if (upErr) throw upErr;
 
-      const { data: { publicUrl } } = supabase.storage.from('documents').getPublicUrl(path);
+      const { data: { publicUrl } } = supabase.storage.from('company-files').getPublicUrl(path);
 
-      await supabase.from('documents').insert({
+      // documents.uploaded_by references team_members.id, not the auth user id, so it is left empty.
+      const { error: docErr } = await supabase.from('documents').insert({
         contact_id: selectedContact.id,
         company_id: companyId,
         name: `Inspection – ${activeElev} Elevation`,
         type: 'photo',
         url: publicUrl,
         size: file.size,
-        uploaded_by: userId,
       } as any);
+      if (docErr) throw docErr;
 
       setPhotoCounts(prev => ({ ...prev, [activeElev]: (prev[activeElev] || 0) + 1 }));
     } catch (err: any) {
@@ -357,14 +359,22 @@ function NewInspectionPanel({ preselectedContact, companyId, userId, onDone, onC
         direction: 'outbound',
       } as any);
 
-      /* inspections row */
-      await (supabase.from('inspections') as any).upsert({
+      /* inspections row — one per contact; inspections has no unique contact_id to upsert on */
+      const inspection = {
         contact_id: selectedContact.id,
         company_id: companyId,
-        user_id: userId,
         status: 'completed',
         data: { photoCounts, checklist, completedAt: new Date().toISOString() },
-      }, { onConflict: 'contact_id' });
+      };
+      const { data: existing } = await (supabase.from('inspections') as any)
+        .select('id')
+        .eq('contact_id', selectedContact.id)
+        .limit(1)
+        .maybeSingle();
+      const { error: inspErr } = existing
+        ? await (supabase.from('inspections') as any).update(inspection).eq('id', existing.id)
+        : await (supabase.from('inspections') as any).insert(inspection);
+      if (inspErr) throw inspErr;
 
       onDone();
     } catch (err: any) {

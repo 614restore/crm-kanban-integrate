@@ -129,6 +129,7 @@ export async function updateContactStatus(context: StatusUpdateContext): Promise
 
     // 4. Log audit trail
     await logAudit({
+      companyId,
       userId,
       userEmail,
       action: 'status_change',

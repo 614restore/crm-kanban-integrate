@@ -175,7 +175,7 @@ export default function AuthPage() {
             try {
               await supabase
                 .from('invitations')
-                .update({ accepted: true })
+                .update({ status: 'accepted' })
                 .eq('token', inviteToken)
                 .eq('company_id', inviteCompanyId);
 

@@ -177,31 +177,29 @@ export function DocumentScanner({
         const fileName = `${timestamp}_${doc.type}_${doc.file.name}`;
         const filePath = `${profile.company_id}/${contactId}/scanned/${fileName}`;
 
-        // Upload to Supabase Storage
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('documents')
+        // Upload to Supabase Storage (the shared backend keeps company files in 'company-files')
+        const { error: uploadError } = await supabase.storage
+          .from('company-files')
           .upload(filePath, doc.file);
 
         if (uploadError) {
           throw uploadError;
         }
 
-        // Save document metadata to database
+        const { data: { publicUrl } } = supabase.storage.from('company-files').getPublicUrl(filePath);
+
+        // Save document metadata to database. documents.type only allows
+        // contract/estimate/invoice/photo/insurance/other; uploaded_by references
+        // team_members.id rather than the auth user, so it is left empty.
         const { data: docData, error: docError } = await supabase
           .from('documents')
           .insert({
             contact_id: contactId,
             company_id: profile.company_id,
             name: doc.name,
-            type: doc.type,
-            filepath: uploadData.path,
-            file_size: doc.file.size,
-            mime_type: doc.file.type,
-            is_legal_document: ['contract', 'estimate', 'work_order', 'change_order'].includes(doc.type),
-            scanned_document: true,
-            scanned_at: doc.scannedAt.toISOString(),
-            created_by: user?.id,
-            created_at: new Date().toISOString()
+            type: ['contract', 'estimate', 'invoice'].includes(doc.type) ? doc.type : 'other',
+            url: publicUrl,
+            size: doc.file.size,
           })
           .select()
           .single();

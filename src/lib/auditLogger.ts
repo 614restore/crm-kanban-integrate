@@ -1,6 +1,7 @@
 import { supabase } from './supabase'
 
 interface AuditEntry {
+  companyId: string
   userId: string
   userEmail: string
   action: string
@@ -12,15 +13,19 @@ interface AuditEntry {
 }
 
 export async function logAudit(entry: AuditEntry): Promise<void> {
+  // audit_logs keeps the details in one jsonb column; company_id is required by RLS.
   const { error } = await supabase.from('audit_logs').insert({
-    user_id:     entry.userId,
-    user_email:  entry.userEmail,
+    company_id:  entry.companyId,
+    user_id:     entry.userId || null,
     action:      entry.action,
     entity_type: entry.entityType,
     entity_id:   entry.entityId ?? null,
-    old_value:   entry.oldValue ?? null,
-    new_value:   entry.newValue ?? null,
-    metadata:    entry.metadata ?? null,
+    data: {
+      user_email: entry.userEmail,
+      old_value:  entry.oldValue ?? null,
+      new_value:  entry.newValue ?? null,
+      metadata:   entry.metadata ?? null,
+    },
   })
 
   if (error) {

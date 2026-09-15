@@ -1117,7 +1117,8 @@ class DatabaseService {
     const { data: columns, error: columnsError } = await supabase
       .from('kanban_columns').select('*').eq('board_id', boardId).order('sort_order', { ascending: true });
     if (columnsError) { console.error('Error fetching columns:', columnsError); return { board, columns: [] }; }
-    return { board, columns: columns || [] };
+    // kanban_columns stores the column title as `name`.
+    return { board, columns: (columns || []).map((col: DbKanbanColumn & { name?: string }) => ({ ...col, title: col.title ?? col.name ?? '' })) };
   }
 
   async createKanbanBoard(board: Partial<DbKanbanBoard>, columns: Partial<DbKanbanColumn>[]): Promise<DbKanbanBoard | null> {
@@ -1126,7 +1127,10 @@ class DatabaseService {
       .from('kanban_boards').insert(board).select().single();
     if (boardError) { console.error('Error creating board:', boardError); return null; }
     if (columns.length > 0) {
-      const columnsWithBoardId = columns.map((col, index) => ({ ...col, board_id: newBoard.id, sort_order: index }));
+      const columnsWithBoardId = columns.map((col, index) => ({
+        board_id: newBoard.id, company_id: newBoard.company_id, name: col.title || 'Untitled',
+        status: col.status, color: col.color, sort_order: index,
+      }));
       const { error: columnsError } = await supabase.from('kanban_columns').insert(columnsWithBoardId);
       if (columnsError) console.error('Error creating columns:', columnsError);
     }
@@ -1144,8 +1148,11 @@ class DatabaseService {
     const { error: deleteError } = await supabase.from('kanban_columns').delete().eq('board_id', boardId);
     if (deleteError) { console.error('Error deleting existing kanban columns:', deleteError); return false; }
     if (columns.length === 0) return true;
+    const { data: board, error: boardError } = await supabase
+      .from('kanban_boards').select('company_id').eq('id', boardId).single();
+    if (boardError || !board) { console.error('Error loading board for kanban columns:', boardError); return false; }
     const payload = columns.map((col, index) => ({
-      board_id: boardId, title: col.title, status: col.status,
+      board_id: boardId, company_id: board.company_id, name: col.title || 'Untitled', status: col.status,
       color: col.color, sort_order: col.sort_order ?? index,
     }));
     const { error: insertError } = await supabase.from('kanban_columns').insert(payload);

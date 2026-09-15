@@ -19,8 +19,7 @@ export async function logActivity(entry: ActivityEntry): Promise<void> {
     type: 'note',
     direction: 'internal',
     content: entry.content,
-    status: 'completed',
-    created_by: entry.userId ?? null,
+    user_id: entry.userId ?? null,
     created_at: new Date().toISOString(),
   });
 

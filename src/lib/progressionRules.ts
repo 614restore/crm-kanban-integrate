@@ -51,6 +51,7 @@ export async function handleAutoProgression(
   }
 
   await logAudit({
+    companyId,
     userId,
     userEmail,
     action: 'auto_board_progression',
