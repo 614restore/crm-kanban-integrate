@@ -410,7 +410,7 @@ Respond ONLY with valid JSON, no markdown:
 {"good": "...", "better": "...", "best": "..."}`;
 
   const rawResponse = await generateText(config, prompt);
-  const cleaned = rawResponse.replace(/\`\`\`(?:json)?\s*/gi, '').replace(/\`\`\`\s*/g, '').trim();
+  const cleaned = rawResponse.replace(/```(?:json)?\s*/gi, '').replace(/```\s*/g, '').trim();
   return JSON.parse(cleaned);
 };
 

@@ -478,6 +478,7 @@ export const parseEagleViewWallsReportFromFile = async (file: File): Promise<Eag
       fullText += (tc.items as any[]).map((i: any) => i?.str ?? '').join(' ') + ' ';
     } catch { /* skip */ }
   }
+  // eslint-disable-next-line no-control-regex -- PDF text extraction leaves null characters
   const text = fullText.replace(/\u0000/g, '').replace(/\s+/g, ' ').trim();
 
   if (!/eagle\s*view/i.test(text)) {
@@ -1011,7 +1012,7 @@ function parseEagleViewReport(text: string, allPageItems: any[][]): RoofrParsedR
   const totalEavesFt  = extractNum(text, [
     /Eaves\/Starter[^\w=]*=\s*([\d,]+)\s*ft/i,
     /Total\s+Eaves\s*=\s*([\d,]+)\s*ft/i,
-    /\bEaves[^\w\/=]*=\s*([\d,]+)\s*ft/i,
+    /\bEaves[^\w/=]*=\s*([\d,]+)\s*ft/i,
   ]);
 
   // Flashing: "Flashing = 18 ft" (not Step flashing)
@@ -1111,6 +1112,7 @@ export const parseRoofrPdfReport = async (file: File): Promise<RoofrParsedReport
   // 2. newline-separated fallback when hasEOL is unreliable
   const normalizePageText = (raw: string) =>
     raw
+      // eslint-disable-next-line no-control-regex -- PDF text extraction leaves null characters
       .replace(/\u0000/g, '')
       .replace(/\r/g, '\n')
       .replace(/[ \t]+/g, ' ')
@@ -2284,7 +2286,7 @@ function _parseInformAdvancedReport(text: string): EagleViewSolarReport {
   ]);
   const ridgesHipsFt = extractNum(text, [
     /Ridges\/Hips:\s*([\d,]+)\s*ft/i,
-    /Ridges\s*[\/&]\s*Hips[:\s]+([\d,]+)\s*ft/i,
+    /Ridges\s*[/&]\s*Hips[:\s]+([\d,]+)\s*ft/i,
   ]);
   const valleysFt = extractNum(text, [/\bValleys:\s*([\d,]+)\s*ft/i]);
   const rakesFt   = extractNum(text, [/\bRakes:\s*([\d,]+)\s*ft/i]);

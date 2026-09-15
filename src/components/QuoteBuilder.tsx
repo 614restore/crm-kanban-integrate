@@ -1100,7 +1100,7 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
 
   const applyRoofrImport = () => {
     if (!roofrParsed) return;
-    let imported = buildMeasurementLineItems('roofr', roofrParsed, companyPricing, roofrWaste, { stories: jobStories, layers: jobLayers });
+    const imported = buildMeasurementLineItems('roofr', roofrParsed, companyPricing, roofrWaste, { stories: jobStories, layers: jobLayers });
     if (imported.length === 0) {
       toast.error('No line items could be generated — check that your Roofr report includes roof area and material calculation data.');
       return;
@@ -2965,7 +2965,7 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
       }
 
       const supplementItems = buildSupplementLineItems(squares);
-      let freshItems = [...importedItems, ...supplementItems];
+      const freshItems = [...importedItems, ...supplementItems];
 
       // Apply company per-sq rates to the primary material item (standard pricing only)
       if (effectivePricingMode !== 'per-sq') {
@@ -3213,7 +3213,7 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
 
   const applyAdditionalRoofReport = (report: AdditionalMeasurementReport) => {
     if (!report.roofData) return;
-    let importedItems = buildMeasurementLineItems('roofr', report.roofData, companyPricing, roofrWastePercent, { stories: jobStories, layers: jobLayers });
+    const importedItems = buildMeasurementLineItems('roofr', report.roofData, companyPricing, roofrWastePercent, { stories: jobStories, layers: jobLayers });
     if (!importedItems.length) { toast.error('No roofing items generated from that report.'); return; }
     // preservePrices=true: only update quantities from the additional report —
     // never overwrite the custom or per-tier prices already on the quote items.
@@ -3230,7 +3230,7 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
     const area = areaSourceOverride === 'wall'
       ? report.wallsData.totalWallAreaSqft
       : (report.wallsData.totalSidingAreaSqft || report.wallsData.totalWallAreaSqft);
-    let importedItems = buildEagleViewWallsLineItems(report.wallsData, companyPricing, wallsWastePercent, area);
+    const importedItems = buildEagleViewWallsLineItems(report.wallsData, companyPricing, wallsWastePercent, area);
     if (!importedItems.length) { toast.error('No siding items generated from that report.'); return; }
     // preservePrices=true: only update quantities from the additional report —
     // never overwrite the custom or per-tier prices already on the quote items.

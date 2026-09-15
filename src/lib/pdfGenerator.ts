@@ -628,7 +628,7 @@ export async function generateQuotePDF(
 
   function startCustomPageSection() {
     addContentPage();
-    let nextY = CONTENT_TOP + 6;
+    const nextY = CONTENT_TOP + 6;
 
     doc.setFillColor(...BLUE_LIGHT);
     doc.roundedRect(MARGIN, nextY - 2, 10, 10, 2, 2, 'F');
@@ -701,7 +701,7 @@ export async function generateQuotePDF(
   doc.text(pillLabel, MARGIN + 8, pillStartY + 5.5);
 
   // ── Left: logo + company name + project type ─────────────────────────────
-  let logoBlockY = pillStartY + 14;
+  const logoBlockY = pillStartY + 14;
   let compTextX = MARGIN;
   if (logoData) {
     try {

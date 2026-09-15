@@ -95,6 +95,7 @@ const pdfSafe = (str: string): string =>
         .replace(/½/g, '1/2')
         .replace(/¼/g, '1/4')
         .replace(/¾/g, '3/4')
+        // eslint-disable-next-line no-control-regex -- keep only Latin-1, which the PDF font can draw
         .replace(/[^\x00-\xFF]/g, '');
 
 const hexToRgb = (hex: string): [number, number, number] => {

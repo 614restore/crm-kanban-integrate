@@ -335,7 +335,7 @@ const PhotoUploader: React.FC<PhotoUploaderProps> = ({
     if (!window.confirm(`Delete ${selectedIndices.size} photo${selectedIndices.size !== 1 ? 's' : ''}? This cannot be undone.`)) return;
     // Remove in descending index order so indices don't shift mid-delete
     const sorted = [...selectedIndices].sort((a, b) => b - a);
-    let updated = [...photos];
+    const updated = [...photos];
     for (const idx of sorted) updated.splice(idx, 1);
     onChange(updated);
     clearSelection();
