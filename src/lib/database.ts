@@ -170,6 +170,35 @@ export interface DbCommunication {
   created_at: string;
 }
 
+// On the shared backend documents.size is a byte count and documents.uploaded_by
+// references team_members.id, while the app works with a formatted size
+// ("1.2 MB") and the auth user id. Convert at the database boundary.
+const DOCUMENT_SIZE_UNITS: Record<string, number> = { BYTES: 1, KB: 1024, MB: 1024 ** 2, GB: 1024 ** 3 };
+
+function formatDocumentSize(bytes: number): string {
+  if (bytes === 0) return '0 Bytes';
+  const units = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  return `${Math.round((bytes / 1024 ** i) * 100) / 100} ${units[i]}`;
+}
+
+function toDbDocumentRow(document: Partial<DbDocument>): Record<string, unknown> {
+  const { size, uploaded_by: _uploadedBy, ...rest } = document as Partial<DbDocument> & { size?: string | number };
+  let bytes: number | null = null;
+  if (typeof size === 'number') {
+    bytes = size;
+  } else if (typeof size === 'string') {
+    const match = size.trim().match(/^([\d.]+)\s*(bytes|kb|mb|gb)?$/i);
+    if (match) bytes = Math.round(parseFloat(match[1]) * DOCUMENT_SIZE_UNITS[(match[2] || 'bytes').toUpperCase()]);
+  }
+  return bytes === null ? rest : { ...rest, size: bytes };
+}
+
+function fromDbDocumentRow(row: DbDocument): DbDocument {
+  const size = row.size as unknown;
+  return typeof size === 'number' ? { ...row, size: formatDocumentSize(size) } : row;
+}
+
 export interface DbDocument {
   id: string;
   company_id: string;
@@ -1077,21 +1106,21 @@ class DatabaseService {
     const { data, error } = await supabase
       .from('documents').select('*').eq('company_id', companyId).order('created_at', { ascending: false });
     if (error) { console.error('Error fetching documents:', error); return []; }
-    return data || [];
+    return (data || []).map(fromDbDocumentRow);
   }
 
   async getDocumentsByContact(contactId: string): Promise<DbDocument[]> {
     const { data, error } = await supabase
       .from('documents').select('*').eq('contact_id', contactId).order('created_at', { ascending: false });
     if (error) { console.error('Error fetching documents:', error); return []; }
-    return data || [];
+    return (data || []).map(fromDbDocumentRow);
   }
 
   async createDocument(document: Partial<DbDocument>): Promise<DbDocument | null> {
     assertCompanyId(document.company_id, 'createDocument');
-    const { data, error } = await supabase.from('documents').insert(document).select().single();
+    const { data, error } = await supabase.from('documents').insert(toDbDocumentRow(document)).select().single();
     if (error) { console.error('Error creating document:', error); return null; }
-    return data;
+    return fromDbDocumentRow(data);
   }
 
   async deleteDocument(documentId: string): Promise<boolean> {

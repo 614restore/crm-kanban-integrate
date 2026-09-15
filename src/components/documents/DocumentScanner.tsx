@@ -177,16 +177,15 @@ export function DocumentScanner({
         const fileName = `${timestamp}_${doc.type}_${doc.file.name}`;
         const filePath = `${profile.company_id}/${contactId}/scanned/${fileName}`;
 
-        // Upload to Supabase Storage (the shared backend keeps company files in 'company-files')
+        // Upload to the private, company-only documents bucket. Like Documents,
+        // the record stores the storage path and the app opens it via a signed URL.
         const { error: uploadError } = await supabase.storage
-          .from('company-files')
+          .from('projectceo-documents')
           .upload(filePath, doc.file);
 
         if (uploadError) {
           throw uploadError;
         }
-
-        const { data: { publicUrl } } = supabase.storage.from('company-files').getPublicUrl(filePath);
 
         // Save document metadata to database. documents.type only allows
         // contract/estimate/invoice/photo/insurance/other; uploaded_by references
@@ -198,7 +197,7 @@ export function DocumentScanner({
             company_id: profile.company_id,
             name: doc.name,
             type: ['contract', 'estimate', 'invoice'].includes(doc.type) ? doc.type : 'other',
-            url: publicUrl,
+            url: filePath,
             size: doc.file.size,
           })
           .select()
