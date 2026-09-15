@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { consumePendingContactTab } from '@/lib/nextStepActions';
+import { consumePendingContactTab, getNextStepForStatus, type NextStep } from '@/lib/nextStepActions';
 
 // ── Schedule-data helpers ──────────────────────────────────────────────────
 // The mobile app serialises milestone data into the notes field using the
@@ -1049,6 +1049,57 @@ export default function ContactDetail() {
     setEditedContact(null);
   };
 
+  // Pipeline Progress's Next step button: what to do to move this contact along.
+  const latestQuote = contactQuotes.reduce<QuoteSummary | null>(
+    (latest, q) => (!latest || q.createdAt > latest.createdAt ? q : latest),
+    null,
+  );
+  const nextStep = getNextStepForStatus(contact.status, {
+    hasQuote: contactQuotes.length > 0,
+    inspectionCompleted: !!(contact.inspectionCompleted ?? (contact as any).inspection_completed),
+  });
+
+  const runNextStep = (step: NextStep) => {
+    switch (step.action) {
+      case 'calendar':
+        handleScheduleAppointment();
+        break;
+      case 'inspection':
+        dispatch({ type: 'SET_VIEW', payload: 'inspections' });
+        dispatch({ type: 'SELECT_CONTACT', payload: contact.id });
+        break;
+      case 'quotes':
+        if (latestQuote) openQuote(latestQuote.id);
+        else openNewQuote();
+        break;
+      case 'invoice':
+        openQuoteAction('invoice');
+        break;
+      case 'quote-payment':
+        openQuoteAction('payment');
+        break;
+      case 'material-orders':
+        dispatch({ type: 'SET_VIEW', payload: 'material-orders' });
+        break;
+      case 'crew-schedule':
+        dispatch({ type: 'SET_VIEW', payload: 'crew-schedule' });
+        break;
+      case 'documents-tab':
+        setActiveTab('documents');
+        break;
+      case 'financial-tab':
+        setActiveTab('financial');
+        break;
+      case 'job-status-tab':
+        setActiveTab('jobStatus');
+        break;
+      case 'select':
+      default:
+        setActiveTab('timeline');
+        break;
+    }
+  };
+
   const handleStatusChange = async (newStatus: CustomerStatus) => {
     try {
       if (!effectiveCompanyId) {
@@ -1875,6 +1926,8 @@ export default function ContactDetail() {
                 currentStatus={contact.status}
                 statusChangedAt={contact.statusChangedAt ?? (contact as any).status_changed_at}
                 inspectionCompleted={contact.inspectionCompleted ?? (contact as any).inspection_completed}
+                nextStep={nextStep}
+                onNextStep={nextStep ? () => runNextStep(nextStep) : undefined}
               />
 
               {/* Project Pricing Card */}

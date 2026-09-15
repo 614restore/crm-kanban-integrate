@@ -1,5 +1,7 @@
 import React from 'react';
-import { Check, Circle, Clock } from 'lucide-react';
+import { ArrowRight, Check, Circle, Clock } from 'lucide-react';
+import type { NextStep } from '@/lib/nextStepActions';
+import { NEXT_STEP_ICONS } from './nextStepIcons';
 import { CustomerStatus } from '@/lib/crmData';
 
 interface PowerStage {
@@ -101,9 +103,13 @@ interface PipelineStageTrackerProps {
   currentStatus: CustomerStatus;
   statusChangedAt?: string;
   inspectionCompleted?: boolean;
+  /** The next thing to do to move this contact along. */
+  nextStep?: NextStep | null;
+  /** Takes you to that step (opens the quote, the calendar, a tab, …). */
+  onNextStep?: () => void;
 }
 
-export function PipelineStageTracker({ currentStatus, statusChangedAt, inspectionCompleted }: PipelineStageTrackerProps) {
+export function PipelineStageTracker({ currentStatus, statusChangedAt, inspectionCompleted, nextStep, onNextStep }: PipelineStageTrackerProps) {
   // Special case: lost
   if (currentStatus === 'lost') {
     return (
@@ -129,6 +135,7 @@ export function PipelineStageTracker({ currentStatus, statusChangedAt, inspectio
   const currentStageIndex = resolveStageIndex(effectiveStatus);
   const nextStage = currentStageIndex < POWER_STAGES.length - 1 ? POWER_STAGES[currentStageIndex + 1] : null;
   const progressPct = Math.round(((currentStageIndex + 1) / POWER_STAGES.length) * 100);
+  const NextStepIcon = nextStep ? NEXT_STEP_ICONS[nextStep.iconName] ?? ArrowRight : ArrowRight;
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
@@ -140,6 +147,24 @@ export function PipelineStageTracker({ currentStatus, statusChangedAt, inspectio
           </span>
         )}
       </div>
+
+      {/* Next step: takes you straight to what moves this contact along */}
+      {nextStep && onNextStep && (
+        <button
+          type="button"
+          onClick={onNextStep}
+          className="group mb-5 flex w-full items-center gap-3 rounded-lg bg-blue-600 px-4 py-3 text-left text-white shadow-sm transition-colors hover:bg-blue-700"
+        >
+          <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-white/15">
+            <NextStepIcon size={18} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold">Next step: {nextStep.label}</span>
+            <span className="block text-xs text-blue-100">{nextStep.description}</span>
+          </span>
+          <ArrowRight size={18} className="flex-shrink-0 transition-transform group-hover:translate-x-0.5" />
+        </button>
+      )}
 
       {/* Progress Bar */}
       <div className="mb-6">

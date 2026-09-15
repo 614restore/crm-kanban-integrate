@@ -9,7 +9,9 @@ export type NextStepActionType =
   | 'documents-tab'   // Open contact → documents tab
   | 'financial-tab'   // Open contact → financial tab
   | 'job-status-tab'  // Open contact → jobStatus tab
-  | 'invoice';        // Open invoice modal for the contact
+  | 'invoice'         // Open invoice modal for the contact
+  | 'inspection'      // Open the inspections view for the contact
+  | 'quote-payment';  // Open the contact's quote to record a payment
 
 export interface NextStep {
   label: string;
@@ -171,6 +173,115 @@ export function getNextStep(status: KanbanStatus): NextStep | null {
     default:
       return null;
   }
+}
+
+/** What a next step can know about a contact beyond its status. */
+export interface NextStepContext {
+  /** Whether the contact already has a quote; unknown on the board. */
+  hasQuote?: boolean;
+  inspectionCompleted?: boolean;
+}
+
+const KANBAN_STATUSES = new Set<string>([
+  'new_lead', 'contacted', 'inspection_scheduled', 'estimating', 'estimate_sent', 'follow_up', 'signed_won', 'lost',
+  'project_scheduled', 'materials_ordered', 'in_progress', 'punch_list', 'complete',
+  'invoice_sent', 'partial_payment', 'paid_in_full', 'collections',
+  'needs_attention', 'awaiting_approval', 'on_hold', 'escalated',
+]);
+
+/**
+ * The next thing to do to move a contact along, for either status vocabulary:
+ * the board's Kanban statuses (new_lead, signed_won, …) or the statuses the
+ * contact page and mobile app save (lead, appt_set, signed, …). Returns null
+ * when the contact is finished or lost.
+ */
+export function getNextStepForStatus(rawStatus: string | null | undefined, ctx: NextStepContext = {}): NextStep | null {
+  const status = (rawStatus ?? '').trim().toLowerCase();
+  if (!status) return null;
+
+  const quoteStep = (): NextStep =>
+    ctx.hasQuote
+      ? {
+          label: 'Open Quote',
+          description: 'Finish the quote and send it to the customer.',
+          iconName: 'FileText',
+          bgColor: 'bg-sky-50',
+          textColor: 'text-sky-700',
+          action: 'quotes',
+        }
+      : {
+          label: 'Build Quote',
+          description: 'Create and send a quote.',
+          iconName: 'FileText',
+          bgColor: 'bg-sky-50',
+          textColor: 'text-sky-700',
+          action: 'quotes',
+        };
+
+  switch (status) {
+    case 'prospect':
+    case 'lead':
+      return getNextStep('new_lead');
+    case 'appt_set':
+    case 'claim_filed':
+    case 'adjuster_scheduled':
+      return ctx.inspectionCompleted
+        ? quoteStep()
+        : {
+            label: 'Start Inspection',
+            description: 'Inspect the property, then mark the inspection complete.',
+            iconName: 'ClipboardList',
+            bgColor: 'bg-amber-50',
+            textColor: 'text-amber-700',
+            action: 'inspection',
+          };
+    case 'inspection_completed':
+    case 'estimating':
+      return quoteStep();
+    case 'estimate_sent':
+    case 'contingency':
+    case 'supplement_filed':
+    case 'retail':
+      if (ctx.hasQuote === false) return quoteStep();
+      return {
+        label: 'Get Signature',
+        description: "Open the quote and send it for the customer's signature.",
+        iconName: 'PenLine',
+        bgColor: 'bg-violet-50',
+        textColor: 'text-violet-700',
+        // On the board the quotes aren't known, so open the contact instead of a new quote.
+        action: ctx.hasQuote ? 'quotes' : 'select',
+      };
+    case 'approved':
+    case 'signed':
+      return {
+        label: 'Collect Down Payment',
+        description: 'Record the deposit before starting the project.',
+        iconName: 'DollarSign',
+        bgColor: 'bg-green-50',
+        textColor: 'text-green-700',
+        action: ctx.hasQuote ? 'quote-payment' : 'financial-tab',
+      };
+    case 'scheduled':
+      return getNextStep('project_scheduled');
+    case 'ordering_material':
+      return getNextStep('materials_ordered');
+    case 'build_phase':
+    case 'cleanup':
+      return getNextStep('in_progress');
+    case 'invoicing':
+      return getNextStep('complete');
+    case 'pending_payment':
+      return { ...(getNextStep('invoice_sent') as NextStep), action: ctx.hasQuote ? 'quote-payment' : 'financial-tab' };
+    case 'completed':
+      return null;
+  }
+
+  if (KANBAN_STATUSES.has(status)) {
+    const step = getNextStep(status as KanbanStatus);
+    return step?.action === 'quotes' ? quoteStep() : step;
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------

@@ -49,7 +49,7 @@ import {
   CalendarPlus,
   Clock,
 } from 'lucide-react';
-import { getNextStep, setPendingContactTab, type NextStep } from '@/lib/nextStepActions';
+import { getNextStepForStatus, setPendingContactTab, type NextStep } from '@/lib/nextStepActions';
 import { fireAutomationEvent } from '@/lib/automationEngine';
 import type { KanbanStatus } from '@/lib/kanbanStatuses';
 
@@ -645,6 +645,14 @@ export default function PipelineBoard() {
         dispatch({ type: 'SET_PENDING_QUOTE_ACTION', payload: { contactId: contact.id, action: 'invoice' } });
         dispatch({ type: 'SET_VIEW', payload: 'quotes' });
         break;
+      case 'inspection':
+        dispatch({ type: 'SET_VIEW', payload: 'inspections' });
+        dispatch({ type: 'SELECT_CONTACT', payload: contact.id });
+        break;
+      case 'quote-payment':
+        dispatch({ type: 'SET_PENDING_QUOTE_ACTION', payload: { contactId: contact.id, action: 'payment' } });
+        dispatch({ type: 'SET_VIEW', payload: 'quotes' });
+        break;
       case 'documents-tab':
         setPendingContactTab('documents');
         dispatch({ type: 'SELECT_CONTACT', payload: contact.id });
@@ -1033,7 +1041,7 @@ export default function PipelineBoard() {
                               </div>
                             )}
                             {(() => {
-                              const ns = getNextStep(contact.status as KanbanStatus);
+                              const ns = getNextStepForStatus(contact.status);
                               if (!ns) return null;
                               const Icon = NEXT_STEP_ICONS[ns.iconName] || ArrowRight;
                               return (
@@ -1176,7 +1184,7 @@ export default function PipelineBoard() {
                                 )}
                                 {assignee && <p className="text-xs text-gray-400 mt-1">{assignee.name}</p>}
                                 {(() => {
-                                  const ns = getNextStep(contact.status as KanbanStatus);
+                                  const ns = getNextStepForStatus(contact.status);
                                   if (!ns) return null;
                                   const Icon = NEXT_STEP_ICONS[ns.iconName] || ArrowRight;
                                   return (
@@ -1338,7 +1346,7 @@ export default function PipelineBoard() {
                             </div>
                           )}
                           {(() => {
-                            const ns = getNextStep(contact.status as KanbanStatus);
+                            const ns = getNextStepForStatus(contact.status);
                             if (!ns) return null;
                             const Icon = NEXT_STEP_ICONS[ns.iconName] || ArrowRight;
                             return (
