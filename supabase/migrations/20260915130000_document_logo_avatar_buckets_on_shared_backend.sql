@@ -103,3 +103,45 @@ drop policy if exists avatars_delete_own on storage.objects;
 create policy avatars_delete_own on storage.objects
   for delete to authenticated
   using (bucket_id = 'avatars' and split_part(name, '/', 1) = auth.uid()::text);
+
+-- ── expense-receipts and projectceo-photos: public read, company-folder writes ─
+-- Expenses → receipt upload writes {company_id}/{expense_id}/{file} with upsert
+-- and shows the public URL; the Photos page (secureUpload) writes
+-- {company_id}/{contact_id}/{file}. Upsert also needs select, so members can
+-- list their own company's folder.
+insert into storage.buckets (id, name, public)
+values ('expense-receipts', 'expense-receipts', true),
+       ('projectceo-photos', 'projectceo-photos', true)
+on conflict (id) do nothing;
+
+drop policy if exists company_uploads_select on storage.objects;
+create policy company_uploads_select on storage.objects
+  for select to authenticated
+  using (
+    bucket_id in ('expense-receipts', 'projectceo-photos')
+    and split_part(name, '/', 1) in (select public.get_my_company_ids()::text)
+  );
+
+drop policy if exists company_uploads_insert on storage.objects;
+create policy company_uploads_insert on storage.objects
+  for insert to authenticated
+  with check (
+    bucket_id in ('expense-receipts', 'projectceo-photos')
+    and split_part(name, '/', 1) in (select public.get_my_company_ids()::text)
+  );
+
+drop policy if exists company_uploads_update on storage.objects;
+create policy company_uploads_update on storage.objects
+  for update to authenticated
+  using (
+    bucket_id in ('expense-receipts', 'projectceo-photos')
+    and split_part(name, '/', 1) in (select public.get_my_company_ids()::text)
+  );
+
+drop policy if exists company_uploads_delete on storage.objects;
+create policy company_uploads_delete on storage.objects
+  for delete to authenticated
+  using (
+    bucket_id in ('expense-receipts', 'projectceo-photos')
+    and split_part(name, '/', 1) in (select public.get_my_company_ids()::text)
+  );
