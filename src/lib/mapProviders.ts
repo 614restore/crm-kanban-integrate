@@ -108,6 +108,12 @@ export interface TileConfig {
   attribution: string;
   subdomains: string;
   maxZoom: number;
+  /**
+   * Load tiles as CORS requests so the browser sends an Origin header, which
+   * providers check against the key's allowed origins. Only for providers
+   * that allow CORS; otherwise their tiles wouldn't load at all.
+   */
+  crossOrigin: boolean;
 }
 
 const OSM_CREDIT = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
@@ -117,6 +123,7 @@ export const FREE_TILES: TileConfig = {
   attribution: OSM_CREDIT,
   subdomains: 'abc',
   maxZoom: 19,
+  crossOrigin: true,
 };
 
 export const DEFAULT_RADAR_URL =
@@ -185,6 +192,7 @@ export function buildTileConfig(row: Pick<MapSettingsRow, 'provider' | 'style' |
         attribution: `&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> ${OSM_CREDIT}`,
         subdomains: 'abc',
         maxZoom: 20,
+        crossOrigin: true,
       };
     }
     case 'stadia': {
@@ -194,6 +202,7 @@ export function buildTileConfig(row: Pick<MapSettingsRow, 'provider' | 'style' |
         attribution: `&copy; <a href="https://stadiamaps.com/">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> ${OSM_CREDIT}`,
         subdomains: 'abc',
         maxZoom: 20,
+        crossOrigin: true,
       };
     }
     case 'mapbox':
@@ -203,6 +212,7 @@ export function buildTileConfig(row: Pick<MapSettingsRow, 'provider' | 'style' |
         attribution: `&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a> ${OSM_CREDIT}`,
         subdomains: 'abc',
         maxZoom: 22,
+        crossOrigin: true,
       };
     case 'thunderforest':
       if (!key) return null;
@@ -211,6 +221,8 @@ export function buildTileConfig(row: Pick<MapSettingsRow, 'provider' | 'style' |
         attribution: `Maps &copy; <a href="https://www.thunderforest.com/">Thunderforest</a>, data ${OSM_CREDIT}`,
         subdomains: 'abc',
         maxZoom: 22,
+        // Thunderforest doesn't send CORS headers on every response.
+        crossOrigin: false,
       };
     case 'custom': {
       const template = (row.custom_url ?? '').trim();
@@ -220,6 +232,8 @@ export function buildTileConfig(row: Pick<MapSettingsRow, 'provider' | 'style' |
         attribution: escapeHtml((row.custom_attribution ?? '').trim() || 'Map tiles from your provider'),
         subdomains: 'abc',
         maxZoom: 20,
+        // Unknown providers may not allow CORS; plain image requests always load.
+        crossOrigin: false,
       };
     }
   }

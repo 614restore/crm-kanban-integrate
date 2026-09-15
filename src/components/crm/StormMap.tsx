@@ -198,6 +198,7 @@ export default function StormMap({
           attribution={baseTiles.attribution}
           subdomains={baseTiles.subdomains}
           maxZoom={baseTiles.maxZoom}
+          crossOrigin={baseTiles.crossOrigin ? 'anonymous' : undefined}
           eventHandlers={{
             tileerror: () => {
               if (providerFailed || mapSettings.tilesSource === 'free') return;

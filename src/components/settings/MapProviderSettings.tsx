@@ -54,7 +54,11 @@ const toForm = (row: MapSettingsRow | null): FormState =>
       }
     : EMPTY_FORM;
 
-type TestResult = { status: 'idle' } | { status: 'testing' } | { status: 'ok'; previewUrl: string } | { status: 'failed'; message: string };
+type TestResult =
+  | { status: 'idle' }
+  | { status: 'testing' }
+  | { status: 'ok'; previewUrl: string; crossOrigin?: boolean }
+  | { status: 'failed'; message: string };
 
 function MapSettingsSection({
   scope,
@@ -136,7 +140,11 @@ function MapSettingsSection({
     setMapTest({ status: 'testing' });
     // Checked server-side: a rejected key still returns an "Invalid key" image to the browser.
     const result = await checkTileUrl(config.url, config.subdomains, true);
-    setMapTest(result.ok ? { status: 'ok', previewUrl: result.sampleUrl } : { status: 'failed', message: result.message });
+    setMapTest(
+      result.ok
+        ? { status: 'ok', previewUrl: result.sampleUrl, crossOrigin: config.crossOrigin }
+        : { status: 'failed', message: result.message },
+    );
   };
 
   const runRadarTest = async () => {
@@ -209,7 +217,10 @@ function MapSettingsSection({
     ) : result.status === 'ok' ? (
       <span className="flex items-center gap-2 text-xs text-green-700">
         <CheckCircle size={13} /> Works
-        <img src={result.previewUrl} alt="Map preview" className="h-16 w-16 rounded border border-gray-200 object-cover bg-gray-50" />
+        <img
+          src={result.previewUrl}
+          crossOrigin={result.crossOrigin ? 'anonymous' : undefined}
+          alt="Map preview" className="h-16 w-16 rounded border border-gray-200 object-cover bg-gray-50" />
       </span>
     ) : result.status === 'failed' ? (
       <span className="flex items-center gap-1.5 text-xs text-red-600"><XCircle size={13} /> {result.message}</span>
