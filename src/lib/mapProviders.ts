@@ -127,6 +127,35 @@ const escapeHtml = (s: string) =>
 
 export const getMapProvider = (id: string | null | undefined) => MAP_PROVIDERS.find((p) => p.id === id) ?? null;
 
+/** Where the provider's dashboard lets a key be limited to certain websites. */
+export const ORIGIN_SETTING_NAMES: Partial<Record<MapProviderId, string>> = {
+  maptiler: 'Allowed HTTP origins',
+  mapbox: 'URL restrictions',
+  stadia: 'Authentication Configuration (domains)',
+  custom: 'allowed websites, domains or referrers',
+};
+
+const PRODUCTION_APP_HOST = 'trussctr.614restore.com';
+
+/**
+ * The web addresses a map key has to allow: where TrussCTR runs for every
+ * company, plus the address this page is open on (e.g. a preview).
+ */
+export function allowedMapHosts(): string[] {
+  const hosts: string[] = [];
+  const envUrl = import.meta.env.VITE_APP_URL as string | undefined;
+  if (envUrl) {
+    try {
+      hosts.push(new URL(envUrl).host);
+    } catch {
+      // Not a full URL; the production host below still applies.
+    }
+  }
+  hosts.push(PRODUCTION_APP_HOST);
+  if (typeof window !== 'undefined' && window.location.host) hosts.push(window.location.host);
+  return [...new Set(hosts)];
+}
+
 export function isValidTileUrl(url: string | null | undefined): boolean {
   const u = (url ?? '').trim();
   return /^https:\/\/\S+$/i.test(u) && ['{z}', '{x}', '{y}'].every((t) => u.includes(t));

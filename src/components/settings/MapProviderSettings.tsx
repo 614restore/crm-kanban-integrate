@@ -9,12 +9,14 @@ import { supabase } from '@/lib/supabase';
 import { MAP_SETTINGS_CHANGED_EVENT } from '@/hooks/useMapSettings';
 import { checkTileUrl } from '@/lib/mapTileCheck';
 import {
+  allowedMapHosts,
   buildTileConfig,
   getMapProvider,
   isValidRadarUrl,
   isValidTileUrl,
   MAP_PROVIDERS,
   MAP_SETTINGS_COLUMNS,
+  ORIGIN_SETTING_NAMES,
   radarTileUrl,
   type MapProviderId,
   type MapSettingsRow,
@@ -317,6 +319,12 @@ function MapSettingsSection({
                 onChange={(e) => update({ apiKey: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono"
               />
+              {ORIGIN_SETTING_NAMES[provider.id] && (
+                <p className="text-xs text-gray-500 mt-1">
+                  In {provider.id === 'custom' ? "your provider's dashboard" : provider.name}, add the TrussCTR web addresses listed at the top of
+                  this page under {provider.id === 'custom' ? 'its ' : ''}"{ORIGIN_SETTING_NAMES[provider.id]}".
+                </p>
+              )}
             </div>
           )}
 
@@ -393,6 +401,55 @@ function MapSettingsSection({
   );
 }
 
+function CopyValue({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard blocked: the address can still be selected and copied by hand.
+    }
+  };
+  return (
+    <div className="flex items-center gap-2">
+      <code className="flex-1 select-all truncate rounded border border-amber-200 bg-white px-2 py-1 text-xs text-gray-800">{value}</code>
+      <button type="button" onClick={copy} className="shrink-0 rounded px-2 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-100">
+        {copied ? 'Copied' : 'Copy'}
+      </button>
+    </div>
+  );
+}
+
+/** The web addresses every company's map key must allow, ready to copy. */
+function AllowedOriginsHelp() {
+  const hosts = allowedMapHosts();
+  return (
+    <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+      <div className="flex items-start gap-2">
+        <ShieldAlert size={16} className="mt-0.5 shrink-0" />
+        <span>
+          Map keys load map images in the browser, so people on your team can see them. In your provider's dashboard, limit the key to
+          TrussCTR's web addresses (MapTiler calls this "Allowed HTTP origins", Mapbox "URL restrictions"). Leave any "User-Agent"
+          restriction empty, or everyone's browser gets blocked.
+        </span>
+      </div>
+      <div>
+        <p className="mb-1.5 text-xs font-semibold">Add each of these to your key:</p>
+        <div className="space-y-1.5">
+          {hosts.map((host) => (
+            <CopyValue key={host} value={host} />
+          ))}
+        </div>
+      </div>
+      <p className="text-xs text-amber-800">
+        If the provider asks for full addresses, add https:// in front of each. Changes can take a minute to apply, then use Test map.
+      </p>
+    </div>
+  );
+}
+
 interface MapProviderSettingsProps {
   companyId: string;
   userId: string | null;
@@ -413,13 +470,7 @@ export default function MapProviderSettings({ companyId, userId, canManageTeam }
         </p>
       </div>
 
-      <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
-        <ShieldAlert size={16} className="mt-0.5 shrink-0" />
-        <span>
-          Map keys load map images in the browser, so people on your team can see them. In your provider's dashboard, limit the key to
-          your TrussCTR web address (for example trussctr.614restore.com).
-        </span>
-      </div>
+      <AllowedOriginsHelp />
 
       <MapSettingsSection scope="personal" companyId={companyId} userId={userId} canEdit={!!userId} />
       <MapSettingsSection scope="team" companyId={companyId} userId={userId} canEdit={canManageTeam} />
