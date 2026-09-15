@@ -44,7 +44,8 @@ async function getCompanySmtp(companyId) {
   if (!companyId) return null;
   const { data } = await db
     .from('companies')
-    .select('smtp_host,smtp_port,smtp_user,smtp_pass,smtp_secure,from_name,from_email,name')
+    // The shared backend names these smtp_username/smtp_password/quote_sender_*; alias to the names used below.
+    .select('smtp_host,smtp_port,smtp_user:smtp_username,smtp_pass:smtp_password,smtp_secure,from_name:quote_sender_name,from_email:quote_sender_email,name')
     .eq('id', companyId)
     .single();
   if (!data?.smtp_host) return null;

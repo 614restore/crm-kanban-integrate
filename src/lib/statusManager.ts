@@ -96,15 +96,16 @@ export async function updateContactStatus(context: StatusUpdateContext): Promise
     if (!currentStatus || !context.contactName || !context.contactEmail) {
       const { data, error } = await supabase
         .from('contacts')
-        .select('status, name, email')
+        .select('status, first_name, last_name, email')
         .eq('id', contactId)
         .single();
-        
+
       if (error) {
         return { success: false, error: `Failed to fetch contact data: ${error.message}` };
       }
-      
-      contactData = data;
+
+      // contacts has first_name/last_name, not name.
+      contactData = { ...data, name: [data.first_name, data.last_name].filter(Boolean).join(' ') };
       currentStatus = currentStatus || data.status;
     }
 

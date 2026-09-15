@@ -19,6 +19,50 @@ function assertCompanyId(companyId: string | undefined | null, method: string): 
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Types matching database schema
+// The shared backend names some company fields the QuoteMGR way; the web app
+// still uses its older names. Reads expose both, writes use the backend names.
+function fromDbCompanyRow<T>(row: T): T {
+  if (!row) return row;
+  const r = row as Record<string, unknown>;
+  return {
+    ...r,
+    tagline: r.tagline ?? r.about_tagline,
+    contractor_license: r.contractor_license ?? r.license_number,
+    from_email: r.from_email ?? r.quote_sender_email,
+    from_name: r.from_name ?? r.quote_sender_name,
+    smtp_user: r.smtp_user ?? r.smtp_username,
+    smtp_pass: r.smtp_pass ?? r.smtp_password,
+  } as T;
+}
+
+function toDbCompanyRow(updates: Partial<DbCompany>): Record<string, unknown> {
+  const { tagline, contractor_license, from_email, from_name, smtp_user, smtp_pass, ...rest } = updates;
+  return {
+    ...rest,
+    ...(tagline !== undefined ? { about_tagline: tagline } : {}),
+    ...(contractor_license !== undefined ? { license_number: contractor_license } : {}),
+    ...(from_email !== undefined ? { quote_sender_email: from_email } : {}),
+    ...(from_name !== undefined ? { quote_sender_name: from_name } : {}),
+    ...(smtp_user !== undefined ? { smtp_username: smtp_user } : {}),
+    ...(smtp_pass !== undefined ? { smtp_password: smtp_pass } : {}),
+  };
+}
+
+// work_orders.assigned_to is one team member on the shared backend (the mobile
+// app and QuoteMGR read it). The web app assigns several people by user id, so
+// the full list lives in assigned_user_ids and the first one fills assigned_to.
+function toDbWorkOrderRow(workOrder: Partial<DbWorkOrder>): Record<string, unknown> {
+  const { assigned_to, ...rest } = workOrder;
+  if (assigned_to === undefined) return rest;
+  const ids = (assigned_to ?? []).filter(Boolean);
+  return { ...rest, assigned_user_ids: ids, assigned_to: ids[0] ?? null };
+}
+
+function fromDbWorkOrderRow(row: DbWorkOrder): DbWorkOrder {
+  const ids = (row as DbWorkOrder & { assigned_user_ids?: string[] | null }).assigned_user_ids;
+  return { ...row, assigned_to: Array.isArray(ids) ? ids : [] };
+}
+
 export interface DbCompany {
   id: string;
   name: string;
@@ -609,7 +653,7 @@ class DatabaseService {
         supabase.from('companies').select('*').eq('id', companyId).single(),
         5000, 'companies direct query',
       );
-      if (!error && data) { this.setCachedCompany(companyId, data); return data; }
+      if (!error && data) { const company = fromDbCompanyRow(data); this.setCachedCompany(companyId, company); return company; }
       if (error) console.warn('[Database] Direct company query failed, trying RPC:', error.message);
     } catch {
       console.warn('[Database] Direct query timed-out, trying RPC');
@@ -621,7 +665,7 @@ class DatabaseService {
         5000, 'get_my_company RPC',
       );
       if (!rpcError && rpcData && rpcData.length > 0) {
-        const company = rpcData[0] as DbCompany;
+        const company = fromDbCompanyRow(rpcData[0] as DbCompany);
         this.setCachedCompany(companyId, company);
         return company;
       }
@@ -693,8 +737,9 @@ class DatabaseService {
         5000, 'update_my_company RPC'
       );
       if (!rpcError && rpcData) {
-        this.setCachedCompany(companyId, rpcData as DbCompany);
-        return rpcData as DbCompany;
+        const company = fromDbCompanyRow(rpcData as DbCompany);
+        this.setCachedCompany(companyId, company);
+        return company;
       }
       if (rpcError) console.warn('[Database] update_my_company RPC failed, falling back:', rpcError.message);
     } catch {
@@ -702,12 +747,13 @@ class DatabaseService {
     }
     try {
       const { data, error } = await this.raceTimeout(
-        supabase.from('companies').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', companyId).select().single(),
+        supabase.from('companies').update({ ...toDbCompanyRow(updates), updated_at: new Date().toISOString() }).eq('id', companyId).select().single(),
         5000, 'updateCompany direct'
       );
       if (error) { console.error('Error updating company:', error); return null; }
-      this.setCachedCompany(companyId, data);
-      return data;
+      const company = fromDbCompanyRow(data);
+      this.setCachedCompany(companyId, company);
+      return company;
     } catch (err) { console.error('updateCompany timed out or failed:', err); return null; }
   }
 
@@ -715,7 +761,7 @@ class DatabaseService {
     assertCompanyId(companyId, 'updateSmtpSettings');
     try {
       const { error } = await this.raceTimeout(
-        supabase.from('companies').update({ ...settings, updated_at: new Date().toISOString() }).eq('id', companyId),
+        supabase.from('companies').update({ ...toDbCompanyRow(settings), updated_at: new Date().toISOString() }).eq('id', companyId),
         5000, 'updateSmtpSettings'
       );
       if (error) { console.error('Error updating SMTP settings:', error); return false; }
@@ -1718,43 +1764,43 @@ class DatabaseService {
     const { data, error } = await supabase
       .from('work_orders').select('*').eq('company_id', companyId).order('created_at', { ascending: false });
     if (error) { console.error('Error fetching work orders:', error); return []; }
-    return data || [];
+    return (data || []).map(fromDbWorkOrderRow);
   }
 
   async getWorkOrdersByProject(projectId: string): Promise<DbWorkOrder[]> {
     const { data, error } = await supabase
       .from('work_orders').select('*').eq('project_id', projectId).order('scheduled_date', { ascending: true });
     if (error) { console.error('Error fetching work orders by project:', error); return []; }
-    return data || [];
+    return (data || []).map(fromDbWorkOrderRow);
   }
 
   async getWorkOrdersByContact(contactId: string): Promise<DbWorkOrder[]> {
     const { data, error } = await supabase
       .from('work_orders').select('*').eq('contact_id', contactId).order('scheduled_date', { ascending: false });
     if (error) { console.error('Error fetching work orders by contact:', error); return []; }
-    return data || [];
+    return (data || []).map(fromDbWorkOrderRow);
   }
 
   async createWorkOrder(workOrder: Partial<DbWorkOrder>): Promise<DbWorkOrder | null> {
     assertCompanyId(workOrder.company_id, 'createWorkOrder');
     try {
       const { data, error } = await this.raceTimeout(
-        supabase.from('work_orders').insert([workOrder]).select().single(),
+        supabase.from('work_orders').insert([toDbWorkOrderRow(workOrder)]).select().single(),
         10000, 'createWorkOrder'
       );
       if (error) throw new Error(error.message);
-      return data;
+      return fromDbWorkOrderRow(data);
     } catch (err) { console.error('createWorkOrder timed out or failed:', err); throw err; }
   }
 
   async updateWorkOrder(workOrderId: string, updates: Partial<DbWorkOrder>): Promise<DbWorkOrder | null> {
     try {
       const { data, error } = await this.raceTimeout(
-        supabase.from('work_orders').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', workOrderId).select().single(),
+        supabase.from('work_orders').update({ ...toDbWorkOrderRow(updates), updated_at: new Date().toISOString() }).eq('id', workOrderId).select().single(),
         10000, 'updateWorkOrder'
       );
       if (error) { console.error('Error updating work order:', error); return null; }
-      return data;
+      return fromDbWorkOrderRow(data);
     } catch (err) { console.error('updateWorkOrder timed out or failed:', err); return null; }
   }
 

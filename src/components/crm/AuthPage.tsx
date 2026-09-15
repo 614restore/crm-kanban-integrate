@@ -49,7 +49,7 @@ export default function AuthPage() {
       // Fetch invite details + company name in one query
       supabase
         .from('invitations')
-        .select('email, role, accepted, expires_at, companies(name)')
+        .select('email, role, status, expires_at, companies(name)')
         .eq('token', token)
         .eq('company_id', companyId)
         .single()
@@ -60,7 +60,7 @@ export default function AuthPage() {
           }
 
           // Check if already accepted
-          if (data.accepted) {
+          if (data.status === 'accepted') {
             setError('This invitation has already been used. Please sign in or contact your team admin.');
             return;
           }
