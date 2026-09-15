@@ -39,6 +39,7 @@ import WeatherWidget from '@/components/integrations/WeatherWidget';
 import EagleViewPanel from './EagleViewPanel';
 import RoofrPanel from './RoofrPanel';
 import InsuranceTrackingView from './InsuranceTrackingView';
+import ContactInsuranceSummary from './ContactInsuranceSummary';
 import SupplementTrackingView from './SupplementTrackingView';
 import { PipelineStageTracker } from './PipelineStageTracker';
 import {
@@ -2564,6 +2565,8 @@ export default function ContactDetail() {
                 )}
               </div>
             </div>
+
+            <ContactInsuranceSummary contactId={contact.id} />
 
             <div className="bg-white rounded-xl border border-gray-200 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Actions</h3>

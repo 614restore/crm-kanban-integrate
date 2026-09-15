@@ -80,6 +80,7 @@ function StatusBadge({ status }: { status: ClaimStatus }) {
 }
 
 const EMPTY_FORM = {
+  contact_id: '',
   claim_number: '',
   insurance_company: '',
   adjuster_name: '',
@@ -161,6 +162,7 @@ export default function InsuranceTrackingView({ contactId, contactName }: Insura
   const openEdit = (claim: InsuranceClaim) => {
     setEditingClaim(claim);
     setForm({
+      contact_id: claim.contact_id ?? '',
       claim_number: claim.claim_number,
       insurance_company: claim.insurance_company,
       adjuster_name: claim.adjuster_name ?? '',
@@ -182,11 +184,17 @@ export default function InsuranceTrackingView({ contactId, contactName }: Insura
       toast.error('Claim number and insurance company are required');
       return;
     }
+    // A claim belongs to a customer; inside a contact record that customer is fixed.
+    const claimContactId = contactId || form.contact_id;
+    if (!claimContactId) {
+      toast.error('Choose the customer this claim is for');
+      return;
+    }
     setIsSaving(true);
     try {
       const payload = {
         company_id: companyId,
-        contact_id: editingClaim ? editingClaim.contact_id : (contactId || null),
+        contact_id: claimContactId,
         claim_number: form.claim_number.trim(),
         insurance_company: form.insurance_company.trim(),
         adjuster_name: form.adjuster_name.trim() || null,
@@ -436,6 +444,26 @@ export default function InsuranceTrackingView({ contactId, contactName }: Insura
               </button>
             </div>
             <div className="p-6 grid grid-cols-2 gap-4">
+              {!contactId && (
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Customer *</label>
+                  <select
+                    value={form.contact_id}
+                    onChange={e => setForm(f => ({ ...f, contact_id: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  >
+                    <option value="">— Select customer —</option>
+                    {[...state.contacts]
+                      .sort((a, b) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`))
+                      .map(c => (
+                        <option key={c.id} value={c.id}>
+                          {`${c.firstName ?? ''} ${c.lastName ?? ''}`.trim() || c.email || 'Unnamed contact'}
+                          {c.address ? ` — ${c.address}` : ''}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Claim Number *</label>
                 <input
@@ -508,7 +536,8 @@ export default function InsuranceTrackingView({ contactId, contactName }: Insura
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Claim Amount</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Amount Claimed</label>
+                <p className="text-xs text-gray-500 mb-1">What you asked the insurer for</p>
                 <div className="relative">
                   <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input
@@ -523,7 +552,8 @@ export default function InsuranceTrackingView({ contactId, contactName }: Insura
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Approved Amount</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Approved by Insurer</label>
+                <p className="text-xs text-gray-500 mb-1">What the adjuster approved — often lower</p>
                 <div className="relative">
                   <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input
