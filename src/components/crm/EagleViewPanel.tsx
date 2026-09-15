@@ -116,7 +116,7 @@ export default function EagleViewPanel({
           .eq('company_id', companyId)
           .eq('integration_type', 'eagleview')
           .eq('is_active', true)
-          .single();
+          .maybeSingle();
 
         if (dbError && dbError.code !== 'PGRST116') {
           // Real DB / auth error — not just "no rows found"

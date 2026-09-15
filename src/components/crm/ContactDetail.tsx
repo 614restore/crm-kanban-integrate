@@ -3797,7 +3797,8 @@ export default function ContactDetail() {
                   work_order_number: `WO-${Date.now()}`,
                   title: formData.get('title') as string,
                   description: formData.get('description') as string,
-                  status: formData.get('status') as string || 'pending',
+                  // work_orders.status has no 'pending'; new work orders start as scheduled.
+                  status: formData.get('status') as string || 'scheduled',
                   priority: formData.get('priority') as string || 'medium',
                   scheduled_date: (formData.get('scheduled_date') as string) || undefined,
                   estimated_hours: parseFloat(formData.get('estimated_hours') as string) || 0,
@@ -3881,7 +3882,6 @@ export default function ContactDetail() {
                     name="status"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                   >
-                    <option value="pending">Pending</option>
                     <option value="scheduled">Scheduled</option>
                     <option value="in_progress">In Progress</option>
                     <option value="completed">Completed</option>

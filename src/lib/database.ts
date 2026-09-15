@@ -19,6 +19,22 @@ function assertCompanyId(companyId: string | undefined | null, method: string): 
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Types matching database schema
+// Forms send "" for an empty number, date or person picker; Postgres rejects ""
+// for those column types with a 400, so send null instead.
+const CONTACT_NON_TEXT_COLUMNS = new Set([
+  'assigned_to', 'added_by', 'pickup_cleared_by', 'inspection_completed_by',
+  'deductible', 'project_value', 'deposit_amount', 'final_payment_amount',
+  'date_of_loss', 'appointment_date', 'deposit_date', 'final_payment_date',
+  'status_changed_at', 'archived_at', 'pickup_cleared_at', 'contingency_signed_at',
+  'inspection_completed_at', 'claim_denied_at',
+]);
+
+function toDbContactRow(contact: Partial<DbContact>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(contact).map(([key, value]) => [key, value === '' && CONTACT_NON_TEXT_COLUMNS.has(key) ? null : value])
+  );
+}
+
 // The shared backend names some company fields the QuoteMGR way; the web app
 // still uses its older names. Reads expose both, writes use the backend names.
 function fromDbCompanyRow<T>(row: T): T {
@@ -861,7 +877,7 @@ class DatabaseService {
     assertCompanyId(contact.company_id, 'createContact');
     try {
       const { data, error } = await this.raceTimeout(
-        supabase.from('contacts').insert(contact).select().single(),
+        supabase.from('contacts').insert(toDbContactRow(contact)).select().single(),
         10000, 'createContact'
       );
       if (error) { console.error('Error creating contact:', error); throw new Error(error.message || 'Failed to save contact to database'); }
@@ -876,7 +892,7 @@ class DatabaseService {
     try {
       // Extended timeout for mobile-friendly performance (30 seconds)
       const { data, error } = await this.raceTimeout(
-        supabase.from('contacts').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', contactId).select().single(),
+        supabase.from('contacts').update({ ...toDbContactRow(updates), updated_at: new Date().toISOString() }).eq('id', contactId).select().single(),
         30000, 'updateContact',
       );
       if (error) { 

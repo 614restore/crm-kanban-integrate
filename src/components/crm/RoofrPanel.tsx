@@ -151,7 +151,7 @@ export default function RoofrPanel({
           .eq('company_id', companyId)
           .eq('integration_type', 'roofr')
           .eq('is_active', true)
-          .single();
+          .maybeSingle();
 
         if (dbError && dbError.code !== 'PGRST116') {
           setConfigStatus('missing');

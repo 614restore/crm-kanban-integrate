@@ -20,6 +20,12 @@ interface DocMeta {
 }
 
 function getApiBase(): string {
+  // Deployed web builds serve /api themselves, and the CSP only allows same-origin calls.
+  const { protocol, hostname } = window.location;
+  if ((protocol === 'https:' || protocol === 'http:') && hostname !== 'localhost'
+      && hostname !== '127.0.0.1' && !hostname.endsWith('.github.io')) {
+    return window.location.origin;
+  }
   const configured = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim();
   if (configured) return configured.replace(/\/$/, '');
   return window.location.origin;

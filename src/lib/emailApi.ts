@@ -7,6 +7,15 @@ export interface SendEmailPayload {
 }
 
 function getApiBaseUrl(): string | null {
+  const { protocol, hostname } = window.location;
+  // A deployed web build (preview, production or custom domain) serves /api from
+  // its own origin, and the Content-Security-Policy only allows same-origin
+  // calls — so never send it to a configured base on another domain.
+  if ((protocol === 'https:' || protocol === 'http:') && hostname !== 'localhost'
+      && hostname !== '127.0.0.1' && !hostname.endsWith('.github.io')) {
+    return window.location.origin;
+  }
+
   const configuredBase =
     (import.meta.env.VITE_EMAIL_API_BASE_URL as string | undefined)?.trim() ||
     (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim();

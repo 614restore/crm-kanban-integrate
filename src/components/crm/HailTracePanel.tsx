@@ -160,7 +160,7 @@ export default function HailTracePanel({ address, city, state, zip, companyId, c
         .select('credentials')
         .eq('company_id', companyId)
         .eq('integration_id', 'hailtrace')
-        .single();
+        .maybeSingle();
 
       const coords = await geocode();
 
