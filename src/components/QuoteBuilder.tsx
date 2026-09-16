@@ -59,14 +59,14 @@ interface QuoteBuilderProps {
 }
 
 const steps = [
-  { id: 'customer', label: 'Customer Info', icon: User },
-  { id: 'project', label: 'Project Details', icon: Settings },
-  { id: 'photos', label: 'Photo Documentation', icon: Camera },
-  { id: 'contingency', label: 'Contingency Agreement', icon: Shield },
-  { id: 'invoice', label: 'Invoice Details', icon: FileText },
-  { id: 'items', label: 'Line Items', icon: Package },
-  { id: 'files', label: 'Brochures & Files', icon: FolderOpen },
-  { id: 'review', label: 'Review & Options', icon: FileText },
+  { id: 'customer', label: 'Customer Info', short: 'Customer', icon: User },
+  { id: 'project', label: 'Project Details', short: 'Project', icon: Settings },
+  { id: 'photos', label: 'Photo Documentation', short: 'Photos', icon: Camera },
+  { id: 'contingency', label: 'Contingency Agreement', short: 'Contingency', icon: Shield },
+  { id: 'invoice', label: 'Invoice Details', short: 'Invoice', icon: FileText },
+  { id: 'items', label: 'Line Items', short: 'Items', icon: Package },
+  { id: 'files', label: 'Brochures & Files', short: 'Files', icon: FolderOpen },
+  { id: 'review', label: 'Review & Options', short: 'Review', icon: FileText },
 ];
 
 /** Money is stored to the cent — a per-bundle rate of 410/3 must not become 136.66666666666666. */
@@ -4394,24 +4394,28 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
         </div>
       )}
 
-      {/* Progress Steps */}
-      <div className="flex items-center gap-1 mb-8 overflow-x-auto pb-2">
+      {/* Progress Steps — wraps to fit the window; labels shorten as it narrows */}
+      <div className="flex flex-wrap items-center gap-x-1 gap-y-2 mb-8">
         {activeSteps.map((step, i) => (
           <React.Fragment key={step.id}>
             <button
               onClick={() => setCurrentStep(i)}
-              className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all ${i === currentStep
+              title={step.label}
+              className={`flex items-center gap-2 px-2.5 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all ${i === currentStep
                 ? 'bg-[#1e3a5f] text-white shadow-lg'
                 : i < currentStep
                   ? 'bg-green-100 text-green-700'
                   : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                 }`}
             >
-              {i < currentStep ? <Check className="w-4 h-4" /> : <step.icon className="w-4 h-4" />}
-              <span className="hidden md:inline">{step.label}</span>
-              <span className="md:hidden">{i + 1}</span>
+              {i < currentStep ? <Check className="w-4 h-4 flex-shrink-0" /> : <step.icon className="w-4 h-4 flex-shrink-0" />}
+              {/* Full name on wide screens, short name from medium up, and on the
+                  narrowest screens just the number — except the step you are on. */}
+              <span className="hidden xl:inline">{step.label}</span>
+              <span className="hidden md:inline xl:hidden">{step.short ?? step.label}</span>
+              <span className="md:hidden">{i === currentStep ? (step.short ?? step.label) : i + 1}</span>
             </button>
-            {i < activeSteps.length - 1 && <ChevronRight className="w-4 h-4 text-gray-300 flex-shrink-0" />}
+            {i < activeSteps.length - 1 && <ChevronRight className="hidden sm:block w-4 h-4 text-gray-300 flex-shrink-0" />}
           </React.Fragment>
         ))}
       </div>
