@@ -883,9 +883,10 @@ export default function ContactDetail() {
     });
   };
 
+  // Back goes to the screen you came from (a board, the dashboard, a search
+  // result), not always the contact list.
   const handleBack = () => {
-    dispatch({ type: 'SELECT_CONTACT', payload: null });
-    dispatch({ type: 'SET_VIEW', payload: 'contacts' });
+    dispatch({ type: 'GO_BACK' });
   };
 
   const handleEdit = () => {

@@ -267,7 +267,7 @@ export default function SupplementTrackingView({ contactId, contactName }: Suppl
               <button
                 onClick={() => {
                   setClaimFilter('all');
-                  dispatch({ type: 'SET_VIEW', payload: 'insurance-tracking' });
+                  dispatch({ type: 'GO_BACK' });
                 }}
                 className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg"
               >

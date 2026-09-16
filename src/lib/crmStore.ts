@@ -78,6 +78,12 @@ export type ViewType =
   | 'sales-analytics'
   | 'inspections';
 
+/** A screen you were on, with the contact that was open on it. */
+export interface ViewHistoryEntry {
+  view: ViewType;
+  contactId: string | null;
+}
+
 export interface CRMState {
   // Current user
   currentUser: TeamMember | null;
@@ -87,6 +93,8 @@ export interface CRMState {
   currentView: ViewType;
   selectedContactId: string | null;
   selectedBoardId: string;
+  /** Screens you came through, newest last, so a back arrow returns to the last one. */
+  viewHistory: ViewHistoryEntry[];
   
   // Data
   contacts: Contact[];
@@ -143,6 +151,7 @@ export interface Notification {
 
 export type CRMAction =
   | { type: 'SET_VIEW'; payload: ViewType }
+  | { type: 'GO_BACK' }
   | { type: 'SELECT_CONTACT'; payload: string | null }
   | { type: 'SELECT_BOARD'; payload: string }
   | { type: 'TOGGLE_SIDEBAR' }
@@ -228,16 +237,53 @@ export type CRMAction =
       companyGoals: CompanyGoals[];
     }};
 
+/** Screens kept in the back history. Older ones fall off the end. */
+const MAX_VIEW_HISTORY = 20;
+
+/** The screen you are leaving, added to the history unless it is already on top. */
+function pushViewHistory(state: CRMState): ViewHistoryEntry[] {
+  const history = state.viewHistory ?? [];
+  const leaving: ViewHistoryEntry = { view: state.currentView, contactId: state.selectedContactId };
+  const top = history[history.length - 1];
+  if (top && top.view === leaving.view && top.contactId === leaving.contactId) return history;
+  return [...history, leaving].slice(-MAX_VIEW_HISTORY);
+}
+
 export function crmReducer(state: CRMState, action: CRMAction): CRMState {
   switch (action.type) {
     case 'SET_VIEW':
-      return { ...state, currentView: action.payload, selectedContactId: null };
-    
+      // Going nowhere new: leave the history alone.
+      if (action.payload === state.currentView && !state.selectedContactId) return state;
+      return {
+        ...state,
+        currentView: action.payload,
+        selectedContactId: null,
+        viewHistory: pushViewHistory(state),
+      };
+
+    case 'GO_BACK': {
+      const history = [...(state.viewHistory ?? [])];
+      const previous = history.pop();
+      // A contact screen with no contact would be blank; fall back to the list.
+      if (!previous || (previous.view === 'contact-detail' && !previous.contactId)) {
+        return {
+          ...state,
+          currentView: previous ? 'contacts' : 'dashboard',
+          selectedContactId: null,
+          viewHistory: history,
+        };
+      }
+      return { ...state, currentView: previous.view, selectedContactId: previous.contactId, viewHistory: history };
+    }
+
     case 'SELECT_CONTACT':
-      return { 
-        ...state, 
+      if (!action.payload) return { ...state, selectedContactId: null };
+      if (state.selectedContactId === action.payload && state.currentView === 'contact-detail') return state;
+      return {
+        ...state,
         selectedContactId: action.payload,
-        currentView: action.payload ? 'contact-detail' : state.currentView 
+        currentView: 'contact-detail',
+        viewHistory: pushViewHistory(state),
       };
     
     case 'SELECT_BOARD':

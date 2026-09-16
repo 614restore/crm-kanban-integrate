@@ -111,6 +111,7 @@ const initialState: CRMState = {
   companyId: null,
   currentView: getInitialView(),
   selectedContactId: null,
+  viewHistory: [],
   selectedBoardId: 'board-retail',
   contacts: [],
   teamMembers: [],

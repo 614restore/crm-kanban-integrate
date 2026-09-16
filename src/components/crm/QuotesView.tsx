@@ -163,6 +163,7 @@ export default function QuotesView() {
     setPreviewReturnStep(null);
     setBuilderNonce((n) => n + 1);
     setShowBuilder(true);
+    setReturnContactId(state.currentView === 'contact-detail' ? state.selectedContactId : null);
     if (!pending.quoteId && pending.items?.length) {
       // QuoteMGR's builder imports measurement reports itself, in its Line Items
       // step, so rows parsed elsewhere are not carried over.
@@ -312,8 +313,18 @@ export default function QuotesView() {
     setEditingQuoteId(id); setBuilderPrefill(null); setPreviewQuoteId(null); setPreviewReturnStep(null); setShowBuilder(true);
   };
   const openPreview = (id: string) => { setPreviewReturnStep(null); setPreviewQuoteId(id); };
+  /** Set when the builder was opened from a contact, so closing returns there. */
+  const [returnContactId, setReturnContactId] = useState<string | null>(null);
+
   const closeBuilder = () => {
     setShowBuilder(false); setEditingQuoteId(null); setBuilderPrefill(null); setPreviewReturnStep(null); loadQuotes();
+    // Opened from a contact (its Next step button, or a quote on its page):
+    // closing the builder goes back to that contact, not the quote list.
+    if (returnContactId) {
+      const contactId = returnContactId;
+      setReturnContactId(null);
+      dispatch({ type: 'SELECT_CONTACT', payload: contactId });
+    }
   };
 
   // As in QuoteMGR, a signed quote is what becomes a work order. The printed
