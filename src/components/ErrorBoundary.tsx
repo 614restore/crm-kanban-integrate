@@ -1,4 +1,5 @@
 import { Component, ReactNode } from "react";
+import { isMissingChunkError, reloadForNewBuild } from "@/lib/lazyScreen";
 
 interface Props {
   children: ReactNode;
@@ -22,6 +23,10 @@ export class ErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, info: { componentStack: string }) {
     // Log to console in dev; swap for Sentry/LogRocket in production
     console.error("[ErrorBoundary] Uncaught error:", error, info.componentStack);
+    // A tab left open from an earlier deployment asked for a file that no longer
+    // exists. Reload once to pick up the current build rather than showing the
+    // error page for something a refresh fixes.
+    if (isMissingChunkError(error)) reloadForNewBuild();
   }
 
   handleReset = () => {

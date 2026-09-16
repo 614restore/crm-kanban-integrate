@@ -1,10 +1,11 @@
 
-import React, { Suspense, lazy, useEffect } from 'react';
+import React, { Suspense, useEffect } from 'react';
+import { lazyScreen } from '@/lib/lazyScreen';
 import AppLayout from '@/components/AppLayout';
 import { AppProvider } from '@/contexts/AppContext';
 
 // Loaded only when a customer opens a quote link, so the app bundle stays lean.
-const CustomerQuotePortal = lazy(() => import('@/components/CustomerQuotePortal'));
+const CustomerQuotePortal = lazyScreen(() => import('@/components/CustomerQuotePortal'));
 
 const CheckoutHandler: React.FC = () => {
   useEffect(() => {
