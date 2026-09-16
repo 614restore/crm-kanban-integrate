@@ -1,7 +1,9 @@
 // Service worker for TrussCTR CRM
 // This provides offline caching and PWA functionality
 
-const CACHE_NAME = 'trussctr-v3';
+// Bumping this name drops every previously cached app shell on activate, so a
+// browser that cached an older deployment's index.html cannot keep serving it.
+const CACHE_NAME = 'trussctr-v4';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -79,26 +81,24 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Navigation (HTML) — stale-while-revalidate:
-  // Serve cached app shell IMMEDIATELY (so the app never shows a white/blank page),
-  // then fetch fresh HTML in the background and update the cache for next visit.
-  // If no cache yet (first visit), wait for the network response.
+  // Navigation (HTML) — network first:
+  // The app shell names its JS bundles by content hash, so a cached shell from an
+  // older deployment asks for chunk files that no longer exist (404s, and the app
+  // keeps running old code). Always try the network, and fall back to the cached
+  // shell only when the network fails, so the app still opens offline.
   if (url.pathname.endsWith('.html') || url.pathname === '/' || request.mode === 'navigate') {
     event.respondWith(
       caches.open(CACHE_NAME).then(async (cache) => {
-        const cached = await cache.match(request) || await cache.match('/index.html');
-
-        const networkFetch = fetch(request, { cache: 'no-store' })
-          .then((response) => {
-            if (response.ok) {
-              cache.put(request, response.clone());
-            }
-            return response;
-          })
-          .catch(() => cached || new Response('Offline', { status: 503 }));
-
-        // Serve cache immediately if available; otherwise wait for network.
-        return cached || networkFetch;
+        try {
+          const response = await fetch(request, { cache: 'no-store' });
+          if (response.ok) {
+            cache.put(request, response.clone());
+          }
+          return response;
+        } catch {
+          const cached = await cache.match(request) || await cache.match('/index.html');
+          return cached || new Response('Offline', { status: 503 });
+        }
       })
     );
     return;
