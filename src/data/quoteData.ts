@@ -113,6 +113,10 @@ export interface Company {
   quote_watermark_opacity?: number | null; // 0.0–1.0, default 0.08
   quote_watermark_rotation?: 'diagonal' | 'straight' | null; // default 'diagonal'
   quote_watermark_size?: number | null; // 0.20–1.40 multiplier; 0.55 = subtle, 1.40 = full page
+  // Customer-facing service request form on the quote portal (default on)
+  enable_service_requests?: boolean | null;
+  // Hide the "Designed with QuoteMGR" footer line on customer documents
+  hide_quotemgr_branding?: boolean | null;
   // Setup guide progress
   setup_guide_progress?: Record<string, 'done' | 'skipped'> | null;
   // Final Offer feature

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useCRM, canManageLeadSources } from '@/lib/crmStore';
 import StormAlertSettings from '@/components/settings/StormAlertSettings';
+import CompanySettingsPanel from '@/components/settings/CompanySettingsPanel';
 import { useAuth } from '@/lib/authContext';
 import { defaultLeadSources } from '@/lib/crmData';
 import { toast } from 'sonner';
@@ -159,7 +160,7 @@ function detectSmtpProvider(host: string) {
   return null;
 }
 
-type SettingsTab = 'company' | 'profile' | 'integrations' | 'ai-assistant' | 'maps' | 'notifications' | 'security' | 'billing' | 'customer-billing' | 'api' | 'features' | 'document-templates' | 'pipeline' | 'guidebook';
+type SettingsTab = 'company' | 'company-settings' | 'profile' | 'integrations' | 'ai-assistant' | 'maps' | 'notifications' | 'security' | 'billing' | 'customer-billing' | 'api' | 'features' | 'document-templates' | 'pipeline' | 'guidebook';
 
 interface CompanyFormData {
   name: string;
@@ -1439,6 +1440,7 @@ export default function SettingsView() {
 
   const tabs = [
     { id: 'company', label: 'Company', icon: <Building2 size={18} /> },
+    { id: 'company-settings', label: 'Company Settings', icon: <FileText size={18} /> },
     { id: 'profile', label: 'My Profile', icon: <User size={18} /> },
     { id: 'features', label: 'Feature Toggles', icon: <ToggleLeft size={18} /> },
     { id: 'pipeline', label: 'Pipeline Triggers', icon: <Target size={18} /> },
@@ -2299,6 +2301,17 @@ export default function SettingsView() {
               companyId={effectiveCompanyId || ''}
               canManageTeamKey={state.currentUser?.role === 'admin' || state.currentUser?.role === 'owner'}
             />
+          </div>
+        )}
+
+        {activeTab === 'company-settings' && (
+          <div className="max-w-5xl">
+            {/* QuoteMGR's company setup: About Us, showcase photos, warranty, receipts, final offer, price library. */}
+            {effectiveCompanyId ? (
+              <CompanySettingsPanel companyId={effectiveCompanyId} userRole={String(userRole)} />
+            ) : (
+              <p className="text-sm text-gray-500">Sign in to a company to edit its settings.</p>
+            )}
           </div>
         )}
 
