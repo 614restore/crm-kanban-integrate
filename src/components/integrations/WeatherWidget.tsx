@@ -2,6 +2,7 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { OpenWeatherIntegration } from '@/lib/integrations/weather';
 import { supabase } from '@/lib/supabase';
+import { toLocalDateString } from '@/lib/dates';
 
 interface WeatherWidgetProps {
   address: string;
@@ -55,7 +56,7 @@ function groupForecastByDay(list: any[]): { date: string; high: number; low: num
     byDay[day].push(item);
   }
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = toLocalDateString();
   return Object.entries(byDay)
     .filter(([day]) => day > today)          // skip today — shown in current block
     .slice(0, 3)

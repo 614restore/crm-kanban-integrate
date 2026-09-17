@@ -1,6 +1,7 @@
 // Work Order & Invoice Helper Functions
 import { supabase } from './supabase';
 import { db } from './database';
+import { toLocalDateString } from './dates';
 
 /**
  * Create an invoice from a completed work order
@@ -48,7 +49,7 @@ export async function createInvoiceFromWorkOrder(
         amount: grandTotal,
         tax_amount: tax,
         status: 'draft',
-        due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        due_date: toLocalDateString(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)),
         notes: `Invoice for Work Order ${workOrder.work_order_number}`,
       })
       .select()

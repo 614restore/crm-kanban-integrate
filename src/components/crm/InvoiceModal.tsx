@@ -7,13 +7,14 @@ import { Invoice, InvoiceItem, formatCurrency, getContactFullName } from '@/lib/
 import { sendEmail } from '@/lib/emailApi';
 import { toast } from 'sonner';
 import { X, Plus, Trash2, Save, Send, DollarSign } from 'lucide-react';
+import { toLocalDateString } from '@/lib/dates';
 
 export default function InvoiceModal() {
   const { state, dispatch } = useCRM();
   const { profile } = useAuth();
   const prefill = state.invoiceModalPrefill;
   const [selectedContactId, setSelectedContactId] = useState(prefill?.contactId || '');
-  const [dueDate, setDueDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [dueDate, setDueDate] = useState(() => toLocalDateString());
   const [items, setItems] = useState<InvoiceItem[]>(
     prefill?.items?.length
       ? prefill.items.map((i: any) => ({

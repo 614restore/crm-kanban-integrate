@@ -10,6 +10,7 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { useCRM } from '@/lib/crmStore';
 import * as db from '@/lib/database';
+import { toLocalDateString } from '@/lib/dates';
 
 interface LimitedAccount {
   id: string;
@@ -432,7 +433,7 @@ export default function LimitedAccountManager({ companyId, currentUserId }: Limi
                   type="date"
                   value={expiresAt}
                   onChange={(e) => setExpiresAt(e.target.value)}
-                  min={new Date().toISOString().split('T')[0]}
+                  min={toLocalDateString()}
                 />
                 <div className="text-xs text-gray-500 mt-1">
                   Leave empty for no expiration

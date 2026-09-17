@@ -52,6 +52,7 @@ import { getContactFullName } from '@/lib/crmData';
 import { getContractorEstimateTemplates } from '@/lib/contractorTemplates';
 import { getLocationAwareContractorTemplates, generateLocationAwareTemplate } from '@/lib/locationAwareTemplates';
 import DocumentScanner from '@/components/documents/DocumentScanner';
+import { toLocalDateString } from '@/lib/dates';
 
 interface DocumentTemplate {
   id: string;
@@ -2725,8 +2726,8 @@ const DocumentTemplates: React.FC = () => {
       id: Date.now().toString(),
       name: `${template.name} (Copy)`,
       isDefault: false,
-      createdAt: new Date().toISOString().split('T')[0],
-      lastModified: new Date().toISOString().split('T')[0],
+      createdAt: toLocalDateString(),
+      lastModified: toLocalDateString(),
       usageCount: 0
     };
     
@@ -2797,7 +2798,7 @@ const DocumentTemplates: React.FC = () => {
     const variables = [...new Set(
       (templateFormData.content.match(/\{\{([A-Z0-9_]+)\}\}/g) || []).map(m => m.slice(2, -2))
     )];
-    const now = new Date().toISOString().split('T')[0];
+    const now = toLocalDateString();
 
     if (editingTemplate) {
       setTemplates(prev => prev.map(t => t.id === editingTemplate.id ? {
@@ -3793,8 +3794,8 @@ const DocumentTemplates: React.FC = () => {
                         name: `${selectedTemplate.name} — ${contactName}`,
                         content: customerPreview,
                         isDefault: false,
-                        createdAt: new Date().toISOString().split('T')[0],
-                        lastModified: new Date().toISOString().split('T')[0],
+                        createdAt: toLocalDateString(),
+                        lastModified: toLocalDateString(),
                         usageCount: 0,
                       };
                       setTemplates(prev => [customized, ...prev]);

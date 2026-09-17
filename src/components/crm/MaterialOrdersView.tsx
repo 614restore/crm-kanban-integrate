@@ -29,6 +29,7 @@ import {
   Eye,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { toLocalDateString } from '@/lib/dates';
 
 // ─── Roofing Material Templates ──────────────────────────────────────────────
 interface MaterialTemplate {
@@ -230,7 +231,7 @@ export default function MaterialOrdersView() {
         setSelectedJobId(draft.selectedJobId || '');
         setSelectedProjectId(draft.selectedProjectId || '');
         setStatus(draft.status || 'pending');
-        setOrderDate(draft.orderDate || new Date().toISOString().split('T')[0]);
+        setOrderDate(draft.orderDate || toLocalDateString());
         setExpectedDeliveryDate(draft.expectedDeliveryDate || '');
         setTax(draft.tax || '0');
         setShipping(draft.shipping || '0');
@@ -245,7 +246,7 @@ export default function MaterialOrdersView() {
         toast.info('Draft restored — your previous material order was recovered.');
       } else {
         setOrderNumber(`MO-${Date.now().toString().slice(-6)}`);
-        setOrderDate(new Date().toISOString().split('T')[0]);
+        setOrderDate(toLocalDateString());
       }
     }
     setShowModal(true);
@@ -344,7 +345,7 @@ export default function MaterialOrdersView() {
         contact_id: selectedContactId || undefined,
         job_id: selectedJobId || selectedProjectId || undefined,
         status,
-        order_date: orderDate || new Date().toISOString().split('T')[0],
+        order_date: orderDate || toLocalDateString(),
         expected_delivery_date: expectedDeliveryDate || undefined,
         actual_delivery_date: actualDeliveryDate || undefined,
         subtotal: parseFloat(subtotal) || 0,
@@ -505,7 +506,7 @@ export default function MaterialOrdersView() {
 
   const handleMarkDelivered = async (orderId: string) => {
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const today = toLocalDateString();
       const updated = await db.updateMaterialOrder(orderId, {
         status: 'delivered',
         actual_delivery_date: today,

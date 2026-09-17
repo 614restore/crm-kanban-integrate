@@ -6,6 +6,7 @@ import { X, Plus, Trash2, FileText, Send, Download, Check, Calendar, DollarSign,
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { buildInvoicePDF, loadLogoAsBase64 as loadLogoBase64 } from '@/lib/buildInvoicePDF';
+import { toLocalDateString } from '@/lib/dates';
 
 interface InvoiceLineItem {
     id: string;
@@ -91,8 +92,8 @@ const InvoiceBuilder: React.FC<Props> = ({
     const [invoice, setInvoice] = useState<InvoiceData>({
         invoice_number: '',
         status: 'draft',
-        issued_date: new Date().toISOString().split('T')[0],
-        due_date: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
+        issued_date: toLocalDateString(),
+        due_date: toLocalDateString(new Date(Date.now() + 30 * 86400000)),
         subtotal: 0,
         tax_rate: 0,
         tax_amount: 0,
@@ -252,7 +253,7 @@ const InvoiceBuilder: React.FC<Props> = ({
     const addPaymentRecord = () => {
         setPaymentRecords(prev => [...prev, {
             id: `pr-${Date.now()}`,
-            date: new Date().toISOString().split('T')[0],
+            date: toLocalDateString(),
             description: '',
             amount: 0,
             type: 'received',

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { DollarSign, Link2, Loader2, X, Copy, Check, Mail, User } from 'lucide-react';
 import { toast } from 'sonner';
+import { toLocalDateString } from '@/lib/dates';
 import {
   Sheet,
   SheetContent,
@@ -64,7 +65,7 @@ export default function PaymentModal({
   const [method, setMethod] = useState<Payment['payment_method']>('cash');
   const [referenceNumber, setReferenceNumber] = useState('');
   const [notes, setNotes] = useState('');
-  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
+  const [paymentDate, setPaymentDate] = useState(toLocalDateString());
   const [saving, setSaving] = useState(false);
 
   // Receipt state
@@ -86,7 +87,7 @@ export default function PaymentModal({
     setMethod('cash');
     setReferenceNumber('');
     setNotes('');
-    setPaymentDate(new Date().toISOString().split('T')[0]);
+    setPaymentDate(toLocalDateString());
     setGeneratedLink(null);
     setLinkId(null);
     setLinkCopied(false);

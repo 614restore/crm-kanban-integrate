@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Upload, CheckCircle, XCircle, AlertTriangle, FileText, DollarSign } from 'lucide-react';
 import { MaterialOrder, MaterialOrderItem } from '@/lib/crmData';
+import { toLocalDateString } from '@/lib/dates';
 
 interface VendorInvoice {
   id: string;
@@ -37,7 +38,7 @@ export function VendorInvoiceMatching({ materialOrder, onInvoiceUploaded }: Invo
       const mockInvoice: VendorInvoice = {
         id: crypto.randomUUID(),
         invoiceNumber: `INV-${Date.now().toString().slice(-6)}`,
-        invoiceDate: new Date().toISOString().split('T')[0],
+        invoiceDate: toLocalDateString(),
         uploadedFile: file,
         items: materialOrder.items.map(item => ({
           ...item,

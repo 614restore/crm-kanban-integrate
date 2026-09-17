@@ -1,6 +1,7 @@
 // Database service layer for CRM data persistence
 import { supabase, isDemoMode } from './supabase';
 import { markDeleted } from './recentlyDeleted';
+import { toLocalDateString } from '@/lib/dates';
 
 // ── Company ID safety assertion ───────────────────────────────────────────────
 // Defense-in-depth: throws in dev, logs in prod if any method fires without
@@ -1012,15 +1013,18 @@ class DatabaseService {
           ? Math.max(15, Math.round((end.getTime() - start.getTime()) / (1000 * 60))) : 60;
         const hh = String(start.getHours()).padStart(2, '0');
         const mm = String(start.getMinutes()).padStart(2, '0');
-        return { ...apt, date: start.toISOString().split('T')[0], time: `${hh}:${mm}`, duration } as DbAppointment;
+        // The local day, to match the local time: toISOString() would file an
+        // evening appointment under the next day.
+        const localDate = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
+        return { ...apt, date: localDate, time: `${hh}:${mm}`, duration } as DbAppointment;
       }
-      return { ...apt, date: new Date().toISOString().split('T')[0], time: '09:00', duration: 60 } as DbAppointment;
+      return { ...apt, date: toLocalDateString(), time: '09:00', duration: 60 } as DbAppointment;
     });
   }
 
   async createAppointment(appointment: Partial<DbAppointment>): Promise<DbAppointment | null> {
     assertCompanyId(appointment.company_id, 'createAppointment');
-    const date = appointment.date || new Date().toISOString().split('T')[0];
+    const date = appointment.date || toLocalDateString();
     const time = appointment.time || '09:00';
     const duration = appointment.duration || 60;
     const start = new Date(`${date}T${time}:00`);

@@ -14,6 +14,7 @@ import autoTable from 'jspdf-autotable';
 import { supabase } from '@/lib/supabase';
 import { certUrl, quoteUrl, cancelNoticeUrl } from '@/lib/appUrl';
 import { toast } from 'sonner';
+import { toLocalDateString } from '@/lib/dates';
 
 interface DocumentsWizardProps {
   quotes: any[];
@@ -1380,7 +1381,7 @@ const DocumentsWizard: React.FC<DocumentsWizardProps> = ({ quotes, company, curr
     if (!invoice) return;
     setEditingDueDate(invoice.due_date ? String(invoice.due_date).split('T')[0] : '');
     setPaymentMethod('check');
-    setPaymentDate(new Date().toISOString().split('T')[0]);
+    setPaymentDate(toLocalDateString());
     const total = invoiceLineItems.reduce((s: number, i: any) => s + Number(i.total || 0), 0);
     setPaymentAmount(total.toFixed(2));
     setPaymentNotes('');
