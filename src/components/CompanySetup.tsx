@@ -617,7 +617,7 @@ const CompanySetup: React.FC<CompanySetupProps> = ({ company, onUpdate, user }) 
                 <div className={allowed ? '' : 'opacity-60'}>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Document Footer</label>
                   <p className="text-xs text-gray-500 mb-3">
-                    Quotes and documents carry a small &ldquo;Designed with QuoteMGR&rdquo; line in the footer.
+                    Quotes and documents carry a small &ldquo;Designed with QuoteMGR &amp; TrussCTR&rdquo; line in the footer.
                     {allowed
                       ? ' Your plan includes white-labelling, so you can remove it.'
                       : ' Removing it is part of white-labelling, included on the Business and Enterprise plans.'}
@@ -630,7 +630,7 @@ const CompanySetup: React.FC<CompanySetupProps> = ({ company, onUpdate, user }) 
                       onChange={(e) => setForm({ ...form, hide_quotemgr_branding: e.target.checked })}
                       className="w-4 h-4 rounded border-gray-300"
                     />
-                    <span className="text-sm text-gray-700">Hide &ldquo;Designed with QuoteMGR&rdquo; on customer documents</span>
+                    <span className="text-sm text-gray-700">Hide &ldquo;Designed with QuoteMGR &amp; TrussCTR&rdquo; on customer documents</span>
                   </label>
                 </div>
               );

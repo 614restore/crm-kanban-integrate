@@ -38,7 +38,7 @@ export const normalizeTier = (raw: string | null | undefined): PlanTier | null =
 
 /**
  * Tiers whose pricing promises white-labelling, and so may hide the
- * "Designed with QuoteMGR" line on customer documents. Business advertises
+ * "Designed with QuoteMGR & TrussCTR" line on customer documents. Business advertises
  * "White-label options" and Enterprise "Full white-label"; Starter and
  * Professional do not, so the toggle is theirs to upgrade for.
  */

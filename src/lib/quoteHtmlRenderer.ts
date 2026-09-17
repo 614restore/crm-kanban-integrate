@@ -101,7 +101,7 @@ export const generateQuoteHTML = ({
   // True when this is a multi-scope quote (options with linked line items)
   const someItemsLinkedToOptions = lineItems.some((i: any) => i.quote_option_id != null);
   const isMultiScope = hasOptions && someItemsLinkedToOptions;
-  // "Designed with QuoteMGR" — shown on customer documents unless the company
+  // "Designed with QuoteMGR & TrussCTR" — shown on customer documents unless the company
   // is on a tier whose pricing promises white-labelling (Business, Enterprise)
   // and has switched it off. Starter and Professional advertise custom
   // branding, not white-label, so the line stays for them.
@@ -110,7 +110,7 @@ export const generateQuoteHTML = ({
     (company as any).hide_quotemgr_branding === true;
   const attributionHtml = brandingHidden
     ? ''
-    : `<p style="margin-top:6px;font-size:9px;color:#9ca3af;">Designed with QuoteMGR</p>`;
+    : `<p style="margin-top:6px;font-size:9px;color:#9ca3af;">Designed with QuoteMGR &amp; TrussCTR</p>`;
 
   const groupedItems = groupLineItemsByCategory(lineItems);
   const categoryTotals = calculateCategoryTotals(groupedItems);
