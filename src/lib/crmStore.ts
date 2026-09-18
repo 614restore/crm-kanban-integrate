@@ -153,6 +153,13 @@ export type CRMAction =
   | { type: 'SET_VIEW'; payload: ViewType }
   | { type: 'GO_BACK' }
   | { type: 'SELECT_CONTACT'; payload: string | null }
+  /**
+   * Selects a contact and navigates to a specific view in one step, e.g.
+   * opening Inspections for a contact. SET_VIEW followed by SELECT_CONTACT
+   * does not work for this: SELECT_CONTACT unconditionally forces
+   * currentView back to 'contact-detail', silently cancelling the SET_VIEW.
+   */
+  | { type: 'NAVIGATE_TO_CONTACT_VIEW'; payload: { view: ViewType; contactId: string } }
   | { type: 'SELECT_BOARD'; payload: string }
   | { type: 'TOGGLE_SIDEBAR' }
   | { type: 'SET_SEARCH'; payload: string }
@@ -283,6 +290,14 @@ export function crmReducer(state: CRMState, action: CRMAction): CRMState {
         ...state,
         selectedContactId: action.payload,
         currentView: 'contact-detail',
+        viewHistory: pushViewHistory(state),
+      };
+
+    case 'NAVIGATE_TO_CONTACT_VIEW':
+      return {
+        ...state,
+        currentView: action.payload.view,
+        selectedContactId: action.payload.contactId,
         viewHistory: pushViewHistory(state),
       };
     

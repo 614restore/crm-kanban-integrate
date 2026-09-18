@@ -1067,8 +1067,7 @@ export default function ContactDetail() {
         handleScheduleAppointment();
         break;
       case 'inspection':
-        dispatch({ type: 'SET_VIEW', payload: 'inspections' });
-        dispatch({ type: 'SELECT_CONTACT', payload: contact.id });
+        dispatch({ type: 'NAVIGATE_TO_CONTACT_VIEW', payload: { view: 'inspections', contactId: contact.id } });
         break;
       case 'quotes':
         if (latestQuote) openQuote(latestQuote.id);
@@ -2128,8 +2127,7 @@ export default function ContactDetail() {
                   </button>
                   <button
                     onClick={() => {
-                      dispatch({ type: 'SET_VIEW', payload: 'inspections' });
-                      dispatch({ type: 'SELECT_CONTACT', payload: contact.id });
+                      dispatch({ type: 'NAVIGATE_TO_CONTACT_VIEW', payload: { view: 'inspections', contactId: contact.id } });
                     }}
                     className="w-full flex items-center gap-3 px-4 py-3 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors text-left"
                   >

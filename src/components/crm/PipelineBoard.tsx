@@ -646,8 +646,7 @@ export default function PipelineBoard() {
         dispatch({ type: 'SET_VIEW', payload: 'quotes' });
         break;
       case 'inspection':
-        dispatch({ type: 'SET_VIEW', payload: 'inspections' });
-        dispatch({ type: 'SELECT_CONTACT', payload: contact.id });
+        dispatch({ type: 'NAVIGATE_TO_CONTACT_VIEW', payload: { view: 'inspections', contactId: contact.id } });
         break;
       case 'quote-payment':
         dispatch({ type: 'SET_PENDING_QUOTE_ACTION', payload: { contactId: contact.id, action: 'payment' } });
