@@ -11,7 +11,7 @@ import { toLocalDateString } from '@/lib/dates';
 
 export default function InvoiceModal() {
   const { state, dispatch } = useCRM();
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const prefill = state.invoiceModalPrefill;
   const [selectedContactId, setSelectedContactId] = useState(prefill?.contactId || '');
   const [dueDate, setDueDate] = useState(() => toLocalDateString());

@@ -193,7 +193,9 @@ const CertificateSigningView: React.FC<CertificateSigningViewProps> = ({
     // Mark certificate as viewed for anonymous (customer) visitors
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session?.user && shareToken) {
-        supabase.rpc('mark_certificate_viewed', { share_token: shareToken }).catch(console.error);
+        supabase.rpc('mark_certificate_viewed', { share_token: shareToken }).then(({ error }) => {
+          if (error) console.error('mark_certificate_viewed failed:', error.message);
+        });
       }
     });
   }, [quoteId]);

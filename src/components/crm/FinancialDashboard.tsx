@@ -39,7 +39,7 @@ type FinancialView = 'all' | 'sales' | 'projects';
 
 export default function FinancialDashboard() {
   const { state, dispatch } = useCRM();
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const financialStats = useFinancialStats();
   const [invoiceFilter, setInvoiceFilter] = useState<InvoiceFilter>('all');
   const [financialView, setFinancialView] = useState<FinancialView>('all');

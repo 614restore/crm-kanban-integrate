@@ -90,7 +90,7 @@ export default function RoofrPanel({
   const [checkingStatus, setCheckingStatus] = useState(false);
   const [saving, setSaving] = useState(false);
   const [configStatus, setConfigStatus] = useState<'unknown' | 'ok' | 'missing'>('unknown');
-  const [roofr, setRoofr] = useState<RoofrIntegration | null>(null);
+  const [roofr, setRoofr] = useState<RoofrAPI | null>(null);
   const [order, setOrder] = useState<StoredOrder | null>(null);
   const [reportType, setReportType] = useState<'standard' | 'premium'>('standard');
   const [error, setError] = useState<string | null>(null);
@@ -161,7 +161,7 @@ export default function RoofrPanel({
         const apiKey = data?.credentials?.apiKey;
         if (!apiKey) { setConfigStatus('missing'); return; }
 
-        setRoofr(new RoofrIntegration(apiKey));
+        setRoofr(new RoofrAPI(apiKey));
         setConfigStatus('ok');
       } catch {
         setConfigStatus('missing');

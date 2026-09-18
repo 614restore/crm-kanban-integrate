@@ -4,6 +4,7 @@ import { useAuth } from '@/lib/authContext';
 import { supabase } from '@/lib/supabase';
 import { withTimeout } from '@/lib/utils';
 import { toast } from 'sonner';
+import { parseLocalDate } from '@/lib/dates';
 import {
   Wrench,
   Truck,
@@ -529,7 +530,7 @@ export default function EquipmentView() {
                     {overdue ? <AlertTriangle size={12} /> : dueSoon ? <AlertTriangle size={12} /> : <Calendar size={12} />}
                     <span>
                       {overdue ? 'Overdue: ' : 'Next maintenance: '}
-                      {new Date(item.next_maintenance).toLocaleDateString()}
+                      {parseLocalDate(item.next_maintenance).toLocaleDateString()}
                     </span>
                   </div>
                 )}

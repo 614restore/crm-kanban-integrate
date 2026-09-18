@@ -27,6 +27,7 @@ import {
   Download,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { parseLocalDate } from '@/lib/dates';
 
 // Status badge component
 function StatusBadge({ status }: { status: Project['status'] }) {
@@ -421,7 +422,7 @@ export default function ProjectsView() {
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return 'Not set';
-    return new Date(dateString).toLocaleDateString('en-US', {
+    return parseLocalDate(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric'
