@@ -8,6 +8,7 @@ import {
   Shield, AlertTriangle, Award
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import StoredMeasurementReports, { saveMeasurementReportToCustomer } from '@/components/StoredMeasurementReports';
 import { toast } from 'sonner';
 import LineItemEditor, { getProductSuggestions, getSidingProductSuggestions, SHINGLE_BRANDS, SIDING_BRANDS } from '@/components/LineItemEditor';
 import PhotoUploader from '@/components/PhotoUploader';
@@ -2047,7 +2048,7 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
     }
   };
 
-  const handleRoofrFile = async (file: File) => {
+  const handleRoofrFile = async (file: File, opts?: { fromStored?: boolean }) => {
     if (!file.name.toLowerCase().endsWith('.pdf')) {
       toast.error('Please upload a Roofr or EagleView PDF report.');
       return;
@@ -2083,6 +2084,7 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
       }
       const source = parsed.source === 'eagleview' ? 'EagleView' : 'Roofr';
       toast.success(`${source} report imported.`);
+      if (!opts?.fromStored) void saveMeasurementReportToCustomer(file, companyId, selectedCustomerId);
     } catch (error: any) {
       console.error('Measurement report parse failed:', error);
       toast.error(error?.message || 'Failed to parse measurement report.');
@@ -3126,7 +3128,7 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
     item => item.id.startsWith('roofr-') || item.id.startsWith('eagleview-walls-'),
   );
 
-  const handleWallsFile = async (file: File) => {
+  const handleWallsFile = async (file: File, opts?: { fromStored?: boolean }) => {
     if (!file.name.toLowerCase().endsWith('.pdf')) {
       toast.error('Please upload an EagleView Walls PDF report.');
       return;
@@ -3149,6 +3151,7 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
       } catch { /* non-fatal */ }
       const sidingSq = (parsed.totalSidingAreaSqft / 100).toFixed(1);
       toast.success(`EagleView Walls imported — ${sidingSq} sq of siding detected.`);
+      if (!opts?.fromStored) void saveMeasurementReportToCustomer(file, companyId, selectedCustomerId);
     } catch (error: any) {
       console.error('Walls report parse failed:', error);
       toast.error(error?.message || 'Failed to parse EagleView Walls report.');
@@ -3427,7 +3430,7 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
 
   // ── EagleView Solar import handlers ─────────────────────────────────────────
 
-  const handleSolarFile = async (file: File) => {
+  const handleSolarFile = async (file: File, opts?: { fromStored?: boolean }) => {
     if (!file.name.toLowerCase().endsWith('.pdf')) {
       toast.error('Please upload an EagleView solar PDF (Inform Advanced or SunSite™).');
       return;
@@ -3445,6 +3448,7 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
       toast.success(
         `EagleView ${isSunSite ? 'SunSite™' : 'Solar'} imported — ${sq} sq, ${parsed.totalFacets} facets${detail}.`,
       );
+      if (!opts?.fromStored) void saveMeasurementReportToCustomer(file, companyId, selectedCustomerId);
     } catch (error: any) {
       toast.error(error?.message || 'Failed to parse EagleView Solar report.');
     } finally {
@@ -5508,6 +5512,13 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
                   </label>
                 </div>
               </div>
+              <StoredMeasurementReports
+                customerId={selectedCustomerId}
+                kind="roof"
+                currentFileName={roofrFileName}
+                disabled={parsingRoofr}
+                onUse={(f) => handleRoofrFile(f, { fromStored: true })}
+              />
               {roofrReport && (
                 <div className="mt-3 pt-3 border-t border-emerald-200 space-y-3">
                   {/* Structure scope selector — only shown when report has multiple structures */}
@@ -5748,6 +5759,13 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
                   </label>
                 </div>
               </div>
+              <StoredMeasurementReports
+                customerId={selectedCustomerId}
+                kind="walls"
+                currentFileName={wallsFileName}
+                disabled={parsingWalls}
+                onUse={(f) => handleWallsFile(f, { fromStored: true })}
+              />
               {wallsReport && (() => {
                 const activeAreaSqft =
                   wallsAreaSource === 'wall'    ? wallsReport.totalWallAreaSqft :
@@ -5940,6 +5958,13 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
                   </label>
                 </div>
               </div>
+              <StoredMeasurementReports
+                customerId={selectedCustomerId}
+                kind="solar"
+                currentFileName={solarFileName}
+                disabled={parsingSolar}
+                onUse={(f) => handleSolarFile(f, { fromStored: true })}
+              />
 
               {solarReport && (() => {
                 const isSunSite = solarReport.source === 'eagleview-sunsite';
