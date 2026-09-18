@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useCRM, canManageLeadSources } from '@/lib/crmStore';
 import StormAlertSettings from '@/components/settings/StormAlertSettings';
 import CompanySettingsPanel from '@/components/settings/CompanySettingsPanel';
+import PricingMaterialsPanel from '@/components/settings/PricingMaterialsPanel';
 import { useAuth } from '@/lib/authContext';
 import { defaultLeadSources } from '@/lib/crmData';
 import { toast } from 'sonner';
@@ -17,6 +18,7 @@ import FeatureToggles from '@/components/crm/FeatureToggles';
 import {
   Settings,
   Building2,
+  FileSpreadsheet,
   Users,
   Bell,
   Shield,
@@ -160,7 +162,7 @@ function detectSmtpProvider(host: string) {
   return null;
 }
 
-type SettingsTab = 'company' | 'company-settings' | 'profile' | 'integrations' | 'ai-assistant' | 'maps' | 'notifications' | 'security' | 'billing' | 'customer-billing' | 'api' | 'features' | 'document-templates' | 'pipeline' | 'guidebook';
+type SettingsTab = 'company' | 'company-settings' | 'pricing-materials' | 'profile' | 'integrations' | 'ai-assistant' | 'maps' | 'notifications' | 'security' | 'billing' | 'customer-billing' | 'api' | 'features' | 'document-templates' | 'pipeline' | 'guidebook';
 
 interface CompanyFormData {
   name: string;
@@ -1441,6 +1443,7 @@ export default function SettingsView() {
   const tabs = [
     { id: 'company', label: 'Company', icon: <Building2 size={18} /> },
     { id: 'company-settings', label: 'Company Settings', icon: <FileText size={18} /> },
+    { id: 'pricing-materials', label: 'Pricing & Materials', icon: <FileSpreadsheet size={18} /> },
     { id: 'profile', label: 'My Profile', icon: <User size={18} /> },
     { id: 'features', label: 'Feature Toggles', icon: <ToggleLeft size={18} /> },
     { id: 'pipeline', label: 'Pipeline Triggers', icon: <Target size={18} /> },
@@ -2311,6 +2314,17 @@ export default function SettingsView() {
               <CompanySettingsPanel companyId={effectiveCompanyId} userRole={String(userRole)} />
             ) : (
               <p className="text-sm text-gray-500">Sign in to a company to edit its settings.</p>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'pricing-materials' && (
+          <div className="max-w-5xl">
+            {/* QuoteMGR's price library, template prices, and materials & margin. */}
+            {effectiveCompanyId && user?.id ? (
+              <PricingMaterialsPanel companyId={effectiveCompanyId} userId={user.id} userRole={String(userRole)} />
+            ) : (
+              <p className="text-sm text-gray-500">Sign in to a company to manage pricing.</p>
             )}
           </div>
         )}
