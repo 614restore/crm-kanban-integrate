@@ -11,7 +11,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronUp, FileText, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { db, type DbDocument } from '@/lib/database';
-import { supabase } from '@/lib/supabase';
 import { getDocumentSignedUrl, uploadDocument, formatFileSize } from '@/lib/storage';
 
 export type MeasurementKind = 'roof' | 'walls' | 'solar';
@@ -69,7 +68,8 @@ export async function saveMeasurementReportToCustomer(
 
     const uploaded = await uploadDocument(file, companyId, customerId);
     if (uploaded.error || !uploaded.path) return;
-    const { data } = await supabase.auth.getUser();
+    // db.createDocument leaves uploaded_by out (the column references
+    // team_members.id, which the auth user id is not) and stores size in bytes.
     await db.createDocument({
       company_id: companyId,
       contact_id: customerId,
@@ -77,7 +77,6 @@ export async function saveMeasurementReportToCustomer(
       type: 'other',
       url: uploaded.path,
       size: formatFileSize(file.size),
-      uploaded_by: data?.user?.id,
     });
   } catch (err) {
     console.warn('[StoredMeasurementReports] could not file the report with the customer:', err);
