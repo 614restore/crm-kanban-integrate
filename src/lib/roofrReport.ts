@@ -528,12 +528,16 @@ export const parseEagleViewWallsReportFromFile = async (file: File): Promise<Eag
   ]);
 
   // ── Opening counts ─────────────────────────────────────────────────────────
-  const windowCount = extractNum(text, [
+  // "Wall Area including Windows & Doors = 2,400" is an area, but the door-count
+  // pattern below also matches its "Doors = 2,400", reading 2,400 doors. QuoteMGR's
+  // parser has this flaw; take that phrase out before counting openings.
+  const countText = text.replace(/Wall\s+Area\s+including\s+Windows?\s+(?:&|and)\s+Doors?\s*=\s*[\d,.]+/gi, ' ');
+  const windowCount = extractNum(countText, [
     /(?:Number\s+of\s+)?Windows?\s*=\s*([\d,]+)(?!\s*(?:sq|ft|area))/i,
     /Window\s+Count\s*=?\s*([\d,]+)/i,
     /Windows?\s*:\s*([\d,]+)/i,
   ]);
-  const doorCount = extractNum(text, [
+  const doorCount = extractNum(countText, [
     /(?:Number\s+of\s+)?Doors?\s*=\s*([\d,]+)(?!\s*(?:sq|ft|area))/i,
     /Door\s+Count\s*=?\s*([\d,]+)/i,
     /Doors?\s*:\s*([\d,]+)/i,
