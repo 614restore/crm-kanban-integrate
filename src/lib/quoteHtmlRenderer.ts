@@ -801,21 +801,67 @@ export const generateQuoteHTML = ({
     const sectionNum = String(proposalSections.findIndex(s => s.title === PAGE_TITLES.scope) + 1).padStart(2, '0');
     const cancelDeadline = calculateCancellationDeadline(quote.created_at || new Date()).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
     const isSigned = quote.status === 'signed';
+    // City/state/zip on one line under the street, so the block reads like a
+    // mailing address rather than a comma run-on. Each part is escaped before
+    // the <br> is added — escaping the joined string would print "&lt;br&gt;".
+    const contingencyCityLine = [
+      customer.city,
+      [customer.state, customer.zip].filter(Boolean).join(' ').trim(),
+    ].filter(Boolean).join(', ');
+    const contingencyPropertyAddressHtml = [customer.address, contingencyCityLine]
+      .filter(Boolean)
+      .map(part => escapeHtml(part))
+      .join('<br>');
+    const contingencyOwnerName =
+      [customer.first_name, customer.last_name].filter(Boolean).join(' ').trim() || 'Property Owner';
+
+    // Sections otherwise flow continuously so no sheet is left half-empty. This
+    // one is the exception: it is a standalone agreement whose signature has to
+    // sit on the same sheet as the clauses it agrees to, and that is only
+    // deterministic if the agreement itself starts at the top of a sheet.
     return `
-    <div class="page">
+    <div class="page" style="page-break-before:always;break-before:page;">
       ${renderWatermark()}
       ${renderHeader()}
       <div class="proposal-panel-header compact">
         <div class="proposal-panel-kicker">Section ${sectionNum}</div>
         <div class="proposal-panel-title">Insurance Contingency Agreement</div>
       </div>
-      <div class="proposal-panel-accent" style="margin-bottom:18px;"></div>
+      <div class="proposal-panel-accent" style="margin-bottom:10px;"></div>
       <div style="padding:0 4px">
-        <div style="background:#fef3c7;border:2px solid #f59e0b;border-radius:10px;padding:12px 16px;text-align:center;margin-bottom:20px">
-          <p style="font-weight:700;color:#92400e;font-size:13px;margin:0">⚠ THREE (3) BUSINESS DAY RIGHT TO CANCEL</p>
-          <p style="color:#92400e;font-size:11px;margin:4px 0 0">You may cancel this agreement without penalty within 3 business days of signing.</p>
+        <!-- Identifies the property this agreement covers. The clauses below
+             refer to "the property described herein", and an adjuster (or an
+             owner with more than one property) cannot tie the signed agreement
+             to an address unless it is stated on the document itself. -->
+        <div style="border:2px solid ${primaryColor};border-radius:10px;padding:10px 14px;margin-bottom:10px;">
+          <div style="font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:${primaryColor};margin-bottom:5px;">Property Covered By This Agreement</div>
+          <div style="display:table;width:100%;table-layout:fixed;">
+            <div style="display:table-row;">
+              <div style="display:table-cell;vertical-align:top;width:50%;padding-right:10px;">
+                <div style="font-size:9px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;color:#6b7280;margin-bottom:2px;">Property Owner</div>
+                <div style="font-weight:700;font-size:12px;color:#111827;line-height:1.3;">${escapeHtml(contingencyOwnerName)}</div>
+                ${customer.phone ? `<div style="font-size:10px;color:#6b7280;line-height:1.35;">${escapeHtml(customer.phone)}</div>` : ''}
+              </div>
+              <div style="display:table-cell;vertical-align:top;width:50%;padding-left:10px;">
+                <div style="font-size:9px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;color:#6b7280;margin-bottom:2px;">Property Address</div>
+                ${contingencyPropertyAddressHtml
+                  ? `<div style="font-weight:700;font-size:12px;color:#111827;line-height:1.35;">${contingencyPropertyAddressHtml}</div>`
+                  : `<div style="font-size:11px;color:#b91c1c;font-weight:600;">Address not on file — add the property address to this customer record.</div>`}
+              </div>
+            </div>
+          </div>
         </div>
-        <div style="space-y:12px;font-size:11.5px;color:#374151;line-height:1.6">
+
+        <!-- A summary banner only; the full statutory notice, with its own
+             acknowledgment signature, follows on the next sheet. -->
+        <div style="background:#fef3c7;border:1.5px solid #f59e0b;border-radius:8px;padding:7px 14px;text-align:center;margin-bottom:12px">
+          <p style="font-weight:700;color:#92400e;font-size:11.5px;margin:0;line-height:1.35">⚠ THREE (3) BUSINESS DAY RIGHT TO CANCEL</p>
+          <p style="color:#92400e;font-size:10px;margin:2px 0 0;line-height:1.35">You may cancel this agreement without penalty within 3 business days of signing.</p>
+        </div>
+        <!-- Clauses are set tight so all eight and the owner's signature land on
+             one sheet: a signature on a sheet of its own, detached from the
+             clauses it agrees to, is weak evidence of what was signed. -->
+        <div style="space-y:12px;font-size:10.5px;color:#374151;line-height:1.45">
           ${[
             ['1. Contingency Basis', 'This Agreement is entered into on a contingency basis. No restoration or repair work will be performed and no payment will be due from the Property Owner unless and until the Property Owner\'s insurance carrier approves a claim for the repair or replacement of damage to the property described herein.'],
             ['2. Authorization to Act', 'Property Owner hereby authorizes Contractor to communicate directly with Property Owner\'s insurance company, insurance adjuster, and any related parties on Property Owner\'s behalf for the sole purpose of facilitating the insurance claim and scope of approved repairs. This authorization does not constitute assignment of benefits.'],
@@ -826,14 +872,17 @@ export const generateQuoteHTML = ({
             ['7. Contractor Obligations', 'Contractor agrees to provide professional workmanship meeting or exceeding industry standards, maintain all required licenses and insurance coverage, and pursue all legitimate supplements on behalf of the Property Owner at no additional charge beyond the approved insurance scope.'],
             ['8. Cancellation', 'Either party may cancel this Agreement within three (3) business days of execution without penalty. After the rescission period, cancellation by the Property Owner after work has commenced may result in liability for costs incurred by Contractor up to the date of cancellation.'],
           ].map(([title, body]) => `
-            <div style="margin-bottom:10px;break-inside:avoid;page-break-inside:avoid;">
-              <p style="font-weight:600;color:#111827;margin:0 0 2px">${title}</p>
+            <div style="margin-bottom:7px;break-inside:avoid;page-break-inside:avoid;">
+              <p style="font-weight:600;color:#111827;margin:0 0 1px;line-height:1.3">${title}</p>
               <p style="margin:0;color:#4b5563">${body}</p>
             </div>
           `).join('')}
         </div>
-        <!-- Signatures: customer agreement + contractor (side by side when both present) -->
-        <div style="margin-top:20px;border-top:1.5px solid #e5e7eb;padding-top:16px;break-inside:avoid;page-break-inside:avoid;">
+        <!-- Signatures: customer agreement + contractor (side by side when both
+             present). break-inside:avoid keeps the pair together, and the
+             tightening above buys the room for it to sit under clause 8 rather
+             than being pushed onto a sheet by itself. -->
+        <div style="margin-top:12px;border-top:1.5px solid #e5e7eb;padding-top:10px;break-inside:avoid;page-break-inside:avoid;">
           ${(() => {
             const custSigImg  = (quote as any).contingency_signature_data  || quote.signature_data  || null;
             const custSigName = (quote as any).contingency_signed_by        || quote.signed_by        || '';
@@ -881,8 +930,11 @@ export const generateQuoteHTML = ({
           })()}
         </div>
 
-        <!-- 3-Day Right to Cancel — embedded in same page, no extra header break -->
-        <div style="margin-top:24px;border-top:2px solid #fca5a5;padding-top:16px;break-inside:avoid;page-break-inside:avoid;">
+        <!-- 3-Day Right to Cancel starts its own sheet. It is a separate
+             statutory disclosure with its own acknowledgment signature, and
+             forcing the break keeps it from competing with the agreement above
+             for the bottom of that sheet. -->
+        <div style="page-break-before:always;break-before:page;border-top:2px solid #fca5a5;padding-top:16px;">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
             <div style="width:28px;height:28px;background:#dc2626;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
               <span style="color:#fff;font-weight:900;font-size:14px">!</span>
