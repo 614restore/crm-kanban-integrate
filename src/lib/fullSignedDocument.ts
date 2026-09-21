@@ -80,6 +80,47 @@ export const buildFullSignedDocumentPdf = async (
     doc.setTextColor(40, 40, 40);
   };
 
+  /**
+   * Small identifying strip stamped on every page after the cover, plus a
+   * "thank you" footer on every page including the cover. Before this, a
+   * page that landed mid-document with no header of its own (a photo page,
+   * the cancel notice, contractor authorization) carried nothing tying it
+   * back to the company or the job — printed loose or read out of context
+   * it could look like it belonged to a different document entirely. Run
+   * once at the very end over every page jsPDF ended up creating, rather
+   * than threaded through each section, so it never has to guess how many
+   * pages a section will take.
+   */
+  const drawPageChrome = (pageNum: number, totalPages: number) => {
+    doc.setPage(pageNum);
+    if (pageNum > 1) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7.5);
+      doc.setTextColor(110, 110, 110);
+      doc.text(companyName, margin, 24);
+      if (company?.phone) {
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(140, 140, 140);
+        doc.text(company.phone, margin, 33);
+      }
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(110, 110, 110);
+      doc.text(fullQuote.quote_number ?? '', pageW - margin, 24, { align: 'right' });
+      doc.setDrawColor(230, 230, 230);
+      doc.line(margin, 39, pageW - margin, 39);
+    }
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(150, 150, 150);
+    const footerText = company?.phone
+      ? `Thank you for your business  |  ${company.phone}`
+      : 'Thank you for your business';
+    doc.text(footerText, pageW / 2, pageH - 22, { align: 'center' });
+    doc.setFontSize(7);
+    doc.text(`Page ${pageNum} of ${totalPages}`, pageW - margin, pageH - 22, { align: 'right' });
+    doc.setTextColor(40, 40, 40);
+  };
+
   const loadBase64 = async (url: string): Promise<string | null> => {
     try {
       const res = await fetch(url);
@@ -253,12 +294,7 @@ export const buildFullSignedDocumentPdf = async (
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(30, 58, 95);
     doc.text('INSURANCE CONTINGENCY AGREEMENT', pageW / 2, y, { align: 'center' });
-    y += 18;
-    doc.setFontSize(8.5);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(90, 90, 90);
-    doc.text(`${companyName}${company?.phone ? '  |  ' + company.phone : ''}`, pageW / 2, y, { align: 'center' });
-    y += 14;
+    y += 22;
     doc.setDrawColor(200, 200, 200);
     doc.line(margin, y, pageW - margin, y);
     y += 12;
@@ -316,8 +352,6 @@ export const buildFullSignedDocumentPdf = async (
   if (!isInsurance && retailSigned) {
     doc.addPage();
     y = margin;
-    drawBanner();
-    y = 78;
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(14);
@@ -510,6 +544,12 @@ export const buildFullSignedDocumentPdf = async (
       doc.text('Contractor signed — no customer signature captured in the app', margin, y);
     }
   }
+
+  // Stamp the header/footer on every page jsPDF ended up creating. Must run
+  // after all content, once the real page count is known -- doing this
+  // per-section would mean guessing how many pages each one takes.
+  const totalPages = doc.internal.getNumberOfPages();
+  for (let p = 1; p <= totalPages; p++) drawPageChrome(p, totalPages);
 
   const fileName = `${fullQuote.quote_number ?? 'Document'}_${custName.replace(/\s+/g, '_')}_Signed.pdf`;
 
