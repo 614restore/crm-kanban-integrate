@@ -363,6 +363,61 @@ async function rotateImageDiagonal(dataUrl: string): Promise<string | null> {
   });
 }
 
+/**
+ * Moves a colour toward white (`amt` > 0) or black (`amt` < 0), where `amt` is
+ * a 0–1 fraction of the remaining distance. Mirrors the _hexLighten/_hexDarken
+ * pair the live HTML proposal uses to build its gradients, so a PDF ramp and
+ * the on-screen one derive the same shades from the same brand colour.
+ */
+function shadeRgb(rgb: [number, number, number], amt: number): [number, number, number] {
+  const f = (c: number) => amt >= 0
+    ? Math.round(c + (255 - c) * amt)
+    : Math.round(c * (1 + amt));
+  return [f(rgb[0]), f(rgb[1]), f(rgb[2])];
+}
+
+/**
+ * Renders a linear gradient to a data URI, for use as a background image.
+ *
+ * jsPDF has no gradient fill — a `rect` is one flat colour — so the cover's
+ * navy column was a single solid block where the live proposal shows a ramp.
+ * Canvas paints the ramp and the PDF just places the result as an image.
+ *
+ * `diagonal` runs the ramp corner to corner (the CSS `135deg` the live cover
+ * uses); otherwise it runs straight down the block.
+ */
+function makeGradientDataUri(
+  widthMm: number,
+  heightMm: number,
+  stops: Array<{ at: number; rgb: [number, number, number] }>,
+  diagonal = true,
+): string | null {
+  try {
+    // 3 px/mm is ample for a smooth ramp and keeps the JPEG to a few KB.
+    const pxPerMm = 3;
+    const w = Math.max(2, Math.round(widthMm * pxPerMm));
+    const h = Math.max(2, Math.round(heightMm * pxPerMm));
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    const grad = diagonal
+      ? ctx.createLinearGradient(0, 0, w, h)
+      : ctx.createLinearGradient(0, 0, 0, h);
+    for (const stop of stops) {
+      grad.addColorStop(stop.at, `rgb(${stop.rgb[0]},${stop.rgb[1]},${stop.rgb[2]})`);
+    }
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+    // High quality: a smooth ramp is exactly what JPEG bands on, and the file
+    // is small enough at this resolution that there is nothing to save.
+    return canvas.toDataURL('image/jpeg', 0.95);
+  } catch {
+    return null;
+  }
+}
+
 function fmtCurrency(val: number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(val);
 }
@@ -741,13 +796,53 @@ export async function generateQuotePDF(
   const rCardW = rightW - rPad * 2;
 
   // ── Backgrounds ──────────────────────────────────────────────────────────
-  doc.setFillColor(...brandPrimary);
-  doc.rect(0, 0, leftW, 279.4, 'F'); // letter-height only — not full continuous page
+  const coverImgH = 86;
+  // The navy column is an ombré, not a flat block: deepest at the top, through
+  // the brand colour around the midpoint, lifting toward a lighter tint at the
+  // bottom — the same three-stop 135deg ramp the live proposal's hero uses.
+  //
+  // The ramp is laid over the part of the column that is actually on show. A
+  // cover photo occupies the top 86 mm, so with one present the gradient runs
+  // from just under it; without one it runs the full height. Either way the
+  // whole ramp is visible rather than most of it hiding behind the photo.
+  const gradTop = shadeRgb(brandPrimary, -0.42);
+  const gradBottom = shadeRgb(brandPrimary, 0.24);
+  // Panels sitting on the ramp. These were fixed navies picked against the flat
+  // column, which left the bottom info boxes darker than the ground they now
+  // sit on. Deriving them from the brand colour keeps each one on the correct
+  // side of its local background, and makes the cover work for a company whose
+  // brand colour is not this navy.
+  const pillFill = shadeRgb(brandPrimary, 0.1);
+  const logoTileFill = shadeRgb(brandPrimary, -0.1);
+  const infoBoxFill = shadeRgb(brandPrimary, 0.26);
+  const navyTopY = coverPhotoData ? coverImgH : 0;
+  const navyH = 279.4 - navyTopY;
+
+  doc.setFillColor(...gradTop);
+  doc.rect(0, 0, leftW, 279.4, 'F'); // flat fallback, and the backing above the photo
+  const columnGradient = makeGradientDataUri(leftW, navyH, [
+    { at: 0, rgb: gradTop },
+    { at: 0.55, rgb: brandPrimary },
+    { at: 1, rgb: gradBottom },
+  ]);
+  if (columnGradient) {
+    try {
+      doc.addImage(columnGradient, 'JPEG', 0, navyTopY, leftW, navyH);
+    } catch {
+      // Fall back to the flat brand colour rather than leaving the dark
+      // backing fill showing through as the whole column.
+      doc.setFillColor(...brandPrimary);
+      doc.rect(0, navyTopY, leftW, navyH, 'F');
+    }
+  } else {
+    doc.setFillColor(...brandPrimary);
+    doc.rect(0, navyTopY, leftW, navyH, 'F');
+  }
+
   doc.setFillColor(238, 242, 250);
   doc.rect(leftW, 0, rightW, 279.4, 'F');
 
   // ── Left: cover photo (top of column) ───────────────────────────────────
-  const coverImgH = 86;
   if (coverPhotoData) {
     try {
       // Box-shrink: draw at its own (possibly smaller, zoomed-out) size,
@@ -757,9 +852,6 @@ export async function generateQuotePDF(
       const cy = (coverImgH - coverPhotoData.boxH) / 2;
       doc.addImage(coverPhotoData.dataUri, 'JPEG', cx, cy, coverPhotoData.boxW, coverPhotoData.boxH);
     } catch { /* skip */ }
-  } else {
-    doc.setFillColor(20, 45, 80);
-    doc.rect(0, 0, leftW, coverImgH, 'F');
   }
 
   // ── Left: "PREPARED PROPOSAL" pill ──────────────────────────────────────
@@ -768,7 +860,7 @@ export async function generateQuotePDF(
   doc.setFontSize(7.5);
   const pillLabel = 'PREPARED PROPOSAL';
   const pillLabelW = doc.getTextWidth(pillLabel) + 16;
-  doc.setFillColor(40, 68, 108);
+  doc.setFillColor(...pillFill);
   doc.roundedRect(MARGIN, pillStartY, pillLabelW, 8, 4, 4, 'F');
   doc.setTextColor(163, 196, 232);
   doc.text(pillLabel, MARGIN + 8, pillStartY + 5.5);
@@ -778,7 +870,7 @@ export async function generateQuotePDF(
   let compTextX = MARGIN;
   if (logoData) {
     try {
-      doc.setFillColor(30, 55, 90);
+      doc.setFillColor(...logoTileFill);
       doc.roundedRect(MARGIN, logoBlockY, 18, 18, 2, 2, 'F');
       doc.addImage(logoData, 'JPEG', MARGIN + 1, logoBlockY + 1, 16, 16);
       compTextX = MARGIN + 22;
@@ -820,7 +912,7 @@ export async function generateQuotePDF(
   const infoBoxAreaY = PAGE_H - 75;
   const infoBoxW = (leftW - MARGIN * 2 - 5) / 2;
   const infoBoxH = 30;
-  const infoBoxBg: [number, number, number] = [35, 65, 108];
+  const infoBoxBg = infoBoxFill;
 
   const infoBoxes = [
     { label: 'PREPARED FOR', value: quote.customer ? `${quote.customer.first_name} ${quote.customer.last_name}` : 'N/A' },
