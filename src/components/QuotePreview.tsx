@@ -104,6 +104,11 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
   const [showEmailCompose, setShowEmailCompose] = useState(false);
   const [showSignOnSite, setShowSignOnSite] = useState(false);
   const [signOnSiteStep, setSignOnSiteStep] = useState<'contractor' | 'handoff' | 'agreement' | 'cancel' | 'done'>('contractor');
+  // "Include photos" toggle shown to the rep right before a sign/countersign
+  // action finalizes and emails the homeowner's copy. Defaults to on; shared
+  // across the contingency-signing, sign-on-site, and contractor-sign modals
+  // since only one of those is open at a time.
+  const [includeCertPhotos, setIncludeCertPhotos] = useState(true);
   const [signOnSiteContractorSig, setSignOnSiteContractorSig] = useState<string | null>(null);
   const [signOnSiteContractorName, setSignOnSiteContractorName] = useState('');
   const [signOnSiteAgreementSig, setSignOnSiteAgreementSig] = useState<string | null>(null);
@@ -812,7 +817,7 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
         // directly sent the customer an email announcing their signed copy
         // with no copy attached — the alert only attaches what the caller
         // hands it.
-        sendFullSignedDocumentToCustomer(quoteId, company).catch(console.error);
+        sendFullSignedDocumentToCustomer(quoteId, company, { includePhotos: includeCertPhotos }).catch(console.error);
         toast.success(`${docLabel} sent to ${quote.customer.email}`, { duration: 4000, icon: '📧' });
       }
     } catch (err: any) {
@@ -866,7 +871,7 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
       // actually attached. This previously posted a bare 'signed' alert, so
       // the homeowner got an email about a copy they never received.
       if (quote?.share_token) {
-        sendFullSignedDocumentToCustomer(quoteId, company).catch(err => {
+        sendFullSignedDocumentToCustomer(quoteId, company, { includePhotos: includeCertPhotos }).catch(err => {
           console.error(err);
           // Fall back to the bare notification rather than going silent.
           supabase.functions.invoke('send-quote-alert', {
@@ -1024,7 +1029,7 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
       // Both parties have now signed, so send the homeowner the executed document
       // itself — the same one "View Full Document" produces — rather than a link.
       if (quote?.status === 'signed' && quote?.customer?.email && quote?.share_token) {
-        const sent = await sendFullSignedDocumentToCustomer(quoteId, company);
+        const sent = await sendFullSignedDocumentToCustomer(quoteId, company, { includePhotos: includeCertPhotos });
         if (sent) toast.success('Signed copy sent to customer', { duration: 4000, icon: '📧' });
       }
     } catch {
@@ -1246,7 +1251,7 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
                 )}
                 {quote?.status !== 'signed' && (
                   <button
-                    onClick={() => { setSignOnSiteContractorSig(null); setSignOnSiteContractorName(currentUser?.full_name || company.name || ''); setSignOnSiteAgreementSig(null); setSignOnSiteStep('contractor'); setShowSignOnSite(true); }}
+                    onClick={() => { setSignOnSiteContractorSig(null); setSignOnSiteContractorName(currentUser?.full_name || company.name || ''); setSignOnSiteAgreementSig(null); setSignOnSiteStep('contractor'); setIncludeCertPhotos(true); setShowSignOnSite(true); }}
                     className="flex items-center gap-1.5 px-3 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium shadow-sm"
                     title="Both contractor and customer sign in person"
                   >
@@ -2151,7 +2156,7 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
                     />
                     <span className="text-xs text-gray-500">{quote.contractor_signed_by}</span>
                     <button
-                      onClick={() => setShowContractorSign(true)}
+                      onClick={() => { setIncludeCertPhotos(true); setShowContractorSign(true); }}
                       className="text-xs font-semibold text-blue-600 hover:underline"
                     >
                       Re-sign
@@ -2159,7 +2164,7 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
                   </div>
                 ) : (
                   <button
-                    onClick={() => setShowContractorSign(true)}
+                    onClick={() => { setIncludeCertPhotos(true); setShowContractorSign(true); }}
                     className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors shadow-sm"
                   >
                     <PenLine className="w-4 h-4" />
@@ -2191,7 +2196,7 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
           ) : isInspectionReport && quote?.contingency_enabled && !isSigned ? (
             <div className="flex flex-col items-center gap-1">
               <button
-                onClick={() => { setContingencySignStep('agreement'); setContingencyAgreementSig(null); setShowContingencySigning(true); }}
+                onClick={() => { setContingencySignStep('agreement'); setContingencyAgreementSig(null); setIncludeCertPhotos(true); setShowContingencySigning(true); }}
                 className="flex items-center gap-2 px-8 py-3 bg-indigo-600 text-white rounded-xl font-semibold text-sm hover:bg-indigo-700 transition-colors shadow-sm"
               >
                 <Shield className="w-4 h-4" /> Review &amp; Sign Agreement
@@ -2826,6 +2831,15 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
                   </div>
                   <div className="space-y-3 border-t pt-4">
                     <p className="text-sm font-semibold text-gray-800">Sign below to acknowledge receipt of the 3-Day Right to Cancel notice</p>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={includeCertPhotos}
+                        onChange={(e) => setIncludeCertPhotos(e.target.checked)}
+                        className="w-4 h-4 rounded border-gray-300 text-[#1e3a5f] focus:ring-[#1e3a5f]"
+                      />
+                      <span className="text-sm text-gray-600">Include project photos in the emailed copy</span>
+                    </label>
                     <SignatureCanvas
                       onSign={savingContingencySign ? () => {} : handleContingencyCancelSign}
                       signerName={contingencySignerName || `${quote?.customer?.first_name || ''} ${quote?.customer?.last_name || ''}`.trim()}
@@ -3271,7 +3285,7 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
                 />
                 <span className="text-xs text-gray-500">{quote.contractor_signed_by}</span>
                 <button
-                  onClick={() => setShowContractorSign(true)}
+                  onClick={() => { setIncludeCertPhotos(true); setShowContractorSign(true); }}
                   className="text-xs font-semibold text-blue-600 hover:underline"
                 >
                   Re-sign
@@ -3279,7 +3293,7 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
               </div>
             ) : (
               <button
-                onClick={() => setShowContractorSign(true)}
+                onClick={() => { setIncludeCertPhotos(true); setShowContractorSign(true); }}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors shadow-sm"
               >
                 <PenLine className="w-4 h-4" />
@@ -3524,6 +3538,15 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
 
                   <div className="space-y-3 border-t pt-4">
                     <p className="text-sm font-semibold text-gray-800">Sign below to acknowledge receipt of the 3-Day Right to Cancel notice</p>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={includeCertPhotos}
+                        onChange={(e) => setIncludeCertPhotos(e.target.checked)}
+                        className="w-4 h-4 rounded border-gray-300 text-[#1e3a5f] focus:ring-[#1e3a5f]"
+                      />
+                      <span className="text-sm text-gray-600">Include project photos in the emailed copy</span>
+                    </label>
                     <SignatureCanvas
                       onSign={savingContingencySign ? () => {} : handleContingencyCancelSign}
                       signerName={contingencySignerName || `${quote?.customer?.first_name || ''} ${quote?.customer?.last_name || ''}`.trim()}
@@ -3667,7 +3690,16 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
                 <X className="w-5 h-5 text-gray-500" />
               </button>
             </div>
-            <div className="p-4">
+            <div className="p-4 space-y-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={includeCertPhotos}
+                  onChange={(e) => setIncludeCertPhotos(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300 text-[#1e3a5f] focus:ring-[#1e3a5f]"
+                />
+                <span className="text-sm text-gray-600">Include project photos in the emailed copy</span>
+              </label>
               <SignatureCanvas
                 onSign={(sigData, signerName) => handleContractorSign(sigData, signerName)}
                 signerName={currentUser?.full_name || company.name}
@@ -3721,6 +3753,15 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
                     ? <p className="text-xs text-indigo-700 mt-0.5 font-medium">Insurance Contingency Agreement</p>
                     : <p className="text-xs text-gray-500 mt-0.5">Quote Acceptance</p>}
                 </div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={includeCertPhotos}
+                    onChange={(e) => setIncludeCertPhotos(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-300 text-[#1e3a5f] focus:ring-[#1e3a5f]"
+                  />
+                  <span className="text-sm text-gray-600">Include project photos in the emailed copy</span>
+                </label>
                 <SignatureCanvas
                   onSign={(sigData, signerName) => {
                     setSignOnSiteContractorSig(sigData);

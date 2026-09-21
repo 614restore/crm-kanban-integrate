@@ -562,7 +562,7 @@ export const buildFullSignedDocumentPdf = async (
 export const sendFullSignedDocumentToCustomer = async (
   quoteId: string,
   company: any,
-  opts: { resend?: boolean } = {},
+  opts: { resend?: boolean; includePhotos?: boolean } = {},
 ): Promise<boolean> => {
   const { data: fullQuote } = await supabase
     .from('quotes')
@@ -572,9 +572,22 @@ export const sendFullSignedDocumentToCustomer = async (
 
   if (!fullQuote?.customer?.email || !fullQuote?.share_token) return false;
 
-  // No photos: the homeowner is being sent the executed record, not the
-  // proposal's photo documentation.
-  const { doc, fileName } = await buildFullSignedDocumentPdf(fullQuote, company);
+  // Include the same project photos the Documents hub's "View Full Document"
+  // button embeds, so the emailed executed record matches what it produces —
+  // unless the rep sending this particular copy chose to leave them out, in
+  // which case skip the query entirely rather than fetching and discarding.
+  const includePhotos = opts.includePhotos !== false;
+  let certPhotos: { id: string; photo_url: string; caption: string | null; sort_order: number | null }[] = [];
+  if (includePhotos) {
+    const { data: photoRows } = await supabase
+      .from('quote_photos')
+      .select('id, photo_url, caption, sort_order')
+      .eq('quote_id', quoteId)
+      .order('sort_order');
+    certPhotos = photoRows ?? [];
+  }
+
+  const { doc, fileName } = await buildFullSignedDocumentPdf(fullQuote, company, certPhotos);
   const base64 = doc.output('datauristring').split(',')[1];
 
   const { error } = await supabase.functions.invoke('send-quote-alert', {
