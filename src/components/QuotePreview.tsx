@@ -13,7 +13,7 @@ import SignatureCanvas from '@/components/SignatureCanvas';
 import Lightbox from '@/components/Lightbox';
 import { generateQuotePDF } from '@/lib/pdfGenerator';
 import { generateQuoteHTML } from '@/lib/quoteHtmlRenderer';
-import { generateAndPrintInspectionReport } from '@/lib/inspectionReportGenerator';
+import { generateInspectionReportPDF } from '@/lib/inspectionReportGenerator';
 import { quoteUrl, certUrl } from '@/lib/appUrl';
 import type { Quote, Company, LineItem, QuotePhoto, QuoteOption } from '@/data/quoteData';
 import { statusConfig, tierLabels } from '@/data/quoteData';
@@ -562,51 +562,12 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
   const handleDownloadPDF = async () => {
     if (!quote) return;
 
-    // ── Professional layout: print the already-rendered preview iframe ──
-    // Customer view skips the print dialog and falls through to jsPDF for a direct download
-    if (viewMode === 'modern' && quoteHtml && !isCustomerView) {
-      // First try: use the preview iframe already on screen (no popup needed)
-      const iframeWin = previewIframeRef.current?.contentWindow;
-      if (iframeWin && iframeHasRenderedContent(iframeWin)) {
-        iframeWin.focus();
-        iframeWin.print();
-        toast.success('Print dialog opened — select "Save as PDF" to download');
-        return;
-      }
-      // Fallback: inject a hidden iframe, wait for load, then print
-      setPdfGenerating(true);
-      setPdfProgress('Preparing Professional layout...');
-      try {
-        const hidden = document.createElement('iframe');
-        // Width matters: a 1px-wide iframe lays the document out against a
-        // 1px viewport, so the print comes out empty or mangled.
-        hidden.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:1200px;height:1px;border:0;';
-        document.body.appendChild(hidden);
-        hidden.addEventListener('load', () => {
-          // Wait for the images rather than a flat timer -- a quote carrying
-          // 20+ photos is nowhere near ready 400ms after load.
-          const imgs = Array.from(hidden.contentDocument?.images ?? []);
-          const imageLoadPromise = imgs.length
-            ? Promise.all(imgs.map(img => img.complete ? Promise.resolve() : new Promise(r => { img.onload = r; img.onerror = r; })))
-            : Promise.resolve();
-          imageLoadPromise.then(() => {
-            hidden.contentWindow?.print();
-            toast.success('Print dialog opened — select "Save as PDF" to download');
-            setTimeout(() => { try { document.body.removeChild(hidden); } catch { /* ignore */ } }, 60000);
-          });
-        });
-        hidden.srcdoc = quoteHtml;
-      } catch (err) {
-        console.error('Professional PDF error:', err);
-        toast.error('Failed to prepare Professional PDF');
-      } finally {
-        setPdfGenerating(false);
-        setPdfProgress('');
-      }
-      return;
-    }
-
-    // ── Classic layout: jsPDF ──
+    // Always generate with jsPDF, which writes a real file straight to the
+    // user's downloads. This used to send the Professional layout through
+    // window.print() instead, which only ever opened a print dialog and left
+    // the actual saving (and the resulting file size) up to the browser --
+    // Safari in particular produced enormous files. Customer view already
+    // took this jsPDF path; staff now get the same behaviour.
     setPdfGenerating(true);
     setPdfProgress('Preparing...');
     try {
@@ -632,31 +593,11 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
     }
   };
 
-  const handleDownloadLive = () => {
-    if (!quoteHtml) { toast.error('Live preview not available'); return; }
-    const iframeWin = previewIframeRef.current?.contentWindow;
-    if (iframeWin) {
-      iframeWin.focus();
-      iframeWin.print();
-      toast.success('Print dialog opened — select "Save as PDF" to download');
-      return;
-    }
-    const hidden = document.createElement('iframe');
-    hidden.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:1200px;height:1px;border:0;';
-    document.body.appendChild(hidden);
-    hidden.addEventListener('load', () => {
-      const imgs = Array.from(hidden.contentDocument?.images ?? []);
-      const ready = imgs.length
-        ? Promise.all(imgs.map(img => img.complete ? Promise.resolve() : new Promise(r => { img.onload = r; img.onerror = r; })))
-        : Promise.resolve();
-      ready.then(() => {
-        hidden.contentWindow?.print();
-        toast.success('Print dialog opened — select "Save as PDF" to download');
-        setTimeout(() => { try { document.body.removeChild(hidden); } catch { /* ignore */ } }, 60000);
-      });
-    });
-    hidden.srcdoc = quoteHtml;
-  };
+  // Downloads a real PDF file rather than opening the browser's print dialog.
+  // Same generator the Download button uses -- there's no way to render the
+  // live HTML layout itself to a PDF in the browser without a headless
+  // browser on the server, and that isn't available on this hosting plan.
+  const handleDownloadLive = () => handleDownloadPDF();
 
   const handleGenerateInspectionReport = async () => {
     if (!quote || photos.length === 0) {
@@ -670,7 +611,7 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
     setInspectionGenerating(true);
     setInspectionProgress('Starting…');
     try {
-      await generateAndPrintInspectionReport({
+      await generateInspectionReportPDF({
         quote: {
           quote_number: quote.quote_number,
           cover_page_title: quote.cover_page_title,
@@ -690,7 +631,7 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
         },
         onProgress: (msg) => setInspectionProgress(msg),
       });
-      toast.success('Print dialog opened — select "Save as PDF" to download the inspection report');
+      toast.success('Inspection report downloaded');
     } catch (err) {
       console.error('Inspection report error:', err);
       toast.error('Failed to generate inspection report. Please try again.');

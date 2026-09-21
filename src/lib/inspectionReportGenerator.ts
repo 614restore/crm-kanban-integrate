@@ -3,9 +3,9 @@
  * Web Inspection Photo Report Generator
  *
  * Fetches all inspection photos, compresses each one to ≤ 100 KB using the
- * Canvas API (no native dependencies), builds a self-contained HTML string,
- * then prints it via a hidden iframe — same "Save as PDF" flow as the
- * professional quote layout.
+ * Canvas API (no native dependencies), then lays them out into a PDF with
+ * jsPDF and saves it directly — no print dialog, and the file size is ours
+ * to control rather than the browser print engine's.
  */
 
 interface Photo {
@@ -107,10 +107,7 @@ const fetchAndCompressToDataUri = async (
   }
 };
 
-// ─── HTML builder ─────────────────────────────────────────────────────────────
-
-const escHtml = (s: string) =>
-  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const fmtDate = (d: string | Date | null | undefined) => {
   if (!d) return '';
@@ -119,205 +116,18 @@ const fmtDate = (d: string | Date | null | undefined) => {
   });
 };
 
-const buildReportHtml = (
-  options: InspectionReportOptions,
-  compressedPhotos: string[],
-  logoDataUri: string,
-  coverDataUri: string,
-): string => {
-  const {quote, photos, company, customer} = options;
-  const primary = company.quote_primary_color || '#1e3a5f';
-  const accent  = company.quote_accent_color  || '#ff6b35';
-
-  const customerAddr = [
-    customer.address,
-    customer.city
-      ? `${customer.city}, ${customer.state || ''} ${customer.zip || ''}`.trim()
-      : null,
-  ].filter(Boolean).join(' ');
-
-  // Helper: normalise a field that may be a string (possibly comma-separated),
-  // an array, or null/undefined — always returns a flat array of non-empty strings.
-  const toTagList = (v: string | string[] | null | undefined): string[] => {
-    if (!v) return [];
-    if (Array.isArray(v)) return v.filter(Boolean);
-    return v.split(',').map(s => s.trim()).filter(Boolean);
-  };
-
-  const buildPhotoCell = (photo: Photo, globalIndex: number): string => {
-    const src = compressedPhotos[globalIndex] || photo.photo_url;
-    const rawTags: string[] = [
-      ...toTagList(photo.damage_type),
-      ...toTagList((photo as any).damage_cause),
-      ...toTagList(photo.location),
-    ];
-    return `<td class="photo-td">
-      <div class="photo-card">
-        <div class="photo-wrap">
-          <img src="${escHtml(src)}" class="photo-img" alt="${escHtml(photo.caption || `Photo ${globalIndex + 1}`)}">
-          <div class="photo-num">${globalIndex + 1}</div>
-        </div>
-        ${rawTags.length ? `<div class="photo-tags">${rawTags.map(t => `<span class="tag">${escHtml(t)}</span>`).join('')}</div>` : ''}
-        ${photo.caption ? `<div class="photo-caption">${escHtml(photo.caption)}</div>` : ''}
-      </div>
-    </td>`;
-  };
-
-  // Page 1: header content + first 2 photos (1 table row).
-  // Pages 2-N: 6 photos each (3 table rows of 2).
-  // Footer goes after the very last photo — never on its own page.
-  // Using <table><tr> because table-row page-break-inside:avoid is the most
-  // reliably honored hint in all print engines (Chrome, Safari, WKWebView).
-  const buildTableHtml = (chunk: Photo[], startGlobalIdx: number): string => {
-    const rows: string[] = [];
-    let idx = startGlobalIdx;
-    for (let r = 0; r < chunk.length; r += 2) {
-      const pair = chunk.slice(r, r + 2);
-      const cells = pair.map(photo => buildPhotoCell(photo, idx++)).join('');
-      const emptyCell = pair.length === 1 ? '<td class="photo-td"></td>' : '';
-      rows.push(`<tr>${cells}${emptyCell}</tr>`);
-    }
-    return `<table class="photo-table"><tbody>${rows.join('')}</tbody></table>`;
-  };
-
-  const FIRST_PAGE_PHOTOS = 2;
-  const PER_PAGE = 8;
-  // chunk 0 = first 2 (go on page 1 with header); chunks 1-N = 8 each
-  const allChunks: Photo[][] = [];
-  if (photos.length > 0) {
-    allChunks.push(photos.slice(0, FIRST_PAGE_PHOTOS));
-    for (let i = FIRST_PAGE_PHOTOS; i < photos.length; i += PER_PAGE) {
-      allChunks.push(photos.slice(i, i + PER_PAGE));
-    }
-  }
-  let gIdx = 0; // running global photo index across all chunks
-
-  return `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<style>
-  @page { margin: 0; size: letter portrait; }
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family: Arial, Helvetica, sans-serif; font-size:12px; color:#111827; line-height:1.5; }
-
-  .banner { background:${primary}; padding:28px 40px 24px; display:flex; justify-content:space-between; align-items:flex-start; }
-  .banner-left { flex:1; }
-  .banner-logo { height:44px; object-fit:contain; margin-bottom:10px; display:block; background:rgba(255,255,255,0.12); border-radius:8px; padding:6px; }
-  .banner-company { font-size:20px; font-weight:800; color:#fff; }
-  .banner-sub { font-size:11px; color:rgba(255,255,255,0.72); margin-top:3px; }
-  .banner-right { text-align:right; }
-  .banner-label { font-size:9px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:rgba(255,255,255,0.6); }
-  .banner-num { font-size:18px; font-weight:800; color:#fff; margin-top:2px; }
-  .banner-date { font-size:10px; color:rgba(255,255,255,0.7); margin-top:3px; }
-  .accent-bar { height:4px; background:${accent}; }
-
-  .cover-wrap { overflow:hidden; max-height:280px; background:#f1f5f9; }
-  .cover-img { width:100%; height:auto; max-height:280px; object-fit:cover; display:block; }
-
-  .info-row { display:flex; border-bottom:1px solid #e5e7eb; }
-  .info-card { flex:1; padding:14px 20px; border-right:1px solid #e5e7eb; }
-  .info-card:last-child { border-right:none; }
-  .info-label { font-size:9px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:${accent}; margin-bottom:4px; }
-  .info-name { font-size:13px; font-weight:700; color:${primary}; }
-  .info-detail { font-size:11px; color:#6b7280; margin-top:2px; }
-
-  .section-header { background:${primary}; padding:10px 40px; display:flex; align-items:center; gap:12px; }
-  .section-badge { background:${accent}; color:#fff; font-size:9px; font-weight:700; letter-spacing:1px; text-transform:uppercase; padding:3px 8px; border-radius:20px; }
-  .section-title { font-size:14px; font-weight:700; color:#fff; }
-  .section-inner { padding:20px 40px 28px; }
-
-  /* Page 1 content area */
-  .photo-page { padding:20px 40px 28px; }
-  /* Continuation pages — explicit break-before applied via inline style, not sibling selector */
-  .cont-page { padding:24px 40px 20px; }
-  /* Table layout — rows are the most reliably break-inside:avoid unit across all print engines */
-  .photo-table { width:100%; border-collapse:separate; border-spacing:0 14px; margin-top:-14px; }
-  .photo-td { width:50%; vertical-align:top; padding:0 7px; }
-  .photo-td:first-child { padding-left:0; }
-  .photo-td:last-child { padding-right:0; }
-  .photo-table tr { page-break-inside:avoid; break-inside:avoid; }
-  .photo-card { border:1px solid #e5e7eb; border-radius:10px; overflow:hidden; background:#fff; page-break-inside:avoid; break-inside:avoid; }
-  /* Fixed-height contain box — shows full image with no cropping */
-  .photo-wrap { position:relative; background:#e8edf2; height:220px; display:flex; align-items:center; justify-content:center; overflow:hidden; }
-  .photo-img { max-width:100%; max-height:220px; width:auto; height:auto; object-fit:contain; display:block; }
-  .photo-num { position:absolute; top:8px; left:8px; background:rgba(0,0,0,0.55); color:#fff; font-size:10px; font-weight:700; width:22px; height:22px; border-radius:11px; display:flex; align-items:center; justify-content:center; }
-  .photo-tags { display:flex; flex-wrap:wrap; gap:4px; padding:8px 10px 4px; }
-  .tag { background:#fef3c7; color:#92400e; font-size:9px; font-weight:700; padding:2px 7px; border-radius:20px; border:1px solid #fcd34d; }
-  .photo-caption { font-size:10px; color:#374151; padding:4px 10px 10px; line-height:1.5; }
-  /* Continuation page photo sizing */
-  .cont-page .photo-table { border-spacing:0 10px; margin-top:-10px; }
-  .cont-page .photo-wrap { height:166px; }
-  .cont-page .photo-img { max-height:166px; }
-  .cont-page .photo-tags { padding:6px 9px 3px; gap:3px; }
-  .cont-page .photo-caption { padding:3px 9px 8px; line-height:1.35; }
-
-  .report-footer { background:${primary}; padding:10px 40px; display:flex; justify-content:space-between; align-items:center; margin-top:24px; }
-  .footer-text { font-size:10px; color:rgba(255,255,255,0.7); }
-  .footer-count { font-size:10px; color:rgba(255,255,255,0.9); font-weight:700; }
-</style>
-</head>
-<body>
-
-<!-- ── Page 1: header + first 2 photos ── -->
-<div${allChunks.length > 1 ? ' style="page-break-after:always;break-after:page;"' : ''}>
-  <div class="banner">
-    <div class="banner-left">
-      ${logoDataUri ? `<img src="${escHtml(logoDataUri)}" class="banner-logo" alt="${escHtml(company.name)}">` : ''}
-      <div class="banner-company">${escHtml(company.name)}</div>
-      <div class="banner-sub">Inspection Photo Report</div>
-    </div>
-    <div class="banner-right">
-      <div class="banner-label">Quote Number</div>
-      <div class="banner-num">#${escHtml(String(quote.quote_number))}</div>
-      <div class="banner-date">${fmtDate(quote.created_at)}</div>
-    </div>
-  </div>
-  <div class="accent-bar"></div>
-  ${coverDataUri ? `<div class="cover-wrap"><img src="${escHtml(coverDataUri)}" class="cover-img" alt="Property"></div><div class="accent-bar"></div>` : ''}
-  <div class="info-row">
-    <div class="info-card">
-      <div class="info-label">Property / Customer</div>
-      <div class="info-name">${escHtml(`${customer.first_name} ${customer.last_name}`)}</div>
-      ${customerAddr ? `<div class="info-detail">${escHtml(customerAddr)}</div>` : ''}
-    </div>
-    <div class="info-card">
-      <div class="info-label">Project</div>
-      <div class="info-name">${escHtml(quote.cover_page_title || quote.project_description || 'Inspection')}</div>
-      ${quote.project_description && quote.cover_page_title ? `<div class="info-detail">${escHtml(quote.project_description)}</div>` : ''}
-    </div>
-    <div class="info-card">
-      <div class="info-label">Total Photos</div>
-      <div class="info-name">${photos.length}</div>
-      <div class="info-detail">Compressed · ${fmtDate(quote.created_at)}</div>
-    </div>
-  </div>
-  <div class="section-header">
-    <span class="section-badge">Documentation</span>
-    <span class="section-title">Inspection Photos</span>
-  </div>
-  ${allChunks.length > 0 ? `<div class="photo-page">${buildTableHtml(allChunks[0], 0)}${(() => { gIdx = allChunks[0].length; return ''; })()}</div>` : ''}
-  ${allChunks.length === 1 ? `<div class="report-footer"><div class="footer-text">${escHtml(company.name)} · Quote #${escHtml(String(quote.quote_number))} · Inspection Report</div><div class="footer-count">${photos.length} photos</div></div>` : ''}
-</div>
-
-<!-- ── Pages 2-N: 6 photos each, footer on the last page ── -->
-${allChunks.slice(1).map((chunk, i) => {
-  const isLast = i === allChunks.length - 2;
-  const startIdx = gIdx;
-  gIdx += chunk.length;
-  return `<div style="page-break-before:always;break-before:page;">
-  <div class="cont-page">${buildTableHtml(chunk, startIdx)}</div>
-  ${isLast ? `<div class="report-footer"><div class="footer-text">${escHtml(company.name)} · Quote #${escHtml(String(quote.quote_number))} · Inspection Report</div><div class="footer-count">${photos.length} photos</div></div>` : ''}
-</div>`;
-}).join('\n')}
-
-</body>
-</html>`;
-};
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-export const generateAndPrintInspectionReport = async (
+/** #rrggbb -> [r,g,b] for jsPDF's setFillColor/setTextColor. */
+const hexToRgb = (hex: string): [number, number, number] => {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return [30, 58, 95];
+  const n = parseInt(m[1], 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+};
+
+export const generateInspectionReportPDF = async (
   options: InspectionReportOptions,
 ): Promise<void> => {
   const {photos, company, quote, onProgress} = options;
@@ -334,37 +144,179 @@ export const generateAndPrintInspectionReport = async (
     onProgress?.(`Compressing photos… ${Math.min(i + BATCH, photos.length)} / ${photos.length}`);
   }
 
-  // Compress logo and cover photo
-  let logoDataUri = '';
   let coverDataUri = '';
-  if (company.logo_url) {
-    onProgress?.('Processing logo…');
-    logoDataUri = await fetchAndCompressToDataUri(company.logo_url, 60);
-  }
   if (quote.cover_photo_url) {
     onProgress?.('Processing cover photo…');
     coverDataUri = await fetchAndCompressToDataUri(quote.cover_photo_url, 120);
   }
 
   onProgress?.('Building report…');
-  const html = buildReportHtml(options, compressed, logoDataUri, coverDataUri);
 
-  // Print via hidden iframe (same pattern as "Download Professional")
-  onProgress?.('Opening print dialog…');
-  const iframe = document.createElement('iframe');
-  iframe.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;border:0;';
-  document.body.appendChild(iframe);
+  // Built with jsPDF rather than rendering HTML through the browser's print
+  // dialog: this downloads a file straight away (no dialog, nothing for the
+  // user to configure) and the photos are embedded at the size they're
+  // actually drawn, so a 30-photo report stays a few MB instead of whatever
+  // the browser's print engine decides to do with them.
+  const {default: jsPDF} = await import('jspdf');
+  const doc = new jsPDF({unit: 'pt', format: 'letter'});
 
-  await new Promise<void>(resolve => {
-    iframe.addEventListener('load', () => {
-      setTimeout(() => {
-        iframe.contentWindow?.print();
-        setTimeout(() => {
-          try { document.body.removeChild(iframe); } catch { /* already removed */ }
-        }, 60000);
-        resolve();
-      }, 400);
+  const PAGE_W = doc.internal.pageSize.getWidth();   // 612
+  const PAGE_H = doc.internal.pageSize.getHeight();  // 792
+  const MARGIN = 40;
+  const CONTENT_W = PAGE_W - MARGIN * 2;
+  const primary = hexToRgb(company.quote_primary_color || '#1e3a5f');
+  const accent = hexToRgb(company.quote_accent_color || '#ff6b35');
+
+  /** Draws an image inside a box, preserving aspect ratio and centering it. */
+  const drawFitted = (dataUri: string, x: number, y: number, boxW: number, boxH: number) => {
+    let w = boxW;
+    let h = boxH;
+    try {
+      const props = doc.getImageProperties(dataUri);
+      const scale = Math.min(boxW / props.width, boxH / props.height);
+      w = props.width * scale;
+      h = props.height * scale;
+    } catch {
+      /* unreadable image — fall back to filling the box */
+    }
+    doc.addImage(dataUri, 'JPEG', x + (boxW - w) / 2, y + (boxH - h) / 2, w, h, undefined, 'FAST');
+  };
+
+  const drawPageHeader = (title: string) => {
+    doc.setFillColor(...primary);
+    doc.rect(0, 0, PAGE_W, 52, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.text(company.name || '', MARGIN, 24);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(210, 220, 235);
+    doc.text(title, MARGIN, 39);
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(9);
+    doc.text(`Quote #${quote.quote_number}`, PAGE_W - MARGIN, 24, {align: 'right'});
+  };
+
+  const drawFooter = (pageNum: number, totalPages: number) => {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(150, 150, 150);
+    doc.text(
+      `${company.name} · Inspection Report · ${photos.length} photos`,
+      MARGIN, PAGE_H - 22,
+    );
+    doc.text(`Page ${pageNum} of ${totalPages}`, PAGE_W - MARGIN, PAGE_H - 22, {align: 'right'});
+  };
+
+  // 2 columns x 3 rows per photo page
+  const COLS = 2;
+  const ROWS = 3;
+  const PER_PAGE = COLS * ROWS;
+  const GUTTER = 16;
+  const CELL_W = (CONTENT_W - GUTTER * (COLS - 1)) / COLS;
+  const IMG_H = 170;
+  const CAPTION_H = 34;
+  const ROW_H = IMG_H + CAPTION_H + 18;
+  const totalPages = 1 + Math.max(1, Math.ceil(photos.length / PER_PAGE));
+
+  // ── Page 1: cover ──────────────────────────────────────────────────────────
+  drawPageHeader('Inspection Photo Report');
+  let y = 52 + 28;
+
+  doc.setTextColor(25, 25, 25);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(22);
+  doc.text(quote.cover_page_title || 'Inspection Photo Report', MARGIN, y);
+  y += 10;
+  doc.setFillColor(...accent);
+  doc.rect(MARGIN, y, 54, 3, 'F');
+  y += 28;
+
+  const custName = `${options.customer.first_name || ''} ${options.customer.last_name || ''}`.trim();
+  const custAddr = [
+    options.customer.address,
+    [options.customer.city, options.customer.state, options.customer.zip].filter(Boolean).join(' '),
+  ].filter(Boolean).join(', ');
+
+  const infoRow = (label: string, value: string) => {
+    if (!value) return;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(120, 130, 150);
+    doc.text(label.toUpperCase(), MARGIN, y);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(11);
+    doc.setTextColor(25, 25, 25);
+    const lines = doc.splitTextToSize(value, CONTENT_W);
+    doc.text(lines, MARGIN, y + 14);
+    y += 14 + lines.length * 13 + 12;
+  };
+
+  infoRow('Property Owner', custName);
+  infoRow('Address', custAddr);
+  infoRow('Date', fmtDate(quote.created_at));
+  if (quote.project_description) infoRow('Scope', quote.project_description);
+
+  if (coverDataUri) {
+    const coverH = Math.min(250, PAGE_H - 70 - y);
+    if (coverH > 80) drawFitted(coverDataUri, MARGIN, y, CONTENT_W, coverH);
+  }
+  drawFooter(1, totalPages);
+
+  // ── Photo pages ────────────────────────────────────────────────────────────
+  onProgress?.('Laying out photos…');
+  for (let i = 0; i < photos.length; i += PER_PAGE) {
+    doc.addPage();
+    const pageNum = 2 + i / PER_PAGE;
+    drawPageHeader('Inspection Photos');
+    const top = 52 + 24;
+
+    photos.slice(i, i + PER_PAGE).forEach((photo, j) => {
+      const col = j % COLS;
+      const row = Math.floor(j / COLS);
+      const cx = MARGIN + col * (CELL_W + GUTTER);
+      const cy = top + row * ROW_H;
+
+      doc.setDrawColor(228, 232, 240);
+      doc.setLineWidth(0.7);
+      doc.roundedRect(cx, cy, CELL_W, IMG_H + CAPTION_H, 5, 5, 'S');
+
+      const dataUri = compressed[i + j];
+      if (dataUri) drawFitted(dataUri, cx + 4, cy + 4, CELL_W - 8, IMG_H - 4);
+
+      // Number badge
+      doc.setFillColor(...primary);
+      doc.circle(cx + 15, cy + 15, 9, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.text(String(i + j + 1), cx + 15, cy + 18, {align: 'center'});
+
+      // Caption + tags
+      const tags = [photo.location, photo.damage_type]
+        .flatMap(t => (Array.isArray(t) ? t : typeof t === 'string' ? t.split(',') : []))
+        .map(t => String(t).trim())
+        .filter(Boolean);
+
+      doc.setTextColor(40, 42, 48);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.5);
+      const capLines = doc.splitTextToSize(photo.caption || '', CELL_W - 16).slice(0, 2);
+      if (capLines.length) doc.text(capLines, cx + 8, cy + IMG_H + 12);
+
+      if (tags.length) {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7.5);
+        doc.setTextColor(120, 130, 150);
+        const tagLine = doc.splitTextToSize(tags.join(' · '), CELL_W - 16)[0];
+        doc.text(tagLine, cx + 8, cy + IMG_H + 12 + capLines.length * 10 + 2);
+      }
     });
-    iframe.srcdoc = html;
-  });
+
+    drawFooter(pageNum, totalPages);
+  }
+
+  const safeNumber = String(quote.quote_number || 'report').replace(/[^a-zA-Z0-9-_]/g, '_');
+  doc.save(`${safeNumber}_Inspection_Report.pdf`);
 };

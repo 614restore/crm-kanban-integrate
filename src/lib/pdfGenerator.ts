@@ -133,6 +133,8 @@ export interface QuotePDFData {
   include_warranty_page: boolean;
   include_cancel_notice: boolean;
   include_better: boolean;
+  /** Per-tier line items: tiers_applicable tags only isolate items when this is true. */
+  use_per_tier_items?: boolean;
   include_best: boolean;
   measurement_provider?: string | null;
   measurement_source_name?: string | null;
