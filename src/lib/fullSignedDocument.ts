@@ -42,6 +42,24 @@ export const buildFullSignedDocumentPdf = async (
     return y;
   };
 
+  /**
+   * Starts a signature-block section (heading + short text + signature
+   * line) — Customer Acceptance, the 3-day cancel notice, and Contractor
+   * Authorization each used to force their own page with doc.addPage(),
+   * even though every one of them is short. Now they flow onto whatever
+   * page has room, only breaking when a section genuinely wouldn't fit, and
+   * a small gap keeps a heading that lands mid-page from sitting flush
+   * against the previous section's signature line.
+   */
+  const startSection = (estimatedHeight: number) => {
+    if (y + estimatedHeight > pageH - margin) {
+      doc.addPage();
+      y = margin;
+    } else if (y > margin) {
+      y += 18;
+    }
+  };
+
   const drawBanner = () => {
     doc.setFillColor(30, 58, 95);
     doc.rect(0, 0, pageW, 58, 'F');
@@ -185,8 +203,12 @@ export const buildFullSignedDocumentPdf = async (
     ackDate: string | null | undefined,
     ackName: string,
   ) => {
-    doc.addPage();
-    y = margin;
+    // Was an unconditional doc.addPage() — the notice is short (a heading,
+    // four short paragraphs, and a compact signature line), so it almost
+    // always fits under whatever signature block preceded it. The estimate
+    // is generous on purpose so a long company name/address never overlaps
+    // the next section rather than trimming a page too aggressively.
+    startSection(320);
     doc.setFontSize(13);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(170, 30, 30);
@@ -426,8 +448,12 @@ export const buildFullSignedDocumentPdf = async (
 
   // ── Contractor Authorization ─────────────────────────────────────────────
   if (fullQuote.contractor_signed_at) {
-    doc.addPage();
-    y = margin;
+    // Same reasoning as drawCancelNotice: this is short enough to usually
+    // follow the cancel notice (or, if there's no cancel notice on this
+    // quote, the Customer Acceptance block) on the same page rather than
+    // forcing a third page for what amounts to one more paragraph and one
+    // more signature line.
+    startSection(260);
 
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
