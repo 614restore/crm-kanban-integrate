@@ -8479,7 +8479,9 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
 
                 {/* Summary Cards — tiered quotes only */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {(['good', 'better', 'best'] as const).map(tier => {
+                  {(['good', 'better', 'best'] as const)
+                    .filter(tier => tier === 'good' || (tier === 'better' && includeBetter) || (tier === 'best' && includeBest))
+                    .map(tier => {
                     const colors = tier === 'good' ? 'border-emerald-200 bg-emerald-50' : tier === 'better' ? 'border-blue-200 bg-blue-50' : 'border-amber-200 bg-amber-50';
                     const textColor = tier === 'good' ? 'text-emerald-700' : tier === 'better' ? 'text-blue-700' : 'text-amber-700';
                     const tierName = tier === 'good' ? goodTierName : tier === 'better' ? betterTierName : bestTierName;
