@@ -323,6 +323,49 @@ const CompanySetup: React.FC<CompanySetupProps> = ({ company, onUpdate, user }) 
     }
   }, [company.id, onUpdate, canEditCompanyInfo, activeTab]);
 
+  const [testingEmail, setTestingEmail] = useState<'sender' | 'delivery' | null>(null);
+
+  /**
+   * Sends a test email through one of the two mail paths.
+   *
+   * The edge function reads the saved company row rather than anything posted
+   * from here — credentials should not make a round trip through the browser,
+   * and a test is only meaningful against what a real quote send would use. So
+   * pending edits are committed first; otherwise you would edit a field, test,
+   * and be told about the previous value.
+   */
+  const handleSendTestEmail = async (mode: 'sender' | 'delivery') => {
+    setTestingEmail(mode);
+    try {
+      if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+      if (JSON.stringify(form) !== committedForm.current) {
+        await handleSave(form, true);
+      }
+
+      const { data, error } = await supabase.functions.invoke('send-test-email', {
+        body: { company_id: company.id, mode },
+      });
+
+      // A non-2xx from the function surfaces as `error` with the useful part
+      // (a rejected SMTP login, say) in data.error — report that, not "failed".
+      const detail = (data as { error?: string } | null)?.error;
+      if (error || detail || !(data as { ok?: boolean } | null)?.ok) {
+        toast.error(detail || error?.message || 'Could not send the test email.', { duration: 10000 });
+        return;
+      }
+
+      const res = data as { to: string; from: string; note?: string };
+      toast.success(`Test email sent to ${res.to} from ${res.from}`, {
+        description: res.note,
+        duration: res.note ? 12000 : 6000,
+      });
+    } catch (err) {
+      toast.error((err as Error)?.message || 'Could not send the test email.');
+    } finally {
+      setTestingEmail(null);
+    }
+  };
+
   // Auto-save: debounce 1.5s after any form change
   useEffect(() => {
     if (isFirstRender.current) {
@@ -1277,6 +1320,25 @@ const CompanySetup: React.FC<CompanySetupProps> = ({ company, onUpdate, user }) 
                   />
                 </div>
               </div>
+
+              {/* Tests the shared sender, and reports whether your own From
+                  address survived or fell back — a fallback send otherwise
+                  looks identical to a successful one. */}
+              <div className="flex flex-wrap items-center gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => handleSendTestEmail('sender')}
+                  disabled={testingEmail !== null}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl border border-[#1e3a5f] text-[#1e3a5f] bg-white hover:bg-[#1e3a5f] hover:text-white transition-colors disabled:opacity-60 disabled:cursor-wait"
+                >
+                  {testingEmail === 'sender'
+                    ? <><div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> Sending…</>
+                    : <><Mail className="w-4 h-4" /> Send test email</>}
+                </button>
+                <span className="text-xs text-gray-600">
+                  Checks the sender name, address and reply-to. Sent to you{user?.email ? ` at ${user.email}` : ''}.
+                </span>
+              </div>
             </div>
 
             <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4 space-y-4">
@@ -1424,6 +1486,28 @@ const CompanySetup: React.FC<CompanySetupProps> = ({ company, onUpdate, user }) 
                   </label>
                 </div>
               )}
+
+              {/* With a connected mailbox this performs a real SMTP handshake,
+                  so a wrong app password or blocked port is found here rather
+                  than on a customer send. */}
+              <div className="flex flex-wrap items-center gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => handleSendTestEmail('delivery')}
+                  disabled={testingEmail !== null}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl border border-emerald-600 text-emerald-700 bg-white hover:bg-emerald-600 hover:text-white transition-colors disabled:opacity-60 disabled:cursor-wait"
+                >
+                  {testingEmail === 'delivery'
+                    ? <><div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> Sending…</>
+                    : <><Mail className="w-4 h-4" /> Send test email</>}
+                </button>
+                <span className="text-xs text-gray-600">
+                  {form.email_send_mode === 'smtp'
+                    ? 'Signs in to your mailbox and sends through it, so a bad password shows up here.'
+                    : 'Sends through the shared QuoteMGR sender.'}
+                  {user?.email ? ` Sent to you at ${user.email}.` : ''}
+                </span>
+              </div>
             </div>
 
             <div>
