@@ -364,6 +364,23 @@ const PhotoMarkupEditor: React.FC<Props> = ({ photoUrl, photoId, onSave, onClose
         setDragOffset({ x: mouseCanvasX - ann.x, y: mouseCanvasY - ann.y });
     };
 
+    // Touch mirror of handleTextMouseDown — without this, dragging a text
+    // label on a touchscreen (tablet/phone, the usual device in the field)
+    // never starts, since only mouse events were wired up here.
+    const handleTextTouchStart = (e: React.TouchEvent, ann: TextAnnotation) => {
+        e.stopPropagation();
+        const touch = e.touches[0];
+        if (!touch) return;
+        const canvas = canvasRef.current!;
+        const rect   = canvas.getBoundingClientRect();
+        const scaleX = canvas.width  / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const touchCanvasX = (touch.clientX - rect.left) * scaleX;
+        const touchCanvasY = (touch.clientY - rect.top)  * scaleY;
+        setDraggingId(ann.id);
+        setDragOffset({ x: touchCanvasX - ann.x, y: touchCanvasY - ann.y });
+    };
+
     const handleMouseMoveGlobal = useCallback((e: MouseEvent) => {
         if (!draggingId) return;
         const canvas = canvasRef.current;
@@ -380,6 +397,25 @@ const PhotoMarkupEditor: React.FC<Props> = ({ photoUrl, photoId, onSave, onClose
         ));
     }, [draggingId, dragOffset]);
 
+    const handleTouchMoveGlobal = useCallback((e: TouchEvent) => {
+        if (!draggingId) return;
+        const touch = e.touches[0];
+        if (!touch) return;
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        e.preventDefault();
+        const rect   = canvas.getBoundingClientRect();
+        const scaleX = canvas.width  / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const newX = (touch.clientX - rect.left) * scaleX - dragOffset.x;
+        const newY = (touch.clientY - rect.top)  * scaleY - dragOffset.y;
+        setTextAnnotations(prev => prev.map(a =>
+            a.id === draggingId
+                ? { ...a, x: Math.max(0, Math.min(canvas.width - 10, newX)), y: Math.max(a.fontSize, Math.min(canvas.height, newY)) }
+                : a
+        ));
+    }, [draggingId, dragOffset]);
+
     const handleMouseUpGlobal = useCallback(() => {
         setDraggingId(null);
     }, []);
@@ -388,12 +424,16 @@ const PhotoMarkupEditor: React.FC<Props> = ({ photoUrl, photoId, onSave, onClose
         if (draggingId) {
             window.addEventListener('mousemove', handleMouseMoveGlobal);
             window.addEventListener('mouseup',   handleMouseUpGlobal);
+            window.addEventListener('touchmove', handleTouchMoveGlobal, { passive: false });
+            window.addEventListener('touchend',  handleMouseUpGlobal);
         }
         return () => {
             window.removeEventListener('mousemove', handleMouseMoveGlobal);
             window.removeEventListener('mouseup',   handleMouseUpGlobal);
+            window.removeEventListener('touchmove', handleTouchMoveGlobal);
+            window.removeEventListener('touchend',  handleMouseUpGlobal);
         };
-    }, [draggingId, handleMouseMoveGlobal, handleMouseUpGlobal]);
+    }, [draggingId, handleMouseMoveGlobal, handleTouchMoveGlobal, handleMouseUpGlobal]);
 
     // ── Inline edit of placed text ────────────────────────────────────────────
     const startEditAnnotation = (e: React.MouseEvent, ann: TextAnnotation) => {
@@ -435,6 +475,28 @@ const PhotoMarkupEditor: React.FC<Props> = ({ photoUrl, photoId, onSave, onClose
     const clear = () => { setStrokes([]); setTextAnnotations([]); };
 
     // ── Save: flatten text onto canvas, then upload ───────────────────────────
+    // canvas 2D fillText never wraps on its own — it always draws on one line no
+    // matter how long the string is. Break the text into lines that fit within
+    // maxWidth ourselves, matching the wrapping the live <span> preview does.
+    const wrapCanvasText = (ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] => {
+        const lines: string[] = [];
+        for (const paragraph of text.split('\n')) {
+            const words = paragraph.split(' ');
+            let line = '';
+            for (const word of words) {
+                const candidate = line ? `${line} ${word}` : word;
+                if (line && ctx.measureText(candidate).width > maxWidth) {
+                    lines.push(line);
+                    line = word;
+                } else {
+                    line = candidate;
+                }
+            }
+            lines.push(line);
+        }
+        return lines;
+    };
+
     const handleSave = async () => {
         const canvas = canvasRef.current;
         if (!canvas) return;
@@ -447,7 +509,10 @@ const PhotoMarkupEditor: React.FC<Props> = ({ photoUrl, photoId, onSave, onClose
                 ctx.fillStyle   = ann.color;
                 ctx.shadowColor = ann.color === '#ffffff' ? '#000' : '#fff';
                 ctx.shadowBlur  = 3;
-                ctx.fillText(ann.text, ann.x, ann.y);
+                const maxWidth  = Math.max(120, canvas.width - ann.x - 10);
+                const lineHeight = ann.fontSize * 1.15;
+                const lines = wrapCanvasText(ctx, ann.text, maxWidth);
+                lines.forEach((line, i) => ctx.fillText(line, ann.x, ann.y + i * lineHeight));
                 ctx.shadowBlur  = 0;
             });
 
@@ -596,6 +661,7 @@ const PhotoMarkupEditor: React.FC<Props> = ({ photoUrl, photoId, onSave, onClose
                                         userSelect: 'none',
                                     }}
                                     onMouseDown={e => handleTextMouseDown(e, ann)}
+                                    onTouchStart={e => handleTextTouchStart(e, ann)}
                                     onDoubleClick={e => startEditAnnotation(e, ann)}
                                 >
                                     {editingAnnotationId === ann.id ? (
@@ -612,7 +678,8 @@ const PhotoMarkupEditor: React.FC<Props> = ({ photoUrl, photoId, onSave, onClose
                                         </div>
                                     ) : (
                                         <div className="relative">
-                                            {/* The visible text label */}
+                                            {/* The visible text label — wraps within the remaining canvas
+                                                width instead of running off in one line. */}
                                             <span
                                                 style={{
                                                     fontFamily: 'sans-serif',
@@ -620,9 +687,11 @@ const PhotoMarkupEditor: React.FC<Props> = ({ photoUrl, photoId, onSave, onClose
                                                     fontSize:   cssFontSize,
                                                     color:      ann.color,
                                                     textShadow: ann.color === '#ffffff' ? '0 0 3px #000, 0 0 3px #000' : '0 0 3px #fff, 0 0 3px #fff',
-                                                    lineHeight: 1,
+                                                    lineHeight: 1.15,
                                                     display:    'block',
-                                                    whiteSpace: 'nowrap',
+                                                    maxWidth:   Math.max(120, canvasSize.w - cssX - 10),
+                                                    whiteSpace: 'pre-wrap',
+                                                    wordBreak:  'break-word',
                                                     pointerEvents: 'none',
                                             }}>
                                                 {ann.text}

@@ -931,7 +931,9 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
       const sentSubject = isCompletionCert
         ? `Completion Certificate – ${quote.quote_number} from ${company.name}`
         : isInspectionReport
-          ? `Inspection Report & Insurance Contingency Agreement – ${quote.quote_number} from ${company.name}`
+          ? (hasContingency
+              ? `Inspection Report & Insurance Contingency Agreement – ${quote.quote_number} from ${company.name}`
+              : `Inspection Report – ${quote.quote_number} from ${company.name}`)
           : `Quote ${quote.quote_number} from ${company.name}`;
       const reportLine = (quote.include_measurement_report && quote.measurement_report_url)
         ? `\n\nYour measurement report: ${quote.measurement_report_url}`
@@ -972,7 +974,10 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
           quote_type: quote.project_type,
           quote_total: getEmailQuoteTotal(quote),
           project_description: quote.project_description,
-          dashboard_url: window.location.origin,
+          // Deep-links straight to this quote instead of the bare app origin,
+          // which just dropped the rep on the dashboard home with no way to
+          // find the document they just sent.
+          dashboard_url: `${window.location.origin}/?view=estimate-preview&estimate_id=${quote.id}`,
           email_subject: sentSubject,
           email_message: sentMessage,
           ...(quote.include_measurement_report && quote.measurement_report_url

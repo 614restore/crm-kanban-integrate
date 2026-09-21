@@ -444,6 +444,10 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
   const [emailDraftBody, setEmailDraftBody] = useState('');
   const [emailDraftSubject, setEmailDraftSubject] = useState('');
   const [additionalEmails, setAdditionalEmails] = useState('');
+  // Set from the quote row on load — a previously saved "Save Draft" (subject/
+  // body/CC on the send screen) that handleOpenSendModal should restore
+  // instead of silently overwriting with a freshly generated draft.
+  const [savedDraftEmail, setSavedDraftEmail] = useState<{ subject: string | null; message: string | null; ccEmails: string | null } | null>(null);
 
   // Roofr PDF import state
   const [roofrImporting, setRoofrImporting] = useState(false);
@@ -1115,6 +1119,15 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
 
   const handleOpenSendModal = async () => {
     setShowSendModal(true);
+    // A previously saved draft (Save Draft on this same screen) is what the
+    // user typed and expects to see again — never overwrite it with a fresh
+    // auto-generated subject/body just because the screen was reopened.
+    if (savedDraftEmail && (savedDraftEmail.subject || savedDraftEmail.message)) {
+      setEmailDraftSubject(savedDraftEmail.subject || '');
+      setEmailDraftBody(savedDraftEmail.message || '');
+      setAdditionalEmails(savedDraftEmail.ccEmails || '');
+      return;
+    }
     if (completionCertificateEnabled) {
       setEmailDraftSubject(`Completion Certificate – ${quoteNumber || ''} from ${company?.name || ''}`);
       setEmailDraftBody(`Hi ${customer.first_name || 'there'},\n\nThank you for your business — we truly appreciate it!\n\nAttached is your Completion Certificate for project #${quoteNumber || ''}. This is the final document that will be submitted to your insurance company to confirm that all work has been fully completed.\n\nThe certificate also includes your basic warranty information for your records. Please keep a copy for your files.\n\nIf you have any questions, don't hesitate to reach out.\n\nThank you again,\n${company?.name || ''}`);
@@ -1523,6 +1536,11 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
       if (quote) {
         setQuoteNumber(quote.quote_number || '');
         setExistingStatus(quote.status || null);
+        setSavedDraftEmail({
+          subject: (quote as any).last_sent_subject ?? null,
+          message: (quote as any).last_sent_message ?? null,
+          ccEmails: (quote as any).last_sent_cc_emails ?? null,
+        });
         if (quote.customer) {
           setCustomer(quote.customer);
           setSelectedCustomerId(quote.customer_id);
@@ -4241,7 +4259,11 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
               certificate_url: completionCertificateEnabled
                 ? certUrl(quoteRow?.share_token)
                 : undefined,
-              dashboard_url: window.location.origin,
+              // Deep-links straight to this quote (AppLayout's existing
+              // ?view=estimate-preview&estimate_id= handler) instead of the
+              // bare app origin, which just dropped the rep on the dashboard
+              // home with no way to find the document they just sent.
+              dashboard_url: `${window.location.origin}/?view=estimate-preview&estimate_id=${savedQuoteId}`,
               quote_total: emailTierContext().totalAmount,
               project_description: projectDescription,
               email_subject: emailDraftSubject || undefined,
@@ -8903,7 +8925,16 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
                 <button
                   onClick={() => {
                     setShowSendModal(false);
-                    supabase.from('quotes').update({ last_sent_subject: emailDraftSubject || null, last_sent_message: emailDraftBody || null }).eq('id', quoteId).then(() => toast.success('Email draft saved!'));
+                    const draft = {
+                      last_sent_subject: emailDraftSubject || null,
+                      last_sent_message: emailDraftBody || null,
+                      last_sent_cc_emails: additionalEmails || null,
+                    };
+                    // Update local state immediately too — reopening the send
+                    // modal later in this same session must see the saved
+                    // draft without waiting on a fresh fetch from the server.
+                    setSavedDraftEmail({ subject: draft.last_sent_subject, message: draft.last_sent_message, ccEmails: draft.last_sent_cc_emails });
+                    supabase.from('quotes').update(draft).eq('id', quoteId).then(() => toast.success('Email draft saved!'));
                   }}
                   disabled={saving || generatingEmailDraft}
                   className="py-2.5 px-4 border border-[#1e3a5f] text-[#1e3a5f] rounded-xl text-sm font-medium hover:bg-blue-50 disabled:opacity-50"
