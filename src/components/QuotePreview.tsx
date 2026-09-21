@@ -1983,6 +1983,19 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
                             <p className="font-semibold text-green-800">Customer Acceptance</p>
                             <p className="text-sm text-green-600">Signed by {quote.signed_by}{quote.signed_at ? ` on ${new Date(quote.signed_at).toLocaleString()}` : ''}</p>
                           </div>
+                          {/* The signature says who agreed and when, but not to
+                              what -- on a tiered quote that's the one fact a
+                              staff member coming back to this signed document
+                              actually needs, and it used to require opening the
+                              pricing page and finding the checkmarked column. */}
+                          {(quote.include_better || quote.include_best) &&
+                            ['good', 'better', 'best'].includes(quote.selected_tier || '') && (
+                            <span className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-green-600 text-white flex-shrink-0">
+                              ✓ {quote.selected_tier === 'good' ? (quote.good_tier_name || 'Good')
+                                : quote.selected_tier === 'better' ? (quote.better_tier_name || 'Better')
+                                : (quote.best_tier_name || 'Best')} Selected
+                            </span>
+                          )}
                         </div>
                         {quote.signature_data && <img src={quote.signature_data} alt="Customer signature" className="max-w-xs border border-green-200 rounded-lg bg-white p-2" />}
                       </div>
@@ -3236,6 +3249,17 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
                   )}
                 </p>
               </div>
+              {/* Top-of-page banner, visible the instant a staff member opens
+                  a signed quote — the one place this can't require scrolling
+                  into the pricing table to find the checkmarked column. */}
+              {(quote.include_better || quote.include_best) &&
+                ['good', 'better', 'best'].includes(quote.selected_tier || '') && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-green-600 text-white flex-shrink-0">
+                  ✓ {quote.selected_tier === 'good' ? (quote.good_tier_name || 'Good')
+                    : quote.selected_tier === 'better' ? (quote.better_tier_name || 'Better')
+                    : (quote.best_tier_name || 'Best')} Selected
+                </span>
+              )}
             </div>
             {quote.contractor_signature_data && !contractorSigBroken ? (
               <div className="flex items-center gap-2 text-sm text-gray-600">

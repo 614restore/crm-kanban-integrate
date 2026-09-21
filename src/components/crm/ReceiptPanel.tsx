@@ -815,6 +815,15 @@ export default function ReceiptPanel({ companyId, userId, userRole, quote, compa
                     <div className="flex items-center gap-2 flex-wrap mb-0.5">
                       <span className="text-xs font-bold tracking-widest uppercase" style={{ color: '#fcd34d' }}>Job Total</span>
                       <span className="text-xs font-semibold" style={{ color: '#fde68a' }}>{quote.quote_number}</span>
+                      {/* Once a tier is picked, tierRows collapses to just that
+                          one row and the breakdown below stops rendering --
+                          this is the only place left that says which tier the
+                          Job Total above is actually billing against. */}
+                      {tierRows.length === 1 && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold" style={{ background: 'rgba(255,255,255,0.15)', color: '#fef3c7' }}>
+                          ✓ {tierRows[0].name}
+                        </span>
+                      )}
                       {quote.project_description && (
                         <span className="text-xs truncate" style={{ color: '#fde68a', opacity: 0.8 }}>{quote.project_description}</span>
                       )}

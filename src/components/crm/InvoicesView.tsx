@@ -473,6 +473,14 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
                       </td>
                       <td className="px-6 py-4">
                         <p className="font-semibold text-gray-900">{formatCurrency(invoice.total)}</p>
+                        {/* Same convention InvoiceDetailView uses for the tier
+                            it was generated against -- shown here too so it
+                            doesn't take opening the invoice to see. */}
+                        {invoice.selected_tier && invoice.selected_tier !== 'all' && (
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            {invoice.selected_tier.charAt(0).toUpperCase() + invoice.selected_tier.slice(1)} Tier
+                          </p>
+                        )}
                       </td>
                       <td className="px-6 py-4">
                         <p className="text-gray-700">{formatCurrency(invoice.deposit_paid || 0)}</p>
