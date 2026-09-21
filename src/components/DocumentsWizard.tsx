@@ -418,7 +418,7 @@ const DocumentsWizard: React.FC<DocumentsWizardProps> = ({ quotes, company, curr
           .order('sort_order'),
         supabase
           .from('quote_line_items')
-          .select('id, category, description, quantity, unit, good_price, sort_order')
+          .select('id, category, description, quantity, unit, good_price, better_price, best_price, sort_order')
           .eq('quote_id', quote.id)
           .order('sort_order'),
       ]);
@@ -966,6 +966,24 @@ const DocumentsWizard: React.FC<DocumentsWizardProps> = ({ quotes, company, curr
 
       // ── Pages 1+: Project Proposal ─────────────────────────────────────────
       const showPrices = fullQuote.show_line_item_prices !== false;
+      // Which tier's pricing belongs on this signed contract: whatever the
+      // customer actually selected/signed, falling back to whichever tier is
+      // included when none was chosen — never hardcode Good, or a
+      // Better/Best acceptance prints the wrong (lower) price on the document.
+      const stForPdf = fullQuote.selected_tier;
+      const tierForPdf: 'good' | 'better' | 'best' =
+        stForPdf === 'good' || stForPdf === 'better' || stForPdf === 'best' ? stForPdf
+        : fullQuote.include_better !== false ? 'better'
+        : fullQuote.include_best !== false ? 'best'
+        : 'good';
+      const priceKeyForPdf = `${tierForPdf}_price` as 'good_price' | 'better_price' | 'best_price';
+      const getQuoteTierTotalForPdf = (tier: 'good' | 'better' | 'best') =>
+        fullQuote.use_manual_totals === true
+          ? (fullQuote as any)[`manual_${tier}_total`] ?? (fullQuote as any)[`${tier}_total`] ?? 0
+          : (fullQuote as any)[`${tier}_total`] ?? 0;
+      const totalForPdf = stForPdf === 'all'
+        ? getQuoteTierTotalForPdf('good') + getQuoteTierTotalForPdf('better') + getQuoteTierTotalForPdf('best')
+        : getQuoteTierTotalForPdf(tierForPdf);
       const grouped: Record<string, any[]> = {};
       for (const li of quoteLineItems) {
         const cat = li.category || 'General';
@@ -1058,10 +1076,11 @@ const DocumentsWizard: React.FC<DocumentsWizardProps> = ({ quotes, company, curr
             doc.setFontSize(9.5);
             doc.setTextColor(40, 42, 48);
             doc.text(wrappedDesc, margin + 14, y + 14);
-            if (showPrices && li.good_price != null) {
+            const liPrice = li[priceKeyForPdf] ?? li.good_price;
+            if (showPrices && liPrice != null) {
               doc.setFont('helvetica', 'bold');
               doc.text(
-                `$${Number(li.good_price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                `$${Number(liPrice).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
                 pageW - margin - 10, y + 14, { align: 'right' }
               );
             }
@@ -1078,7 +1097,7 @@ const DocumentsWizard: React.FC<DocumentsWizardProps> = ({ quotes, company, curr
         doc.setFontSize(11);
         doc.setTextColor(255, 255, 255);
         doc.text('TOTAL CONTRACT AMOUNT', margin + 10, y + 20);
-        const totalStr = `$${Number(fullQuote.good_total ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        const totalStr = `$${Number(totalForPdf ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         doc.text(totalStr, pageW - margin - 10, y + 20, { align: 'right' });
         y += 30;
       }
