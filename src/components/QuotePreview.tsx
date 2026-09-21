@@ -1500,7 +1500,7 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
                   // Internal-only lines (labor) never reach the customer's copy —
                   // their dollars are already inside the tier totals above.
                   if (item.hidden_from_customer) return acc;
-                  if (!item.tiers_applicable || item.tiers_applicable.length === 0 || item.tiers_applicable.includes(tier)) {
+                  if (quote.use_per_tier_items !== true || !item.tiers_applicable || item.tiers_applicable.length === 0 || item.tiers_applicable.includes(tier)) {
                     if (!acc[item.category]) acc[item.category] = [];
                     acc[item.category].push(item);
                   }
@@ -2568,6 +2568,7 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
                       sectionDeduction = selectedTierKeys.reduce((sum, t) => {
                         const priceKey = (t + '_price') as 'good_price' | 'better_price' | 'best_price';
                         const tierItems = lineItems.filter(li =>
+                          quote.use_per_tier_items !== true ||
                           !li.tiers_applicable || li.tiers_applicable.length === 0 || li.tiers_applicable.includes(t as any)
                         );
                         const allCats = [...new Set(tierItems.map(li => li.category))].filter(Boolean);

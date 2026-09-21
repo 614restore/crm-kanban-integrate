@@ -42,6 +42,7 @@ const WorkOrderPanel: React.FC<Props> = ({
     const [saving, setSaving] = useState(false);
     const [structures, setStructures] = useState<RoofrStructureSummary[]>([]);
     const [selectedStructureIdx, setSelectedStructureIdx] = useState<number | null>(null); // null = all
+    const [usePerTierItems, setUsePerTierItems] = useState(false);
 
     useEffect(() => {
         loadData();
@@ -52,9 +53,10 @@ const WorkOrderPanel: React.FC<Props> = ({
         const [{ data: items }, { data: num }, { data: quoteRow }] = await Promise.all([
             supabase.from('quote_line_items').select('*').eq('quote_id', quoteId).order('sort_order'),
             supabase.rpc('get_next_work_order_number', { p_company_id: companyId }),
-            supabase.from('quotes').select('measurement_data, measurement_provider').eq('id', quoteId).single(),
+            supabase.from('quotes').select('measurement_data, measurement_provider, use_per_tier_items').eq('id', quoteId).single(),
         ]);
         if (items) setLineItems(items);
+        setUsePerTierItems((quoteRow as any)?.use_per_tier_items === true);
         if (num) {
             setWorkOrderNumber(num);
         } else {
@@ -82,22 +84,33 @@ const WorkOrderPanel: React.FC<Props> = ({
     const isDividerItem = (item: any) =>
         item.quantity === 0 && item.unit === '' && item.description === '';
 
+    /**
+     * Same rule QuoteBuilder's calculateTotals uses to isolate a tier's rows: an item
+     * with no tiers_applicable tag is shared by every tier, and a tag only isolates
+     * items when the quote is in per-tier mode. Without this a per-tier quote's work
+     * order mixed all three tiers' items instead of the one the customer signed for.
+     */
+    const isInTier = (item: any, tier: 'good' | 'better' | 'best') =>
+        !usePerTierItems || !item.tiers_applicable?.length || item.tiers_applicable.includes(tier);
+
     const visibleItems = (() => {
-        if (selectedStructureIdx === null || structures.length <= 1) return lineItems;
+        const tierItems = lineItems.filter(item => isDividerItem(item) || isInTier(item, selectedTier));
+
+        if (selectedStructureIdx === null || structures.length <= 1) return tierItems;
 
         const targetLabel = `Structure ${structures[selectedStructureIdx].structureNumber}`;
-        const hasDividers = lineItems.some(isDividerItem);
-        if (!hasDividers) return lineItems;
+        const hasDividers = tierItems.some(isDividerItem);
+        if (!hasDividers) return tierItems;
 
-        const startIdx = lineItems.findIndex(
+        const startIdx = tierItems.findIndex(
             (item) => isDividerItem(item) && item.item_name === targetLabel,
         );
-        if (startIdx === -1) return lineItems;
+        if (startIdx === -1) return tierItems;
 
-        const endIdx = lineItems.findIndex(
+        const endIdx = tierItems.findIndex(
             (item, i) => i > startIdx && isDividerItem(item),
         );
-        return lineItems.slice(startIdx + 1, endIdx === -1 ? undefined : endIdx);
+        return tierItems.slice(startIdx + 1, endIdx === -1 ? undefined : endIdx);
     })();
 
     const selectedStructure = selectedStructureIdx !== null ? structures[selectedStructureIdx] : null;

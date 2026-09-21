@@ -350,7 +350,7 @@ export default function QuotesView() {
       supabase
         .from('quotes')
         .select(`id, quote_number, project_description, cover_page_title, selected_tier,
-          include_better, include_best, completion_certificate_enabled,
+          include_better, include_best, completion_certificate_enabled, use_per_tier_items,
           good_total, better_total, best_total, good_tier_name, better_tier_name, best_tier_name,
           use_manual_totals, manual_good_total, manual_better_total, manual_best_total,
           customer_id, customer:customers(id, first_name, last_name, email, address, city, state, zip)`)
@@ -673,6 +673,7 @@ export default function QuotesView() {
             selectedTier={tier}
             includeBetter={iq.include_better !== false}
             includeBest={iq.include_best !== false}
+            usePerTierItems={iq.use_per_tier_items === true}
             goodTotal={tierTotal(iq.manual_good_total, iq.good_total)}
             betterTotal={tierTotal(iq.manual_better_total, iq.better_total)}
             bestTotal={tierTotal(iq.manual_best_total, iq.best_total)}

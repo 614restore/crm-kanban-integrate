@@ -1477,6 +1477,7 @@ export async function generateQuotePDF(
   for (const tier of activeTiers) {
     onProgress?.(`Generating ${tier.label} option page...`);
     const tierLineItems = lineItems.filter(item =>
+      quote.use_per_tier_items !== true ||
       !item.tiers_applicable || item.tiers_applicable.length === 0 || item.tiers_applicable.includes(tier.key)
     );
     if (tierLineItems.length === 0 && resolvedQuote[tier.totalKey] === 0) continue;

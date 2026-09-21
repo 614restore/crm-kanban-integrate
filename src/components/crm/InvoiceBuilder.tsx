@@ -51,6 +51,7 @@ interface Props {
     selectedTier: 'good' | 'better' | 'best';
     includeBetter?: boolean;
     includeBest?: boolean;
+    usePerTierItems?: boolean;
     goodTotal?: number;
     betterTotal?: number;
     bestTotal?: number;
@@ -78,6 +79,7 @@ interface Props {
 
 const InvoiceBuilder: React.FC<Props> = ({
     quoteId, quoteNumber, selectedTier, includeBetter = true, includeBest = true,
+    usePerTierItems = false,
     goodTotal, betterTotal, bestTotal, useManualTotal = false,
     goodTierName = 'Good', betterTierName = 'Better', bestTierName = 'Best',
     companyId, customerId,
@@ -152,7 +154,7 @@ const InvoiceBuilder: React.FC<Props> = ({
             // Items with no tiers_applicable (empty or null) are shared across all tiers.
             const tierItems = data.filter((item: any) => {
                 const ta = item.tiers_applicable;
-                return !ta || ta.length === 0 || ta.includes(currentTier);
+                return !usePerTierItems || !ta || ta.length === 0 || ta.includes(currentTier);
             });
 
             const items: InvoiceLineItem[] = tierItems.map((item: any, i: number) => ({

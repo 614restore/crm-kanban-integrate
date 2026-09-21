@@ -495,6 +495,12 @@ export const generateQuoteHTML = ({
       const tierGroupedItems: Record<string, any[]> = Object.fromEntries(
         Object.entries(groupedItems)
           .map(([cat, items]) => [cat, (items as any[]).filter((item: any) =>
+            // tiers_applicable only isolates items when the quote is actually in
+            // per-tier mode. Outside that mode it's ignored -- same bypass
+            // QuoteBuilder's own calculateTotals() uses -- so a quote duplicated
+            // from a per-tier source doesn't have its items silently hidden by
+            // stale tags that no longer mean anything for this quote.
+            quote.use_per_tier_items !== true ||
             !item.tiers_applicable || item.tiers_applicable.length === 0 || item.tiers_applicable.includes(tierKey)
           )])
           // Drop categories the customer would see as an empty table — e.g. a
