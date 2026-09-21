@@ -3660,6 +3660,9 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
             city: customer.city || '',
             state: customer.state || '',
             zip: customer.zip || '',
+            second_first_name: customer.second_first_name || '',
+            second_last_name: customer.second_last_name || '',
+            second_phone: customer.second_phone || '',
           }
           : undefined,
       creator: {
@@ -3825,6 +3828,9 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
           city: customer.city,
           state: customer.state,
           zip: customer.zip,
+          second_first_name: customer.second_first_name || null,
+          second_last_name: customer.second_last_name || null,
+          second_phone: customer.second_phone || null,
         }).select().single();
         if (error) throw error;
         customerId = newCustomer.id;
@@ -3840,6 +3846,9 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
           city: customer.city,
           state: customer.state,
           zip: customer.zip,
+          second_first_name: customer.second_first_name || null,
+          second_last_name: customer.second_last_name || null,
+          second_phone: customer.second_phone || null,
         }).eq('id', customerId);
         if (error) throw error;
       }
@@ -4554,6 +4563,31 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
                 <label className="block text-sm font-medium text-gray-700 mb-1">ZIP Code</label>
                 <input type="text" value={customer.zip || ''} onChange={(e) => setCustomer({ ...customer, zip: e.target.value })}
                   className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#1e3a5f] focus:border-transparent outline-none" placeholder="75201" />
+              </div>
+            </div>
+            {/* Second property owner — optional. Jointly-owned homes need both
+                names on the agreement, and the co-owner is often reachable. */}
+            <div className="pt-4 mt-2 border-t border-gray-100">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-sm font-semibold text-gray-700">Second Owner</span>
+                <span className="text-xs font-medium text-gray-400">Optional</span>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
+                  <input type="text" value={customer.second_first_name || ''} onChange={(e) => setCustomer({ ...customer, second_first_name: e.target.value })}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#1e3a5f] focus:border-transparent outline-none" placeholder="Robert" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
+                  <input type="text" value={customer.second_last_name || ''} onChange={(e) => setCustomer({ ...customer, second_last_name: e.target.value })}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#1e3a5f] focus:border-transparent outline-none" placeholder="Smith" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Second Phone</label>
+                  <input type="tel" value={customer.second_phone || ''} onChange={(e) => setCustomer({ ...customer, second_phone: e.target.value })}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#1e3a5f] focus:border-transparent outline-none" placeholder="(555) 000-0000" />
+                </div>
               </div>
             </div>
           </div>

@@ -396,12 +396,12 @@ const DocumentsWizard: React.FC<DocumentsWizardProps> = ({ quotes, company, curr
       const [{ data: fullQ }, { data: inv }, { data: photoRows }, { data: lineItemRows }] = await Promise.all([
         supabase
           .from('quotes')
-          .select(`*, customer:customers(id, first_name, last_name, email, phone, address, city, state, zip)`)
+          .select(`*, customer:customers(id, first_name, last_name, email, phone, address, city, state, zip, second_first_name, second_last_name, second_phone)`)
           .eq('id', quote.id)
           .single(),
         supabase
           .from('invoices')
-          .select('*, customer:customers(first_name, last_name, email, address, city, state, zip)')
+          .select('*, customer:customers(first_name, last_name, email, address, city, state, zip, second_first_name, second_last_name, second_phone)')
           .eq('quote_id', quote.id)
           .order('created_at', { ascending: false })
           .limit(1)
@@ -1363,7 +1363,7 @@ const DocumentsWizard: React.FC<DocumentsWizardProps> = ({ quotes, company, curr
       const [{ data: fq }, { data: photoRows }] = await Promise.all([
         supabase
           .from('quotes')
-          .select(`*, customer:customers(id, first_name, last_name, email, phone, address, city, state, zip)`)
+          .select(`*, customer:customers(id, first_name, last_name, email, phone, address, city, state, zip, second_first_name, second_last_name, second_phone)`)
           .eq('id', quote.id)
           .single(),
         supabase

@@ -2,6 +2,7 @@
 import jsPDF from 'jspdf';
 import { supabase } from '@/lib/supabase';
 import { foldDocumentText } from './pdfGenerator';
+import { ownerNames } from './customerName';
 
 // The document behind "View Full Document": project details, document status and
 // both signatures, without the proposal's cover, pricing tiers or marketing
@@ -30,6 +31,11 @@ export const buildFullSignedDocumentPdf = async (
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
   const custName = `${fullQuote.customer?.first_name ?? ''} ${fullQuote.customer?.last_name ?? ''}`.trim();
+  // Every owner on the record, for the lines that identify who the document is
+  // for. The attestation and "signed by" lines below deliberately keep
+  // custName / the recorded signer: those name whoever actually signed, which
+  // on a jointly-owned home is usually one of the two.
+  const ownerLine = ownerNames(fullQuote.customer ?? {}) || custName;
   const companyName = company?.name ?? '';
   const cityStateZip = [fullQuote.customer?.city, fullQuote.customer?.state, fullQuote.customer?.zip].filter(Boolean).join(', ');
 
@@ -151,7 +157,7 @@ export const buildFullSignedDocumentPdf = async (
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
   doc.setTextColor(90, 90, 90);
-  doc.text(`Prepared for: ${custName}`, margin, y);
+  doc.text(`Prepared for: ${ownerLine}`, margin, y);
   if (fullQuote.customer?.address) doc.text(`Address: ${fullQuote.customer.address}${cityStateZip ? ', ' + cityStateZip : ''}`, margin + 230, y);
   y += 12;
   if (fullQuote.customer?.email) doc.text(`Email: ${fullQuote.customer.email}`, margin, y);
@@ -300,7 +306,7 @@ export const buildFullSignedDocumentPdf = async (
     y += 12;
     doc.setFontSize(8.5);
     doc.setTextColor(60, 60, 60);
-    doc.text(`Customer: ${custName}`, margin, y);
+    doc.text(`Customer: ${ownerLine}`, margin, y);
     doc.text(`Quote #: ${fullQuote.quote_number ?? ''}`, pageW - margin, y, { align: 'right' });
     y += 12;
     if (fullQuote.customer?.address) { doc.text(fullQuote.customer.address, margin, y); y += 10; }
@@ -406,7 +412,7 @@ export const buildFullSignedDocumentPdf = async (
     doc.setTextColor(90, 90, 90);
     const completionDate = fullQuote.contractor_signed_at ?? fullQuote.certificate_customer_signed_at;
     doc.text(
-      `Prepared for ${custName}${completionDate ? `  ·  Completion Date: ${new Date(completionDate).toLocaleDateString()}` : ''}`,
+      `Prepared for ${ownerLine}${completionDate ? `  ·  Completion Date: ${new Date(completionDate).toLocaleDateString()}` : ''}`,
       pageW / 2, y, { align: 'center' },
     );
     y += 22;

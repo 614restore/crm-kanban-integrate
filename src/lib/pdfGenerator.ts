@@ -174,6 +174,10 @@ export interface QuotePDFData {
     city: string;
     state: string;
     zip: string;
+    /** Second property owner — see Contact in src/data/quoteData.ts. */
+    second_first_name?: string | null;
+    second_last_name?: string | null;
+    second_phone?: string | null;
   };
   creator?: {
     full_name: string;

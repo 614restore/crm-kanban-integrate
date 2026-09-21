@@ -172,6 +172,15 @@ export interface Contact {
   city: string;
   state: string;
   zip: string;
+  /**
+   * Second property owner. Homes are frequently owned jointly and a carrier
+   * expects every owner on the deed to be named on the agreement; the
+   * co-owner's number is also often the one that actually gets answered.
+   * Optional — most records have only one owner.
+   */
+  second_first_name?: string | null;
+  second_last_name?: string | null;
+  second_phone?: string | null;
 }
 
 export interface CustomPageAttachment {

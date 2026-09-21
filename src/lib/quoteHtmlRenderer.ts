@@ -6,6 +6,7 @@
 import { canHideBranding, normalizeTier } from './planLimits';
 import { getMeasurementSummary } from './measurementSummary';
 import { calculateCancellationDeadline, getLegalNotice } from './legalNotices';
+import { ownerNames, ownerPhones, hasSecondOwner } from './customerName';
 
 type PageKey = 'cover' | 'about' | 'scope' | 'photos' | 'warranty' | 'signature' | 'cancel';
 
@@ -147,6 +148,13 @@ export const generateQuoteHTML = ({
     quote.measurement_data ?? null,
   );
   const legalNotice = getLegalNotice(customer.state, company.state);
+  // Both owners, for the blocks that identify who the document is for. Empty
+  // when the record has only one owner, so those blocks fall through to the
+  // existing single-name wording and nothing changes for the common case.
+  // Deliberately NOT used on signature attribution lines: those name whoever
+  // actually put pen to the page, which may be one owner of two.
+  const bothOwnerNames = hasSecondOwner(customer) ? ownerNames(customer) : '';
+  const allOwnerPhones = ownerPhones(customer);
   const cancellationDeadline = calculateCancellationDeadline(quote.sent_at || quote.created_at || new Date());
   const acceptedSections = selectedSections?.length
     ? selectedSections
@@ -286,7 +294,7 @@ export const generateQuoteHTML = ({
     <div class="hero-meta-grid">
       <div class="hero-meta-card">
         <div class="hero-meta-label">Prepared For</div>
-        <div class="hero-meta-value">${escapeHtml(truncateForCover(`${customer.first_name || ''} ${customer.last_name || ''}`.trim(), 90))}</div>
+        <div class="hero-meta-value">${escapeHtml(truncateForCover(bothOwnerNames || `${customer.first_name || ''} ${customer.last_name || ''}`.trim(), 90))}</div>
       </div>
       <div class="hero-meta-card">
         <div class="hero-meta-label">Prepared By</div>
@@ -717,7 +725,7 @@ export const generateQuoteHTML = ({
       : null;
     const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const customerName = quote.customer
-      ? `${quote.customer.first_name || ''} ${quote.customer.last_name || ''}`.trim()
+      ? bothOwnerNames || `${quote.customer.first_name || ''} ${quote.customer.last_name || ''}`.trim()
       : (quote as any).customer_name || '';
     const address = [quote.customer?.address, quote.customer?.city, quote.customer?.state].filter(Boolean).join(', ');
     return `
@@ -825,8 +833,10 @@ export const generateQuoteHTML = ({
       .filter(Boolean)
       .map(part => escapeHtml(part))
       .join('<br>');
-    const contingencyOwnerName =
-      [customer.first_name, customer.last_name].filter(Boolean).join(' ').trim() || 'Property Owner';
+    // Names every owner on the record — a carrier expects each owner on the
+    // deed to appear on the agreement, not just whoever was spoken to.
+    const contingencyOwnerName = ownerNames(customer) || 'Property Owner';
+    const contingencyPhones = allOwnerPhones;
 
     // Sections otherwise flow continuously so no sheet is left half-empty. This
     // one is the exception: it is a standalone agreement whose signature has to
@@ -853,7 +863,7 @@ export const generateQuoteHTML = ({
               <div style="display:table-cell;vertical-align:top;width:50%;padding-right:10px;">
                 <div style="font-size:9px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;color:#6b7280;margin-bottom:2px;">Property Owner</div>
                 <div style="font-weight:700;font-size:12px;color:#111827;line-height:1.3;">${escapeHtml(contingencyOwnerName)}</div>
-                ${customer.phone ? `<div style="font-size:10px;color:#6b7280;line-height:1.35;">${escapeHtml(customer.phone)}</div>` : ''}
+                ${contingencyPhones.map(p => `<div style="font-size:10px;color:#6b7280;line-height:1.35;">${escapeHtml(p)}</div>`).join('')}
               </div>
               <div style="display:table-cell;vertical-align:top;width:50%;padding-left:10px;">
                 <div style="font-size:9px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;color:#6b7280;margin-bottom:2px;">Property Address</div>
@@ -1068,7 +1078,7 @@ export const generateQuoteHTML = ({
   const renderAcceptancePage = () => {
     // ── Insurance Contingency Agreement page ─────────────────────────────────
     if ((quote as any).include_payment_contract) {
-      const custName = `${customer.first_name || ''} ${customer.last_name || ''}`.trim() || 'Homeowner';
+      const custName = bothOwnerNames || `${customer.first_name || ''} ${customer.last_name || ''}`.trim() || 'Homeowner';
       const addr = [customer.address, customer.city ? `${customer.city}, ${customer.state || ''} ${customer.zip || ''}`.trim() : null].filter(Boolean).join(', ');
       const today = new Date(quote.created_at || Date.now()).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
       const signedDateFmt = signedDate ? new Date(signedDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '';
@@ -1227,9 +1237,9 @@ export const generateQuoteHTML = ({
         </div>
         <div class="accept-party">
           <div class="accept-party-label">Customer</div>
-          <div class="accept-party-name">${escapeHtml(signedName || `${customer.first_name} ${customer.last_name}`)}</div>
+          <div class="accept-party-name">${escapeHtml(bothOwnerNames || signedName || `${customer.first_name} ${customer.last_name}`)}</div>
           ${customer.address ? `<div class="accept-party-detail">${escapeHtml(customer.address)}, ${escapeHtml(customer.city || '')} ${escapeHtml(customer.state || '')} ${escapeHtml(customer.zip || '')}</div>` : ''}
-          ${customer.phone ? `<div class="accept-party-detail">${escapeHtml(customer.phone)}</div>` : ''}
+          ${allOwnerPhones.map(ph => `<div class="accept-party-detail">${escapeHtml(ph)}</div>`).join('')}
           ${customer.email ? `<div class="accept-party-detail">${escapeHtml(customer.email)}</div>` : ''}
         </div>
         <div class="accept-party">
@@ -1592,7 +1602,7 @@ export const generateQuoteHTML = ({
       ? new Date((quote as any).deposit_due_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
       : null;
     const issueDate = new Date(quote.created_at || Date.now()).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-    const custName = `${customer.first_name || ''} ${customer.last_name || ''}`.trim();
+    const custName = bothOwnerNames || `${customer.first_name || ''} ${customer.last_name || ''}`.trim();
     const addr = [customer?.address, customer?.city, customer?.state].filter(Boolean).join(', ');
     const insCompany = (quote as any).insurance_company_name || '';
     const claimNum = (quote as any).claim_number || '';
