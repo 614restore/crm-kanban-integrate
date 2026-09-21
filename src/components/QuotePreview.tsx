@@ -3,7 +3,7 @@ import React, { useEffect, useState, useMemo, useRef } from 'react';
 import {
   ArrowLeft, Download, Send, Mail, Printer, CheckCircle, Clock, Eye,
   Building2, Phone, Globe, MapPin, Shield, FileText, Camera, AlertCircle, X, Loader2,
-  DollarSign, ArrowRight, LayoutList, Monitor, ZoomIn, ExternalLink, PenLine, Star, Award
+  DollarSign, ArrowRight, LayoutList, Monitor, ZoomIn, ExternalLink, PenLine, Star, Award, Link2
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { sendFullSignedDocumentToCustomer } from '@/lib/fullSignedDocument';
@@ -13,7 +13,8 @@ import SignatureCanvas from '@/components/SignatureCanvas';
 import Lightbox from '@/components/Lightbox';
 import { generateQuotePDF } from '@/lib/pdfGenerator';
 import { generateQuoteHTML } from '@/lib/quoteHtmlRenderer';
-import { generateInspectionReportPDF } from '@/lib/inspectionReportGenerator';
+import { generateInspectionReportPDF, inspectionReportFileName } from '@/lib/inspectionReportGenerator';
+import { openOrSavePdf, uploadPdfForSharing, copyToClipboard } from '@/lib/pdfDelivery';
 import { quoteUrl, certUrl } from '@/lib/appUrl';
 import type { Quote, Company, LineItem, QuotePhoto, QuoteOption } from '@/data/quoteData';
 import { statusConfig, tierLabels } from '@/data/quoteData';
@@ -623,7 +624,14 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
     toast.success('Choose "Save as PDF" in the dialog to download the file', { duration: 6000 });
   };
 
-  const handleGenerateInspectionReport = async () => {
+  /**
+   * Produces the photo report and then views, saves or shares it.
+   *
+   * The generator used to save the file itself, so downloading was the only
+   * thing this could ever do. It returns the document now, so "open it and
+   * look at it" and "send someone a link" are just different endings.
+   */
+  const handleGenerateInspectionReport = async (mode: 'view' | 'download' | 'share' = 'view') => {
     if (!quote || photos.length === 0) {
       if (onEdit) {
         onEdit();
@@ -635,7 +643,7 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
     setInspectionGenerating(true);
     setInspectionProgress('Starting…');
     try {
-      await generateInspectionReportPDF({
+      const doc = await generateInspectionReportPDF({
         quote: {
           quote_number: quote.quote_number,
           cover_page_title: quote.cover_page_title,
@@ -655,10 +663,23 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
         },
         onProgress: (msg) => setInspectionProgress(msg),
       });
-      toast.success('Inspection report downloaded');
+      const fileName = inspectionReportFileName(quote.quote_number);
+      if (mode === 'share') {
+        setInspectionProgress('Uploading…');
+        const url = await uploadPdfForSharing(doc, fileName, company.id);
+        await copyToClipboard(url);
+        toast.success('Share link copied to clipboard');
+      } else {
+        openOrSavePdf(doc, fileName, mode);
+        toast.success(mode === 'view' ? 'Inspection report opened' : 'Inspection report downloaded');
+      }
     } catch (err) {
       console.error('Inspection report error:', err);
-      toast.error('Failed to generate inspection report. Please try again.');
+      toast.error(
+        mode === 'share'
+          ? 'Could not create a share link for the report. Please try again.'
+          : 'Failed to generate inspection report. Please try again.',
+      );
     } finally {
       setInspectionGenerating(false);
       setInspectionProgress('');
@@ -1021,6 +1042,43 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
   // nothing on screen said so — people clicked a "Download" button, got a print
   // dialog, and read it as the download having failed. This states it once,
   // where the buttons are.
+  // Photo report: open it, save it, or copy a link to it. It was a single
+  // button that could only download, so there was no way to look at the report
+  // before sending it, or to send it to anyone. Rendered from one definition
+  // because both the Classic and Professional action bars carry it.
+  const photoReportButtons = (photos.length > 0 || quote?.project_type === 'inspection_report') ? (
+    <div className="flex items-center rounded-lg overflow-hidden shadow-sm">
+      <button
+        onClick={() => handleGenerateInspectionReport('view')}
+        disabled={inspectionGenerating}
+        className="flex items-center gap-1.5 px-3 py-2 text-sm bg-emerald-600 text-white hover:bg-emerald-700 transition-colors font-medium disabled:opacity-60 disabled:cursor-wait"
+        title={quote?.completion_certificate_enabled ? 'Open completion photos & certificate' : 'Open the inspection photo report'}
+      >
+        {inspectionGenerating ? (
+          <><Loader2 className="w-4 h-4 animate-spin" /><span className="hidden sm:inline">{inspectionProgress || 'Generating…'}</span></>
+        ) : (
+          <><Camera className="w-4 h-4" /><span className="hidden sm:inline">{quote?.completion_certificate_enabled ? 'Completion Photos & Cert' : 'Photo Report'}</span></>
+        )}
+      </button>
+      <button
+        onClick={() => handleGenerateInspectionReport('download')}
+        disabled={inspectionGenerating}
+        className="px-2 py-2 bg-emerald-600 text-white hover:bg-emerald-700 transition-colors border-l border-emerald-500 disabled:opacity-60 disabled:cursor-wait"
+        title="Download the photo report"
+      >
+        <Download className="w-4 h-4" />
+      </button>
+      <button
+        onClick={() => handleGenerateInspectionReport('share')}
+        disabled={inspectionGenerating}
+        className="px-2 py-2 bg-emerald-600 text-white hover:bg-emerald-700 transition-colors border-l border-emerald-500 disabled:opacity-60 disabled:cursor-wait"
+        title="Copy a shareable link to the photo report"
+      >
+        <Link2 className="w-4 h-4" />
+      </button>
+    </div>
+  ) : null;
+
   const printHint = (
     <div className="bg-blue-50 border-b border-blue-100 print:hidden px-4 py-1.5 text-center text-xs text-blue-900">
       <Printer className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" />
@@ -1155,20 +1213,7 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
                     <Printer className="w-4 h-4" /><span className="hidden sm:inline">Print / Save Live</span><span className="sm:hidden">Live</span>
                   </button>
                 )}
-                {(photos.length > 0 || quote?.project_type === 'inspection_report') && (
-                  <button
-                    onClick={handleGenerateInspectionReport}
-                    disabled={inspectionGenerating}
-                    className="flex items-center gap-1.5 px-3 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium disabled:opacity-60 disabled:cursor-wait shadow-sm"
-                    title={quote?.completion_certificate_enabled ? "Generate completion photos & certificate PDF" : "Generate inspection photo report PDF"}
-                  >
-                    {inspectionGenerating ? (
-                      <><Loader2 className="w-4 h-4 animate-spin" /><span className="hidden sm:inline">{inspectionProgress || 'Generating…'}</span></>
-                    ) : (
-                      <><Camera className="w-4 h-4" /><span className="hidden sm:inline">{quote?.completion_certificate_enabled ? 'Completion Photos & Cert' : 'Photo Report'}</span></>
-                    )}
-                  </button>
-                )}
+                {photoReportButtons}
                 {isInspectionReport && onEdit && quote?.status !== 'signed' && (
                   <button
                     onClick={onEdit}
@@ -2883,20 +2928,7 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
                     <ArrowRight className="w-4 h-4" /><span className="hidden sm:inline">Convert to Quote</span>
                   </button>
                 )}
-                {(photos.length > 0 || quote?.project_type === 'inspection_report') && (
-                  <button
-                    onClick={handleGenerateInspectionReport}
-                    disabled={inspectionGenerating}
-                    className="flex items-center gap-1.5 px-3 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium disabled:opacity-60 disabled:cursor-wait shadow-sm"
-                    title={quote?.completion_certificate_enabled ? "Generate completion photos & certificate PDF" : "Generate inspection photo report PDF"}
-                  >
-                    {inspectionGenerating ? (
-                      <><Loader2 className="w-4 h-4 animate-spin" /><span className="hidden sm:inline">{inspectionProgress || 'Generating…'}</span></>
-                    ) : (
-                      <><Camera className="w-4 h-4" /><span className="hidden sm:inline">{quote?.completion_certificate_enabled ? 'Completion Photos & Cert' : 'Photo Report'}</span></>
-                    )}
-                  </button>
-                )}
+                {photoReportButtons}
                 {quote?.status !== 'draft' && (
                   <button
                     onClick={handleSendCertificateFromPreview}

@@ -4,9 +4,14 @@
  *
  * Fetches all inspection photos, compresses each one to ≤ 100 KB using the
  * Canvas API (no native dependencies), then lays them out into a PDF with
- * jsPDF and saves it directly — no print dialog, and the file size is ours
- * to control rather than the browser print engine's.
+ * jsPDF — no print dialog, and the file size is ours to control rather than
+ * the browser print engine's. The finished document is returned so callers can
+ * view it, save it, or upload it for sharing.
  */
+
+// Type-only: jsPDF itself is still loaded through a dynamic import below, so
+// this annotation costs nothing at runtime and the chunk stays lazy.
+import type jsPDF from 'jspdf';
 
 interface Photo {
   id: string;
@@ -127,9 +132,18 @@ const hexToRgb = (hex: string): [number, number, number] => {
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 };
 
+/**
+ * Builds the report and hands back the document.
+ *
+ * This used to end in doc.save(), which meant the only thing a caller could
+ * ever do with a report was download it — there was no way to open one for
+ * viewing, or upload it somewhere to share. Returning the document leaves that
+ * choice to the caller; use inspectionReportFileName() when saving so every
+ * caller names the file identically.
+ */
 export const generateInspectionReportPDF = async (
   options: InspectionReportOptions,
-): Promise<void> => {
+): Promise<jsPDF> => {
   const {photos, company, quote, onProgress} = options;
 
   onProgress?.('Compressing photos…');
@@ -317,6 +331,9 @@ export const generateInspectionReportPDF = async (
     drawFooter(pageNum, totalPages);
   }
 
-  const safeNumber = String(quote.quote_number || 'report').replace(/[^a-zA-Z0-9-_]/g, '_');
-  doc.save(`${safeNumber}_Inspection_Report.pdf`);
+  return doc;
 };
+
+/** The report's download filename, so every caller names the file the same. */
+export const inspectionReportFileName = (quoteNumber: string | null | undefined): string =>
+  `${String(quoteNumber || 'report').replace(/[^a-zA-Z0-9-_]/g, '_')}_Inspection_Report.pdf`;

@@ -4,14 +4,16 @@ import { createPortal } from 'react-dom';
 import {
   X, Search, Award, Shield, FileText, Loader2, Check, ChevronLeft,
   AlertCircle, Send, Pencil, FilePlus, Plus, Download, Trash2,
-  CheckCircle2, Clock, MinusCircle, ExternalLink, Eye, ChevronDown, Link,
-  Mail, Share2, ClipboardList, User, ChevronRight,
+  CheckCircle2, Clock, MinusCircle, ExternalLink, Eye, ChevronDown, Link, Link2,
+  Mail, Share2, ClipboardList, User, ChevronRight, Camera,
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { foldDocumentText } from '@/lib/pdfGenerator';
 import { buildFullSignedDocumentPdf } from '@/lib/fullSignedDocument';
 import autoTable from 'jspdf-autotable';
 import { supabase } from '@/lib/supabase';
+import { openOrSavePdf, uploadPdfForSharing, copyToClipboard } from '@/lib/pdfDelivery';
+import { generateInspectionReportPDF, inspectionReportFileName } from '@/lib/inspectionReportGenerator';
 import { certUrl, quoteUrl, cancelNoticeUrl } from '@/lib/appUrl';
 import { toast } from 'sonner';
 import { toLocalDateString } from '@/lib/dates';
@@ -180,16 +182,9 @@ const SectionHeader: React.FC<{ label: string }> = ({ label }) => (
   </div>
 );
 
-// On iOS Safari, window.open(blobUrl) is blocked after async operations since
-// the original tap is no longer a trusted gesture. Always save on mobile instead.
-const openOrSavePdf = (doc: InstanceType<typeof jsPDF>, fileName: string, mode: 'view' | 'download') => {
-  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || ('ontouchstart' in window && navigator.maxTouchPoints > 0);
-  if (mode === 'view' && !isMobile) {
-    window.open(doc.output('bloburl'), '_blank');
-  } else {
-    doc.save(fileName);
-  }
-};
+// openOrSavePdf now lives in @/lib/pdfDelivery, so screens other than this one
+// can open a generated PDF rather than being limited to saving it. The iOS
+// Safari caveat that shaped it is documented there.
 
 // ─── Small action button ──────────────────────────────────────────────────────
 const ActionBtn: React.FC<{
@@ -413,7 +408,7 @@ const DocumentsWizard: React.FC<DocumentsWizardProps> = ({ quotes, company, curr
           .maybeSingle(),
         supabase
           .from('quote_photos')
-          .select('id, photo_url, caption, sort_order')
+          .select('id, photo_url, caption, damage_type, damage_cause, location, notes, sort_order')
           .eq('quote_id', quote.id)
           .order('sort_order'),
         supabase
@@ -564,6 +559,53 @@ const DocumentsWizard: React.FC<DocumentsWizardProps> = ({ quotes, company, curr
       doc.text('Date', margin + 220, sigY + 14);
 
       doc.save(`Change-Order-${q?.quote_number ?? 'document'}.pdf`);
+    } finally {
+      setGeneratingPdf(null);
+    }
+  };
+
+  // ── Inspection photo report ────────────────────────────────────────────────
+  // Available from here for any quote that has photos, rather than only from
+  // the quote preview screen, and independent of whether the quote has been
+  // signed — the photos exist from the inspection onward.
+  const handlePhotoReportPdf = async (mode: 'view' | 'download' | 'share' = 'view') => {
+    if (!fullQuote) return;
+    if (certPhotos.length === 0) {
+      toast.error('This quote has no photos yet.');
+      return;
+    }
+    setGeneratingPdf(`photos-${mode}`);
+    try {
+      const doc = await generateInspectionReportPDF({
+        quote: {
+          quote_number: fullQuote.quote_number,
+          cover_page_title: fullQuote.cover_page_title,
+          project_description: fullQuote.project_description,
+          created_at: fullQuote.created_at,
+          cover_photo_url: fullQuote.cover_photo_url,
+        },
+        photos: certPhotos,
+        company,
+        customer: {
+          first_name: fullQuote.customer?.first_name || '',
+          last_name: fullQuote.customer?.last_name || '',
+          address: fullQuote.customer?.address,
+          city: fullQuote.customer?.city,
+          state: fullQuote.customer?.state,
+          zip: fullQuote.customer?.zip,
+        },
+      });
+      const fileName = inspectionReportFileName(fullQuote.quote_number);
+      if (mode === 'share') {
+        const url = await uploadPdfForSharing(doc, fileName, company.id);
+        await copyToClipboard(url);
+        toast.success('Photo report link copied to clipboard');
+      } else {
+        openOrSavePdf(doc, fileName, mode);
+      }
+    } catch (err) {
+      console.error('Photo report error:', err);
+      toast.error('Failed to build the photo report. Please try again.');
     } finally {
       setGeneratingPdf(null);
     }
@@ -1326,7 +1368,7 @@ const DocumentsWizard: React.FC<DocumentsWizardProps> = ({ quotes, company, curr
           .single(),
         supabase
           .from('quote_photos')
-          .select('id, photo_url, caption, sort_order')
+          .select('id, photo_url, caption, damage_type, damage_cause, location, notes, sort_order')
           .eq('quote_id', quote.id)
           .order('sort_order'),
       ]);
@@ -2027,6 +2069,46 @@ const DocumentsWizard: React.FC<DocumentsWizardProps> = ({ quotes, company, curr
                   {!isInsurance && !retailSigned && (
                     <p className="text-xs text-gray-400">
                       {q?.signed_at ? 'Loading signature…' : 'Customer has not yet signed this quote.'}
+                    </p>
+                  )}
+                </DocRow>
+
+                {/* ── Inspection Photo Report ──
+                    Always listed. The photos exist from the inspection onward,
+                    so this does not wait on a signature the way the documents
+                    around it do; it just says so when there are none yet. */}
+                <DocRow
+                  icon={<Camera className="w-4 h-4 text-emerald-500" />}
+                  label="Inspection Photo Report"
+                  status={certPhotos.length > 0 ? 'complete' : 'na'}
+                  statusLabel={certPhotos.length > 0 ? `${certPhotos.length} photo${certPhotos.length === 1 ? '' : 's'}` : 'No Photos'}
+                  dimmed={certPhotos.length === 0}
+                >
+                  {certPhotos.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      <ActionBtn
+                        variant="primary"
+                        onClick={() => handlePhotoReportPdf('view')}
+                        disabled={!!generatingPdf}
+                        icon={generatingPdf === 'photos-view' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Eye className="w-3 h-3" />}
+                        label="View Report"
+                      />
+                      <ActionBtn
+                        onClick={() => handlePhotoReportPdf('download')}
+                        disabled={!!generatingPdf}
+                        icon={generatingPdf === 'photos-download' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
+                        label="Download PDF"
+                      />
+                      <ActionBtn
+                        onClick={() => handlePhotoReportPdf('share')}
+                        disabled={!!generatingPdf}
+                        icon={generatingPdf === 'photos-share' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Link2 className="w-3 h-3" />}
+                        label="Copy Link"
+                      />
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-400">
+                      No photos have been added to this quote yet.
                     </p>
                   )}
                 </DocRow>
