@@ -7316,12 +7316,16 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
                 <span className={`font-medium transition-opacity ${usePerTierItems && perTierEditorTab !== 'good' ? 'opacity-30 text-gray-400' : 'text-emerald-600'}`}>
                   {goodTierName}: {formatCurrency(totals.good)}
                 </span>
-                <span className={`font-medium transition-opacity ${usePerTierItems && perTierEditorTab !== 'better' ? 'opacity-30 text-gray-400' : 'text-blue-600'}`}>
-                  {betterTierName}: {formatCurrency(totals.better)}
-                </span>
-                <span className={`font-medium transition-opacity ${usePerTierItems && perTierEditorTab !== 'best' ? 'opacity-30 text-gray-400' : 'text-amber-600'}`}>
-                  {bestTierName}: {formatCurrency(totals.best)}
-                </span>
+                {includeBetter && (
+                  <span className={`font-medium transition-opacity ${usePerTierItems && perTierEditorTab !== 'better' ? 'opacity-30 text-gray-400' : 'text-blue-600'}`}>
+                    {betterTierName}: {formatCurrency(totals.better)}
+                  </span>
+                )}
+                {includeBest && (
+                  <span className={`font-medium transition-opacity ${usePerTierItems && perTierEditorTab !== 'best' ? 'opacity-30 text-gray-400' : 'text-amber-600'}`}>
+                    {bestTierName}: {formatCurrency(totals.best)}
+                  </span>
+                )}
               </div>
             </div>
 
