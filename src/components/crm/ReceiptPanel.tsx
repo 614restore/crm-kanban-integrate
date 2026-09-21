@@ -225,7 +225,6 @@ export default function ReceiptPanel({ companyId, userId, userRole, quote, compa
   const historicalRawBalance = quoteTotal > 0 ? quoteTotal - totalPaidHistorical : null;
   const historicalBalance = historicalRawBalance !== null ? Math.max(0, historicalRawBalance) : null;
   const overpayment = historicalRawBalance !== null && historicalRawBalance < 0 ? Math.abs(historicalRawBalance) : 0;
-  const isPastDue = historicalRawBalance !== null && historicalRawBalance > 0 && quotePayments.length > 0;
 
   // Entry-form balance (for new payment summary)
   const [amount, setAmount] = useState('');
@@ -842,11 +841,16 @@ export default function ReceiptPanel({ companyId, userId, userRole, quote, compa
               {(() => {
                 const isOver = overpayment > 0;
                 const isPaid = historicalBalance === 0 && !isOver;
-                const balBg = isPaid ? '#14532d' : isOver ? '#312e81' : isPastDue ? '#7f1d1d' : '#c2410c';
-                const balLabel = isPaid ? 'Paid in Full' : isOver ? 'Overpayment' : isPastDue ? 'Past Due' : 'Balance Due';
+                // "Past Due" used to fire the moment ANY payment existed while a
+                // balance remained -- true of every ordinary in-progress deposit,
+                // with no actual due date ever checked. There's no due-date field
+                // on a quote to check against, so a remaining balance is just
+                // "Balance Due" until real overdue tracking exists.
+                const balBg = isPaid ? '#14532d' : isOver ? '#312e81' : '#c2410c';
+                const balLabel = isPaid ? 'Paid in Full' : isOver ? 'Overpayment' : 'Balance Due';
                 const balValue = isPaid ? '✓ Paid' : isOver ? `+${fmt(overpayment)}` : fmt(historicalBalance ?? quoteTotal);
-                const balSub = isPaid ? 'No balance remaining' : isOver ? 'Customer is owed a refund' : isPastDue ? 'Balance is overdue' : 'Amount still owed';
-                const balSubColor = isPaid ? '#bbf7d0' : isOver ? '#c7d2fe' : isPastDue ? '#fca5a5' : '#fed7aa';
+                const balSub = isPaid ? 'No balance remaining' : isOver ? 'Customer is owed a refund' : 'Amount still owed';
+                const balSubColor = isPaid ? '#bbf7d0' : isOver ? '#c7d2fe' : '#fed7aa';
                 return (
                   <div className="grid grid-cols-2" style={{ borderTop: '3px solid rgba(0,0,0,0.15)' }}>
                     {/* Total Paid */}
@@ -861,7 +865,7 @@ export default function ReceiptPanel({ companyId, userId, userRole, quote, compa
                     <div className="p-4 relative" style={{ background: balBg }}>
                       <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: balSubColor }}>{balLabel}</p>
                       <p className="text-xl font-black text-white leading-none truncate">{balValue}</p>
-                      <p className="text-[10px] mt-1.5 font-semibold" style={{ color: isPastDue ? '#fca5a5' : balSubColor }}>{balSub}</p>
+                      <p className="text-[10px] mt-1.5 font-semibold" style={{ color: balSubColor }}>{balSub}</p>
                       {isOver && (
                         canRefund ? (
                           <button onClick={() => { setRefundNote(''); setShowRefund(true); }}
