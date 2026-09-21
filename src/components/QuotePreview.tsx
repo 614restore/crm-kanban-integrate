@@ -529,31 +529,53 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
     }
   };
 
-  const handlePrint = () => {
-    if (viewMode === 'modern' && quoteHtml) {
-      // Use the already-rendered iframe — images are already loaded, no timing issues
-      const iframeWin = previewIframeRef.current?.contentWindow;
-      if (iframeWin && iframeHasRenderedContent(iframeWin)) {
-        iframeWin.focus();
-        iframeWin.print();
-        return;
-      }
-      // Fallback: inject a hidden iframe and wait for images to fully load
-      const hidden = document.createElement('iframe');
-      hidden.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:1200px;height:1px;border:0;';
-      document.body.appendChild(hidden);
-      hidden.addEventListener('load', () => {
-        // Wait for images inside the iframe to load before printing
-        const imgs = Array.from(hidden.contentDocument?.images ?? []);
-        const imageLoadPromise = imgs.length
-          ? Promise.all(imgs.map(img => img.complete ? Promise.resolve() : new Promise(r => { img.onload = r; img.onerror = r; })))
-          : Promise.resolve();
-        imageLoadPromise.then(() => {
-          hidden.contentWindow?.print();
-          setTimeout(() => { try { document.body.removeChild(hidden); } catch { /* ignore */ } }, 60000);
-        });
+  /**
+   * Hands the live Professional HTML to the browser's own print engine.
+   *
+   * This is the only renderer that produces the Professional design as a
+   * document: jsPDF draws its own layout from scratch, and the live HTML has
+   * no fixed page containers to capture — it relies on the browser paginator
+   * and `break-inside: avoid`, so there is nothing to screenshot page by page.
+   * Reproducing this design in a downloaded file would take a real browser
+   * engine server-side, which this hosting plan cannot run.
+   *
+   * "Save as PDF" in the resulting dialog writes the file, which is why the
+   * buttons and the hint below the action bar both say so.
+   */
+  const printQuoteHtml = () => {
+    if (!quoteHtml) {
+      window.print();
+      return;
+    }
+    // Prefer the already-rendered iframe — its images are loaded, no timing issues
+    const iframeWin = previewIframeRef.current?.contentWindow;
+    if (iframeWin && iframeHasRenderedContent(iframeWin)) {
+      iframeWin.focus();
+      iframeWin.print();
+      return;
+    }
+    // Fallback: inject a hidden iframe and wait for images to fully load
+    const hidden = document.createElement('iframe');
+    hidden.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:1200px;height:1px;border:0;';
+    document.body.appendChild(hidden);
+    hidden.addEventListener('load', () => {
+      const imgs = Array.from(hidden.contentDocument?.images ?? []);
+      const imageLoadPromise = imgs.length
+        ? Promise.all(imgs.map(img => img.complete ? Promise.resolve() : new Promise(r => { img.onload = r; img.onerror = r; })))
+        : Promise.resolve();
+      imageLoadPromise.then(() => {
+        hidden.contentWindow?.print();
+        setTimeout(() => { try { document.body.removeChild(hidden); } catch { /* ignore */ } }, 60000);
       });
-      hidden.srcdoc = quoteHtml;
+    });
+    hidden.srcdoc = quoteHtml;
+  };
+
+  const handlePrint = () => {
+    // Print what is on screen: the Professional HTML in modern mode, the
+    // Classic DOM otherwise.
+    if (viewMode === 'modern' && quoteHtml) {
+      printQuoteHtml();
     } else {
       window.print();
     }
@@ -593,11 +615,13 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
     }
   };
 
-  // Downloads a real PDF file rather than opening the browser's print dialog.
-  // Same generator the Download button uses -- there's no way to render the
-  // live HTML layout itself to a PDF in the browser without a headless
-  // browser on the server, and that isn't available on this hosting plan.
-  const handleDownloadLive = () => handleDownloadPDF();
+  // The Professional ("live") layout goes through the print engine, whichever
+  // view is on screen. Routing this at jsPDF instead produced a real file but
+  // in the Classic layout, which is not the design this button offers.
+  const handleDownloadLive = () => {
+    printQuoteHtml();
+    toast.success('Choose "Save as PDF" in the dialog to download the file', { duration: 6000 });
+  };
 
   const handleGenerateInspectionReport = async () => {
     if (!quote || photos.length === 0) {
@@ -993,6 +1017,17 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
     localStorage.setItem('quotePreviewMode', next);
   };
 
+  // Printing and saving a file are the same action behind the same button, and
+  // nothing on screen said so — people clicked a "Download" button, got a print
+  // dialog, and read it as the download having failed. This states it once,
+  // where the buttons are.
+  const printHint = (
+    <div className="bg-blue-50 border-b border-blue-100 print:hidden px-4 py-1.5 text-center text-xs text-blue-900">
+      <Printer className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" />
+      To save a file instead of printing, choose <strong>Save as PDF</strong> as the destination in the print dialog.
+    </div>
+  );
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -1115,9 +1150,9 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
                   <button
                     onClick={handleDownloadLive}
                     className="flex items-center gap-1.5 px-3 py-2 text-sm bg-[#1e3a5f] text-white rounded-lg hover:bg-[#152d4a] transition-colors font-medium shadow-sm"
-                    title="Download the live professional layout (what customers see)"
+                    title='Professional layout (what customers see) — opens the print dialog, where "Save as PDF" downloads the file'
                   >
-                    <Download className="w-4 h-4" /><span className="hidden sm:inline">Download Live</span><span className="sm:hidden">Live</span>
+                    <Printer className="w-4 h-4" /><span className="hidden sm:inline">Print / Save Live</span><span className="sm:hidden">Live</span>
                   </button>
                 )}
                 {(photos.length > 0 || quote?.project_type === 'inspection_report') && (
@@ -1213,10 +1248,12 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
                 onClick={handleDownloadLive}
                 className="flex items-center gap-1.5 px-3 py-2 text-sm bg-[#1e3a5f] text-white rounded-lg hover:bg-[#152d4a] transition-colors font-medium shadow-sm"
               >
-                <Download className="w-4 h-4" /><span>Print / Save PDF</span>
+                <Printer className="w-4 h-4" /><span>Print / Save PDF</span>
               </button>
             </div>
           )}
+
+          {printHint}
 
           {/* Page Navigation */}
           <div className="bg-white border-b sticky top-0 z-20 print:hidden">
@@ -2812,14 +2849,17 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {/* Download Live Button */}
+            {/* Print / Save PDF. Labelled for what it does: it opens the print
+                dialog, where "Save as PDF" writes the file. It used to say
+                "Download Live" and open a dialog, which read as a failure. */}
             <button
               onClick={handleDownloadLive}
               className="flex items-center gap-1.5 px-3 py-2 text-sm bg-[#ff6b35] text-white rounded-lg hover:bg-[#e55a2b] transition-colors font-medium shadow-sm"
+              title='Opens the print dialog — choose "Save as PDF" to download the file instead of printing'
             >
               <>
-                <Download className="w-4 h-4" />
-                <span className="hidden sm:inline">Download Live</span>
+                <Printer className="w-4 h-4" />
+                <span className="hidden sm:inline">Print / Save PDF</span>
                 <span className="sm:hidden">PDF</span>
               </>
             </button>
@@ -2926,6 +2966,7 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
             )}
           </div>
         </div>
+        {printHint}
       </div>
 
       {/* Last Sent Email — staff only */}
