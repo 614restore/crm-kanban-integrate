@@ -2080,11 +2080,18 @@ const DocumentsWizard: React.FC<DocumentsWizardProps> = ({ quotes, company, curr
                 <DocRow
                   icon={<Camera className="w-4 h-4 text-emerald-500" />}
                   label="Inspection Photo Report"
-                  status={certPhotos.length > 0 ? 'complete' : 'na'}
-                  statusLabel={certPhotos.length > 0 ? `${certPhotos.length} photo${certPhotos.length === 1 ? '' : 's'}` : 'No Photos'}
-                  dimmed={certPhotos.length === 0}
+                  status={loading || certPhotos.length === 0 ? 'na' : 'complete'}
+                  statusLabel={loading ? 'Loading…' : certPhotos.length > 0 ? `${certPhotos.length} photo${certPhotos.length === 1 ? '' : 's'}` : 'No Photos'}
+                  dimmed={!loading && certPhotos.length === 0}
                 >
-                  {certPhotos.length > 0 ? (
+                  {/* The photo list starts empty and fills in, so without this
+                      loading branch the row tells you a quote has no photos for
+                      as long as the fetch takes. */}
+                  {loading ? (
+                    <p className="text-xs text-gray-400 flex items-center gap-1.5">
+                      <Loader2 className="w-3 h-3 animate-spin" /> Loading photos…
+                    </p>
+                  ) : certPhotos.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
                       <ActionBtn
                         variant="primary"
