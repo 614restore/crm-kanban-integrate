@@ -324,7 +324,14 @@ export const generateQuoteHTML = ({
           alt="Property photo"
           crossorigin="anonymous"
         >
-        <div style="padding:14px 22px;color:white;background:linear-gradient(180deg,${secondaryColor} 0%,${primaryColor} 100%);">
+        <!-- Ombre, not a flat block. This was a two-stop ramp between two dark
+             navies (secondary -> primary), a difference too small to read, so
+             the panel under the cover photo looked like one solid colour. The
+             third stop lifts the foot of the panel toward a lighter tint of
+             the brand colour, which is what actually makes the ramp visible.
+             .hero-meta-card is translucent white, so the four info cards stay
+             lighter than the ramp wherever it lands beneath them. -->
+        <div style="padding:14px 22px;color:white;background:linear-gradient(160deg,${secondaryColor} 0%,${primaryColor} 55%,${_hexLighten(primaryColor, 0.24)} 100%);">
           ${heroContent}
         </div>
        </div>`
