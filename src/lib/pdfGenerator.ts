@@ -31,8 +31,12 @@ const PAGE_W = 215.9;
 const PAGE_H = 279.4;
 const MARGIN = 20;
 const CONTENT_W = PAGE_W - MARGIN * 2;
-const HEADER_H = 18;
-const CONTENT_TOP = MARGIN + HEADER_H + 4;
+// Height of the running header band, measured from the top of the sheet. The
+// header's own content (logo, company name, three contact lines) ends around
+// 20 mm, so the band used to be MARGIN + 18 = 38 mm tall and every content page
+// opened with ~18 mm of dead white space under the rule.
+const HEADER_H = 24;
+const CONTENT_TOP = HEADER_H + 8;
 const CONTENT_BOTTOM = PAGE_H - MARGIN - 16;
 
 // ─── WinAnsi text folding ────────────────────────────────────────────────────
@@ -381,7 +385,6 @@ export async function generateQuotePDF(
   // never-true conditions they had become.
   const doc = new jsPDF({ unit: 'mm', format: [PAGE_W, PAGE_H] });
   foldDocumentText(doc);
-  let totalPagesEstimate = 1; // cover always
   const includeAbout = quote.include_about_page !== false;
   const includeWarranty = quote.include_warranty_page !== false;
   const includeCancelNotice = quote.include_cancel_notice !== false;
@@ -408,14 +411,10 @@ export async function generateQuotePDF(
     ...(includeBest ? [{ key: 'best' as const, label: bestTierName, subtitle: 'Premium Solution', description: resolvedQuote.tier_desc_best || null, totalKey: 'best_total' as const, priceKey: 'best_price' as const, photoUrl: resolvedQuote.tier_photo_best ?? null, color: AMBER, bgColor: AMBER_LIGHT, badge: 'BEST VALUE' }] : []),
   ];
 
-  // Estimate total pages
-  if (includeAbout) totalPagesEstimate++;
-  totalPagesEstimate += activeTiers.length; // one page per tier
-  totalPagesEstimate += selectedCustomPages.length;
-  if (photos.length > 0) totalPagesEstimate += Math.ceil(photos.length / 4);
-  if (includeWarranty) totalPagesEstimate++;
-  if (includeCancelNotice) totalPagesEstimate++;
-  totalPagesEstimate++; // signature
+  // A page-count estimate used to be built here from a fixed one-page-per-
+  // section assumption. Sections flow across as many pages as their content
+  // needs, so the estimate was always wrong; the footers use the real count
+  // from doc.getNumberOfPages() once the document is complete instead.
 
   // Pre-load logo
   let logoData: string | null = null;
@@ -512,6 +511,60 @@ export async function generateQuotePDF(
     y = CONTENT_TOP;
   }
 
+  /**
+   * Shrinks a single-line label until it fits `maxW`, down to `minSize`, and
+   * only ellipsises once even that is too narrow. Hard-truncating at a fixed
+   * character count is what turned "St. Paul's Lutheran Church & School" into
+   * "St. Paul's Lutheran…" on the cover while a point of font size would have
+   * fit the whole name.
+   *
+   * Leaves the font size set to whatever it settled on, so the caller draws at
+   * the same size it was measured at.
+   */
+  function fitText(text: string, maxW: number, startSize: number, minSize: number): string {
+    let size = startSize;
+    doc.setFontSize(size);
+    while (doc.getTextWidth(text) > maxW && size > minSize) {
+      size = Math.max(minSize, size - 0.5);
+      doc.setFontSize(size);
+    }
+    if (doc.getTextWidth(text) <= maxW) return text;
+    let clipped = text;
+    while (clipped.length > 1 && doc.getTextWidth(`${clipped}…`) > maxW) {
+      clipped = clipped.slice(0, -1);
+    }
+    return `${clipped.trimEnd()}…`;
+  }
+
+  /**
+   * Lays out one scope row without drawing it: its wrapped description lines,
+   * its optional per-tier product name, and the total height they add up to.
+   *
+   * Both the row itself and the look-ahead that keeps a category heading with
+   * its first row need this measurement, and they have to agree — so it lives
+   * in one place rather than being recomputed at each call site.
+   */
+  function measureScopeRow(
+    item: LineItem | undefined,
+    tierKey: 'good' | 'better' | 'best',
+    showPrices: boolean,
+  ): { height: number; descLines: string[]; productName?: string } {
+    if (!item) return { height: 6, descLines: [] };
+    const productKey = tierKey === 'good' ? 'good_product' : tierKey === 'better' ? 'better_product' : 'best_product';
+    const productName = (item as unknown as Record<string, string | undefined>)[productKey] || undefined;
+    const descW = CONTENT_W * (showPrices ? 0.62 : 0.82);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.5);
+    const descLines: string[] = item.description ? doc.splitTextToSize(item.description, descW) : [];
+    // Product name counts as one sub-line; description lines stack below it.
+    const subLineCount = (productName ? 1 : 0) + descLines.length;
+    return {
+      height: subLineCount > 0 ? 6 + subLineCount * 3.5 : 6,
+      descLines,
+      productName,
+    };
+  }
+
   function drawWatermark() {
     if (!watermarkData) return;
     const wSize = 140; // mm — fits diagonal image within letter page
@@ -529,7 +582,7 @@ export async function generateQuotePDF(
     drawWatermark();
     // Left orange accent bar
     doc.setFillColor(...brandAccent);
-    doc.rect(0, 0, 3.5, MARGIN + HEADER_H, 'F');
+    doc.rect(0, 0, 3.5, HEADER_H, 'F');
 
     // Company logo
     const hY = 2;
@@ -561,30 +614,40 @@ export async function generateQuotePDF(
     // Separator
     doc.setDrawColor(...GRAY_200);
     doc.setLineWidth(0.3);
-    doc.line(MARGIN, MARGIN + HEADER_H, PAGE_W - MARGIN, MARGIN + HEADER_H);
+    doc.line(MARGIN, HEADER_H, PAGE_W - MARGIN, HEADER_H);
   }
 
   // ─── Section header banner helper ───────────────────────────────────────────
-  // Returns the new Y position after the banner
+  // Returns the new Y position after the banner.
+  //
+  // The banner is 20 mm tall with a 2 mm accent stripe across its bottom edge,
+  // so the 13 pt title has to sit clear of that stripe — at a y+17 baseline its
+  // descenders ran straight through it. It also moves to the next page as a
+  // unit with the first slice of whatever follows, so a section never opens
+  // with its heading stranded alone at the foot of a sheet.
+  const SECTION_BANNER_H = 20;
+
   function drawSectionHeader(sectionLabel: string, title: string, yPos: number): number {
-    const bannerH = 20;
     doc.setFillColor(...brandPrimary);
-    doc.roundedRect(MARGIN, yPos, CONTENT_W, bannerH, 3, 3, 'F');
+    doc.roundedRect(MARGIN, yPos, CONTENT_W, SECTION_BANNER_H, 3, 3, 'F');
     // Orange bottom stripe
     doc.setFillColor(...brandAccent);
-    doc.rect(MARGIN, yPos + bannerH - 2, CONTENT_W, 2, 'F');
+    doc.rect(MARGIN, yPos + SECTION_BANNER_H - 2, CONTENT_W, 2, 'F');
     // Section label (e.g. "SECTION 02")
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(6.5);
     doc.setTextColor(...brandAccent);
     doc.text(sectionLabel, MARGIN + 5, yPos + 7);
-    // Title
+    // Title — the available width excludes the 5 mm gutters on both sides.
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(13);
     doc.setTextColor(...WHITE);
-    doc.text(title, MARGIN + 5, yPos + 17);
-    return yPos + bannerH + 6;
+    doc.text(fitText(title, CONTENT_W - 10, 13, 8.5), MARGIN + 5, yPos + 15);
+    return yPos + SECTION_BANNER_H + 6;
   }
+
+  /** Space a section banner needs before it is worth starting on this page. */
+  const SECTION_HEADER_BLOCK = SECTION_BANNER_H + 6 + 20;
 
   function drawPageFooter(pageNumber: number, total: number) {
     const fY = PAGE_H - MARGIN - 2;
@@ -641,15 +704,25 @@ export async function generateQuotePDF(
   }
 
   // ── Build section list for right-column cover card ──
+  // The order here has to be the order the body actually draws in, because the
+  // numbers printed on each banner come from the same running counter. It used
+  // to list the scope before the photos and the warranty before the custom
+  // pages, so the cover's contents disagreed with every banner below it.
   const coverSectionItems: { num: string; name: string }[] = [];
   let _sNum = 1;
   coverSectionItems.push({ num: '01', name: 'Cover' });
   _sNum = 2;
   if (includeAbout) { coverSectionItems.push({ num: String(_sNum).padStart(2, '0'), name: 'About Our Company' }); _sNum++; }
-  activeTiers.forEach(() => { coverSectionItems.push({ num: String(_sNum).padStart(2, '0'), name: 'Project Overview & Scope' }); _sNum++; });
   if (photos.length > 0) { coverSectionItems.push({ num: String(_sNum).padStart(2, '0'), name: 'Photo Documentation' }); _sNum++; }
-  if (includeWarranty) { coverSectionItems.push({ num: String(_sNum).padStart(2, '0'), name: 'Warranty Information' }); _sNum++; }
+  activeTiers.forEach((t) => {
+    coverSectionItems.push({
+      num: String(_sNum).padStart(2, '0'),
+      name: activeTiers.length > 1 ? `Scope — ${t.label}` : 'Project Overview & Scope',
+    });
+    _sNum++;
+  });
   selectedCustomPages.forEach(p => { coverSectionItems.push({ num: String(_sNum).padStart(2, '0'), name: p.title }); _sNum++; });
+  if (includeWarranty) { coverSectionItems.push({ num: String(_sNum).padStart(2, '0'), name: 'Warranty Information' }); _sNum++; }
   coverSectionItems.push({ num: String(_sNum).padStart(2, '0'), name: 'Acceptance & Signature' }); _sNum++;
   if (includeCancelNotice) { coverSectionItems.push({ num: String(_sNum).padStart(2, '0'), name: 'Notice of Right to Cancel' }); }
 
@@ -767,11 +840,25 @@ export async function generateQuotePDF(
     doc.setFontSize(6);
     doc.setTextColor(163, 196, 232);
     doc.text(box.label, bx + 5, by + 8);
+    // Long values — a church name with an "Attn:" line, say — get two lines at
+    // a reduced size before they are ellipsised, instead of being chopped at a
+    // fixed 20 characters.
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
     doc.setTextColor(...WHITE);
-    const displayVal = box.value.length > 20 ? box.value.substring(0, 19) + '…' : box.value;
-    doc.text(displayVal, bx + 5, by + 20);
+    doc.setFontSize(10);
+    if (doc.getTextWidth(box.value) <= infoBoxW - 10) {
+      doc.text(box.value, bx + 5, by + 20);
+    } else {
+      doc.setFontSize(8);
+      const lines: string[] = doc.splitTextToSize(box.value, infoBoxW - 10);
+      if (lines.length <= 2) {
+        lines.forEach((line, li) => doc.text(line, bx + 5, by + 17 + li * 5));
+      } else {
+        doc.text(lines[0], bx + 5, by + 17);
+        doc.setFontSize(8);
+        doc.text(fitText(lines.slice(1).join(' '), infoBoxW - 10, 8, 8), bx + 5, by + 22);
+      }
+    }
   });
 
   // ── Right: Proposal Sections card ───────────────────────────────────────
@@ -798,9 +885,8 @@ export async function generateQuotePDF(
     doc.text(sect.num, rX + 13, rowY + 5.5, { align: 'center' });
     // Name
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8.5);
     doc.setTextColor(...GRAY_700);
-    doc.text(sect.name, rX + 23, rowY + 5.5);
+    doc.text(fitText(sect.name, rCardW - 30, 8.5, 6), rX + 23, rowY + 5.5);
   });
 
   if (moreSections > 0) {
@@ -951,6 +1037,7 @@ export async function generateQuotePDF(
     onProgress?.('Generating about page...');
     y += SECTION_GAP;
     const aboutSectionNum = _contentSectionNum++;
+    ensureSpace(SECTION_HEADER_BLOCK);
     y = drawSectionHeader(`SECTION ${String(aboutSectionNum).padStart(2, '0')}`, `About ${company.name}`, y);
 
     // About text — full-width, bold first paragraph
@@ -1065,22 +1152,33 @@ export async function generateQuotePDF(
     onProgress?.('Generating photo pages...');
     y += SECTION_GAP;
     const photoSectionNum = _contentSectionNum++;
-    y = drawSectionHeader(`SECTION ${String(photoSectionNum).padStart(2, '0')}`, 'Photo Documentation', y);
 
-    // 3-column grid: up to 3 rows per page
+    // 3-column grid, as many rows per page as fit
     const photoCols = 3;
     const photoGap = 4;
     const photoW = (CONTENT_W - photoGap * (photoCols - 1)) / photoCols;
     const photoImgH = Math.round(photoW * 0.62); // ~35mm landscape proportion
-    const photoTextH = 8; // space below card border for optional caption
+    // Room below each card for a damage badge plus two caption lines and two
+    // note lines. At 8 mm the caption was clipped after its first line, so
+    // every photo read "…displaced shingles," and stopped mid-sentence.
+    const photoTextH = 16;
     const photoBlockH = photoImgH + photoTextH;
+
+    // A photo row is taller than the generic keep-with allowance, so the banner
+    // has to reserve room for a real row or it lands alone at the page foot.
+    ensureSpace(SECTION_BANNER_H + 6 + photoBlockH);
+    y = drawSectionHeader(`SECTION ${String(photoSectionNum).padStart(2, '0')}`, 'Photo Documentation', y);
 
     for (let i = 0; i < photos.length; i++) {
       const photo = photos[i];
       const col = i % photoCols;
 
-      if (col === 0 && i > 0) {
-        y += photoBlockH + photoGap;
+      if (col === 0) {
+        if (i > 0) y += photoBlockH + photoGap;
+        // A row is drawn as a unit: break before one that would run past the
+        // bottom margin. Without this the grid simply carried on off the sheet
+        // and every photo past the fold was lost.
+        ensureSpace(photoBlockH);
       }
 
       const px = MARGIN + col * (photoW + photoGap);
@@ -1155,6 +1253,11 @@ export async function generateQuotePDF(
         });
       }
     }
+
+    // `y` tracks the TOP of the row being filled, so it still points at the
+    // last row here. Without this the next section's banner was drawn straight
+    // over the final row of photos.
+    y += photoBlockH;
   }
 
   // ═══════════════════════════════════════════
@@ -1176,6 +1279,7 @@ export async function generateQuotePDF(
       const showSectionTotals = quote.show_section_totals !== false;
       const optSectionNum = _contentSectionNum++;
       const bannerH = 20;
+      ensureSpace(SECTION_HEADER_BLOCK);
       doc.setFillColor(...brandPrimary);
       doc.roundedRect(MARGIN, y, CONTENT_W, bannerH, 3, 3, 'F');
       doc.setFillColor(...brandAccent);
@@ -1185,9 +1289,8 @@ export async function generateQuotePDF(
       doc.setTextColor(...brandAccent);
       doc.text(`SECTION ${String(optSectionNum).padStart(2, '0')}`, MARGIN + 5, y + 7);
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(11);
       doc.setTextColor(255, 255, 255);
-      doc.text(`${opt.name} Option`, MARGIN + 5, y + 15);
+      doc.text(fitText(`${opt.name} Option`, CONTENT_W - 10, 11, 8), MARGIN + 5, y + 15);
       y += bannerH + 8;
 
       const grouped = optItems.reduce((acc: Record<string, LineItem[]>, item: any) => {
@@ -1197,7 +1300,19 @@ export async function generateQuotePDF(
         return acc;
       }, {} as Record<string, LineItem[]>);
 
+      const measureOptionRow = (item: LineItem | undefined): { height: number; descLines: string[] } => {
+        if (!item) return { height: 6, descLines: [] };
+        const descText = item.description ? String(item.description) : '';
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(6.5);
+        const descW = CONTENT_W * (showPrices ? 0.55 : 0.75);
+        const descLines: string[] = descText ? doc.splitTextToSize(descText, descW) : [];
+        return { height: descLines.length > 0 ? 6 + descLines.length * 3.5 : 6, descLines };
+      };
+
       for (const [category, items] of Object.entries(grouped)) {
+        // Keep the category heading with its first row — see the tier path.
+        ensureSpace(7 + measureOptionRow((items as LineItem[])[0]).height + 2);
         doc.setFillColor(...NAVY_LIGHT);
         doc.roundedRect(MARGIN, y, CONTENT_W, 6, 1.5, 1.5, 'F');
         doc.setFont('helvetica', 'bold');
@@ -1210,11 +1325,7 @@ export async function generateQuotePDF(
           const itemPrice = (item as any).price ?? (item as any).good_price ?? 0;
           const lineTotal = item.quantity * itemPrice;
           // Pre-calculate wrapped description lines so row height is accurate
-          const descText = item.description ? String(item.description) : '';
-          doc.setFontSize(6.5);
-          const descW = CONTENT_W * (showPrices ? 0.55 : 0.75);
-          const descLines: string[] = descText ? doc.splitTextToSize(descText, descW) : [];
-          const itemH = descLines.length > 0 ? (6 + descLines.length * 3.5) : 6;
+          const { height: itemH, descLines } = measureOptionRow(item);
           ensureSpace(itemH + 2);
           doc.setDrawColor(...GRAY_200);
           doc.setLineWidth(0.2);
@@ -1238,7 +1349,9 @@ export async function generateQuotePDF(
           doc.setTextColor(...GRAY_500);
           doc.text(`${item.quantity} ${item.unit}`, colRight - totalW - priceW - unitW - qtyW + 2, y + 4.5);
           if (showPrices) {
-            doc.text(`$${item.quantity > 1 ? (itemPrice).toFixed(2) : ''}`, colRight - totalW - priceW + 2, y + 4.5, { align: 'right' });
+            // Unit price. The quantity test here printed a bare "$" for every
+            // single-quantity row instead of that row's price.
+            doc.text(`$${itemPrice.toFixed(2)}`, colRight - totalW - priceW + 2, y + 4.5, { align: 'right' });
             doc.text(`$${lineTotal.toFixed(2)}`, colRight, y + 4.5, { align: 'right' });
           }
           y += itemH;
@@ -1255,6 +1368,7 @@ export async function generateQuotePDF(
         y += 2;
       }
 
+      ensureSpace(12);
       doc.setFillColor(...brandPrimary);
       doc.roundedRect(MARGIN, y, CONTENT_W, 10, 2, 2, 'F');
       doc.setFont('helvetica', 'bold');
@@ -1284,8 +1398,27 @@ export async function generateQuotePDF(
     const tierSectionLabel = `SECTION ${String(tierSectionNum).padStart(2, '0')}`;
     const tierTitle = `Project Overview & Scope — ${tier.label} Option`;
 
-    // Navy banner
+    // Navy banner. Everything from here to the first scope row is one visual
+    // unit — banner, blurb, tier photo, "WHAT'S INCLUDED" rule, category
+    // heading — so the whole run is measured up front rather than letting the
+    // page break land in the middle of it.
     const bannerH = 20;
+    const firstCategoryItems = Object.values(
+      tierLineItems.reduce((acc, item) => {
+        if ((item as unknown as { is_divider?: boolean }).is_divider) return acc;
+        if (!acc[item.category]) acc[item.category] = [];
+        acc[item.category].push(item);
+        return acc;
+      }, {} as Record<string, LineItem[]>),
+    )[0];
+    ensureSpace(
+      bannerH + 4
+      + (tier.description ? 14 : 0)
+      + (tierPhotoDataMap.get(tier.key) ? 42 : 0)
+      + 7 // WHAT'S INCLUDED rule
+      + 7 // category heading
+      + measureScopeRow(firstCategoryItems?.[0], tier.key, quote.show_line_item_prices !== false).height,
+    );
     doc.setFillColor(...brandPrimary);
     doc.roundedRect(MARGIN, y, CONTENT_W, bannerH, 3, 3, 'F');
     // Orange bottom stripe
@@ -1296,11 +1429,10 @@ export async function generateQuotePDF(
     doc.setFontSize(6.5);
     doc.setTextColor(...brandAccent);
     doc.text(tierSectionLabel, MARGIN + 5, y + 7);
-    // Title (left side)
+    // Title (left side) — kept clear of the badge and of the accent stripe.
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
     doc.setTextColor(...WHITE);
-    doc.text(tierTitle, MARGIN + 5, y + 17);
+    doc.text(fitText(tierTitle, CONTENT_W - (tier.badge ? 50 : 10), 12, 8), MARGIN + 5, y + 15);
     // Tier badge (right side)
     if (tier.badge) {
       doc.setFillColor(...WHITE);
@@ -1316,6 +1448,7 @@ export async function generateQuotePDF(
 
     // ── Tier description blurb ─────────────────
     if (tier.description) {
+      ensureSpace(14);
       doc.setFillColor(...tier.bgColor);
       doc.rect(MARGIN, y, CONTENT_W, 12, 'F');
       doc.setFont('helvetica', 'italic');
@@ -1330,6 +1463,7 @@ export async function generateQuotePDF(
     const tierImgData = tierPhotoDataMap.get(tier.key);
     if (tierImgData) {
       const imgH = 40;
+      ensureSpace(imgH + 2);
       try {
         doc.addImage(tierImgData, 'JPEG', MARGIN, y, CONTENT_W, imgH, undefined, 'MEDIUM');
       } catch {
@@ -1340,6 +1474,7 @@ export async function generateQuotePDF(
     }
 
     // ── Section header ────────────────────────
+    ensureSpace(24);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7);
     doc.setTextColor(...GRAY_500);
@@ -1357,7 +1492,11 @@ export async function generateQuotePDF(
     }, {} as Record<string, LineItem[]>);
 
     for (const [category, items] of Object.entries(grouped)) {
-      // Category label
+      // Category label. It has to travel with its first row, or a category that
+      // lands at the foot of a page prints its heading there and its items on
+      // the next sheet — which is exactly how "GUTTERS" ended up alone at the
+      // bottom of a page with nothing under it.
+      ensureSpace(7 + measureScopeRow(items[0], tier.key, showPrices).height + 2);
       doc.setFillColor(...tier.bgColor);
       doc.roundedRect(MARGIN, y, CONTENT_W, 6, 1.5, 1.5, 'F');
       doc.setFont('helvetica', 'bold');
@@ -1368,17 +1507,8 @@ export async function generateQuotePDF(
 
       for (const item of items) {
         const lineTotal = item.quantity * item[tier.priceKey];
-        const productKey = tier.key === 'good' ? 'good_product' : tier.key === 'better' ? 'better_product' : 'best_product';
-        const productName = (item as any)[productKey] as string | undefined;
         // Pre-calculate sub-lines so row height is accurate before drawing
-        const descW = CONTENT_W * (showPrices ? 0.62 : 0.82);
-        doc.setFontSize(6.5);
-        const descLines: string[] = item.description
-          ? doc.splitTextToSize(item.description, descW)
-          : [];
-        // Product name counts as one sub-line; description lines stack below it
-        const subLineCount = (productName ? 1 : 0) + descLines.length;
-        const itemH = subLineCount > 0 ? (6 + subLineCount * 3.5) : 6;
+        const { height: itemH, descLines, productName } = measureScopeRow(item, tier.key, showPrices);
 
         // Rows used to run straight off the bottom of the sheet — harmless on a
         // 5-metre page, but on real pages everything past the fold vanished.
@@ -1447,14 +1577,20 @@ export async function generateQuotePDF(
     }
 
     // ── Total row ──────────────────────────────
+    // This bar neither reserved room for itself nor advanced `y` past itself,
+    // so it could be split by the page edge and the next section's banner was
+    // drawn straight over the top of it.
+    const totalBarH = 12;
+    ensureSpace(totalBarH + 2);
     doc.setFillColor(...tier.color);
-    doc.roundedRect(MARGIN, y, CONTENT_W, 12, 3, 3, 'F');
+    doc.roundedRect(MARGIN, y, CONTENT_W, totalBarH, 3, 3, 'F');
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
     doc.setTextColor(...WHITE);
     doc.text('Total Investment', MARGIN + 6, y + 8);
     doc.setFontSize(11);
     doc.text(fmtCurrency(resolvedQuote[tier.totalKey]), PAGE_W - MARGIN - 6, y + 8, { align: 'right' });
+    y += totalBarH;
   }
   } // end else (legacy tiers)
 
@@ -1465,6 +1601,7 @@ export async function generateQuotePDF(
     onProgress?.(`Generating ${customPage.title} page...`);
     y += SECTION_GAP;
     const cpSectionNum = _contentSectionNum++;
+    ensureSpace(SECTION_HEADER_BLOCK);
     y = drawSectionHeader(`SECTION ${String(cpSectionNum).padStart(2, '0')}`, customPage.title, y);
 
     if (customPage.body) {
@@ -1525,6 +1662,7 @@ export async function generateQuotePDF(
     onProgress?.('Generating warranty page...');
     y += SECTION_GAP;
     const warrantySectionNum = _contentSectionNum++;
+    ensureSpace(SECTION_HEADER_BLOCK);
     y = drawSectionHeader(`SECTION ${String(warrantySectionNum).padStart(2, '0')}`, 'Warranty Information', y);
 
     if (company.warranty_text) {
@@ -1625,6 +1763,7 @@ export async function generateQuotePDF(
   const acceptedTotal = selectedTierForSig ? resolvedQuote[selectedTierForSig.totalKey] : null;
 
   const sigBannerH = 22;
+  ensureSpace(sigBannerH + 6 + 34);
   doc.setFillColor(...brandPrimary);
   doc.roundedRect(MARGIN, y, CONTENT_W, sigBannerH, 3, 3, 'F');
   doc.setFillColor(...brandAccent);
@@ -1638,7 +1777,7 @@ export async function generateQuotePDF(
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13);
   doc.setTextColor(...WHITE);
-  doc.text('Customer Acceptance', MARGIN + 5, y + 18);
+  doc.text('Customer Acceptance', MARGIN + 5, y + 16);
   // Accepted amount box (right side)
   if (acceptedTotal !== null && selectedTierForSig) {
     const amtBoxW = 48;
@@ -1688,6 +1827,7 @@ export async function generateQuotePDF(
     },
   ];
 
+  ensureSpace(infoColH + 4);
   infoCols.forEach((col, ci) => {
     const cx = MARGIN + ci * (infoColW + 4);
     doc.setFillColor(...GRAY_50);
@@ -1699,20 +1839,17 @@ export async function generateQuotePDF(
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
     doc.setTextColor(...GRAY_900);
+    // Each line is held inside its own column. A long customer name used to run
+    // straight across the gutter and print on top of the column beside it.
     col.lines.slice(0, 4).forEach((line, li) => {
-      if (li === 0) {
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(8);
-      } else {
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(7.5);
-      }
-      doc.text(line, cx + 5, y + 13 + li * 5);
+      doc.setFont('helvetica', li === 0 ? 'bold' : 'normal');
+      doc.text(fitText(line, infoColW - 10, li === 0 ? 8 : 7.5, 5.5), cx + 5, y + 13 + li * 5);
     });
   });
   y += infoColH + 4;
 
   // ── Accepted scope & tier price comparison ────────────────────────────────
+  ensureSpace(8 + 10 + (activeTiers.length > 0 ? 18 : 0));
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7);
   doc.setTextColor(...GRAY_500);
@@ -1756,6 +1893,13 @@ export async function generateQuotePDF(
   }
 
   // ── Agreement terms ───────────────────────────────────────────────────────
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  const agText = legalNotice.contractAgreementText;
+  const agLines = doc.splitTextToSize(agText, CONTENT_W - 10);
+  const agBoxH = Math.max(agLines.length * 3.8 + 8, 18);
+  ensureSpace(6 + agBoxH + 4);
+
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7);
   doc.setTextColor(...GRAY_500);
@@ -1763,9 +1907,6 @@ export async function generateQuotePDF(
   y += 6;
 
   doc.setFillColor(...GRAY_50);
-  const agText = legalNotice.contractAgreementText;
-  const agLines = doc.splitTextToSize(agText, CONTENT_W - 10);
-  const agBoxH = Math.max(agLines.length * 3.8 + 8, 18);
   doc.roundedRect(MARGIN, y, CONTENT_W, agBoxH, 2, 2, 'F');
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7);
@@ -1783,8 +1924,11 @@ export async function generateQuotePDF(
     `Payment Schedule: A deposit of ${depositPct}% of the agreed project total is due prior to ` +
     `commencement of work. The remaining ${balancePct}% balance is due upon satisfactory completion ` +
     `of all work described in this proposal. Any additional scope must be agreed upon in writing prior to performance.`;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7);
   const pmtLines = doc.splitTextToSize(pmtText, CONTENT_W - 10);
   const pmtBoxH = Math.max(pmtLines.length * 3.8 + 8, 14);
+  ensureSpace(pmtBoxH + 6);
   doc.setFillColor(...GRAY_50);
   doc.roundedRect(MARGIN, y, CONTENT_W, pmtBoxH, 2, 2, 'F');
   doc.setFont('helvetica', 'bold');
@@ -1797,6 +1941,7 @@ export async function generateQuotePDF(
 
   // ── Signature section ─────────────────────────────────────────────────────
   const sigColW = (CONTENT_W - 6) / 2;
+  ensureSpace(44);
 
   if (quote.signed_at && quote.signature_data) {
     // Signed — show the actual signature image
@@ -1824,25 +1969,32 @@ export async function generateQuotePDF(
     doc.text('CONTRACTOR REPRESENTATIVE', MARGIN + sigColW + 6, y);
     y += 6;
 
+    // The name sits in the part of the column left of the date rule, so it is
+    // held to that width — a long one used to print straight over "Date".
+    const nameColW = sigColW * 0.65 - 3;
+
     // Customer sig line
     doc.setDrawColor(...GRAY_900);
     doc.setLineWidth(0.5);
     doc.line(MARGIN, y + 18, MARGIN + sigColW, y + 18);
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7);
     doc.setTextColor(...GRAY_500);
     const custName = quote.customer ? `${quote.customer.first_name} ${quote.customer.last_name}` : '';
-    if (custName) { doc.text(custName, MARGIN, y + 22); }
+    if (custName) doc.text(fitText(custName, nameColW, 7, 5), MARGIN, y + 22);
+    doc.setFontSize(7);
     doc.text('Print Name', MARGIN, y + 26);
     doc.line(MARGIN + sigColW * 0.65, y + 18, MARGIN + sigColW, y + 18);
     doc.text('Date', MARGIN + sigColW * 0.65 + 1, y + 22);
 
-    // Contractor sig line
+    // Contractor sig line. This column printed "Print Name & Title" and then
+    // "Print Name" underneath it — two captions for one rule, and no name.
     const repX = MARGIN + sigColW + 6;
     doc.setDrawColor(...GRAY_900);
     doc.line(repX, y + 18, repX + sigColW, y + 18);
-    doc.text('Print Name & Title', repX, y + 22);
-    doc.text('Print Name', repX, y + 26);
+    const contractorName = quote.creator?.full_name || company.name;
+    if (contractorName) doc.text(fitText(contractorName, nameColW, 7, 5), repX, y + 22);
+    doc.setFontSize(7);
+    doc.text('Print Name & Title', repX, y + 26);
     doc.line(repX + sigColW * 0.65, y + 18, repX + sigColW, y + 18);
     doc.text('Date', repX + sigColW * 0.65 + 1, y + 22);
 
@@ -1958,12 +2110,22 @@ export async function generateQuotePDF(
     }
   }
   // ═══════════════════════════════════════════
-  // FINALIZE: trim the page down to the content
+  // FINALIZE
   // ═══════════════════════════════════════════
   onProgress?.('Finalizing document...');
 
   // The media box used to be cropped here to trim the unused tail of the 5-metre
   // page. Pages are a fixed Letter size now, so there is no tail to crop.
+
+  // Footers run last, once the real page count is known — drawPageFooter needs
+  // the total, and pages are still being added right up to the cancellation
+  // notice. The cover is a full-bleed two-column design and takes none.
+  const finalPageCount = doc.getNumberOfPages();
+  for (let p = 2; p <= finalPageCount; p++) {
+    doc.setPage(p);
+    drawPageFooter(p, finalPageCount);
+  }
+  doc.setPage(finalPageCount);
 
   return doc;
 }
