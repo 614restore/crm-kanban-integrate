@@ -251,7 +251,10 @@ function toDbDocumentRow(document: Partial<DbDocument>): Record<string, unknown>
     const match = size.trim().match(/^([\d.]+)\s*(bytes|kb|mb|gb)?$/i);
     if (match) bytes = Math.round(parseFloat(match[1]) * DOCUMENT_SIZE_UNITS[(match[2] || 'bytes').toUpperCase()]);
   }
-  return bytes === null ? rest : { ...rest, size: bytes };
+  // customer_id is NOT NULL in the schema and mirrors contact_id
+  const row = { ...rest } as Record<string, unknown>;
+  if (rest.contact_id && !row.customer_id) row.customer_id = rest.contact_id;
+  return bytes === null ? row : { ...row, size: bytes };
 }
 
 function fromDbDocumentRow(row: DbDocument): DbDocument {

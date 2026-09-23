@@ -49,10 +49,11 @@ import {
   getMentionTargets,
   validateMentions,
 } from '@/lib/mentions';
-import { uploadDocument, validateDocumentFile, formatFileSize, getDocumentSignedUrl, isHttpUrl, isSupabaseStorageUrl } from '@/lib/storage';
+import { validateDocumentFile, formatFileSize, getDocumentSignedUrl, isHttpUrl, isSupabaseStorageUrl } from '@/lib/storage';
+import { secureUpload } from '@/lib/storageUtils';
+import { buildStoredDocumentUrl, resolveDocumentSignedUrl } from '@/lib/documentAccess';
 import { compressImage } from '@/lib/imageUtils';
 import { htmlStringToPdfBlob } from '@/lib/pdfService';
-import { resolveDocumentSignedUrl } from '@/lib/documentAccess';
 import { logActivity } from '@/lib/activityLogger';
 import { toast } from 'sonner';
 import {
@@ -550,13 +551,10 @@ export default function ContactDetail() {
       const fileToUpload = pendingUploadFile.type.startsWith('image/')
         ? await compressImage(pendingUploadFile, { maxSide: 1600, quality: 0.85, targetBytes: 1_000_000 })
         : pendingUploadFile;
-      const uploadResult = await uploadDocument(fileToUpload, effectiveCompanyId, contactId);
-
-      if (uploadResult.error) {
-        console.error('[ContactDetail] Upload failed:', uploadResult.error);
-        toast.error(`Upload failed: ${uploadResult.error}`);
-        return;
-      }
+      const fileExt = fileToUpload.name.split('.').pop() || 'bin';
+      const storedName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
+      const uploadResult = await secureUpload('documents', contactId, fileToUpload, storedName, fileToUpload.type);
+      const storedUrl = buildStoredDocumentUrl(uploadResult.publicUrl, 'documents', uploadResult.path);
 
       // Resolve measurement variants: type → 'measurement', then back-fill category
       const isMeasurement = pendingUploadCategory.startsWith('measurement:');
@@ -570,7 +568,7 @@ export default function ContactDetail() {
         contact_id: contactId,
         name: pendingUploadName || pendingUploadFile.name,
         type: docType,
-        url: uploadResult.path,
+        url: storedUrl,
         size: formatFileSize(fileToUpload.size),
         uploaded_by: profile?.id,
       });
@@ -637,18 +635,17 @@ export default function ContactDetail() {
     setIsUploadingAvatar(true);
     try {
       const compressed = await compressImage(file, { maxSide: 1600, quality: 0.85, targetBytes: 1_000_000 });
-      const uploadResult = await uploadDocument(compressed, effectiveCompanyId, contactId);
-      if (uploadResult.error) {
-        toast.error(`Avatar upload failed: ${uploadResult.error}`);
-        return;
-      }
+      const imgExt = compressed.name?.split('.').pop() || 'jpg';
+      const imgName = `avatar-${Math.random().toString(36).substring(2)}-${Date.now()}.${imgExt}`;
+      const avatarUpload = await secureUpload('documents', contactId, compressed, imgName, compressed.type);
+      const avatarStoredUrl = buildStoredDocumentUrl(avatarUpload.publicUrl, 'documents', avatarUpload.path);
 
       const created = await db.createDocument({
         company_id: effectiveCompanyId,
         contact_id: contactId,
         name: '__contact_avatar__',
         type: 'photo',
-        url: uploadResult.path,
+        url: avatarStoredUrl,
         size: formatFileSize(compressed.size),
         uploaded_by: profile?.id,
       });
@@ -658,7 +655,7 @@ export default function ContactDetail() {
         return;
       }
 
-      const signedUrl = await getDocumentSignedUrl(uploadResult.path, 3600);
+      const signedUrl = avatarUpload.signedUrl || await getDocumentSignedUrl(avatarUpload.path, 3600);
       setContactAvatarUrl(signedUrl);
       toast.success('Profile photo updated!');
     } catch (error) {
