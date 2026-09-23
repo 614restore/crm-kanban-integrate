@@ -239,6 +239,7 @@ export default function ContactDetail() {
   const { profile } = useAuth();
   const contact = useCurrentContact();
   const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [docSubTab, setDocSubTab] = useState<'all' | 'measurements' | 'photos' | 'docs' | 'legal'>('all');
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isReassigning, setIsReassigning] = useState(false);
@@ -295,7 +296,7 @@ export default function ContactDetail() {
   // Document naming dialog state
   const [pendingUploadFile, setPendingUploadFile] = useState<File | null>(null);
   const [pendingUploadName, setPendingUploadName] = useState('');
-  const [pendingUploadCategory, setPendingUploadCategory] = useState<'contract' | 'estimate' | 'invoice' | 'photo' | 'insurance' | 'other'>('other');
+  const [pendingUploadCategory, setPendingUploadCategory] = useState<'contract' | 'estimate' | 'invoice' | 'photo' | 'insurance' | 'other' | 'measurement:roof' | 'measurement:walls' | 'measurement:premium'>('other');
   const [showUploadNameDialog, setShowUploadNameDialog] = useState(false);
 
   // Avatar state
@@ -405,12 +406,13 @@ export default function ContactDetail() {
             id: doc.id,
             contactId: doc.contact_id || '',
             name: doc.name,
-            type: doc.type as 'contract' | 'estimate' | 'invoice' | 'photo' | 'insurance' | 'other',
+            type: doc.type as 'contract' | 'estimate' | 'invoice' | 'photo' | 'insurance' | 'other' | 'measurement' | 'document' | 'signed',
             url,
             uploadedAt: doc.created_at,
             uploadedBy: doc.uploaded_by || 'Team member',
             size: doc.size || 'Unknown',
             htmlContent: doc.html_content || undefined,
+            category: (doc.category as 'roof' | 'walls' | 'premium' | 'general' | null) ?? null,
           };
         })
       );
@@ -556,11 +558,18 @@ export default function ContactDetail() {
         return;
       }
 
+      // Resolve measurement variants: type → 'measurement', then back-fill category
+      const isMeasurement = pendingUploadCategory.startsWith('measurement:');
+      const docType = isMeasurement ? 'measurement' : pendingUploadCategory;
+      const measurementCategory = isMeasurement
+        ? (pendingUploadCategory.split(':')[1] as 'roof' | 'walls' | 'premium')
+        : undefined;
+
       const created = await db.createDocument({
         company_id: effectiveCompanyId,
         contact_id: contactId,
         name: pendingUploadName || pendingUploadFile.name,
-        type: pendingUploadCategory,
+        type: docType,
         url: uploadResult.path,
         size: formatFileSize(fileToUpload.size),
         uploaded_by: profile?.id,
@@ -572,15 +581,25 @@ export default function ContactDetail() {
         return;
       }
 
+      // Non-blocking category update for measurement docs (column may not exist on older deployments)
+      if (isMeasurement && measurementCategory) {
+        supabase
+          .from('documents')
+          .update({ category: measurementCategory })
+          .eq('id', created.id)
+          .then(() => {});
+      }
+
       const newDoc: Document = {
         id: created.id,
         contactId: created.contact_id || '',
         name: created.name,
-        type: created.type as 'contract' | 'estimate' | 'invoice' | 'photo' | 'insurance' | 'other',
+        type: created.type as 'contract' | 'estimate' | 'invoice' | 'photo' | 'insurance' | 'other' | 'measurement',
         url: created.url,
         uploadedAt: created.created_at,
         uploadedBy: created.uploaded_by || 'Team member',
         size: created.size || formatFileSize(fileToUpload.size),
+        category: measurementCategory ?? null,
       };
 
       setContactDocuments((prev) => [newDoc, ...prev]);
@@ -2277,34 +2296,143 @@ export default function ContactDetail() {
 
         {activeTab === 'documents' && (
           <div className="space-y-4">
-            {/* ── Aerial Measurement Reports ── */}
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-              <EagleViewPanel
-                address={contact.address || ''}
-                city={contact.city || ''}
-                state={contact.state || ''}
-                zip={contact.zip || ''}
-                companyId={effectiveCompanyId || ''}
-                contactId={contact.id}
-                contactName={getContactFullName(contact)}
-                userId={profile?.id}
-                onDocumentSaved={(doc) => setContactDocuments(prev => [doc, ...prev])}
-              />
-              <RoofrPanel
-                address={contact.address || ''}
-                city={contact.city || ''}
-                state={contact.state || ''}
-                zip={contact.zip || ''}
-                companyId={effectiveCompanyId || ''}
-                contactId={contact.id}
-                contactName={getContactFullName(contact)}
-                userId={profile?.id}
-                onDocumentSaved={(doc) => setContactDocuments(prev => [doc, ...prev])}
-              />
+            {/* ── Document sub-tabs ── */}
+            <div className="flex gap-1 bg-gray-100 rounded-xl p-1 flex-wrap">
+              {(['all', 'measurements', 'photos', 'docs', 'legal'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setDocSubTab(tab)}
+                  className={`flex-1 min-w-0 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    docSubTab === tab
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  {tab === 'all' && 'All'}
+                  {tab === 'measurements' && '📐 Measurements'}
+                  {tab === 'photos' && '📷 Photos'}
+                  {tab === 'docs' && '📄 Docs'}
+                  {tab === 'legal' && '✅ Signed'}
+                </button>
+              ))}
             </div>
 
+            {/* ── Measurements sub-tab ── */}
+            {docSubTab === 'measurements' && (() => {
+              const measurementDocs = contactDocuments.filter(d => d.type === 'measurement');
+              const roofDocs = measurementDocs.filter(d => d.category === 'roof' || (!d.category));
+              const wallsDocs = measurementDocs.filter(d => d.category === 'walls');
+              const premiumDocs = measurementDocs.filter(d => d.category === 'premium');
+
+              const MeasurementSection = ({ title, docs }: { title: string; docs: typeof measurementDocs }) => (
+                docs.length > 0 ? (
+                  <div className="bg-white rounded-xl border border-gray-200">
+                    <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
+                      <h4 className="text-sm font-semibold text-gray-700">{title}</h4>
+                      <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{docs.length}</span>
+                    </div>
+                    <div className="divide-y divide-gray-100">
+                      {docs.map(doc => (
+                        <div key={doc.id} className="p-4 flex items-center justify-between hover:bg-gray-50">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 bg-blue-50 rounded-lg flex items-center justify-center flex-shrink-0">
+                              <FileText size={18} className="text-blue-600" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-gray-900 text-sm">{doc.name}</p>
+                              <p className="text-xs text-gray-500">{doc.size} · {formatDate(doc.uploadedAt)}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button onClick={() => handleViewDoc(doc)} className="p-2 hover:bg-gray-100 rounded-lg" title="View"><Eye size={16} className="text-gray-500" /></button>
+                            <button onClick={() => handleDownloadDoc(doc)} className="p-2 hover:bg-gray-100 rounded-lg" title="Download"><Download size={16} className="text-gray-500" /></button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null
+              );
+
+              return (
+                <div className="space-y-3">
+                  {measurementDocs.length === 0 ? (
+                    <div className="bg-white rounded-xl border border-gray-200 p-12 text-center text-gray-500">
+                      <FileText size={32} className="mx-auto mb-2 opacity-40" />
+                      <p className="text-sm">No measurement reports yet</p>
+                      <p className="text-xs text-gray-400 mt-1">Upload a report above and choose a measurement category</p>
+                    </div>
+                  ) : (
+                    <>
+                      <MeasurementSection title="📐 Roof Measurements" docs={roofDocs} />
+                      <MeasurementSection title="🧱 Walls Reports" docs={wallsDocs} />
+                      <MeasurementSection title="⭐ Premium Reports" docs={premiumDocs} />
+                    </>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* ── All tab: recent measurements summary ── */}
+            {docSubTab === 'all' && (() => {
+              const recentMeasurements = contactDocuments
+                .filter(d => d.type === 'measurement')
+                .slice(0, 3);
+              if (recentMeasurements.length === 0) return null;
+              return (
+                <div className="bg-white rounded-xl border border-gray-200">
+                  <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+                    <h4 className="text-sm font-semibold text-gray-700">📐 Measurements</h4>
+                    <button onClick={() => setDocSubTab('measurements')} className="text-xs text-blue-600 hover:underline">View all</button>
+                  </div>
+                  <div className="divide-y divide-gray-100">
+                    {recentMeasurements.map(doc => (
+                      <div key={doc.id} className="p-3 flex items-center justify-between hover:bg-gray-50">
+                        <div className="flex items-center gap-3">
+                          <FileText size={16} className="text-blue-600 flex-shrink-0" />
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">{doc.name}</p>
+                            <p className="text-xs text-gray-500">{doc.size} · {formatDate(doc.uploadedAt)}</p>
+                          </div>
+                        </div>
+                        <button onClick={() => handleViewDoc(doc)} className="p-1.5 hover:bg-gray-100 rounded-lg"><Eye size={15} className="text-gray-500" /></button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* ── Aerial Measurement Order Panels (order new reports) ── */}
+            {(docSubTab === 'all' || docSubTab === 'measurements') && (
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                <EagleViewPanel
+                  address={contact.address || ''}
+                  city={contact.city || ''}
+                  state={contact.state || ''}
+                  zip={contact.zip || ''}
+                  companyId={effectiveCompanyId || ''}
+                  contactId={contact.id}
+                  contactName={getContactFullName(contact)}
+                  userId={profile?.id}
+                  onDocumentSaved={(doc) => setContactDocuments(prev => [doc, ...prev])}
+                />
+                <RoofrPanel
+                  address={contact.address || ''}
+                  city={contact.city || ''}
+                  state={contact.state || ''}
+                  zip={contact.zip || ''}
+                  companyId={effectiveCompanyId || ''}
+                  contactId={contact.id}
+                  contactName={getContactFullName(contact)}
+                  userId={profile?.id}
+                  onDocumentSaved={(doc) => setContactDocuments(prev => [doc, ...prev])}
+                />
+              </div>
+            )}
+
             {/* ── Signed Documents ── */}
-            <div className="bg-white rounded-xl border border-gray-200">
+            {(docSubTab === 'all' || docSubTab === 'legal') && <div className="bg-white rounded-xl border border-gray-200">
               <div className="p-5 border-b border-gray-200 flex items-center gap-3">
                 <CheckCircle size={20} className="text-green-600" />
                 <h3 className="text-lg font-semibold text-gray-900">Signed Documents</h3>
@@ -2365,17 +2493,17 @@ export default function ContactDetail() {
                   </div>
                 )}
               </div>
-            </div>
+            </div>}
 
             {/* ── Uploaded Files ── */}
-            {(() => {
+            {(docSubTab === 'all' || docSubTab === 'photos' || docSubTab === 'docs') && (() => {
               const FIELD_ROLES = new Set(['subcontractor','canvasser','field_tech','field_contractor','production_manager','project_manager']);
               const getRoleForUploader = (uploadedBy: string) => {
                 const member = state.teamMembers.find(tm => tm.id === uploadedBy);
                 return member?.role ?? null;
               };
               const photos = contactDocuments.filter(d => d.type === 'photo');
-              const nonPhotoDocs = contactDocuments.filter(d => d.type !== 'photo');
+              const nonPhotoDocs = contactDocuments.filter(d => d.type !== 'photo' && d.type !== 'measurement');
               const salesPhotos = photos.filter(d => {
                 const role = getRoleForUploader(d.uploadedBy);
                 return role === null || !FIELD_ROLES.has(role);
@@ -2457,7 +2585,7 @@ export default function ContactDetail() {
                   </div>
 
                   {/* ── Photos section with folders ── */}
-                  {photos.length > 0 && (
+                  {photos.length > 0 && docSubTab !== 'docs' && (
                     <div className="border-b border-gray-100">
                       {/* Sales Team Photos folder */}
                       {salesPhotos.length > 0 && (
@@ -2500,7 +2628,7 @@ export default function ContactDetail() {
                   )}
 
                   {/* ── Non-photo documents ── */}
-                  <div className="divide-y divide-gray-100">
+                  {docSubTab !== 'photos' && <div className="divide-y divide-gray-100">
                     {nonPhotoDocs.map((doc) => <DocRow key={doc.id} doc={doc} />)}
                     {contactDocuments.length === 0 && (
                       <div className="p-12 text-center text-gray-500">
@@ -2513,7 +2641,7 @@ export default function ContactDetail() {
                         </div>
                       </div>
                     )}
-                  </div>
+                  </div>}
                 </div>
               );
             })()}
@@ -4096,12 +4224,19 @@ export default function ContactDetail() {
                   onChange={(e) => setPendingUploadCategory(e.target.value as typeof pendingUploadCategory)}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="insurance">Insurance Documents</option>
-                  <option value="contract">Contracts</option>
-                  <option value="estimate">Estimates</option>
-                  <option value="invoice">Invoices</option>
-                  <option value="photo">Photos</option>
-                  <option value="other">Other</option>
+                  <optgroup label="Measurements">
+                    <option value="measurement:roof">📐 Roof Measurement</option>
+                    <option value="measurement:walls">🧱 Walls Report</option>
+                    <option value="measurement:premium">⭐ Premium Report (All)</option>
+                  </optgroup>
+                  <optgroup label="Documents">
+                    <option value="insurance">Insurance Documents</option>
+                    <option value="contract">Contracts</option>
+                    <option value="estimate">Estimates</option>
+                    <option value="invoice">Invoices</option>
+                    <option value="photo">Photos</option>
+                    <option value="other">Other</option>
+                  </optgroup>
                 </select>
               </div>
             </div>

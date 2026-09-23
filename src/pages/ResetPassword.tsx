@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { Lock, Eye, EyeOff, CheckCircle, AlertCircle } from 'lucide-react';
-import trussLogo from '../assets/trussctr-logo.png';
+import trussLogo from '../assets/trussctr-logo.webp';
 
 // Shown when must_change_password = true (temp password), after a Supabase
 // PASSWORD_RECOVERY event (web reset link), or when the user taps Change Password
