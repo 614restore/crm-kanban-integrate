@@ -494,7 +494,7 @@ export default function ContactDetail() {
             {activeTab === 'inspection' && <InspectionTab contact={contact} userId={user?.id} onDocumentsChanged={fetchDocuments} />}
             {activeTab === 'status' && <StatusTab contact={contact} onAdvance={advanceStatus} />}
             {activeTab === 'timeline' && <TimelineTab timeline={timeline} onRefresh={fetchTimeline} contact={contact} userId={user?.id} companyId={profile?.company_id} />}
-            {activeTab === 'documents' && <DocumentsTab contactId={contact.id} contact={contact} userId={user?.id} documents={documentsWithUrls.length ? documentsWithUrls : documents} onUpload={handleUpload} onLegalUpload={handleLegalUpload} onDocumentsRefresh={fetchDocuments} />}
+            {activeTab === 'documents' && <DocumentsTab contactId={contact.id} contact={contact} userId={user?.id} documents={documentsWithUrls.length ? documentsWithUrls : documents} onUpload={handleUpload} onLegalUpload={handleLegalUpload} onDocumentsRefresh={fetchDocuments} uploadSaving={uploadSaving} />}
             {activeTab === 'financial' && <FinancialTab contact={contact} userId={user?.id} onEdit={openEdit} onRefresh={fetchContact} />}
             {activeTab === 'insurance' && <InsuranceTab contact={contact} />}
           </motion.div>
@@ -1917,7 +1917,7 @@ function TimelineTab({ timeline, onRefresh, contact, userId, companyId }: { time
   );
 }
 
-function DocumentsTab({ contactId, contact, userId, documents, onUpload, onLegalUpload, onDocumentsRefresh }: { contactId: string; contact?: any; userId?: string; documents: any[]; onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void; onLegalUpload: (label: string, docType: string, e: React.ChangeEvent<HTMLInputElement>) => void; onDocumentsRefresh?: () => void }) {
+function DocumentsTab({ contactId, contact, userId, documents, onUpload, onLegalUpload, onDocumentsRefresh, uploadSaving }: { contactId: string; contact?: any; userId?: string; documents: any[]; onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void; onLegalUpload: (label: string, docType: string, e: React.ChangeEvent<HTMLInputElement>) => void; onDocumentsRefresh?: () => void; uploadSaving?: boolean }) {
   const navigate = useNavigate();
   const [filter, setFilter] = useState<'all' | 'photos' | 'docs' | 'legal'>('all');
   const LEGAL_DOCS = [
@@ -2108,12 +2108,65 @@ function DocumentsTab({ contactId, contact, userId, documents, onUpload, onLegal
           </button>
         </div>
       </div>
+      {/* ── Measurements ─────────────────────────────────────── */}
+      {(() => {
+        const measureDocs = documents.filter((d) => d.type === 'measurement');
+        if (!measureDocs.length) return null;
+        const categoryLabel: Record<string, string> = { roof: '🏠 Roof', walls: '🧱 Walls', premium: '⭐ Premium' };
+        const order = ['roof', 'walls', 'premium', null];
+        const grouped: Record<string, any[]> = {};
+        measureDocs.forEach((d) => {
+          const k = d.category ?? 'other';
+          (grouped[k] = grouped[k] || []).push(d);
+        });
+        return (
+          <div className="bg-sky-50 border border-sky-100 rounded-2xl p-4 space-y-3">
+            <div className="flex justify-between items-center">
+              <h4 className="text-xs font-bold text-sky-700 uppercase tracking-wider">Saved Measurements</h4>
+              <span className="text-[10px] font-bold text-sky-500 uppercase">Roofr · EagleView</span>
+            </div>
+            {order.filter((k) => grouped[String(k ?? 'other')]?.length).map((k) => {
+              const key = String(k ?? 'other');
+              return (
+                <div key={key}>
+                  <p className="text-[11px] font-bold text-sky-600 uppercase tracking-wider mb-1.5">{categoryLabel[key] ?? '📄 Other'}</p>
+                  <div className="space-y-1.5">
+                    {grouped[key].map((doc) => (
+                      <button
+                        key={doc.id}
+                        type="button"
+                        onClick={() => window.open(doc.displayUrl || doc.url, '_blank')}
+                        className="w-full flex items-center gap-3 bg-white rounded-xl p-3 border border-sky-100 text-left"
+                      >
+                        <FileText size={16} className="text-sky-500 shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold text-slate-700 truncate">{doc.name}</p>
+                          <p className="text-[10px] text-slate-400">{new Date(doc.created_at).toLocaleDateString()}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
+
       <div className="flex justify-between items-center">
         <h3 className="text-sm font-bold text-primary">Files & Photos</h3>
-        <label className="bg-accent text-white p-2 rounded-xl cursor-pointer active:scale-95 transition-transform">
-          <Plus size={18} />
-          <input type="file" className="hidden" onChange={onUpload} accept="image/*" />
-        </label>
+        <div className="flex gap-2">
+          <label className={`flex items-center gap-1.5 bg-slate-100 text-slate-700 px-3 py-2 rounded-xl cursor-pointer text-xs font-bold active:scale-95 transition-transform ${uploadSaving ? 'opacity-50 pointer-events-none' : ''}`}>
+            {uploadSaving ? <span className="block w-3.5 h-3.5 border-2 border-slate-500 border-t-transparent rounded-full animate-spin" /> : <FileText size={14} />}
+            {uploadSaving ? 'Saving…' : 'PDF / Doc'}
+            <input type="file" className="hidden" onChange={onUpload} accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,application/*" disabled={uploadSaving} />
+          </label>
+          <label className={`flex items-center gap-1.5 bg-accent text-white px-3 py-2 rounded-xl cursor-pointer text-xs font-bold active:scale-95 transition-transform ${uploadSaving ? 'opacity-50 pointer-events-none' : ''}`}>
+            <Plus size={14} />
+            Photo
+            <input type="file" className="hidden" onChange={onUpload} accept="image/*" disabled={uploadSaving} />
+          </label>
+        </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
         {gridDocs.length > 0 ? gridDocs.map((doc, i) => {
