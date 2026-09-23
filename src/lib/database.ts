@@ -1183,8 +1183,12 @@ class DatabaseService {
 
   async createDocument(document: Partial<DbDocument>): Promise<DbDocument | null> {
     assertCompanyId(document.company_id, 'createDocument');
-    const { data, error } = await supabase.from('documents').insert(toDbDocumentRow(document)).select().single();
-    if (error) { console.error('Error creating document:', error); return null; }
+    const row = toDbDocumentRow(document);
+    const { data, error } = await supabase.from('documents').insert(row).select().single();
+    if (error) {
+      console.error('Error creating document:', error.code, error.message, error.details, error.hint, JSON.stringify(row));
+      throw new Error(`Document save failed: ${error.message} (${error.code})`);
+    }
     return fromDbDocumentRow(data);
   }
 
