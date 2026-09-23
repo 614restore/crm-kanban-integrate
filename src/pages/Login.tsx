@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Mail, Lock, AlertCircle, CheckCircle, Eye, EyeOff } from 'lucide-react';
-import trussLogo from '../assets/trussctr-logo.png';
+import trussLogo from '../assets/trussctr-logo.webp';
 
 export default function Login() {
   const [email, setEmail] = useState('');

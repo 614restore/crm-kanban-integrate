@@ -376,7 +376,7 @@ export default function RoofrPanel({
         company_id: companyId,
         contact_id: contactId,
         name: `Roofr ${order.reportType.charAt(0).toUpperCase() + order.reportType.slice(1)} Report — ${repName}`,
-        type: 'other',
+        type: 'measurement',
         url: uploadResult.path,
         size: `${Math.round(fileBlob.size / 1024)} KB`,
         uploaded_by: userId || null,
@@ -384,15 +384,29 @@ export default function RoofrPanel({
 
       if (!newDbDoc) throw new Error('Failed to create document record');
 
+      // Derive measurement category from report type; non-blocking (column may not exist on older deployments)
+      const reportName = order.reportType.toLowerCase();
+      const measurementCategory: 'roof' | 'walls' | 'premium' =
+        reportName.includes('wall') ? 'walls'
+        : reportName.includes('premium') || reportName.includes('enhanced') ? 'premium'
+        : 'roof';
+
+      supabase
+        .from('documents')
+        .update({ category: measurementCategory })
+        .eq('id', newDbDoc.id)
+        .then(() => {});
+
       const frontendDoc: Document = {
         id: newDbDoc.id,
         contactId,
         name: newDbDoc.name,
-        type: 'other',
+        type: 'measurement',
         url: newDbDoc.url,
         uploadedAt: newDbDoc.created_at || new Date().toISOString(),
         uploadedBy: 'Roofr',
         size: newDbDoc.size || '',
+        category: measurementCategory,
       };
 
       onDocumentSaved?.(frontendDoc);
