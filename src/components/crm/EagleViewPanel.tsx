@@ -9,7 +9,8 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { db } from '@/lib/database';
 import { EagleViewIntegration } from '@/lib/integrations/eagleview';
-import { uploadDocument } from '@/lib/storage';
+import { secureUpload } from '@/lib/storageUtils';
+import { buildStoredDocumentUrl } from '@/lib/documentAccess';
 import { Document } from '@/lib/crmData';
 
 interface Props {
@@ -280,32 +281,36 @@ export default function EagleViewPanel({
       const fileName = `EagleView_${order.reportType}_${contactName?.replace(/\s+/g, '_') || contactId}_${new Date().toISOString().slice(0, 10)}.${order.orderId.startsWith('DEMO-') ? 'html' : 'pdf'}`;
       const file = new File([pdfBlob], fileName, { type: pdfBlob.type });
 
-      const uploadResult = await uploadDocument(file, companyId, contactId);
-      if (uploadResult.error || !uploadResult.path) {
-        throw new Error(uploadResult.error || 'Upload failed');
-      }
-
-      const newDbDoc = await db.createDocument({
-        company_id: companyId,
+      const fileExt = file.name.split('.').pop() || 'pdf';
+      const storedName = `${Math.random()}.${fileExt}`;
+      const uploadResult = await secureUpload('documents', contactId, file, storedName, file.type);
+      const evCategory = order.reportType === 'premium' ? 'premium' : 'roof';
+      const docName = `EagleView ${order.reportType.charAt(0).toUpperCase() + order.reportType.slice(1)} Report — ${repName}`;
+      const publicUrl = uploadResult.publicUrl;
+      const storedUrl = buildStoredDocumentUrl(publicUrl, 'documents', uploadResult.path);
+      const { data: inserted, error: dbErr } = await (supabase.from('documents') as any).insert({
         contact_id: contactId,
-        name: `EagleView ${order.reportType.charAt(0).toUpperCase() + order.reportType.slice(1)} Report — ${repName}`,
-        type: 'other',
-        url: uploadResult.path,
-        size: `${Math.round(pdfBlob.size / 1024)} KB`,
+        customer_id: contactId,
+        company_id: companyId,
+        name: docName,
+        type: 'measurement',
+        category: evCategory,
+        url: storedUrl,
+        size: pdfBlob.size,
         uploaded_by: userId || null,
-      });
-
-      if (!newDbDoc) throw new Error('Failed to create document record');
+      }).select('id, name, type, url, created_at').single();
+      if (dbErr) throw new Error(dbErr.message);
+      const newDbDoc = inserted;
 
       const frontendDoc: Document = {
         id: newDbDoc.id,
         contactId,
         name: newDbDoc.name,
-        type: 'other',
+        type: 'measurement',
         url: newDbDoc.url,
         uploadedAt: newDbDoc.created_at || new Date().toISOString(),
         uploadedBy: 'EagleView',
-        size: newDbDoc.size || '',
+        size: String(pdfBlob.size),
       };
 
       onDocumentSaved?.(frontendDoc);

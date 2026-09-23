@@ -172,7 +172,7 @@ export default function ContactDetail() {
 
   const fetchDocuments = async () => {
     try {
-      const { data, error } = await supabase.from('documents').select('*').eq('contact_id', id).order('created_at', { ascending: false });
+      const { data, error } = await (supabase.from('documents') as any).select('*').or(`contact_id.eq.${id},customer_id.eq.${id}`).order('created_at', { ascending: false });
       if (error) throw error;
       const docs = data || [];
       setDocuments(docs);
@@ -331,15 +331,22 @@ export default function ContactDetail() {
       const fileName = `${Math.random()}.${fileExt}`;
       const bucket = isImage ? 'projectceo-photos' : 'documents';
       const uploadResult = await secureUpload(bucket, id, file, fileName, file.type);
-      const { error: dbError } = await supabase.from('documents').insert({
+      const lowerName = file.name.toLowerCase();
+      const isMeasurement = !isImage && (lowerName.includes('roofr') || lowerName.includes('eagleview'));
+      const measureCategory = isMeasurement
+        ? (lowerName.includes('wall') ? 'walls' : lowerName.includes('premium') ? 'premium' : 'roof')
+        : null;
+      const { error: dbError } = await (supabase.from('documents') as any).insert({
         contact_id: id,
+        customer_id: id,
         company_id: contact.company_id,
         name: file.name,
-        type: isImage ? 'photo' : 'document',
+        type: isImage ? 'photo' : isMeasurement ? 'measurement' : 'document',
+        category: measureCategory,
         url: buildStoredDocumentUrl(uploadResult.publicUrl, bucket, uploadResult.path),
         size: file.size,
-        uploaded_by: user?.id ?? 'unknown',
-      } as any);
+        uploaded_by: user?.id ?? null,
+      });
       if (dbError) throw dbError;
       await fetchDocuments();
       const contactName = contact?.first_name ? `${contact.first_name}'s` : 'customer';
@@ -362,16 +369,17 @@ export default function ContactDetail() {
       const fileExt = file.name.split('.').pop();
       const fileName = `${Math.random()}.${fileExt}`;
       const bucket = isImage ? 'projectceo-photos' : 'documents';
-      const uploadResult = await secureUpload(bucket, id, file, fileName);
-      const { error: dbError } = await supabase.from('documents').insert({
+      const uploadResult = await secureUpload(bucket, id, file, fileName, file.type);
+      const { error: dbError } = await (supabase.from('documents') as any).insert({
         contact_id: id,
+        customer_id: id,
         company_id: contact.company_id,
         name: label,
-        type: docType as any,
+        type: docType,
         url: buildStoredDocumentUrl(uploadResult.publicUrl, bucket, uploadResult.path),
         size: file.size,
-        uploaded_by: user?.id ?? 'unknown',
-      } as any);
+        uploaded_by: user?.id ?? null,
+      });
       if (dbError) throw dbError;
       fetchDocuments();
     } catch (err) {
