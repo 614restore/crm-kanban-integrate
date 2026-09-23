@@ -13,8 +13,9 @@ import { supabase } from '@/lib/supabase';
 import { db } from '@/lib/database';
 import { RoofrIntegration as RoofrAPI, RoofrReport } from '@/lib/integrations/roofr';
 import { RoofrIntegration as RoofrUploadComponent } from './RoofrIntegration';
-import { uploadDocument } from '@/lib/storage';
 import { Document } from '@/lib/crmData';
+import { secureUpload } from '@/lib/storageUtils';
+import { buildStoredDocumentUrl } from '@/lib/documentAccess';
 import type { RoofrMeasurements, StructureMeasurements } from '@/lib/roofrParser';
 
 interface Props {
@@ -367,35 +368,29 @@ export default function RoofrPanel({
       const fileName = `Roofr_${order.reportType}_${safeName}_${date}.${ext}`;
       const file = new File([fileBlob], fileName, { type: fileBlob.type });
 
-      const uploadResult = await uploadDocument(file, companyId, contactId);
-      if (uploadResult.error || !uploadResult.path) {
-        throw new Error(uploadResult.error || 'Upload failed');
-      }
+      const fileExt = file.name.split('.').pop() || 'pdf';
+      const storedName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
+      const uploadResult = await secureUpload('documents', contactId, file, storedName, file.type);
+      const storedUrl = buildStoredDocumentUrl(uploadResult.publicUrl, 'documents', uploadResult.path);
 
-      const newDbDoc = await db.createDocument({
-        company_id: companyId,
-        contact_id: contactId,
-        name: `Roofr ${order.reportType.charAt(0).toUpperCase() + order.reportType.slice(1)} Report — ${repName}`,
-        type: 'measurement',
-        url: uploadResult.path,
-        size: `${Math.round(fileBlob.size / 1024)} KB`,
-        uploaded_by: userId || null,
-      });
-
-      if (!newDbDoc) throw new Error('Failed to create document record');
-
-      // Derive measurement category from report type; non-blocking (column may not exist on older deployments)
       const reportName = order.reportType.toLowerCase();
       const measurementCategory: 'roof' | 'walls' | 'premium' =
         reportName.includes('wall') ? 'walls'
         : reportName.includes('premium') || reportName.includes('enhanced') ? 'premium'
         : 'roof';
 
-      supabase
-        .from('documents')
-        .update({ category: measurementCategory })
-        .eq('id', newDbDoc.id)
-        .then(() => {});
+      const newDbDoc = await db.createDocument({
+        company_id: companyId,
+        contact_id: contactId,
+        name: `Roofr ${order.reportType.charAt(0).toUpperCase() + order.reportType.slice(1)} Report — ${repName}`,
+        type: 'measurement',
+        category: measurementCategory,
+        url: storedUrl,
+        size: `${Math.round(fileBlob.size / 1024)} KB`,
+        uploaded_by: userId || null,
+      });
+
+      if (!newDbDoc) throw new Error('Failed to create document record');
 
       const frontendDoc: Document = {
         id: newDbDoc.id,
