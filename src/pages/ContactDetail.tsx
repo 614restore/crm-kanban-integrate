@@ -118,6 +118,8 @@ export default function ContactDetail() {
   const tabScrollerRef = useRef<HTMLDivElement | null>(null);
   const [canScrollTabsLeft, setCanScrollTabsLeft] = useState(false);
   const [canScrollTabsRight, setCanScrollTabsRight] = useState(false);
+  const [uploadSaving, setUploadSaving] = useState(false);
+  const [uploadToast, setUploadToast] = useState<string | null>(null);
   useEffect(() => {
     fetchContact();
     fetchDocuments();
@@ -322,12 +324,13 @@ export default function ContactDetail() {
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !id) return;
+    setUploadSaving(true);
     try {
       const isImage = file.type.startsWith('image/');
       const fileExt = file.name.split('.').pop();
       const fileName = `${Math.random()}.${fileExt}`;
       const bucket = isImage ? 'projectceo-photos' : 'documents';
-      const uploadResult = await secureUpload(bucket, id, file, fileName);
+      const uploadResult = await secureUpload(bucket, id, file, fileName, file.type);
       const { error: dbError } = await supabase.from('documents').insert({
         contact_id: id,
         company_id: contact.company_id,
@@ -338,10 +341,16 @@ export default function ContactDetail() {
         uploaded_by: user?.id ?? 'unknown',
       } as any);
       if (dbError) throw dbError;
-      fetchDocuments();
+      await fetchDocuments();
+      const contactName = contact?.first_name ? `${contact.first_name}'s` : 'customer';
+      setUploadToast(`Saved to ${contactName} documents`);
+      setTimeout(() => setUploadToast(null), 4000);
     } catch (err) {
       console.error('Error uploading:', err);
-      alert('Upload failed. Make sure "documents" bucket exists in Supabase.');
+      alert(`Upload failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setUploadSaving(false);
+      e.target.value = '';
     }
   };
 
@@ -381,6 +390,18 @@ export default function ContactDetail() {
 
   return (
     <div className="h-full flex flex-col bg-slate-50">
+      {uploadToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 bg-emerald-600 text-white px-4 py-3 rounded-xl shadow-lg text-sm font-medium">
+          <CheckCircle2 size={16} />
+          {uploadToast}
+        </div>
+      )}
+      {uploadSaving && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 bg-slate-700 text-white px-4 py-3 rounded-xl shadow-lg text-sm font-medium">
+          <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+          Saving…
+        </div>
+      )}
       <div className="bg-primary text-white p-6 pb-20 relative">
         <div className="flex justify-between items-center mb-6">
           <button onClick={() => navigate('/contacts')} className="p-2 -ml-2 hover:bg-white/10 rounded-full transition-colors">
