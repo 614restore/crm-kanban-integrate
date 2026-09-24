@@ -49,7 +49,7 @@ import {
   getMentionTargets,
   validateMentions,
 } from '@/lib/mentions';
-import { validateDocumentFile, formatFileSize, getDocumentSignedUrl, isHttpUrl, isSupabaseStorageUrl } from '@/lib/storage';
+import { validateDocumentFile, formatFileSize, getDocumentSignedUrl, isHttpUrl, isSupabaseStorageUrl, extractStorageInfo, deleteFile } from '@/lib/storage';
 import { secureUpload } from '@/lib/storageUtils';
 import { buildStoredDocumentUrl, resolveDocumentSignedUrl } from '@/lib/documentAccess';
 import { compressImage } from '@/lib/imageUtils';
@@ -667,14 +667,25 @@ export default function ContactDetail() {
     }
   };
 
-  const handleDeleteDocument = (docId: string) => {
-    toast.warning('Delete this document? This cannot be undone.', {
+  // Deletes the record and its stored file, e.g. a report uploaded to the wrong customer.
+  const handleDeleteDocument = (doc: Document) => {
+    toast.warning(`Delete "${doc.name}" from this customer? This cannot be undone.`, {
       action: {
         label: 'Delete',
         onClick: async () => {
-          const ok = await db.deleteDocument(docId);
+          const ok = await db.deleteDocument(doc.id);
           if (!ok) { toast.error('Failed to delete document'); return; }
-          setContactDocuments((prev) => prev.filter((doc) => doc.id !== docId));
+          const stored = doc.url ? extractStorageInfo(doc.url) : null;
+          if (stored && !(await deleteFile(stored.bucket, stored.path))) {
+            console.warn('[ContactDetail] Document record deleted but storage file remained:', stored.path);
+          }
+          if (doc.type === 'measurement' && contact) {
+            // Drop measurements the Roofr panel extracted from this upload so they
+            // don't linger on the wrong customer.
+            try { localStorage.removeItem(`roofr_order_${contact.id}`); } catch { /* private mode */ }
+            window.dispatchEvent(new CustomEvent('roofr-order-updated', { detail: { contactId: contact.id } }));
+          }
+          setContactDocuments((prev) => prev.filter((d) => d.id !== doc.id));
           toast.success('Document deleted');
         },
       },
@@ -2350,6 +2361,7 @@ export default function ContactDetail() {
                           <div className="flex items-center gap-1">
                             <button onClick={() => handleViewDoc(doc)} className="p-2 hover:bg-gray-100 rounded-lg" title="View"><Eye size={16} className="text-gray-500" /></button>
                             <button onClick={() => handleDownloadDoc(doc)} className="p-2 hover:bg-gray-100 rounded-lg" title="Download"><Download size={16} className="text-gray-500" /></button>
+                            <button onClick={() => handleDeleteDocument(doc)} className="p-2 hover:bg-red-100 rounded-lg" title="Delete"><Trash2 size={16} className="text-red-500" /></button>
                           </div>
                         </div>
                       ))}
@@ -2399,7 +2411,10 @@ export default function ContactDetail() {
                             <p className="text-xs text-gray-500">{doc.size} · {formatDate(doc.uploadedAt)}</p>
                           </div>
                         </div>
-                        <button onClick={() => handleViewDoc(doc)} className="p-1.5 hover:bg-gray-100 rounded-lg"><Eye size={15} className="text-gray-500" /></button>
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => handleViewDoc(doc)} className="p-1.5 hover:bg-gray-100 rounded-lg" title="View"><Eye size={15} className="text-gray-500" /></button>
+                          <button onClick={() => handleDeleteDocument(doc)} className="p-1.5 hover:bg-red-100 rounded-lg" title="Delete"><Trash2 size={15} className="text-red-500" /></button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -2536,7 +2551,7 @@ export default function ContactDetail() {
                     {(doc.name?.toLowerCase().endsWith('.pdf') || doc.url?.toLowerCase().includes('.pdf')) && (
                       <button onClick={() => handleLoadRoofrMeasurements(doc)} className="p-2 hover:bg-blue-100 rounded-lg transition-colors" title="Load Roofr measurements"><Zap size={18} className="text-blue-500" /></button>
                     )}
-                    <button onClick={() => handleDeleteDocument(doc.id)} className="p-2 hover:bg-red-100 rounded-lg transition-colors" title="Delete"><Trash2 size={18} className="text-red-500" /></button>
+                    <button onClick={() => handleDeleteDocument(doc)} className="p-2 hover:bg-red-100 rounded-lg transition-colors" title="Delete"><Trash2 size={18} className="text-red-500" /></button>
                   </div>
                 </div>
               );
@@ -2565,7 +2580,7 @@ export default function ContactDetail() {
                     </div>
                     <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-2">
                       <button onClick={() => handleOpenDocument(doc.url, doc.name)} className="p-1.5 bg-white rounded-md" title="View"><Eye size={14} className="text-gray-700" /></button>
-                      <button onClick={() => handleDeleteDocument(doc.id)} className="p-1.5 bg-white rounded-md" title="Delete"><Trash2 size={14} className="text-red-500" /></button>
+                      <button onClick={() => handleDeleteDocument(doc)} className="p-1.5 bg-white rounded-md" title="Delete"><Trash2 size={14} className="text-red-500" /></button>
                     </div>
                     <p className="text-xs text-gray-500 mt-1 truncate">{doc.name}</p>
                   </div>

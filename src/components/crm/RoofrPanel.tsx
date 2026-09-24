@@ -175,8 +175,8 @@ export default function RoofrPanel({
     // Re-read when another component loads Roofr measurements from a document PDF
     const onExternalUpdate = (e: Event) => {
       if ((e as CustomEvent).detail?.contactId === contactId) {
-        const updated = readOrderFromStorage(contactId);
-        if (updated) setOrder(updated);
+        // null when the source document was deleted — clear the panel too
+        setOrder(readOrderFromStorage(contactId));
       }
     };
     window.addEventListener('roofr-order-updated', onExternalUpdate);
