@@ -113,6 +113,7 @@ import {
   FolderOpen,
   Image,
   Copy,
+  FolderInput,
 } from 'lucide-react';
 
 type TabType = 'overview' | 'timeline' | 'documents' | 'financial' | 'projects' | 'jobStatus' | 'survey' | 'insurance';
@@ -270,6 +271,10 @@ export default function ContactDetail() {
   const [signedDocs, setSignedDocs] = useState<SignedDoc[]>([]);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [viewingDocHtml, setViewingDocHtml] = useState<{ name: string; html: string } | null>(null);
+  const [movingDoc, setMovingDoc] = useState<Document | null>(null);
+  const [moveSearch, setMoveSearch] = useState('');
+  const [moveTargetId, setMoveTargetId] = useState<string | null>(null);
+  const [movingInProgress, setMovingInProgress] = useState(false);
   const [templateRoofrData, setTemplateRoofrData] = useState<{ measurements: any; structures?: any[] } | undefined>(undefined);
 
   // Project-related data
@@ -692,6 +697,66 @@ export default function ContactDetail() {
       cancel: { label: 'Cancel' },
       duration: 8000,
     });
+  };
+
+  const openMoveDocument = (doc: Document) => {
+    setMovingDoc(doc);
+    setMoveSearch('');
+    setMoveTargetId(null);
+  };
+
+  // Moves a document (e.g. a Roofr report uploaded to the wrong customer) to
+  // another customer. The stored file is moved into the new customer's folder
+  // too, since storage access is granted per customer folder.
+  const handleMoveDocument = async () => {
+    if (!movingDoc || !moveTargetId || !contact) return;
+    const target = state.contacts.find((c) => c.id === moveTargetId);
+    if (!target) return;
+    setMovingInProgress(true);
+    try {
+      let newUrl = movingDoc.url;
+      const stored = movingDoc.url ? extractStorageInfo(movingDoc.url) : null;
+      if (stored && stored.path.startsWith(`${contact.id}/`)) {
+        const newPath = `${target.id}/${stored.path.slice(contact.id.length + 1)}`;
+        const { error: moveError } = await supabase.storage.from(stored.bucket).move(stored.path, newPath);
+        if (moveError) throw new Error(`Could not move the file: ${moveError.message}`);
+        const { data: { publicUrl } } = supabase.storage.from(stored.bucket).getPublicUrl(newPath);
+        newUrl = buildStoredDocumentUrl(publicUrl, stored.bucket, newPath);
+      }
+
+      const { error } = await supabase
+        .from('documents')
+        .update({ contact_id: target.id, customer_id: target.id, url: newUrl })
+        .eq('id', movingDoc.id);
+      if (error) {
+        // Put the file back so the record and file stay together.
+        if (stored && newUrl !== movingDoc.url) {
+          const moved = extractStorageInfo(newUrl);
+          if (moved) await supabase.storage.from(stored.bucket).move(moved.path, stored.path);
+        }
+        throw new Error(error.message);
+      }
+
+      if (movingDoc.type === 'measurement') {
+        try { localStorage.removeItem(`roofr_order_${contact.id}`); } catch { /* private mode */ }
+        window.dispatchEvent(new CustomEvent('roofr-order-updated', { detail: { contactId: contact.id } }));
+      }
+      const movedDoc: Document = { ...movingDoc, contactId: target.id, url: newUrl };
+      setContactDocuments((prev) => prev.filter((d) => d.id !== movingDoc.id));
+      if (target.documents) {
+        dispatch({ type: 'UPDATE_CONTACT', payload: { ...target, documents: [movedDoc, ...target.documents] } });
+      }
+      const source = state.contacts.find((c) => c.id === contact.id);
+      if (source?.documents) {
+        dispatch({ type: 'UPDATE_CONTACT', payload: { ...source, documents: source.documents.filter((d) => d.id !== movingDoc.id) } });
+      }
+      toast.success(`Moved "${movingDoc.name}" to ${getContactFullName(target)}`);
+      setMovingDoc(null);
+    } catch (err) {
+      toast.error('Failed to move document: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    } finally {
+      setMovingInProgress(false);
+    }
   };
 
   const handleOpenDocument = async (url?: string, _docName?: string) => {
@@ -2361,6 +2426,7 @@ export default function ContactDetail() {
                           <div className="flex items-center gap-1">
                             <button onClick={() => handleViewDoc(doc)} className="p-2 hover:bg-gray-100 rounded-lg" title="View"><Eye size={16} className="text-gray-500" /></button>
                             <button onClick={() => handleDownloadDoc(doc)} className="p-2 hover:bg-gray-100 rounded-lg" title="Download"><Download size={16} className="text-gray-500" /></button>
+                            <button onClick={() => openMoveDocument(doc)} className="p-2 hover:bg-gray-100 rounded-lg" title="Move to another customer"><FolderInput size={16} className="text-gray-500" /></button>
                             <button onClick={() => handleDeleteDocument(doc)} className="p-2 hover:bg-red-100 rounded-lg" title="Delete"><Trash2 size={16} className="text-red-500" /></button>
                           </div>
                         </div>
@@ -2413,6 +2479,7 @@ export default function ContactDetail() {
                         </div>
                         <div className="flex items-center gap-1">
                           <button onClick={() => handleViewDoc(doc)} className="p-1.5 hover:bg-gray-100 rounded-lg" title="View"><Eye size={15} className="text-gray-500" /></button>
+                          <button onClick={() => openMoveDocument(doc)} className="p-1.5 hover:bg-gray-100 rounded-lg" title="Move to another customer"><FolderInput size={15} className="text-gray-500" /></button>
                           <button onClick={() => handleDeleteDocument(doc)} className="p-1.5 hover:bg-red-100 rounded-lg" title="Delete"><Trash2 size={15} className="text-red-500" /></button>
                         </div>
                       </div>
@@ -2551,6 +2618,7 @@ export default function ContactDetail() {
                     {(doc.name?.toLowerCase().endsWith('.pdf') || doc.url?.toLowerCase().includes('.pdf')) && (
                       <button onClick={() => handleLoadRoofrMeasurements(doc)} className="p-2 hover:bg-blue-100 rounded-lg transition-colors" title="Load Roofr measurements"><Zap size={18} className="text-blue-500" /></button>
                     )}
+                    <button onClick={() => openMoveDocument(doc)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="Move to another customer"><FolderInput size={18} className="text-gray-500" /></button>
                     <button onClick={() => handleDeleteDocument(doc)} className="p-2 hover:bg-red-100 rounded-lg transition-colors" title="Delete"><Trash2 size={18} className="text-red-500" /></button>
                   </div>
                 </div>
@@ -2580,6 +2648,7 @@ export default function ContactDetail() {
                     </div>
                     <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-2">
                       <button onClick={() => handleOpenDocument(doc.url, doc.name)} className="p-1.5 bg-white rounded-md" title="View"><Eye size={14} className="text-gray-700" /></button>
+                      <button onClick={() => openMoveDocument(doc)} className="p-1.5 bg-white rounded-md" title="Move to another customer"><FolderInput size={14} className="text-gray-700" /></button>
                       <button onClick={() => handleDeleteDocument(doc)} className="p-1.5 bg-white rounded-md" title="Delete"><Trash2 size={14} className="text-red-500" /></button>
                     </div>
                     <p className="text-xs text-gray-500 mt-1 truncate">{doc.name}</p>
@@ -4172,6 +4241,61 @@ export default function ContactDetail() {
         changeOrder={viewingChangeOrder}
         companyId={profile?.company_id || ''}
       />
+
+      {/* Move document to another customer */}
+      {movingDoc && (() => {
+        const q = moveSearch.trim().toLowerCase();
+        const candidates = state.contacts
+          .filter((c) => c.id !== contact.id)
+          .filter((c) => !q || `${getContactFullName(c)} ${c.address || ''} ${c.email || ''} ${c.phone1 || ''}`.toLowerCase().includes(q))
+          .slice(0, 50);
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => !movingInProgress && setMovingDoc(null)}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[80vh]" onClick={(e) => e.stopPropagation()}>
+              <div className="px-5 py-4 border-b border-gray-200 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="text-base font-bold text-gray-900">Move to another customer</h2>
+                  <p className="text-xs text-gray-500 truncate mt-0.5">{movingDoc.name}</p>
+                </div>
+                <button onClick={() => setMovingDoc(null)} disabled={movingInProgress} className="p-1.5 hover:bg-gray-100 rounded-lg" title="Close"><X size={18} className="text-gray-500" /></button>
+              </div>
+              <div className="px-5 pt-4">
+                <input
+                  autoFocus
+                  value={moveSearch}
+                  onChange={(e) => setMoveSearch(e.target.value)}
+                  placeholder="Search customers by name, address, email or phone…"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                />
+              </div>
+              <div className="flex-1 overflow-y-auto px-5 py-3 space-y-1">
+                {candidates.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-6">No matching customers</p>
+                ) : candidates.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => setMoveTargetId(c.id)}
+                    className={`w-full text-left px-3 py-2 rounded-lg border transition-colors ${moveTargetId === c.id ? 'border-blue-500 bg-blue-50' : 'border-transparent hover:bg-gray-50'}`}
+                  >
+                    <p className="text-sm font-medium text-gray-900">{getContactFullName(c)}</p>
+                    {c.address && <p className="text-xs text-gray-500 truncate">{[c.address, c.city, c.state].filter(Boolean).join(', ')}</p>}
+                  </button>
+                ))}
+              </div>
+              <div className="px-5 py-4 border-t border-gray-200 flex justify-end gap-2">
+                <button onClick={() => setMovingDoc(null)} disabled={movingInProgress} className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50">Cancel</button>
+                <button
+                  onClick={handleMoveDocument}
+                  disabled={!moveTargetId || movingInProgress}
+                  className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {movingInProgress ? 'Moving…' : 'Move document'}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* In-app document viewer for template documents (HTML-based) */}
       {viewingDocHtml && (
