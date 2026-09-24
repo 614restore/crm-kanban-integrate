@@ -18,7 +18,7 @@ import { quoteProjectTemplates, TemplateLineItem } from '@/data/quoteTemplates';
 import {
   FileText, Plus, Search, Trash2, X, Save, User, Send, Link2, Eye, ChevronDown,
   Home, Wrench, Hammer, Sun, Droplets, Layers, Grid3x3,
-  Scroll, Tablet, PackageOpen, Box, ClipboardList, DollarSign,
+  Scroll, Tablet, PackageOpen, Box, ClipboardList, DollarSign, Archive, ArchiveRestore,
 } from 'lucide-react';
 
 // ── QuoteMGR-parity quote builder for web ─────────────────────────────────
@@ -135,6 +135,9 @@ export default function QuotesView() {
   const [quotes, setQuotes] = useState<QuoteRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [showBuilder, setShowBuilder] = useState(false);
   const [editingQuoteId, setEditingQuoteId] = useState<string | null>(null);
   const [builderPrefill, setBuilderPrefill] = useState<PendingQuote | null>(null);
@@ -174,8 +177,9 @@ export default function QuotesView() {
 
   useEffect(() => {
     if (companyId) loadQuotes();
+    setSelectedIds(new Set());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companyId]);
+  }, [companyId, showArchived]);
 
   // The builder and preview take QuoteMGR's company and team-member rows.
   useEffect(() => {
@@ -213,12 +217,12 @@ export default function QuotesView() {
         .from('quotes')
         .select('id, quote_number, status, contact_id, customer_id, project_type, good_total, better_total, best_total, selected_tier, created_at, share_token, cover_page_title, project_description')
         .eq('company_id', companyId)
-        .eq('is_archived', false)
+        .eq('is_archived', showArchived)
         .order('created_at', { ascending: false });
       if (error) throw error;
       setQuotes((data || []) as QuoteRow[]);
-      // Keep the dashboard and pipeline values in step with what was just loaded.
-      dispatch({ type: 'SET_QUOTES', payload: (data || []).map(toQuoteSummary) });
+      // Keep the dashboard and pipeline values in step with the active quotes only.
+      if (!showArchived) dispatch({ type: 'SET_QUOTES', payload: (data || []).map(toQuoteSummary) });
     } catch (err: any) {
       toast.error('Failed to load quotes: ' + err.message);
     } finally {
@@ -294,6 +298,77 @@ export default function QuotesView() {
       toast.error('Failed to send quote: ' + (err.message || 'unknown error'));
     }
   };
+
+  // QuoteMGR's project is read-only; never let archive/delete write to it.
+  const isReadOnlyProject = () =>
+    String((supabase as any).supabaseUrl || import.meta.env.VITE_SUPABASE_URL || '').includes('qgvuzrvpyyrrulhwlzma');
+
+  const setArchived = async (ids: string[], archived: boolean) => {
+    if (!ids.length) return;
+    if (isReadOnlyProject()) { toast.error('Quotes are read-only in this environment.'); return; }
+    setBulkBusy(true);
+    try {
+      const { error } = await supabase
+        .from('quotes')
+        .update({ is_archived: archived, updated_at: new Date().toISOString() })
+        .in('id', ids)
+        .eq('company_id', companyId);
+      if (error) throw error;
+      toast.success(`${ids.length} quote${ids.length === 1 ? '' : 's'} ${archived ? 'archived' : 'restored'}`);
+      setSelectedIds(new Set());
+      loadQuotes();
+    } catch (err: any) {
+      toast.error(`Failed to ${archived ? 'archive' : 'restore'}: ${err.message || 'unknown error'}`);
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  // Deleting cascades to line items, options and signatures, so signed quotes
+  // can only be archived.
+  const deleteQuotes = (ids: string[]) => {
+    const targets = quotes.filter((q) => ids.includes(q.id));
+    const deletable = targets.filter((q) => q.status !== 'signed');
+    const skipped = targets.length - deletable.length;
+    if (!deletable.length) { toast.error('Signed quotes can\'t be deleted — archive them instead.'); return; }
+    if (isReadOnlyProject()) { toast.error('Quotes are read-only in this environment.'); return; }
+    toast.warning(
+      `Permanently delete ${deletable.length} quote${deletable.length === 1 ? '' : 's'}?${skipped ? ` ${skipped} signed quote${skipped === 1 ? '' : 's'} will be skipped.` : ''} This cannot be undone.`,
+      {
+        duration: 10000,
+        cancel: { label: 'Cancel', onClick: () => {} },
+        action: {
+          label: 'Delete',
+          onClick: async () => {
+            setBulkBusy(true);
+            try {
+              const { error } = await supabase
+                .from('quotes')
+                .delete()
+                .in('id', deletable.map((q) => q.id))
+                .eq('company_id', companyId)
+                .neq('status', 'signed');
+              if (error) throw error;
+              toast.success(`${deletable.length} quote${deletable.length === 1 ? '' : 's'} deleted`);
+              setSelectedIds(new Set());
+              loadQuotes();
+            } catch (err: any) {
+              toast.error('Failed to delete: ' + (err.message || 'unknown error'));
+            } finally {
+              setBulkBusy(false);
+            }
+          },
+        },
+      },
+    );
+  };
+
+  const toggleSelected = (id: string) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -508,21 +583,70 @@ export default function QuotesView() {
         />
       </div>
 
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5 text-sm">
+          <button
+            onClick={() => setShowArchived(false)}
+            className={`px-3 py-1.5 rounded-md font-medium ${!showArchived ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+          >
+            Active
+          </button>
+          <button
+            onClick={() => setShowArchived(true)}
+            className={`px-3 py-1.5 rounded-md font-medium flex items-center gap-1.5 ${showArchived ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+          >
+            <Archive size={14} /> Archived
+          </button>
+        </div>
+        {selectedIds.size > 0 && (
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-gray-500">{selectedIds.size} selected</span>
+            <button
+              disabled={bulkBusy}
+              onClick={() => setArchived(Array.from(selectedIds), !showArchived)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 bg-white font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              {showArchived ? <><ArchiveRestore size={14} /> Restore</> : <><Archive size={14} /> Archive</>}
+            </button>
+            <button
+              disabled={bulkBusy}
+              onClick={() => deleteQuotes(Array.from(selectedIds))}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 font-medium text-red-600 hover:bg-red-100 disabled:opacity-50"
+            >
+              <Trash2 size={14} /> Delete
+            </button>
+            <button onClick={() => setSelectedIds(new Set())} className="p-1.5 text-gray-400 hover:text-gray-600" title="Clear selection">
+              <X size={14} />
+            </button>
+          </div>
+        )}
+      </div>
+
       {loading ? (
         <div className="text-center py-16 text-gray-400">Loading quotes...</div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
           <FileText className="mx-auto text-gray-300 mb-3" size={40} />
-          <p className="text-gray-500 mb-4">No quotes yet</p>
-          <button onClick={openNew} className="text-blue-600 font-medium hover:underline">
-            Create your first quote
-          </button>
+          <p className="text-gray-500 mb-4">{showArchived ? 'No archived quotes' : 'No quotes yet'}</p>
+          {!showArchived && (
+            <button onClick={openNew} className="text-blue-600 font-medium hover:underline">
+              Create your first quote
+            </button>
+          )}
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wide">
               <tr>
+                <th className="w-10 px-4 py-3">
+                  <input
+                    type="checkbox"
+                    aria-label="Select all quotes"
+                    checked={filtered.length > 0 && filtered.every((q) => selectedIds.has(q.id))}
+                    onChange={(e) => setSelectedIds(e.target.checked ? new Set(filtered.map((q) => q.id)) : new Set())}
+                  />
+                </th>
                 <th className="text-left px-4 py-3">Quote #</th>
                 <th className="text-left px-4 py-3">Customer</th>
                 <th className="text-left px-4 py-3">Status</th>
@@ -540,6 +664,14 @@ export default function QuotesView() {
                   onClick={() => openEdit(q.id)}
                   className="hover:bg-gray-50 cursor-pointer transition-colors"
                 >
+                  <td className="w-10 px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      aria-label={`Select quote ${q.quote_number}`}
+                      checked={selectedIds.has(q.id)}
+                      onChange={() => toggleSelected(q.id)}
+                    />
+                  </td>
                   <td className="px-4 py-3 font-medium text-gray-900">{q.quote_number}</td>
                   <td className="px-4 py-3 text-gray-700">{contactName(q.contact_id || q.customer_id)}</td>
                   <td className="px-4 py-3">
@@ -608,6 +740,24 @@ export default function QuotesView() {
                           title="Create work order"
                         >
                           <ClipboardList size={15} />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setArchived([q.id], !showArchived)}
+                        disabled={bulkBusy}
+                        className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors disabled:opacity-50"
+                        title={showArchived ? 'Restore quote' : 'Archive quote'}
+                      >
+                        {showArchived ? <ArchiveRestore size={15} /> : <Archive size={15} />}
+                      </button>
+                      {q.status !== 'signed' && (
+                        <button
+                          onClick={() => deleteQuotes([q.id])}
+                          disabled={bulkBusy}
+                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
+                          title="Delete quote"
+                        >
+                          <Trash2 size={15} />
                         </button>
                       )}
                     </div>
