@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react-swc';
 import path from 'path';
 
@@ -6,8 +6,19 @@ import path from 'path';
 // changes, since sw.js is byte-identical across deploys and never signals one.
 const BUILD_ID = process.env.VERCEL_GIT_COMMIT_SHA || String(Date.now());
 
-export default defineConfig(({ mode }) => {
+// QuoteMGR's Supabase project is read-only for this app. Refuse to produce a
+// bundle that would read and write it (web, GitHub Pages or the iOS app).
+const READ_ONLY_SUPABASE_REF = 'qgvuzrvpyyrrulhwlzma';
+
+export default defineConfig(({ mode, command }) => {
   const base = process.env.VITE_BASE_URL ?? '/';
+  const supabaseUrl = loadEnv(mode, process.cwd(), '').VITE_SUPABASE_URL || '';
+  if (command === 'build' && supabaseUrl.includes(READ_ONLY_SUPABASE_REF)) {
+    throw new Error(
+      `VITE_SUPABASE_URL points at the read-only QuoteMGR project (${READ_ONLY_SUPABASE_REF}). ` +
+      'Use the TrussCTR production project (llamtjsquoqlejznmyjl).'
+    );
+  }
 
   return {
     base,
