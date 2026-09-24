@@ -299,9 +299,9 @@ export default function QuotesView() {
     }
   };
 
-  // QuoteMGR's project is read-only; never let archive/delete write to it.
+  // Only TrussCTR's own project may be written to; QuoteMGR's projects are read-only.
   const isReadOnlyProject = () =>
-    String((supabase as any).supabaseUrl || import.meta.env.VITE_SUPABASE_URL || '').includes('qgvuzrvpyyrrulhwlzma');
+    !String((supabase as any).supabaseUrl || import.meta.env.VITE_SUPABASE_URL || '').includes('llamtjsquoqlejznmyjl');
 
   const setArchived = async (ids: string[], archived: boolean) => {
     if (!ids.length) return;
