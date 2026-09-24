@@ -689,15 +689,22 @@ export default function ContactDetail() {
       return;
     }
 
-    // Open a blank tab immediately (within the user gesture) so the browser
-    // doesn't treat the later window.open as a popup. We update its location
-    // once the signed URL is ready.
-    const newTab = window.open('', '_blank', 'noopener,noreferrer');
+    // Open the tab synchronously (inside the click) so it isn't popup-blocked,
+    // then point it at the signed URL. Passing 'noopener' here would make
+    // window.open return null, leaving the tab stuck on about:blank.
+    const isNative = typeof (window as any).Capacitor?.isNativePlatform === 'function'
+      && (window as any).Capacitor.isNativePlatform();
+    const newTab = isNative ? null : window.open('about:blank', '_blank');
+    if (newTab) {
+      try { newTab.opener = null; } catch { /* cross-origin guard */ }
+      newTab.document.title = 'Loading document…';
+    }
 
     try {
       // Non-Supabase URLs (EagleView reports, external links) — open directly
       if (isHttpUrl(url) && !isSupabaseStorageUrl(url)) {
-        if (newTab) newTab.location.href = url;
+        if (newTab) newTab.location.replace(url);
+        else window.open(url, '_blank');
         return;
       }
 
@@ -711,10 +718,10 @@ export default function ContactDetail() {
         return;
       }
 
-      if (newTab) {
-        newTab.location.href = signedUrl;
+      if (newTab && !newTab.closed) {
+        newTab.location.replace(signedUrl);
       } else {
-        window.open(signedUrl, '_blank', 'noopener,noreferrer');
+        window.open(signedUrl, '_blank');
       }
     } catch (error) {
       if (newTab) newTab.close();
