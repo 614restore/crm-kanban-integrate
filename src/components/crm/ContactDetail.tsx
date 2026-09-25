@@ -1543,6 +1543,14 @@ export default function ContactDetail() {
                   ))}
                 </select>
                 <button
+                  onClick={openNewInspection}
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-indigo-200 text-indigo-700 rounded-lg hover:bg-indigo-50 transition-colors font-medium"
+                  title="New inspection report with contingency agreement and 3-day cancel notice"
+                >
+                  <Shield size={18} />
+                  Inspection Report
+                </button>
+                <button
                   onClick={handleEdit}
                   className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
                 >
