@@ -139,6 +139,9 @@ serve(async (req) => {
     // Reject everything else so the function can't be abused for spam.
     const admin = getSupabaseAdmin();
     let authorized = false;
+    // The signed-in staff member sending this, so replies come back to them and not to
+    // the platform address the mail is delivered from.
+    let senderUserEmail: string | undefined;
 
     const authHeader = req.headers.get('authorization') || '';
     const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
@@ -150,11 +153,14 @@ serve(async (req) => {
         // Confirm caller is an active team member
         const { data: member } = await admin
           .from('team_members')
-          .select('id')
+          .select('id, email')
           .eq('user_id', user.id)
           .eq('is_active', true)
           .maybeSingle();
-        if (member) authorized = true;
+        if (member) {
+          authorized = true;
+          senderUserEmail = normalizeEmail((member as { email?: string | null }).email) || normalizeEmail(user.email) || undefined;
+        }
       }
     }
 
@@ -202,7 +208,11 @@ serve(async (req) => {
     const requestedFromEmail =
       normalizeEmail(body.from_email) ||
       normalizeEmail(companyMailSettings?.quote_sender_email);
+    // Replies go to whoever is signed in and sending. Only when there is no signed-in
+    // sender (a customer-facing send authorised by a share link) does it fall back to
+    // what the caller asked for, then the company's reply-to, then its sender address.
     const replyToEmail =
+      senderUserEmail ||
       body.reply_to_email?.trim() ||
       companyMailSettings?.quote_reply_to_email?.trim() ||
       requestedFromEmail ||

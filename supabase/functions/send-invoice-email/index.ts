@@ -204,6 +204,8 @@ serve(async (req) => {
       to: toName ? `"${toName}" <${toEmail}>` : toEmail,
       subject: `${payload.is_receipt ? 'Receipt' : 'Invoice'} #${headerSafe(payload.invoice_number)} from ${headerSafe(payload.from_company) || 'Your Contractor'}`,
       html: buildInvoiceHtml(payload),
+      // Replies go to the signed-in person who sent it, not the delivery address.
+      ...(user.email ? { replyTo: headerSafe(user.email) } : {}),
     });
 
     return json({ success: true });

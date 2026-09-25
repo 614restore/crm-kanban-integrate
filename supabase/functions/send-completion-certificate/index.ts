@@ -840,6 +840,9 @@ serve(async (req) => {
     // Allow calls from sign-certificate (or other edge functions) using the service role key
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     const isInternalCall = serviceRoleKey && bearerToken === serviceRoleKey;
+    // The signed-in staff member sending this; replies come back to them. Internal and
+    // share-link sends have no signed-in sender and fall back to the company's reply-to.
+    let senderUserEmail: string | undefined;
 
     // Allow sending to extra_recipients only, authenticated by the quote's share_token
     // This lets internal systems forward a copy without needing a user session.
@@ -858,7 +861,7 @@ serve(async (req) => {
 
       const { data: member } = await admin
         .from('team_members')
-        .select('id')
+        .select('id, email')
         .eq('user_id', authUser.id)
         .eq('is_active', true)
         .maybeSingle();
@@ -866,6 +869,8 @@ serve(async (req) => {
       if (!member) {
         return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
       }
+      senderUserEmail =
+        ((member as { email?: string | null }).email || authUser.email || '').trim().toLowerCase() || undefined;
     }
 
     // ── Load quote with customer, company, and signatures ────────────────────
@@ -936,7 +941,7 @@ serve(async (req) => {
 
       const senderName    = company.quote_sender_name?.trim() || company.name || 'QuoteMGR';
       const requestedFrom = normalizeEmail(company.quote_sender_email);
-      const replyTo       = company.quote_reply_to_email?.trim() || requestedFrom || undefined;
+      const replyTo       = senderUserEmail || company.quote_reply_to_email?.trim() || requestedFrom || undefined;
       const subject       = `Your Signed Contingency Agreement — ${company.name}`;
 
       const pdfName = body.pdf_filename || `Contingency-Agreement-${quote.quote_number ?? 'document'}.pdf`;
@@ -1075,7 +1080,7 @@ serve(async (req) => {
 
     const senderName     = company.quote_sender_name?.trim() || company.name || 'QuoteMGR';
     const requestedFrom  = normalizeEmail(company.quote_sender_email);
-    const replyTo        = company.quote_reply_to_email?.trim() || requestedFrom || undefined;
+    const replyTo        = senderUserEmail || company.quote_reply_to_email?.trim() || requestedFrom || undefined;
     const subject        = body.is_signed_copy
       ? `Your Signed Certificate of Completion — ${company.name}`
       : `Your Certificate of Completion — ${company.name}`;
