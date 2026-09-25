@@ -2573,7 +2573,17 @@ export default function ContactDetail() {
                         </p>
                       </div>
                     </div>
-                    {doc.viewUrl && (
+                    {doc.docType === 'agreement' && doc.viewUrl ? (
+                      // Stored PDFs need a signed URL; handleOpenDocument resolves it
+                      // (and opens plain links as-is).
+                      <button
+                        onClick={() => handleOpenDocument(doc.viewUrl, doc.title)}
+                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
+                        title="View signed document"
+                      >
+                        <ExternalLink size={18} className="text-gray-500" />
+                      </button>
+                    ) : doc.viewUrl && (
                       <a
                         href={doc.viewUrl}
                         target="_blank"

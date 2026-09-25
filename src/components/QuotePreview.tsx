@@ -6,7 +6,7 @@ import {
   DollarSign, ArrowRight, LayoutList, Monitor, ZoomIn, ExternalLink, PenLine, Star, Award
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { sendFullSignedDocumentToCustomer } from '@/lib/fullSignedDocument';
+import { sendFullSignedDocumentToCustomer, saveSignedPdfToDocuments } from '@/lib/fullSignedDocument';
 import { toast } from 'sonner';
 import { hasPricedLabor, quoteNeedsLabor, LABOR_MISSING_MESSAGE } from '@/lib/laborGuard';
 import SignatureCanvas from '@/components/SignatureCanvas';
@@ -817,6 +817,9 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
       setSignOnSiteStep('done');
       loadQuote();
       toast.success('Signed on site — document saved!');
+      saveSignedPdfToDocuments(quoteId, company)
+        .then((saved) => { if (saved) toast.success('Signed PDF saved to customer documents'); })
+        .catch((err) => { console.error(err); toast.error('Signed, but the PDF could not be saved to documents'); });
 
       // Both parties just signed in person — send the customer their fully-executed copy
       if (quote?.share_token && quote?.customer?.email) {
@@ -875,6 +878,9 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
       setShowContingencySigning(false);
       loadQuote();
       toast.success('Agreement signed — thank you!');
+      if (!isCustomerView) {
+        saveSignedPdfToDocuments(quoteId, company).catch(console.error);
+      }
 
       // Send the customer their signed contingency copy — with the document
       // actually attached. This previously posted a bare 'signed' alert, so
@@ -1029,6 +1035,12 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
       setShowContractorSign(false);
       await loadQuote();
       toast.success('Your signature has been added');
+      if (quote?.status === 'signed') {
+        saveSignedPdfToDocuments(quoteId, company).catch((err) => {
+          console.error(err);
+          toast.error('Signature added, but the signed PDF could not be saved to documents');
+        });
+      }
 
       // Both parties have now signed, so send the homeowner the executed document
       // itself — the same one "View Full Document" produces — rather than a link.
