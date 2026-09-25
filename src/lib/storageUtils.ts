@@ -2,6 +2,7 @@
 // Ensures all file uploads use company-isolated paths
 
 import { supabase } from './supabase';
+import { optimizeImageForUpload } from './imageUtils';
 
 /**
  * Get the current user's company ID for secure file path construction
@@ -43,14 +44,22 @@ export function createSecureFilePath(
 export async function secureUpload(
   bucket: string,
   contactId: string, 
-  file: Blob,
-  fileName: string,
-  contentType?: string
+  originalFile: Blob,
+  originalFileName: string,
+  originalContentType?: string
 ): Promise<{
   path: string;
   publicUrl: string;
   signedUrl?: string;
 }> {
+  // Photos are scaled down before they are stored (PDFs and other files pass through).
+  const file = await optimizeImageForUpload(originalFile);
+  const converted = file !== originalFile;
+  const contentType = converted ? file.type : originalContentType;
+  const fileName = converted && file.type === 'image/jpeg'
+    ? originalFileName.replace(/\.(png|webp|hei[cf])$/i, '.jpg')
+    : originalFileName;
+
   const companyId = await getCurrentUserCompanyId();
   const securePath = createSecureFilePath(companyId, contactId, fileName);
 

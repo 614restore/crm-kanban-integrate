@@ -7,7 +7,7 @@ import { damageTypes, photoLocations } from '@/data/quoteData';
 import type { EstimatePhoto } from '@/data/quoteData';
 import PhotoMarkupEditor from './PhotoMarkupEditor';
 import Lightbox from './Lightbox';
-import { compressImage, COMPRESS_PRESETS, STORAGE_CACHE_CONTROL } from '@/lib/imageUtils';
+import { compressImage, optimizeImageForUpload, COMPRESS_PRESETS, STORAGE_CACHE_CONTROL } from '@/lib/imageUtils';
 
 // ─── Photo Crop Modal ─────────────────────────────────────────────────────────
 
@@ -304,7 +304,8 @@ const PhotoUploader: React.FC<PhotoUploaderProps> = ({
     if (!cropPhoto) return;
     try {
       const fileName = `cropped-${Date.now()}-${Math.random().toString(36).substring(7)}.jpg`;
-      const { error } = await supabase.storage.from('quote-photos').upload(fileName, blob, {
+      const optimizedBlob = await optimizeImageForUpload(blob, COMPRESS_PRESETS.quotePhoto);
+      const { error } = await supabase.storage.from('quote-photos').upload(fileName, optimizedBlob, {
         contentType: 'image/jpeg',
         cacheControl: STORAGE_CACHE_CONTROL,
       });

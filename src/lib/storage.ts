@@ -1,4 +1,5 @@
 import { supabase, supabaseKey, supabaseUrl, isDemoMode } from './supabase';
+import { optimizeImageForUpload } from './imageUtils';
 
 export interface UploadResult {
   url: string;
@@ -177,11 +178,14 @@ async function uploadViaSdk(
  * @returns Upload result with URL and path
  */
 export async function uploadFile(
-  file: File,
+  originalFile: File,
   bucket: string,
   folder?: string
 ): Promise<UploadResult> {
   try {
+    // Photos are scaled down before they are stored (PDFs and other files pass through).
+    const file = (await optimizeImageForUpload(originalFile)) as File;
+
     // In demo mode, return error to trigger fallback to data URL
     if (isDemoMode) {
       return {

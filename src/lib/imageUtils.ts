@@ -95,6 +95,8 @@ export const compressImage = async (
       canvas.width  = width;
       canvas.height = height;
       const ctx = canvas.getContext('2d')!;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, width, height);
       ctx.drawImage(img, 0, 0, width, height);
 
       const tryEncode = (q: number) => {
@@ -151,7 +153,43 @@ export const COMPRESS_PRESETS = {
 
   /** Cover / hero photo — shown full-width in PDF cover page */
   coverPhoto: { maxSide: 1800, targetBytes: 700_000 } as CompressOptions,
+
+  /**
+   * Any other photo a person uploads (customer files, inspections, receipts, scans).
+   * About 3 megapixels: sharp enough to open full screen and zoom into for damage
+   * documentation, without keeping the 12-40 megapixels a phone camera produces.
+   */
+  fieldPhoto: { maxSide: 2048, targetBytes: 600_000, quality: 0.84 } as CompressOptions,
 } as const;
+
+/**
+ * Scales an image down before it is stored, so Supabase does not fill up with
+ * full-resolution camera files. Anything that is not a photo (PDFs, SVG and animated GIF
+ * logos, documents) is returned untouched, and so is a small PNG (a logo or icon, where
+ * transparency and sharp edges matter). Never returns a bigger file than it was given.
+ */
+export async function optimizeImageForUpload(
+  file: File | Blob,
+  options: CompressOptions = COMPRESS_PRESETS.fieldPhoto,
+): Promise<File | Blob> {
+  const type = (file.type || '').toLowerCase();
+  const name = file instanceof File ? file.name : 'image';
+  const looksLikeImage = type.startsWith('image/') || /\.(jpe?g|png|webp|hei[cf])$/i.test(name);
+  if (!looksLikeImage) return file;
+  if (type === 'image/svg+xml' || type === 'image/gif') return file;
+  if ((type === 'image/png' || type === 'image/webp') && file.size <= 800_000) return file;
+  try {
+    const source = file instanceof File ? file : new File([file], name, { type: type || 'image/jpeg' });
+    const optimized = await compressImage(source, options);
+    if (!(optimized.size < file.size || isHeicFile(source))) return file;
+    // The result is a JPEG, so its name says so too.
+    return optimized.type === 'image/jpeg' && !/\.jpe?g$/i.test(optimized.name)
+      ? new File([optimized], optimized.name.replace(/\.[^./]+$/, '') + '.jpg', { type: 'image/jpeg', lastModified: optimized.lastModified })
+      : optimized;
+  } catch {
+    return file;
+  }
+}
 
 /**
  * One-year browser cache control string for Supabase storage uploads.

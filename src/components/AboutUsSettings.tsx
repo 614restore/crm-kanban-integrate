@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
+import { optimizeImageForUpload, COMPRESS_PRESETS, STORAGE_CACHE_CONTROL } from '@/lib/imageUtils';
 import { getAIConfig } from '@/lib/aiHelper';
 import type { Company } from '@/data/quoteData';
 
@@ -343,9 +344,10 @@ const AboutUsSettings: React.FC<AboutUsSettingsProps> = ({ company, onUpdate }) 
   const handleBgUpload = async (file: File) => {
     setUploadingBg(true);
     try {
-      const ext = file.name.split('.').pop() || 'jpg';
+      const optimized = (await optimizeImageForUpload(file, COMPRESS_PRESETS.coverPhoto)) as File;
+      const ext = optimized.name.split('.').pop() || 'jpg';
       const path = `about-bg-${company.id}-${Date.now()}.${ext}`;
-      const { error } = await supabase.storage.from('quote-photos').upload(path, file, { upsert: true });
+      const { error } = await supabase.storage.from('quote-photos').upload(path, optimized, { upsert: true, cacheControl: STORAGE_CACHE_CONTROL });
       if (error) throw error;
       const { data } = supabase.storage.from('quote-photos').getPublicUrl(path);
       setBgImageUrl(data.publicUrl);
@@ -362,9 +364,10 @@ const AboutUsSettings: React.FC<AboutUsSettingsProps> = ({ company, onUpdate }) 
   const handleHighlightPhotoUpload = async (highlightId: string, file: File) => {
     setUploadingHighlightId(highlightId);
     try {
-      const ext = file.name.split('.').pop() || 'jpg';
+      const optimized = (await optimizeImageForUpload(file, COMPRESS_PRESETS.quotePhoto)) as File;
+      const ext = optimized.name.split('.').pop() || 'jpg';
       const path = `highlight-${company.id}-${highlightId}-${Date.now()}.${ext}`;
-      const { error } = await supabase.storage.from('quote-photos').upload(path, file, { upsert: true });
+      const { error } = await supabase.storage.from('quote-photos').upload(path, optimized, { upsert: true, cacheControl: STORAGE_CACHE_CONTROL });
       if (error) throw error;
       const { data } = supabase.storage.from('quote-photos').getPublicUrl(path);
       setHighlights((prev) => prev.map((h) => h.id === highlightId ? { ...h, photoUrl: data.publicUrl } : h));
@@ -383,9 +386,10 @@ const AboutUsSettings: React.FC<AboutUsSettingsProps> = ({ company, onUpdate }) 
     try {
       const uploaded: ShowcasePhoto[] = [];
       for (const file of Array.from(files)) {
-        const ext = file.name.split('.').pop() || 'jpg';
+        const optimized = (await optimizeImageForUpload(file)) as File;
+        const ext = optimized.name.split('.').pop() || 'jpg';
         const path = `about-showcase-${company.id}-${Date.now()}-${uid()}.${ext}`;
-        const { error } = await supabase.storage.from('quote-photos').upload(path, file, { upsert: true });
+        const { error } = await supabase.storage.from('quote-photos').upload(path, optimized, { upsert: true, cacheControl: STORAGE_CACHE_CONTROL });
         if (error) throw error;
         const { data } = supabase.storage.from('quote-photos').getPublicUrl(path);
         uploaded.push({ id: uid(), url: data.publicUrl, caption: '' });

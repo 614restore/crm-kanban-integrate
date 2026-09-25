@@ -34,7 +34,7 @@ import type { RoofrImportMode, RoofrParsedReport, EagleViewWallsReport, EagleVie
 import { buildMeasurementLineItems } from '@/lib/measurementImport';
 import type { MeasurementProviderId } from '@/lib/measurementProviders';
 import type { AIQuotePhotoAnalysis, AIQuotePhotoSuggestedLineItem } from '@/lib/aiHelper';
-import { compressImage, COMPRESS_PRESETS, STORAGE_CACHE_CONTROL } from '@/lib/imageUtils';
+import { compressImage, optimizeImageForUpload, COMPRESS_PRESETS, STORAGE_CACHE_CONTROL } from '@/lib/imageUtils';
 
 interface QuoteBuilderProps {
   companyId: string;
@@ -3785,10 +3785,11 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
     setUploadingCoverPhoto(true);
     const toastId = toast.loading('Uploading cover photo…');
     try {
-      const ext = file.name.split('.').pop() || 'jpg';
+      const optimized = (await optimizeImageForUpload(file, COMPRESS_PRESETS.coverPhoto)) as File;
+      const ext = optimized.name.split('.').pop() || 'jpg';
       const fileName = `cover-${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
       const uploadResult = await Promise.race([
-        supabase.storage.from('quote-photos').upload(fileName, file, { contentType: file.type, upsert: true }),
+        supabase.storage.from('quote-photos').upload(fileName, optimized, { contentType: optimized.type, upsert: true }),
         new Promise<{ error: Error }>((_resolve, reject) =>
           setTimeout(() => reject(new Error('Upload timed out — please try again.')), 20_000)
         ),
@@ -8599,11 +8600,12 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
                             setUploadingTierPhoto(tier);
                             const tierToastId = toast.loading('Uploading photo…');
                             try {
-                              const ext = file.name.split('.').pop() || 'jpg';
+                              const optimized = (await optimizeImageForUpload(file, COMPRESS_PRESETS.quotePhoto)) as File;
+                              const ext = optimized.name.split('.').pop() || 'jpg';
                               // flat path — no subfolders, keeps same policy as regular photos
                               const path = `tier-${tier.toLowerCase()}-${companyId}-${Date.now()}.${ext}`;
                               const uploadResult = await Promise.race([
-                                supabase.storage.from('quote-photos').upload(path, file, { contentType: file.type, upsert: true }),
+                                supabase.storage.from('quote-photos').upload(path, optimized, { contentType: optimized.type, upsert: true }),
                                 new Promise<{ error: Error }>((_resolve, reject) =>
                                   setTimeout(() => reject(new Error('Upload timed out — please try again.')), 20_000)
                                 ),

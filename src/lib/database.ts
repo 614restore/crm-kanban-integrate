@@ -1,5 +1,6 @@
 // Database service layer for CRM data persistence
 import { supabase, isDemoMode } from './supabase';
+import { optimizeImageForUpload } from './imageUtils';
 import { markDeleted } from './recentlyDeleted';
 import { toLocalDateString } from '@/lib/dates';
 
@@ -2035,8 +2036,10 @@ class DatabaseService {
   async uploadExpenseReceipt(companyId: string, expenseId: string, file: File): Promise<string | null> {
     assertCompanyId(companyId, 'uploadExpenseReceipt');
     if (this.inDemoMode()) return null;
-    const path = `${companyId}/${expenseId}/${file.name}`;
-    const { error } = await supabase.storage.from('expense-receipts').upload(path, file, { upsert: true });
+    // A receipt photo is scaled down; a PDF receipt passes through untouched.
+    const optimized = (await optimizeImageForUpload(file)) as File;
+    const path = `${companyId}/${expenseId}/${optimized.name}`;
+    const { error } = await supabase.storage.from('expense-receipts').upload(path, optimized, { upsert: true });
     if (error) { console.error('Error uploading receipt:', error); return null; }
     const { data: urlData } = supabase.storage.from('expense-receipts').getPublicUrl(path);
     return urlData.publicUrl;

@@ -2,6 +2,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { X, Pen, ArrowRight, Circle, Square, Type, Trash2, Undo2, Check, Minus, Plus, Move, Crop } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { optimizeImageForUpload, COMPRESS_PRESETS } from '@/lib/imageUtils';
 import { toast } from 'sonner';
 
 type Tool = 'pen' | 'arrow' | 'circle' | 'rectangle' | 'text' | 'move';
@@ -516,9 +517,11 @@ const PhotoMarkupEditor: React.FC<Props> = ({ photoUrl, photoId, onSave, onClose
                 ctx.shadowBlur  = 0;
             });
 
-            const blob = await new Promise<Blob>((resolve, reject) =>
+            const rawBlob = await new Promise<Blob>((resolve, reject) =>
                 canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas empty')), 'image/jpeg', 0.92)
             );
+            // Stored at the same size budget as any other quote photo.
+            const blob = await optimizeImageForUpload(rawBlob, COMPRESS_PRESETS.quotePhoto);
             // Flat filename with NO embedded UUID — the quote-photos storage policy
             // allows uploads whose path contains no UUID at all (see storage_path_has_no_uuid),
             // same convention as the plain photo upload in PhotoUploader.tsx. Embedding photoId
