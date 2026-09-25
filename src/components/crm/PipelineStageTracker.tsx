@@ -12,7 +12,7 @@ interface PowerStage {
   color: string;
 }
 
-// 8-column Power Pipeline — each stage maps to one or more underlying statuses.
+// 9-stage Power Pipeline — each stage maps to one or more underlying statuses.
 const POWER_STAGES: PowerStage[] = [
   {
     id: 'discovery',
@@ -25,14 +25,21 @@ const POWER_STAGES: PowerStage[] = [
     id: 'inspection',
     label: 'Inspection',
     description: 'Appointment set or inspection completed',
-    statuses: ['appt_set', 'claim_filed', 'adjuster_scheduled', 'inspection_completed', 'inspected' as CustomerStatus],
+    statuses: ['appt_set', 'inspection_completed', 'inspected' as CustomerStatus],
     color: '#7c3aed',
+  },
+  {
+    id: 'adjuster_pending',
+    label: 'Adjuster / Carrier Pending',
+    description: 'Claim filed, adjuster meeting, waiting on the carrier (skipped for cash jobs)',
+    statuses: ['claim_filed', 'adjuster_scheduled', 'supplement_filed'],
+    color: '#0284c7',
   },
   {
     id: 'pending_scope',
     label: 'Pending Scope',
     description: 'Estimating or awaiting customer commitment',
-    statuses: ['estimating', 'estimate_sent', 'contingency', 'supplement_filed', 'retail'],
+    statuses: ['estimating', 'estimate_sent', 'contingency', 'retail'],
     color: '#d97706',
   },
   {
@@ -45,30 +52,30 @@ const POWER_STAGES: PowerStage[] = [
   {
     id: 'pre_production',
     label: 'Pre-Production',
-    description: 'Ordering materials and admin handoff',
+    description: 'Permits, materials, scheduling and crew',
     statuses: ['ordering_material', 'scheduled'],
     color: '#0891b2',
   },
   {
     id: 'active_build',
     label: 'Active Build',
-    description: 'Crews on site — in progress through cleanup',
-    statuses: ['in_progress', 'build_phase', 'cleanup'],
+    description: 'Crews on site',
+    statuses: ['in_progress', 'build_phase'],
     color: '#2563eb',
   },
   {
-    id: 'final_billing',
-    label: 'Final Billing',
-    description: 'Invoiced and awaiting final payment',
-    statuses: ['invoicing', 'pending_payment'],
-    color: '#e11d48',
+    id: 'qc_walkthrough',
+    label: 'QC & Walkthrough',
+    description: 'Cleanup check, photos, punch list and final walkthrough',
+    statuses: ['cleanup'],
+    color: '#0d9488',
   },
   {
-    id: 'closed_paid',
-    label: 'Closed / Paid',
-    description: 'Project complete — fully closed',
-    statuses: ['completed'],
-    color: '#16a34a',
+    id: 'final_billing',
+    label: 'Final Billing & Closed',
+    description: 'Invoiced and awaiting payment — closed once paid',
+    statuses: ['invoicing', 'pending_payment', 'completed'],
+    color: '#e11d48',
   },
 ];
 

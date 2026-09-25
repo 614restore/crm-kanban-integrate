@@ -69,10 +69,13 @@ const NEXT_STEP_ICONS: Record<string, React.ElementType> = {
 };
 
 
-// ── Power Pipeline — 8-column "Velocity" Kanban ──────────────────────────────
-// Each column groups related statuses. Cards show a sub-status badge for
+// ── Power Pipeline — 9-column "Velocity" Kanban ──────────────────────────────
+// Each column groups related statuses; the statuses themselves are unchanged, so
+// everything that sets a status (drag and drop, quotes, invoices, payments, signing)
+// still moves a customer exactly as before. Cards show a sub-status badge for
 // granularity. Insurance contacts get a blue left border; Retail get green.
 // Dragging a card into a column assigns it the column's primaryStatus.
+// Cash / retail jobs never pass through Adjuster / Carrier Pending.
 const POWER_PIPELINE_COLUMNS: Array<{
   id: string;
   title: string;
@@ -100,18 +103,29 @@ const POWER_PIPELINE_COLUMNS: Array<{
     title: 'Inspection',
     description: 'Appointment set or inspection in progress',
     primaryStatus: 'appt_set',
-    statuses: ['appt_set', 'claim_filed', 'adjuster_scheduled', 'inspection_completed', 'inspected' as CustomerStatus],
+    statuses: ['appt_set', 'inspection_completed', 'inspected' as CustomerStatus],
     color: '#7c3aed',
     bg: 'bg-violet-50',
     headerBorder: 'border-violet-200',
     badge: 'bg-violet-100 text-violet-700',
   },
   {
+    id: 'adjuster_pending',
+    title: 'Adjuster / Carrier Pending',
+    description: 'Claim filed, adjuster meeting, waiting on the carrier',
+    primaryStatus: 'claim_filed',
+    statuses: ['claim_filed', 'adjuster_scheduled', 'supplement_filed'],
+    color: '#0284c7',
+    bg: 'bg-sky-50',
+    headerBorder: 'border-sky-200',
+    badge: 'bg-sky-100 text-sky-700',
+  },
+  {
     id: 'pending_scope',
     title: 'Pending Scope',
-    description: 'Estimating or awaiting commitment',
+    description: 'Estimating or awaiting customer commitment',
     primaryStatus: 'contingency',
-    statuses: ['estimating', 'estimate_sent', 'contingency', 'supplement_filed', 'retail'],
+    statuses: ['estimating', 'estimate_sent', 'contingency', 'retail'],
     color: '#d97706',
     bg: 'bg-amber-50',
     headerBorder: 'border-amber-200',
@@ -131,7 +145,7 @@ const POWER_PIPELINE_COLUMNS: Array<{
   {
     id: 'pre_production',
     title: 'Pre-Production',
-    description: 'Ordering materials & admin handoff',
+    description: 'Permits, materials, scheduling & crew',
     primaryStatus: 'ordering_material',
     statuses: ['ordering_material', 'scheduled'],
     color: '#0891b2',
@@ -144,33 +158,33 @@ const POWER_PIPELINE_COLUMNS: Array<{
     title: 'Active Build',
     description: 'Crews on site',
     primaryStatus: 'in_progress',
-    statuses: ['in_progress', 'build_phase', 'cleanup'],
+    statuses: ['in_progress', 'build_phase'],
     color: '#2563eb',
     bg: 'bg-blue-50',
     headerBorder: 'border-blue-200',
     badge: 'bg-blue-100 text-blue-700',
   },
   {
+    id: 'qc_walkthrough',
+    title: 'QC & Walkthrough',
+    description: 'Cleanup check, photos, punch list, final walkthrough',
+    primaryStatus: 'cleanup',
+    statuses: ['cleanup'],
+    color: '#0d9488',
+    bg: 'bg-teal-50',
+    headerBorder: 'border-teal-200',
+    badge: 'bg-teal-100 text-teal-700',
+  },
+  {
     id: 'final_billing',
-    title: 'Final Billing',
-    description: 'Invoiced — awaiting payment',
+    title: 'Final Billing & Closed',
+    description: 'Invoiced, awaiting payment — then paid and closed',
     primaryStatus: 'invoicing',
-    statuses: ['invoicing', 'pending_payment'],
+    statuses: ['invoicing', 'pending_payment', 'completed'],
     color: '#e11d48',
     bg: 'bg-rose-50',
     headerBorder: 'border-rose-200',
     badge: 'bg-rose-100 text-rose-700',
-  },
-  {
-    id: 'closed_paid',
-    title: 'Closed / Paid',
-    description: 'Project complete',
-    primaryStatus: 'completed',
-    statuses: ['completed'],
-    color: '#16a34a',
-    bg: 'bg-green-50',
-    headerBorder: 'border-green-200',
-    badge: 'bg-green-100 text-green-700',
   },
   {
     id: 'lost',
@@ -205,10 +219,10 @@ const SUB_STATUS_LABELS: Partial<Record<CustomerStatus, string>> = {
   scheduled:            'Scheduled',
   in_progress:          'In Progress',
   build_phase:          'Build Phase',
-  cleanup:              'Cleanup',
-  invoicing:            'Invoicing',
-  pending_payment:      'Pending Pmt.',
-  completed:            'Complete',
+  cleanup:              'QC / Walkthrough',
+  invoicing:            'Invoiced',
+  pending_payment:      'Awaiting Pmt.',
+  completed:            'Paid & Closed',
   lost:                 'Lost',
 };
 
@@ -232,6 +246,8 @@ const CONTACT_TYPE_CARD_STYLE = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function getStageAlert(contact: Contact): { label: string; className: string } | null {
+  // A paid or lost job is finished, not stuck, so it never gets a days-in-stage warning.
+  if (contact.status === 'completed' || contact.status === 'lost') return null;
   const since = contact.statusChangedAt || contact.updatedAt || contact.createdAt;
   if (!since) return null;
   const days = Math.floor((Date.now() - new Date(since).getTime()) / (1000 * 60 * 60 * 24));
@@ -362,10 +378,15 @@ export default function PipelineBoard() {
 
   // Power Pipeline: match any contact whose normalized status falls within the column's statuses.
   const getPowerColumnContacts = (statuses: CustomerStatus[]): Contact[] => {
-    return state.contacts.filter((c) => {
+    const inColumn = state.contacts.filter((c) => {
       const normalized = normalizePipelineStatus(c.status) as CustomerStatus | undefined;
       return normalized ? (statuses as string[]).includes(normalized) : (statuses as string[]).includes(c.status);
     });
+    // Paid jobs sit below the ones still waiting on payment (only the billing column holds both).
+    const isPaid = (c: Contact) => normalizePipelineStatus(c.status) === 'completed';
+    return (statuses as string[]).includes('completed') && (statuses as string[]).length > 1
+      ? [...inColumn.filter((c) => !isPaid(c)), ...inColumn.filter(isPaid)]
+      : inColumn;
   };
 
   const handleDragStart = (e: React.DragEvent, contact: Contact) => {

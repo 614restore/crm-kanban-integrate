@@ -39,7 +39,7 @@ interface PowerStep {
   primaryStatus: CustomerStatus;
 }
 
-// 8-column Power Pipeline — each step groups related statuses.
+// 9-stage Power Pipeline — each step groups related statuses.
 const POWER_STEPS: PowerStep[] = [
   {
     id: 'discovery',
@@ -53,17 +53,26 @@ const POWER_STEPS: PowerStep[] = [
   {
     id: 'inspection',
     label: 'Inspection',
-    description: 'Appointment set — adjuster or rep on site',
-    statuses: ['appt_set', 'claim_filed', 'adjuster_scheduled', 'inspection_completed', 'inspected' as CustomerStatus],
+    description: 'Appointment set — rep on site',
+    statuses: ['appt_set', 'inspection_completed', 'inspected' as CustomerStatus],
     icon: Calendar,
     color: 'violet',
     primaryStatus: 'appt_set',
   },
   {
+    id: 'adjuster_pending',
+    label: 'Adjuster / Carrier Pending',
+    description: 'Claim filed, adjuster meeting, waiting on the carrier',
+    statuses: ['claim_filed', 'adjuster_scheduled', 'supplement_filed'],
+    icon: Clock,
+    color: 'sky',
+    primaryStatus: 'claim_filed',
+  },
+  {
     id: 'pending_scope',
     label: 'Pending Scope',
-    description: 'Estimating or awaiting homeowner / insurance commitment',
-    statuses: ['estimating', 'estimate_sent', 'contingency', 'supplement_filed', 'retail'],
+    description: 'Estimating or awaiting homeowner commitment',
+    statuses: ['estimating', 'estimate_sent', 'contingency', 'retail'],
     icon: FileText,
     color: 'amber',
     primaryStatus: 'contingency',
@@ -80,7 +89,7 @@ const POWER_STEPS: PowerStep[] = [
   {
     id: 'pre_production',
     label: 'Pre-Production',
-    description: 'Ordering materials — back office handoff',
+    description: 'Permits, materials, scheduling and crew',
     statuses: ['ordering_material', 'scheduled'],
     icon: Package,
     color: 'cyan',
@@ -89,34 +98,36 @@ const POWER_STEPS: PowerStep[] = [
   {
     id: 'active_build',
     label: 'Active Build',
-    description: 'Crews on site — construction through cleanup',
-    statuses: ['in_progress', 'build_phase', 'cleanup'],
+    description: 'Crews on site',
+    statuses: ['in_progress', 'build_phase'],
     icon: Hammer,
     color: 'blue',
     primaryStatus: 'in_progress',
   },
   {
+    id: 'qc_walkthrough',
+    label: 'QC & Walkthrough',
+    description: 'Cleanup check, photos, punch list and final walkthrough',
+    statuses: ['cleanup'],
+    icon: CheckCircle,
+    color: 'teal',
+    primaryStatus: 'cleanup',
+  },
+  {
     id: 'final_billing',
-    label: 'Final Billing',
-    description: 'Invoice sent — awaiting final payment',
-    statuses: ['invoicing', 'pending_payment'],
+    label: 'Final Billing & Closed',
+    description: 'Invoice sent, awaiting payment — closed once paid',
+    statuses: ['invoicing', 'pending_payment', 'completed'],
     icon: CreditCard,
     color: 'rose',
     primaryStatus: 'invoicing',
-  },
-  {
-    id: 'closed_paid',
-    label: 'Closed / Paid',
-    description: 'Project complete — fully closed',
-    statuses: ['completed'],
-    icon: Trophy,
-    color: 'green',
-    primaryStatus: 'completed',
   },
 ];
 
 const COLOR_MAP: Record<string, string> = {
   slate:   'text-slate-600 border-slate-400 bg-slate-50',
+  sky:     'text-sky-600 border-sky-500 bg-sky-50',
+  teal:    'text-teal-600 border-teal-500 bg-teal-50',
   violet:  'text-violet-600 border-violet-500 bg-violet-50',
   amber:   'text-amber-600 border-amber-500 bg-amber-50',
   emerald: 'text-emerald-600 border-emerald-500 bg-emerald-50',
@@ -515,7 +526,37 @@ const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({
             </button>
           )}
 
-          {(normalizedStatus === 'in_progress' || normalizedStatus === 'build_phase' || normalizedStatus === 'cleanup') && (
+          {(normalizedStatus === 'in_progress' || normalizedStatus === 'build_phase') && (
+            <button
+              onClick={() => onStatusChange?.('cleanup')}
+              className="p-3 bg-teal-100 text-teal-700 rounded-lg hover:bg-teal-200 transition-colors text-sm font-medium disabled:opacity-50"
+              disabled={!onStatusChange}
+            >
+              Send to QC &amp; Walkthrough
+            </button>
+          )}
+
+          {normalizedStatus === 'inspection_completed' && (
+            <button
+              onClick={() => onStatusChange?.('claim_filed')}
+              className="p-3 bg-sky-100 text-sky-700 rounded-lg hover:bg-sky-200 transition-colors text-sm font-medium disabled:opacity-50"
+              disabled={!onStatusChange}
+            >
+              Move to Adjuster / Carrier Pending
+            </button>
+          )}
+
+          {(normalizedStatus === 'claim_filed' || normalizedStatus === 'adjuster_scheduled' || normalizedStatus === 'supplement_filed') && (
+            <button
+              onClick={onCreateQuote}
+              className="p-3 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors text-sm font-medium disabled:opacity-50"
+              disabled={!onCreateQuote}
+            >
+              Create Quote from Carrier Scope
+            </button>
+          )}
+
+          {normalizedStatus === 'cleanup' && (
             <button
               onClick={() => onStatusChange?.('invoicing')}
               className="p-3 bg-rose-100 text-rose-700 rounded-lg hover:bg-rose-200 transition-colors text-sm font-medium disabled:opacity-50"

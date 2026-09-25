@@ -222,9 +222,25 @@ export function getNextStepForStatus(rawStatus: string | null | undefined, ctx: 
     case 'prospect':
     case 'lead':
       return getNextStep('new_lead');
-    case 'appt_set':
     case 'claim_filed':
     case 'adjuster_scheduled':
+    case 'supplement_filed':
+      // Waiting on the carrier: when their scope arrives, the next move is the quote.
+      return ctx.hasQuote
+        ? {
+            label: 'Waiting on the Carrier',
+            description: 'Follow up on the adjuster or scope, then send the quote for signature.',
+            iconName: 'Clock',
+            bgColor: 'bg-sky-50',
+            textColor: 'text-sky-700',
+            action: 'quotes',
+          }
+        : {
+            ...quoteStep(),
+            label: 'Build the Quote',
+            description: "Once the carrier's scope arrives, build the quote from it.",
+          };
+    case 'appt_set':
       return ctx.inspectionCompleted
         ? quoteStep()
         : {
@@ -240,7 +256,6 @@ export function getNextStepForStatus(rawStatus: string | null | undefined, ctx: 
       return quoteStep();
     case 'estimate_sent':
     case 'contingency':
-    case 'supplement_filed':
     case 'retail':
       if (ctx.hasQuote === false) return quoteStep();
       return {
@@ -267,8 +282,16 @@ export function getNextStepForStatus(rawStatus: string | null | undefined, ctx: 
     case 'ordering_material':
       return getNextStep('materials_ordered');
     case 'build_phase':
-    case 'cleanup':
       return getNextStep('in_progress');
+    case 'cleanup':
+      return {
+        label: 'QC & Walkthrough',
+        description: 'Check the cleanup, finish the photos and punch list, then create the final invoice.',
+        iconName: 'ClipboardList',
+        bgColor: 'bg-teal-50',
+        textColor: 'text-teal-700',
+        action: ctx.hasQuote ? 'quotes' : 'financial-tab',
+      };
     case 'invoicing':
       return getNextStep('complete');
     case 'pending_payment':

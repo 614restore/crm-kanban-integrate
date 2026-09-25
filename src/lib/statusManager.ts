@@ -301,7 +301,8 @@ export async function enhancedAutoProgression(contactId: string, newStatus: stri
     'ordering_material': 'in_progress', // When materials arrive and work begins
     'in_progress': 'build_phase', // Main construction phase
     'build_phase': 'cleanup', // Final cleanup phase
-    'cleanup': 'completed', // Job completion
+    // 'cleanup' does not advance by itself: QC & Walkthrough is a deliberate stop before billing.
+    // Creating the final invoice moves the job to 'invoicing', and a payment completes it.
     'completed': 'invoicing', // Generate final invoice
     'invoicing': 'pending_payment', // Waiting for payment
     // 'pending_payment': 'paid' (should be triggered by payment, not auto)
@@ -313,7 +314,7 @@ export async function enhancedAutoProgression(contactId: string, newStatus: stri
   console.log(`[AutoProgression] Evaluating progression: ${newStatus} → ${nextStatus} for contact ${contactId}`);
 
   // Add delay for some transitions to prevent immediate double-progression and allow user review
-  const delayedProgressions = ['estimate_sent', 'contingency', 'build_phase', 'cleanup'];
+  const delayedProgressions = ['estimate_sent', 'contingency', 'build_phase'];
   const delay = delayedProgressions.includes(newStatus) ? 3000 : 1000; // 3s for delayed, 1s for immediate
 
   // Special conditions for certain progressions
