@@ -120,7 +120,7 @@ type TabType = 'overview' | 'timeline' | 'documents' | 'financial' | 'projects' 
 
 interface SignedDoc {
   id: string;
-  docType: 'estimate' | 'work_order' | 'change_order';
+  docType: 'estimate' | 'work_order' | 'change_order' | 'agreement';
   label: string;
   title: string;
   signedBy: string;
@@ -440,6 +440,16 @@ export default function ContactDetail() {
 
       const origin = window.location.origin;
       const normalized: SignedDoc[] = [
+        // Signed quotes and contingency agreements, filed by the database when signed.
+        ...visibleDocs.filter(d => d.type === 'signed').map(d => ({
+          id: d.id,
+          docType: 'agreement' as const,
+          label: '',
+          title: d.name,
+          signedBy: '',
+          signedAt: d.uploadedAt,
+          viewUrl: d.url,
+        })),
         ...signedEstimates.map(est => ({
           id: est.id,
           docType: 'estimate' as const,
@@ -2538,13 +2548,17 @@ export default function ContactDetail() {
                       <div>
                         <div className="flex items-center gap-2 mb-0.5">
                           <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                            doc.docType === 'estimate'
+                            doc.docType === 'agreement'
+                              ? 'bg-green-100 text-green-700'
+                              : doc.docType === 'estimate'
                               ? 'bg-blue-100 text-blue-700'
                               : doc.docType === 'work_order'
                               ? 'bg-purple-100 text-purple-700'
                               : 'bg-orange-100 text-orange-700'
                           }`}>
-                            {doc.docType === 'estimate'
+                            {doc.docType === 'agreement'
+                              ? 'Agreement'
+                              : doc.docType === 'estimate'
                               ? 'Estimate'
                               : doc.docType === 'work_order'
                               ? 'Work Order'
@@ -2554,7 +2568,7 @@ export default function ContactDetail() {
                         </div>
                         <p className="font-medium text-gray-900">{doc.title}</p>
                         <p className="text-sm text-gray-500">
-                          Signed by {doc.signedBy} · {formatDate(doc.signedAt)}
+                          {doc.signedBy ? `Signed by ${doc.signedBy}` : 'Signed'} · {formatDate(doc.signedAt)}
                           {doc.amount != null && ` · ${formatCurrency(doc.amount)}`}
                         </p>
                       </div>
@@ -2589,7 +2603,8 @@ export default function ContactDetail() {
                 return member?.role ?? null;
               };
               const photos = contactDocuments.filter(d => d.type === 'photo');
-              const nonPhotoDocs = contactDocuments.filter(d => d.type !== 'photo' && d.type !== 'measurement');
+              // Signed agreements are listed in the Signed section instead.
+              const nonPhotoDocs = contactDocuments.filter(d => d.type !== 'photo' && d.type !== 'measurement' && d.type !== 'signed');
               const salesPhotos = photos.filter(d => {
                 const role = getRoleForUploader(d.uploadedBy);
                 return role === null || !FIELD_ROLES.has(role);
