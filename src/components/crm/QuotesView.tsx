@@ -18,7 +18,7 @@ import { quoteProjectTemplates, TemplateLineItem } from '@/data/quoteTemplates';
 import {
   FileText, Plus, Search, Trash2, X, Save, User, Send, Link2, Eye, ChevronDown,
   Home, Wrench, Hammer, Sun, Droplets, Layers, Grid3x3,
-  Scroll, Tablet, PackageOpen, Box, ClipboardList, DollarSign, Archive, ArchiveRestore,
+  Scroll, Tablet, PackageOpen, Box, ClipboardList, DollarSign, Archive, ArchiveRestore, Shield,
 } from 'lucide-react';
 
 // ── QuoteMGR-parity quote builder for web ─────────────────────────────────
@@ -151,6 +151,8 @@ export default function QuotesView() {
   const [previewQuoteId, setPreviewQuoteId] = useState<string | null>(null);
   const [previewReturnStep, setPreviewReturnStep] = useState<number | null>(null);
   const [builderNonce, setBuilderNonce] = useState(0);
+  // Inspection reports use the builder's inspection mode (contingency + 3-day cancel steps).
+  const [builderInspection, setBuilderInspection] = useState(false);
   const [quoteCompany, setQuoteCompany] = useState<Company | null>(null);
   const [teamMember, setTeamMember] = useState<TeamMember | null>(null);
   const [builderContextError, setBuilderContextError] = useState<string | null>(null);
@@ -162,6 +164,11 @@ export default function QuotesView() {
     if (!pending) return;
     setEditingQuoteId(pending.quoteId ?? null);
     setBuilderPrefill(pending.quoteId ? null : pending);
+    setBuilderInspection(!!pending.inspection);
+    if (pending.quoteId) {
+      supabase.from('quotes').select('project_type').eq('id', pending.quoteId).maybeSingle()
+        .then(({ data }) => { if (data?.project_type === 'inspection_report') setBuilderInspection(true); });
+    }
     setPreviewQuoteId(null);
     setPreviewReturnStep(null);
     setBuilderNonce((n) => n + 1);
@@ -382,9 +389,15 @@ export default function QuotesView() {
 
   const openNew = () => {
     setEditingQuoteId(null); setBuilderPrefill(null); setPreviewQuoteId(null); setPreviewReturnStep(null);
+    setBuilderInspection(false);
     setBuilderNonce((n) => n + 1); setShowBuilder(true);
   };
+  const openNewInspection = () => {
+    openNew();
+    setBuilderInspection(true);
+  };
   const openEdit = (id: string) => {
+    setBuilderInspection(quotes.find((q) => q.id === id)?.project_type === 'inspection_report');
     setEditingQuoteId(id); setBuilderPrefill(null); setPreviewQuoteId(null); setPreviewReturnStep(null); setShowBuilder(true);
   };
   const openPreview = (id: string) => { setPreviewReturnStep(null); setPreviewQuoteId(id); };
@@ -536,7 +549,7 @@ export default function QuotesView() {
   if (showBuilder && quoteCompany && teamMember && companyId) {
     return (
       <QuoteBuilder
-        key={editingQuoteId ?? `new-${builderNonce}`}
+        key={`${editingQuoteId ?? `new-${builderNonce}`}-${builderInspection ? 'inspection' : 'quote'}`}
         companyId={companyId}
         userId={teamMember.id}
         currentUser={teamMember}
@@ -544,6 +557,7 @@ export default function QuotesView() {
         editQuoteId={editingQuoteId}
         prefilledCustomerId={builderPrefill?.contactId ?? null}
         initialStep={previewReturnStep ?? 0}
+        inspectionOnly={builderInspection}
         onSave={(id) => setEditingQuoteId(id)}
         onSent={closeBuilder}
         onPreview={(id, step) => { setEditingQuoteId(id); setPreviewReturnStep(step); setPreviewQuoteId(id); }}
@@ -564,12 +578,21 @@ export default function QuotesView() {
             Tiered Good / Better / Best proposals — shared with the mobile app.
           </p>
         </div>
-        <button
-          onClick={openNew}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-        >
-          <Plus size={18} /> New Quote
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={openNewInspection}
+            className="flex items-center gap-2 bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50 px-4 py-2 rounded-lg font-medium transition-colors"
+            title="Inspection report with contingency agreement and 3-day cancel notice"
+          >
+            <Shield size={18} /> New Inspection Report
+          </button>
+          <button
+            onClick={openNew}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+          >
+            <Plus size={18} /> New Quote
+          </button>
+        </div>
       </div>
 
       <div className="relative mb-4">

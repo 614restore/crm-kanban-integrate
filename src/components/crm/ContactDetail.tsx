@@ -942,6 +942,12 @@ export default function ContactDetail() {
     dispatch({ type: 'SET_VIEW', payload: 'quotes' });
   };
 
+  const openNewInspection = () => {
+    if (!contact) return;
+    dispatch({ type: 'SET_PENDING_QUOTE', payload: { contactId: contact.id, inspection: true } });
+    dispatch({ type: 'SET_VIEW', payload: 'quotes' });
+  };
+
   const openQuote = (quoteId: string) => {
     if (!contact) return;
     dispatch({ type: 'SET_PENDING_QUOTE', payload: { contactId: contact.id, quoteId } });
@@ -2820,6 +2826,14 @@ export default function ContactDetail() {
                   <Plus size={18} />
                   New Quote
                 </button>
+                <button
+                  onClick={openNewInspection}
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-indigo-200 text-indigo-700 rounded-lg hover:bg-indigo-50 transition-colors"
+                  title="Inspection report with contingency agreement and 3-day cancel notice"
+                >
+                  <Shield size={18} />
+                  New Inspection Report
+                </button>
                 {(() => {
                   const pdfs = (contactDocuments || []).filter(d =>
                     d.name?.toLowerCase().endsWith('.pdf') || d.url?.toLowerCase().includes('.pdf')
@@ -2985,13 +2999,23 @@ export default function ContactDetail() {
                   <FileText size={20} />
                   Quotes ({contactQuotes.length})
                 </h3>
-                <button
-                  onClick={openNewQuote}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                >
-                  <Plus size={18} />
-                  New Quote
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={openNewInspection}
+                    className="flex items-center gap-2 px-4 py-2 bg-white border border-indigo-200 text-indigo-700 rounded-lg hover:bg-indigo-50 transition-colors"
+                    title="Inspection report with contingency agreement and 3-day cancel notice"
+                  >
+                    <Shield size={18} />
+                    New Inspection Report
+                  </button>
+                  <button
+                    onClick={openNewQuote}
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                  >
+                    <Plus size={18} />
+                    New Quote
+                  </button>
+                </div>
               </div>
 
               {contactQuotes.length > 0 ? (
