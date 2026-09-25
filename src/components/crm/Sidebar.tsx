@@ -5,6 +5,7 @@ import { useAuth } from '@/lib/authContext';
 import { useCompanyBrand } from '@/lib/useCompanyBrand';
 import { useNotificationFeed, type FeedNotification } from '@/hooks/useNotificationFeed';
 import NotificationDetailDialog from './NotificationDetailDialog';
+import BugReportModal from './BugReportModal';
 import { openNotificationTarget } from '@/lib/notificationNavigation';
 import {
   LayoutDashboard,
@@ -132,6 +133,7 @@ export default function Sidebar() {
   const { currentView, sidebarCollapsed, currentUser } = state;
   const { name: companyName, logoUrl: companyLogoUrl } = useCompanyBrand();
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showBugReport, setShowBugReport] = useState(false);
   // Same list as the top bar bell, including notifications saved in the database.
   const { items: notificationFeed, unreadCount, markRead, markAllRead } = useNotificationFeed();
   // Clicking opens the whole notification; the list cuts long messages off.
@@ -360,6 +362,12 @@ export default function Sidebar() {
           <a href="/eula" target="_blank" rel="noopener noreferrer" className="text-xs text-slate-500 hover:text-slate-300 transition-colors">EULA</a>
           <span className="text-slate-600 text-xs">·</span>
           <a href="mailto:614restorellc@gmail.com?subject=TrussCTR%20Support" className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Support</a>
+          {profile?.company_id && (
+            <>
+              <span className="text-slate-600 text-xs">·</span>
+              <button type="button" onClick={() => setShowBugReport(true)} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Report a bug</button>
+            </>
+          )}
         </div>
       )}
 
@@ -413,6 +421,15 @@ export default function Sidebar() {
           </button>
         )}
       </div>
+      {showBugReport && profile?.company_id && (
+        <BugReportModal
+          companyId={profile.company_id}
+          companyName={companyName || 'Your company'}
+          userEmail={profile.email}
+          userRole={profile.role}
+          onClose={() => setShowBugReport(false)}
+        />
+      )}
       <NotificationDetailDialog
         notification={openedNotification}
         onClose={() => setOpenedNotification(null)}
