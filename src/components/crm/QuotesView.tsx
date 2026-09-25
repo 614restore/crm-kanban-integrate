@@ -19,6 +19,7 @@ import {
   FileText, Plus, Search, Trash2, X, Save, User, Send, Link2, Eye, ChevronDown,
   Home, Wrench, Hammer, Sun, Droplets, Layers, Grid3x3,
   Scroll, Tablet, PackageOpen, Box, ClipboardList, DollarSign, Archive, ArchiveRestore, Shield,
+  MoreHorizontal, Copy, Loader2,
 } from 'lucide-react';
 
 // ── QuoteMGR-parity quote builder for web ─────────────────────────────────
@@ -138,6 +139,9 @@ export default function QuotesView() {
   const [showArchived, setShowArchived] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  // The row whose ⋯ Actions menu is open, and where to draw it (fixed, so the table's scroll box can't clip it).
+  const [actionMenu, setActionMenu] = useState<{ quote: QuoteRow; top: number; right: number } | null>(null);
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
   const [showBuilder, setShowBuilder] = useState(false);
   const [editingQuoteId, setEditingQuoteId] = useState<string | null>(null);
   const [builderPrefill, setBuilderPrefill] = useState<PendingQuote | null>(null);
@@ -309,6 +313,129 @@ export default function QuotesView() {
   // Only TrussCTR's own project may be written to; QuoteMGR's projects are read-only.
   const isReadOnlyProject = () =>
     !String((supabase as any).supabaseUrl || import.meta.env.VITE_SUPABASE_URL || '').includes('llamtjsquoqlejznmyjl');
+
+  // Copies a quote into a new draft, as QuoteMGR's Duplicate Quote does: the scope
+  // options, line items and photos come along; signatures, payments, the share link,
+  // sent history and the chosen tier do not.
+  const duplicateQuote = async (q: QuoteRow) => {
+    if (!companyId) return;
+    if (isReadOnlyProject()) { toast.error('Quotes are read-only in this environment.'); return; }
+    setDuplicatingId(q.id);
+    try {
+      const { data: src, error: srcErr } = await supabase
+        .from('quotes').select('*').eq('id', q.id).eq('company_id', companyId).single();
+      if (srcErr || !src) throw srcErr ?? new Error('Quote not found');
+
+      const { data: srcOptions } = await supabase
+        .from('quote_options').select('*').eq('quote_id', q.id).order('sort_order');
+      const { data: items } = await supabase
+        .from('quote_line_items').select('*').eq('quote_id', q.id);
+
+      // A quote can outlive its customer. Copy it without the link rather than fail on it.
+      let keepCustomer = false;
+      const customerId = src.customer_id || src.contact_id;
+      if (customerId) {
+        const { data: cust } = await supabase
+          .from('customers').select('id').eq('id', customerId).eq('company_id', companyId).maybeSingle();
+        keepCustomer = !!cust;
+      }
+
+      // A multi-scope quote keeps each scope's total on its own tier column.
+      let goodTotal = src.good_total;
+      let betterTotal = src.better_total;
+      let bestTotal = src.best_total;
+      const isMultiScope = !!(srcOptions?.length && items?.some((i: any) => i.quote_option_id != null));
+      if (isMultiScope && items && srcOptions) {
+        const sorted = [...srcOptions].sort((a: any, b: any) => a.sort_order - b.sort_order);
+        const optTotal = (optId: string) =>
+          items.filter((i: any) => i.quote_option_id === optId)
+            .reduce((sum: number, i: any) => sum + (i.quantity ?? 0) * (i.good_price ?? 0), 0);
+        goodTotal = sorted[0] ? optTotal(sorted[0].id) : 0;
+        betterTotal = sorted[1] ? optTotal(sorted[1].id) : 0;
+        bestTotal = sorted[2] ? optTotal(sorted[2].id) : 0;
+      }
+
+      const OMIT = new Set([
+        'id', 'created_at', 'updated_at', 'share_token', 'status', 'is_archived',
+        'signed_at', 'signed_by', 'signature_data', 'cancel_signature_data', 'cancel_signed_at',
+        'contractor_signature_data', 'contractor_signed_by', 'contractor_signed_at', 'signed_pdf_url',
+        'viewed_at', 'sent_at', 'final_offer_sent_at', 'final_offer_pending_at',
+        'final_offer_pending_discount_pct', 'final_offer_submitted_by',
+        'completion_certificate_sent_at', 'certificate_customer_signed_at',
+        'inspection_report_viewed_at', 'last_sent_subject', 'last_sent_message', 'last_sent_cc_emails',
+        'selected_tier', 'customer_selected_upgrades', 'financing_status',
+        'quote_number', 'cover_page_title', 'company_id', 'created_by', 'customer_id', 'contact_id',
+        'good_total', 'better_total', 'best_total',
+      ]);
+      const copyFields: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(src)) if (!OMIT.has(k)) copyFields[k] = v;
+
+      const quoteNumber = `${src.project_type === 'inspection_report' ? 'IC' : 'QT'}-${new Date().getFullYear()}-${String(Date.now()).slice(-5)}`;
+      const { data: newQuote, error } = await supabase
+        .from('quotes')
+        .insert({
+          ...copyFields,
+          company_id: companyId,
+          created_by: profile?.id ?? null,
+          customer_id: keepCustomer ? customerId : null,
+          quote_number: quoteNumber,
+          status: 'draft',
+          cover_page_title: src.cover_page_title
+            ? `Copy of ${String(src.cover_page_title).replace(/^(copy of\s+)+/i, '')}`
+            : null,
+          good_total: goodTotal,
+          better_total: betterTotal,
+          best_total: bestTotal,
+        })
+        .select()
+        .single();
+      if (error || !newQuote) throw error ?? new Error('Could not create the copy');
+
+      // From here on a failure removes the half-built copy instead of leaving a broken draft.
+      try {
+        const optIdMap: Record<string, string> = {};
+        if (srcOptions?.length) {
+          const rows = srcOptions.map(({ id: _id, quote_id: _qid, created_at: _ca, updated_at: _ua, ...rest }: any) => ({
+            ...rest, quote_id: newQuote.id,
+          }));
+          const { data: newOpts, error: optsErr } = await supabase.from('quote_options').insert(rows).select();
+          if (optsErr) throw new Error(`Failed to copy scope options: ${optsErr.message}`);
+          srcOptions.forEach((old: any) => {
+            const match = (newOpts as any[] | null)?.find((n) => n.sort_order === old.sort_order);
+            if (match) optIdMap[old.id] = match.id;
+          });
+        }
+        if (items?.length) {
+          const rows = items.map(({ id: _id, quote_id: _qid, created_at: _ca, ...rest }: any) => ({
+            ...rest,
+            quote_id: newQuote.id,
+            quote_option_id: rest.quote_option_id ? (optIdMap[rest.quote_option_id] ?? null) : null,
+          }));
+          const { error: itemsErr } = await supabase.from('quote_line_items').insert(rows);
+          if (itemsErr) throw new Error(`Failed to copy line items: ${itemsErr.message}`);
+        }
+        const { data: photos } = await supabase.from('quote_photos').select('*').eq('quote_id', q.id);
+        if (photos?.length) {
+          const rows = photos.map(({ id: _id, quote_id: _qid, created_at: _ca, ...rest }: any) => ({
+            ...rest, quote_id: newQuote.id,
+          }));
+          await supabase.from('quote_photos').insert(rows);
+        }
+      } catch (copyErr) {
+        await supabase.from('quotes').delete().eq('id', newQuote.id).eq('company_id', companyId);
+        throw copyErr;
+      }
+
+      toast.success(`Duplicated as ${quoteNumber}`);
+      loadQuotes();
+      openEdit(newQuote.id); // open the copy ready to edit
+    } catch (err: any) {
+      console.error('Duplicate error:', err);
+      toast.error(`Failed to duplicate: ${err?.message || 'Unknown error'}`);
+    } finally {
+      setDuplicatingId(null);
+    }
+  };
 
   const setArchived = async (ids: string[], archived: boolean) => {
     if (!ids.length) return;
@@ -707,82 +834,20 @@ export default function QuotesView() {
                   <td className="px-4 py-3 text-right text-gray-700">{money(q.best_total)}</td>
                   <td className="px-4 py-3 text-gray-500">{new Date(q.created_at).toLocaleDateString()}</td>
                   <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex items-center justify-end gap-1">
-                      {q.share_token && (
-                        <a
-                          href={shareUrl(q.share_token)}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                          title="View customer page"
-                        >
-                          <Eye size={15} />
-                        </a>
-                      )}
+                    <div className="flex items-center justify-end">
                       <button
-                        onClick={() => openPreview(q.id)}
-                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                        title="Preview quote"
+                        onClick={(e) => {
+                          const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                          setActionMenu(actionMenu?.quote.id === q.id ? null : { quote: q, top: r.bottom + 4, right: window.innerWidth - r.right });
+                        }}
+                        disabled={bulkBusy || duplicatingId === q.id}
+                        className="p-1.5 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors disabled:opacity-50"
+                        title="Actions"
+                        aria-haspopup="menu"
+                        aria-expanded={actionMenu?.quote.id === q.id}
                       >
-                        <FileText size={15} />
+                        {duplicatingId === q.id ? <Loader2 size={16} className="animate-spin" /> : <MoreHorizontal size={16} />}
                       </button>
-                      <button
-                        onClick={() => handleCopyLink(q)}
-                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                        title="Copy share link"
-                      >
-                        <Link2 size={15} />
-                      </button>
-                      <button
-                        onClick={() => handleSendQuote(q)}
-                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                        title="Email quote to customer"
-                      >
-                        <Send size={15} />
-                      </button>
-                      <button
-                        onClick={() => openReceipts(q)}
-                        className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
-                        title="Payments & receipts"
-                      >
-                        <DollarSign size={15} />
-                      </button>
-                      {q.status === 'signed' && (
-                        <button
-                          onClick={() => openInvoice(q)}
-                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                          title="Create invoice"
-                        >
-                          <FileText size={15} />
-                        </button>
-                      )}
-                      {q.status === 'signed' && (
-                        <button
-                          onClick={() => openWorkOrder(q)}
-                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                          title="Create work order"
-                        >
-                          <ClipboardList size={15} />
-                        </button>
-                      )}
-                      <button
-                        onClick={() => setArchived([q.id], !showArchived)}
-                        disabled={bulkBusy}
-                        className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors disabled:opacity-50"
-                        title={showArchived ? 'Restore quote' : 'Archive quote'}
-                      >
-                        {showArchived ? <ArchiveRestore size={15} /> : <Archive size={15} />}
-                      </button>
-                      {q.status !== 'signed' && (
-                        <button
-                          onClick={() => deleteQuotes([q.id])}
-                          disabled={bulkBusy}
-                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
-                          title="Delete quote"
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      )}
                     </div>
                   </td>
                 </tr>
@@ -791,6 +856,44 @@ export default function QuotesView() {
           </table>
         </div>
       )}
+
+      {actionMenu && (() => {
+        const q = actionMenu.quote;
+        const close = () => setActionMenu(null);
+        const item = (label: string, icon: React.ReactNode, onClick: () => void, tone = 'text-gray-700 hover:bg-gray-50') => (
+          <button
+            key={label}
+            role="menuitem"
+            onClick={() => { close(); onClick(); }}
+            className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left ${tone}`}
+          >
+            {icon}{label}
+          </button>
+        );
+        return (
+          <>
+            <div className="fixed inset-0 z-40" onClick={close} onContextMenu={(e) => { e.preventDefault(); close(); }} />
+            <div
+              role="menu"
+              className="fixed z-50 w-56 rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
+              style={{ top: Math.min(actionMenu.top, window.innerHeight - 420), right: actionMenu.right }}
+              onKeyDown={(e) => { if (e.key === 'Escape') close(); }}
+            >
+              {q.share_token && item('View customer page', <Eye size={15} />, () => window.open(shareUrl(q.share_token as string), '_blank', 'noopener'))}
+              {item('Preview quote', <FileText size={15} />, () => openPreview(q.id))}
+              {item('Copy share link', <Link2 size={15} />, () => handleCopyLink(q))}
+              {item('Email to customer', <Send size={15} />, () => handleSendQuote(q))}
+              {item('Payments & receipts', <DollarSign size={15} />, () => openReceipts(q))}
+              {q.status === 'signed' && item('Create invoice', <FileText size={15} />, () => openInvoice(q))}
+              {q.status === 'signed' && item('Create work order', <ClipboardList size={15} />, () => openWorkOrder(q))}
+              <div className="my-1 border-t border-gray-100" />
+              {item('Duplicate', <Copy size={15} />, () => duplicateQuote(q))}
+              {item(showArchived ? 'Restore' : 'Archive', showArchived ? <ArchiveRestore size={15} /> : <Archive size={15} />, () => setArchived([q.id], !showArchived))}
+              {q.status !== 'signed' && item('Delete', <Trash2 size={15} />, () => deleteQuotes([q.id]), 'text-red-600 hover:bg-red-50')}
+            </div>
+          </>
+        );
+      })()}
 
       {workOrderQuote && workOrderCompany && companyId && (() => {
         const customerId = workOrderQuote.customer_id || workOrderQuote.contact_id;
