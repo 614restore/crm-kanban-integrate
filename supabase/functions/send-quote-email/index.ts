@@ -265,6 +265,11 @@ serve(async (req) => {
       ? body.email_message.trim().split(/\n+/).map(line => `<p style="margin:0 0 10px">${line}</p>`).join('')
       : null;
 
+    // The app's default message already opens with "Hi <first name>,". Only add the
+    // template's own "Hello <name>," when the message does not greet the customer
+    // itself, so they are not greeted twice.
+    const messageHasGreeting = /^\s*(hi|hello|hey|dear|good\s+(morning|afternoon|evening))\b/i.test(body.email_message ?? '');
+
     const companyName = body.from_company || fallbackFromName;
 
     // Internal copy sent to the contractor — does NOT include the share token link
@@ -388,7 +393,7 @@ serve(async (req) => {
           <tr>
             <td class="email-body" style="background:#ffffff;padding:32px 36px;border-left:1px solid #e5e7eb;border-right:1px solid #e5e7eb">
 
-              <p style="margin:0 0 20px;font-size:15px;color:#374151">Hello ${body.to_name || 'there'},</p>
+              ${messageHasGreeting ? '' : `<p style="margin:0 0 20px;font-size:15px;color:#374151">Hello ${body.to_name || 'there'},</p>`}
 
               ${customMessageHtml
                 ? `<div style="margin:0 0 20px;font-size:15px;color:#374151">${customMessageHtml}</div>`
