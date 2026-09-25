@@ -172,6 +172,7 @@ serve(async (req) => {
     // not repeated and callers never need to pass these flags themselves.
     let resolvedProjectType: string | null = null;
     let resolvedContingencyEnabled = false;
+    let resolvedQuoteId: string | null = null;
 
     if (payloadShareToken && admin) {
       const { data: quote } = await admin
@@ -182,7 +183,8 @@ serve(async (req) => {
       if (quote) {
         // Customer-facing path: a valid share_token authorises the send.
         authorized = true;
-        const q = quote as { project_type?: string | null; contingency_enabled?: boolean | null };
+        const q = quote as { id?: string; project_type?: string | null; contingency_enabled?: boolean | null };
+        resolvedQuoteId = q.id ?? null;
         resolvedProjectType = q.project_type ?? null;
         resolvedContingencyEnabled = q.contingency_enabled === true;
       }
@@ -217,6 +219,15 @@ serve(async (req) => {
       companyMailSettings?.quote_reply_to_email?.trim() ||
       requestedFromEmail ||
       undefined;
+    // When a reply domain is configured (INBOUND_REPLY_DOMAIN), a staff send sets the
+    // Reply-To header to this quote's own reply address, so the customer's answer is
+    // filed in their Notes by receive-email-reply, which also forwards a copy to the rep.
+    // The footer and the rep's copy still show the rep's real email.
+    const inboundDomain = (Deno.env.get('INBOUND_REPLY_DOMAIN') || '').trim().toLowerCase();
+    const replyToHeader =
+      inboundDomain && senderUserEmail && resolvedQuoteId
+        ? `reply+${resolvedQuoteId}@${inboundDomain}`
+        : replyToEmail;
     const bccEmail =
       body.bcc_email?.trim() ||
       replyToEmail ||
@@ -519,7 +530,7 @@ serve(async (req) => {
         provider === 'gmail' || provider === 'outlook'
           ? smtpUsername
           : requestedFromEmail || smtpUsername;
-      const effectiveReplyTo = replyToEmail || requestedFromEmail || smtpUsername || undefined;
+      const effectiveReplyTo = replyToHeader || requestedFromEmail || smtpUsername || undefined;
       const transporter = nodemailer.createTransport({
         host: companyMailSettings.smtp_host,
         port: companyMailSettings.smtp_port,
@@ -639,7 +650,7 @@ serve(async (req) => {
       body: JSON.stringify({
         from: fromHeader,
         to: [body.to_email],
-        reply_to: replyToEmail,
+        reply_to: replyToHeader,
         subject,
         html,
         text: plainText,
@@ -682,7 +693,7 @@ serve(async (req) => {
           body: JSON.stringify({
             from: fromHeader,
             to: [ccAddr],
-            reply_to: replyToEmail,
+            reply_to: replyToHeader,
             subject: `[CC] ${subject}`,
             html: ccHtml,
             ...(resendAttachments ? { attachments: resendAttachments } : {}),
