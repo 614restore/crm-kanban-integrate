@@ -4434,7 +4434,9 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
         <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4">
           <span className="text-amber-700 text-lg">🔒</span>
           <p className="text-sm font-medium text-amber-800">
-            This quote has been signed and is locked. To make changes, create a Change Order.
+            {projectType === 'inspection_report' || inspectionOnly
+              ? 'This inspection report has been signed and is locked.'
+              : 'This quote has been signed and is locked. To make changes, create a Change Order.'}
           </p>
         </div>
       )}

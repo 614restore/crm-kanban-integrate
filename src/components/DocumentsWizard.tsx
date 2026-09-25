@@ -269,6 +269,11 @@ const DocumentsWizard: React.FC<DocumentsWizardProps> = ({ quotes, company, curr
   const [markingPaid, setMarkingPaid] = useState(false);
 
   const q = fullQuote || selectedQuote;
+  // A change order amends work the customer has seen, so it applies to a quote they have
+  // opened or signed, and never to an inspection report.
+  const changeOrderEligible =
+    !!q && q.project_type !== 'inspection_report' &&
+    (q.status === 'viewed' || q.status === 'signed' || !!q.viewed_at || !!q.signed_at);
   const customerName = q?.customer
     ? `${q.customer.first_name} ${q.customer.last_name}`.trim()
     : q?.quote_number ?? '';
@@ -2265,83 +2270,87 @@ const DocumentsWizard: React.FC<DocumentsWizardProps> = ({ quotes, company, curr
                   </div>
                 </DocRow>
 
-                {/* ── Change Order ── */}
-                <DocRow
-                  icon={<FilePlus className="w-4 h-4 text-orange-500" />}
-                  label="Change Order"
-                  status={changeOrders.length > 0 ? 'complete' : 'none'}
-                  statusLabel={changeOrders.length > 0 ? `${changeOrders.length} Item${changeOrders.length > 1 ? 's' : ''}` : 'None'}
-                  dimmed={!invoice}
-                >
-                  {!invoice ? (
-                    <p className="text-xs text-gray-400">No invoice linked — create an invoice first.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {changeOrders.length > 0 && (
-                        <div className="rounded-lg border border-gray-200 divide-y divide-gray-100 text-xs">
-                          {changeOrders.map((co: any) => (
-                            <div key={co.id} className="flex items-center gap-2 px-3 py-2">
-                              <span className="flex-1 text-gray-700 truncate">{co.description}</span>
-                              <span className="font-semibold text-gray-900 shrink-0">
-                                ${Number(co.total).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                              </span>
-                              <button onClick={() => handleDeleteChangeOrder(co.id)} className="text-gray-300 hover:text-red-500 transition-colors shrink-0">
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {showAddCo ? (
-                        <div className="space-y-2 bg-orange-50 rounded-lg p-3 border border-orange-200">
-                          <input
-                            type="text"
-                            placeholder='Description (e.g. "Gutter upgrade")'
-                            value={newCoDesc}
-                            onChange={e => setNewCoDesc(e.target.value)}
-                            className="w-full px-2.5 py-1.5 border border-orange-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-orange-400"
-                          />
-                          <div className="flex gap-2">
-                            <input
-                              type="number"
-                              placeholder="Amount"
-                              value={newCoAmount}
-                              onChange={e => setNewCoAmount(e.target.value)}
-                              className="flex-1 px-2.5 py-1.5 border border-orange-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-orange-400"
-                            />
-                            <button
-                              onClick={handleAddChangeOrder}
-                              disabled={savingCo || !newCoDesc.trim() || !newCoAmount}
-                              className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white rounded-lg text-xs font-medium transition-colors flex items-center gap-1"
-                            >
-                              {savingCo ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
-                              Save
-                            </button>
-                            <button onClick={() => setShowAddCo(false)} className="px-2 text-gray-400 hover:text-gray-600 text-xs">Cancel</button>
-                          </div>
-                        </div>
-                      ) : null}
-
-                      <div className="flex flex-wrap gap-2">
-                        <ActionBtn
-                          onClick={() => setShowAddCo(v => !v)}
-                          icon={<Plus className="w-3 h-3" />}
-                          label="Add Item"
-                        />
+                {/* ── Change Order ──
+                    Only a quote (not an inspection report) the customer has opened can need one,
+                    after it has been sent. Any that already exist stay visible. */}
+                {(changeOrderEligible || changeOrders.length > 0) && (
+                  <DocRow
+                    icon={<FilePlus className="w-4 h-4 text-orange-500" />}
+                    label="Change Order"
+                    status={changeOrders.length > 0 ? 'complete' : 'none'}
+                    statusLabel={changeOrders.length > 0 ? `${changeOrders.length} Item${changeOrders.length > 1 ? 's' : ''}` : 'None'}
+                    dimmed={!invoice}
+                  >
+                    {!invoice ? (
+                      <p className="text-xs text-gray-400">No invoice linked — create an invoice first.</p>
+                    ) : (
+                      <div className="space-y-2">
                         {changeOrders.length > 0 && (
-                          <ActionBtn
-                            onClick={handleDownloadChangeOrderPdf}
-                            disabled={generatingPdf === 'co'}
-                            icon={generatingPdf === 'co' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
-                            label="Download PDF"
-                          />
+                          <div className="rounded-lg border border-gray-200 divide-y divide-gray-100 text-xs">
+                            {changeOrders.map((co: any) => (
+                              <div key={co.id} className="flex items-center gap-2 px-3 py-2">
+                                <span className="flex-1 text-gray-700 truncate">{co.description}</span>
+                                <span className="font-semibold text-gray-900 shrink-0">
+                                  ${Number(co.total).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                </span>
+                                <button onClick={() => handleDeleteChangeOrder(co.id)} className="text-gray-300 hover:text-red-500 transition-colors shrink-0">
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
                         )}
-                      </div>
-                    </div>
-                  )}
-                </DocRow>
 
+                        {showAddCo ? (
+                          <div className="space-y-2 bg-orange-50 rounded-lg p-3 border border-orange-200">
+                            <input
+                              type="text"
+                              placeholder='Description (e.g. "Gutter upgrade")'
+                              value={newCoDesc}
+                              onChange={e => setNewCoDesc(e.target.value)}
+                              className="w-full px-2.5 py-1.5 border border-orange-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-orange-400"
+                            />
+                            <div className="flex gap-2">
+                              <input
+                                type="number"
+                                placeholder="Amount"
+                                value={newCoAmount}
+                                onChange={e => setNewCoAmount(e.target.value)}
+                                className="flex-1 px-2.5 py-1.5 border border-orange-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-orange-400"
+                              />
+                              <button
+                                onClick={handleAddChangeOrder}
+                                disabled={savingCo || !newCoDesc.trim() || !newCoAmount}
+                                className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white rounded-lg text-xs font-medium transition-colors flex items-center gap-1"
+                              >
+                                {savingCo ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                                Save
+                              </button>
+                              <button onClick={() => setShowAddCo(false)} className="px-2 text-gray-400 hover:text-gray-600 text-xs">Cancel</button>
+                            </div>
+                          </div>
+                        ) : null}
+
+                        <div className="flex flex-wrap gap-2">
+                          <ActionBtn
+                            onClick={() => setShowAddCo(v => !v)}
+                            icon={<Plus className="w-3 h-3" />}
+                            label="Add Item"
+                          />
+                          {changeOrders.length > 0 && (
+                            <ActionBtn
+                              onClick={handleDownloadChangeOrderPdf}
+                              disabled={generatingPdf === 'co'}
+                              icon={generatingPdf === 'co' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
+                              label="Download PDF"
+                            />
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </DocRow>
+
+                )}
                 {/* ── Invoice ── */}
                 <DocRow
                   icon={<FileText className="w-4 h-4 text-blue-600" />}
