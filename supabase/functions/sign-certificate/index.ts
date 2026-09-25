@@ -2,6 +2,14 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 
+
+// The verified platform sender every TrussCTR email goes out from (same one the quote emails use).
+const platformFromEmail = (() => {
+  const v = (Deno.env.get('ALERT_FROM_EMAIL') || '').trim();
+  return v.match(/<([^>]+)>/)?.[1] || v || 'scopemgr@614restore.com';
+})();
+const APP_URL = (Deno.env.get('APP_URL') || 'https://trussctr.614restore.com').replace(/\/$/, '');
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -121,8 +129,8 @@ serve(async (req) => {
     // Send email notification to the contractor (non-fatal)
     try {
       const resendKey = Deno.env.get('RESEND_API_KEY');
-      const fromEmail = Deno.env.get('ALERT_FROM_EMAIL') || 'noreply@quotemgr.app';
-      const appUrl = Deno.env.get('APP_URL') || 'https://app.614restore.com';
+      const fromEmail = platformFromEmail;
+      const appUrl = APP_URL;
 
       const companyData = quote.company as Record<string, any> | null;
       const creatorData = quote.creator as Record<string, any> | null;
@@ -151,10 +159,10 @@ serve(async (req) => {
               <p style="margin:0 0 16px;color:#6b7280;font-size:13px">Signed at: ${new Date(signedAt).toLocaleString()}</p>
               <p style="margin:0 0 24px">Log in to view and download the fully-signed certificate.</p>
               <a href="${appUrl}" style="display:inline-block;background:#1e3a5f;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">
-                Open QuoteMGR →
+                Open TrussCTR →
               </a>
               <p style="margin:24px 0 0;font-size:12px;color:#6b7280">
-                This is an automated notification from QuoteMGR.
+                This is an automated notification from TrussCTR.
               </p>
             </div>
           </div>`;
@@ -164,7 +172,7 @@ serve(async (req) => {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${resendKey}` },
             body: JSON.stringify({
-              from: `QuoteMGR <${fromEmail}>`,
+              from: `TrussCTR <${fromEmail}>`,
               to: [alertEmail],
               subject: `${customerName} signed the Completion Certificate`,
               html: alertHtml,
@@ -181,7 +189,7 @@ serve(async (req) => {
       try {
         const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
         const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-        const appUrl = Deno.env.get('APP_URL') || 'https://app.614restore.com';
+        const appUrl = APP_URL;
         await fetch(`${supabaseUrl}/functions/v1/send-completion-certificate`, {
           method: 'POST',
           headers: {

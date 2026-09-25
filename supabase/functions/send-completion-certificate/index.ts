@@ -78,7 +78,7 @@ const inlineDataImages = (html: string): { html: string; images: InlineImage[] }
     (_match, mime: string, b64: string) => {
       const idx = images.length + 1;
       const ext = mime.split('/')[1].replace('+xml', '').replace('jpeg', 'jpg');
-      const cid = `img${idx}.${Date.now()}@quotemgr`;
+      const cid = `img${idx}.${Date.now()}@trussctr`;
       images.push({ filename: `signature-${idx}.${ext}`, content: b64, contentType: mime, cid });
       return `src="cid:${cid}"`;
     },
@@ -666,7 +666,7 @@ const buildEmailHtml = (data: {
       <tr>
         <td style="background:#f9fafb;padding:16px 36px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 10px 10px">
           <p style="margin:0;font-size:11px;color:#9ca3af;text-align:center;line-height:1.8">
-            This certificate was issued by <strong>${companyName}</strong> via QuoteMGR.<br>
+            This certificate was issued by <strong>${companyName}</strong> via TrussCTR.<br>
             This is a legally binding document — please retain it for your records.
           </p>
         </td>
@@ -789,7 +789,7 @@ const buildContingencyOnlyEmailHtml = (data: {
       <tr>
         <td style="background:#f9fafb;padding:16px 36px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 10px 10px">
           <p style="margin:0;font-size:11px;color:#9ca3af;text-align:center;line-height:1.8">
-            This document was issued by <strong>${companyName}</strong> via QuoteMGR.<br>
+            This document was issued by <strong>${companyName}</strong> via TrussCTR.<br>
             This is a legally binding document — please retain it for your records.
           </p>
         </td>
@@ -939,7 +939,7 @@ serve(async (req) => {
       const parseAllowedDomains = (v?: string | null) =>
         (v || '').split(',').map(x => x.trim().toLowerCase()).filter(Boolean);
 
-      const senderName    = company.quote_sender_name?.trim() || company.name || 'QuoteMGR';
+      const senderName    = company.quote_sender_name?.trim() || company.name || 'TrussCTR';
       const requestedFrom = normalizeEmail(company.quote_sender_email);
       const replyTo       = senderUserEmail || company.quote_reply_to_email?.trim() || requestedFrom || undefined;
       const subject       = `Your Signed Contingency Agreement — ${company.name}`;
@@ -1078,7 +1078,7 @@ serve(async (req) => {
     const parseAllowedDomains = (v?: string | null) =>
       (v || '').split(',').map(x => x.trim().toLowerCase()).filter(Boolean);
 
-    const senderName     = company.quote_sender_name?.trim() || company.name || 'QuoteMGR';
+    const senderName     = company.quote_sender_name?.trim() || company.name || 'TrussCTR';
     const requestedFrom  = normalizeEmail(company.quote_sender_email);
     const replyTo        = senderUserEmail || company.quote_reply_to_email?.trim() || requestedFrom || undefined;
     const subject        = body.is_signed_copy

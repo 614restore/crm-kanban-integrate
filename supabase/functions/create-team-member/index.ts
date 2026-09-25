@@ -1,12 +1,20 @@
 // Copied from the shared backend's create-team-member (TrussCENTER line).
 // TrussCTR changes, both optional so the mobile app's calls behave as before:
-//  - app_name brands the invite email (default QuoteMGR).
+//  - app_name brands the invite email (default TrussCTR).
 //  - redirect_to sends the set-password link back to the calling app. Supabase
 //    only honours it if the URL is in Auth > URL Configuration > Redirect URLs;
 //    otherwise the link falls back to the project's Site URL.
 //  - Company name and role are HTML-escaped in the email.
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
+
+
+// The verified platform sender every TrussCTR email goes out from (same one the quote emails use).
+const platformFromEmail = (() => {
+  const v = (Deno.env.get('ALERT_FROM_EMAIL') || '').trim();
+  return v.match(/<([^>]+)>/)?.[1] || v || 'scopemgr@614restore.com';
+})();
+const APP_URL = (Deno.env.get('APP_URL') || 'https://trussctr.614restore.com').replace(/\/$/, '');
 
 interface CreateTeamMemberPayload {
   company_id: string;
@@ -278,7 +286,7 @@ serve(async (req) => {
             .maybeSingle();
           const displayCompanyName = companyRow?.name ?? 'your team';
           const esc = (v: unknown) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
-          const appName = (typeof app_name === 'string' ? app_name.replace(/[<>&"\r\n]/g, '').trim().slice(0, 40) : '') || 'QuoteMGR';
+          const appName = (typeof app_name === 'string' ? app_name.replace(/[<>&"\r\n]/g, '').trim().slice(0, 40) : '') || 'TrussCTR';
 
           const emailHtml = `<!DOCTYPE html>
 <html>
@@ -322,7 +330,7 @@ serve(async (req) => {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              from: `${appName} <noreply@quotemgr.614restore.com>`,
+              from: `${appName} <${platformFromEmail}>`,
               to: [normalizedEmail],
               subject: `You've been invited to join ${displayCompanyName.replace(/[\r\n]/g, ' ')} on ${appName}`,
               html: emailHtml,
