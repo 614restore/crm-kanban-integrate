@@ -1,6 +1,8 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import nodemailer from 'npm:nodemailer@6.10.0';
+import { Buffer } from 'node:buffer';
+import { PDFDocument, rgb, StandardFonts, type PDFFont } from 'https://esm.sh/pdf-lib@1.17.1';
 
 
 // The verified platform sender every TrussCTR email goes out from (same one the quote emails use).
@@ -76,6 +78,8 @@ const buildReceiptHtml = (data: {
   footerText?: string;
   date: string;
   brandColor?: string;
+  /** True when the receipt goes out with a PDF copy attached. */
+  pdfAttached?: boolean;
 }): string => {
   // The header was hardcoded navy while the company's own colours sat unused in
   // the database. Worse for logos than it sounds: an uploaded JPEG has no
@@ -195,6 +199,13 @@ const buildReceiptHtml = (data: {
           </td>
         </tr>
 
+        ${data.pdfAttached ? `
+        <tr>
+          <td style="padding:16px 40px 0;">
+            <p style="margin:0;font-size:13px;color:#6b7280;">A PDF copy of this receipt is attached to this email.</p>
+          </td>
+        </tr>` : ''}
+
         ${data.note ? `
         <tr>
           <td style="padding:16px 40px 0;">
@@ -233,6 +244,184 @@ const buildReceiptHtml = (data: {
 </body>
 </html>`;
 };
+
+// ─── Receipt PDF ──────────────────────────────────────────────────────
+// Built from the same data as the HTML receipt, so the PDF a customer opens (or a rep downloads)
+// matches the email. pdf-lib's standard fonts are WinAnsi only and it throws on anything else,
+// so text is folded down to characters they can draw.
+const WINANSI_SAFE_ABOVE_LATIN1 = new Set(['—', '–', '•', '…', '™', '†', '‡', '‘', '’', '“', '”', '€']);
+const PDF_SYMBOL_FALLBACKS: Record<string, string> = { '✓': '•', '✔': '•', '−': '-', '≈': '~', '→': '->' };
+const winAnsi = (value: string): string => {
+  let out = '';
+  for (const ch of value) {
+    const code = ch.codePointAt(0) ?? 0;
+    if (code <= 0xff || WINANSI_SAFE_ABOVE_LATIN1.has(ch)) { out += ch; continue; }
+    out += PDF_SYMBOL_FALLBACKS[ch] ?? '';
+  }
+  return out;
+};
+
+const hexToRgb = (hex: string) => {
+  const h = /^#[0-9a-fA-F]{6}$/.test(hex) ? hex : '#1e3a5f';
+  return rgb(parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255);
+};
+
+const toBase64 = (bytes: Uint8Array): string => {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(binary);
+};
+
+type ReceiptData = Parameters<typeof buildReceiptHtml>[0];
+
+async function buildReceiptPdf(data: ReceiptData): Promise<Uint8Array> {
+  const doc = await PDFDocument.create();
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const regular = await doc.embedFont(StandardFonts.Helvetica);
+  const italic = await doc.embedFont(StandardFonts.HelveticaOblique);
+  const W = 612, H = 792, M = 48, RIGHT = W - M;
+  const brand = hexToRgb(data.brandColor ?? '');
+  const ink = rgb(0.07, 0.09, 0.15), gray = rgb(0.42, 0.45, 0.5), light = rgb(0.61, 0.64, 0.69);
+  let page = doc.addPage([W, H]);
+
+  const wrap = (text: string, font: PDFFont, size: number, width: number): string[] => {
+    const lines: string[] = [];
+    for (const para of winAnsi(text).split('\n')) {
+      let line = '';
+      for (const word of para.split(/\s+/).filter(Boolean)) {
+        const attempt = line ? `${line} ${word}` : word;
+        if (font.widthOfTextAtSize(attempt, size) <= width) line = attempt;
+        else { if (line) lines.push(line); line = word; }
+      }
+      lines.push(line);
+    }
+    return lines;
+  };
+  const rightText = (t: string, y: number, font: PDFFont, size: number, color = ink) => {
+    const text = winAnsi(t);
+    page.drawText(text, { x: RIGHT - font.widthOfTextAtSize(text, size), y, size, font, color });
+  };
+  const text = (t: string, x: number, y: number, font: PDFFont, size: number, color = ink) =>
+    page.drawText(winAnsi(t), { x, y, size, font, color });
+
+  // Header band, with the company's logo when one can be fetched.
+  page.drawRectangle({ x: 0, y: H - 112, width: W, height: 112, color: rgb(0.07, 0.09, 0.15) });
+  page.drawRectangle({ x: 0, y: H - 116, width: W, height: 4, color: brand });
+  let nameX = M;
+  if (data.logoUrl) {
+    try {
+      const res = await fetch(data.logoUrl, { signal: AbortSignal.timeout(4000) });
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      if (res.ok && bytes.length > 0 && bytes.length < 3_000_000) {
+        const isPng = bytes[0] === 0x89 && bytes[1] === 0x50;
+        const isJpg = bytes[0] === 0xff && bytes[1] === 0xd8;
+        if (isPng || isJpg) {
+          const img = isPng ? await doc.embedPng(bytes) : await doc.embedJpg(bytes);
+          const h = 46, w = Math.min(140, (img.width / img.height) * h);
+          page.drawImage(img, { x: M, y: H - 82, width: w, height: h });
+          nameX = M + w + 16;
+        }
+      }
+    } catch { /* no logo: the name alone is fine */ }
+  }
+  text(data.companyName, nameX, H - 56, bold, 20, rgb(1, 1, 1));
+  text(`Payment Receipt  ·  ${data.receiptNumber}`, nameX, H - 76, regular, 10, rgb(0.8, 0.83, 0.87));
+
+  // Received from / date
+  let y = H - 152;
+  text('RECEIVED FROM', M, y, regular, 8, light);
+  rightText('DATE', y, regular, 8, light);
+  y -= 18;
+  text(data.customerName, M, y, bold, 14);
+  rightText(data.date, y, regular, 11, gray);
+  if (data.customerEmail) { y -= 15; text(data.customerEmail, M, y, regular, 10, gray); }
+  y -= 30;
+
+  // Scope of work
+  const ensure = (need: number) => {
+    if (y - need < 60) { page = doc.addPage([W, H]); y = H - 60; }
+  };
+  const cleanTitle = (data.projectTitle ?? '').replace(/\s*(proposal|quote)\s*$/i, '').trim();
+  const rows = (data.tiers ?? []).map((t) => ({
+    label: cleanTitle && GENERIC_TIER_NAMES.has(t.name.toLowerCase()) ? `${t.name} — ${cleanTitle}` : t.name,
+    amount: fmt(t.subtotal),
+  }));
+  if (rows.length > 0 || data.quoteTotal != null) {
+    page.drawRectangle({ x: M, y: y - 6, width: RIGHT - M, height: 22, color: rgb(0.95, 0.96, 0.96) });
+    text('SCOPE OF WORK', M + 10, y, bold, 8, gray);
+    const priceLabel = 'PRICE';
+    page.drawText(priceLabel, { x: RIGHT - 10 - bold.widthOfTextAtSize(priceLabel, 8), y, size: 8, font: bold, color: gray });
+    y -= 26;
+    for (const r of rows) {
+      const lines = wrap(r.label, regular, 11, RIGHT - M - 130);
+      ensure(lines.length * 14 + 12);
+      lines.forEach((l, i) => text(l, M + 10, y - i * 14, regular, 11, rgb(0.22, 0.25, 0.32)));
+      page.drawText(winAnsi(r.amount), { x: RIGHT - 10 - regular.widthOfTextAtSize(winAnsi(r.amount), 11), y, size: 11, font: regular, color: rgb(0.22, 0.25, 0.32) });
+      y -= lines.length * 14 + 6;
+      page.drawLine({ start: { x: M, y: y + 2 }, end: { x: RIGHT, y: y + 2 }, thickness: 0.5, color: rgb(0.9, 0.91, 0.92) });
+      y -= 8;
+    }
+    if (data.quoteTotal != null) {
+      ensure(30);
+      page.drawRectangle({ x: M, y: y - 8, width: RIGHT - M, height: 24, color: rgb(0.98, 0.98, 0.98) });
+      text('Project Total', M + 10, y, bold, 11);
+      const t = winAnsi(fmt(data.quoteTotal));
+      page.drawText(t, { x: RIGHT - 10 - bold.widthOfTextAtSize(t, 11), y, size: 11, font: bold, color: ink });
+      y -= 34;
+    }
+  }
+
+  // Payment summary
+  const paidToDate = data.totalPaidToDate ?? data.amount;
+  const priorPaid = paidToDate - data.amount;
+  const rawBalance = data.quoteTotal != null ? data.quoteTotal - paidToDate : null;
+  const balance = rawBalance !== null ? Math.max(0, rawBalance) : null;
+  const overpayment = rawBalance !== null && rawBalance < 0 ? Math.abs(rawBalance) : 0;
+  const boxH = 20 + (priorPaid > 0 ? 22 : 0) + 32 + (balance !== null ? 34 : 0);
+  ensure(boxH + 10);
+  page.drawRectangle({ x: M, y: y - boxH + 14, width: RIGHT - M, height: boxH, color: rgb(0.94, 0.99, 0.96), borderColor: rgb(0.53, 0.94, 0.67), borderWidth: 1 });
+  let by = y - 10;
+  if (priorPaid > 0) {
+    text('Previously paid', M + 16, by, regular, 10.5, rgb(0.09, 0.4, 0.21));
+    rightText(fmt(priorPaid), by, regular, 10.5, rgb(0.09, 0.4, 0.21));
+    by -= 22;
+  }
+  text('This Payment', M + 16, by, bold, 12, rgb(0.08, 0.5, 0.24));
+  const amt = winAnsi(fmt(data.amount));
+  page.drawText(amt, { x: RIGHT - 16 - bold.widthOfTextAtSize(amt, 20), y: by - 2, size: 20, font: bold, color: rgb(0.08, 0.5, 0.24) });
+  by -= 30;
+  if (balance !== null) {
+    page.drawLine({ start: { x: M + 16, y: by + 14 }, end: { x: RIGHT - 16, y: by + 14 }, thickness: 0.5, color: rgb(0.73, 0.97, 0.82) });
+    const label = overpayment > 0 ? 'Account Status' : 'Amount Due';
+    const value = overpayment > 0 ? `Overpayment: +${fmt(overpayment)}` : balance === 0 ? 'Paid in Full' : fmt(balance);
+    const color = overpayment > 0 ? rgb(0.49, 0.23, 0.93) : balance === 0 ? rgb(0.08, 0.5, 0.24) : rgb(0.71, 0.33, 0.04);
+    text(label, M + 16, by - 4, regular, 11, rgb(0.22, 0.25, 0.32));
+    const v = winAnsi(value);
+    page.drawText(v, { x: RIGHT - 16 - bold.widthOfTextAtSize(v, 13), y: by - 5, size: 13, font: bold, color });
+    by -= 30;
+  }
+  y = y - boxH - 4;
+
+  text(`Payment method: ${methodLabel[data.paymentMethod] ?? data.paymentMethod}`, M, y, regular, 10.5, gray);
+  y -= 20;
+  if (data.note) {
+    for (const l of wrap(`Note: ${data.note}`, italic, 10.5, RIGHT - M)) { ensure(16); text(l, M, y, italic, 10.5, gray); y -= 14; }
+    y -= 6;
+  }
+  if (data.footerText) {
+    ensure(40);
+    page.drawLine({ start: { x: M, y: y + 6 }, end: { x: RIGHT, y: y + 6 }, thickness: 0.5, color: rgb(0.9, 0.91, 0.92) });
+    y -= 10;
+    for (const l of wrap(data.footerText, regular, 10.5, RIGHT - M)) { ensure(16); text(l, M, y, regular, 10.5, rgb(0.22, 0.25, 0.32)); y -= 14; }
+    y -= 6;
+  }
+  ensure(60);
+  text('Thank you for your business. Please keep this receipt for your records.', M, y - 6, regular, 10, gray);
+  const contact = [data.companyPhone, data.companyEmail, data.companyAddress].filter(Boolean).join('  |  ');
+  if (contact) text(contact, M, y - 22, regular, 9, light);
+
+  return await doc.save();
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -410,7 +599,7 @@ serve(async (req) => {
       totalPaidToDate = (allPayments ?? []).reduce((sum, p) => sum + (p.amount ?? 0), 0) + (payment.amount ?? 0);
     }
 
-    const htmlBody = buildReceiptHtml({
+    const receiptData: ReceiptData = {
       receiptNumber: payment.receipt_number,
       companyName: company.name,
       companyPhone: company.phone,
@@ -429,13 +618,30 @@ serve(async (req) => {
       footerText: company.receipt_footer_text ?? undefined,
       brandColor: company.quote_primary_color ?? undefined,
       date: new Date(payment.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
-    });
+    };
+
+    // The PDF copy: attached to the email and returned so the apps can offer a download.
+    // A failure here must never stop the receipt itself, so it only costs the attachment.
+    let pdfBytes: Uint8Array | null = null;
+    try {
+      pdfBytes = await buildReceiptPdf(receiptData);
+    } catch (pdfErr) {
+      console.error('Receipt PDF failed:', pdfErr);
+    }
+    const pdfFilename = `Receipt-${String(payment.receipt_number ?? 'receipt').replace(/[^A-Za-z0-9._-]+/g, '_')}.pdf`;
+    const htmlBody = buildReceiptHtml({ ...receiptData, pdfAttached: !!pdfBytes });
 
     // Preview stops here: the document is built, nothing is sent, and no
     // payment was recorded. Returning the same htmlBody the email uses is the
     // point — a preview built from a second template could drift from it.
     if (preview) {
-      return new Response(JSON.stringify({ preview: true, html: htmlBody, receipt_number: payment.receipt_number }), {
+      return new Response(JSON.stringify({
+        preview: true,
+        html: htmlBody,
+        receipt_number: payment.receipt_number,
+        pdf_base64: pdfBytes ? toBase64(pdfBytes) : null,
+        pdf_filename: pdfFilename,
+      }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -474,6 +680,7 @@ serve(async (req) => {
       payment.note ? `Note: ${payment.note}` : '',
       '',
       'Thank you for your business. Please keep this receipt for your records.',
+      pdfBytes ? 'A PDF copy of this receipt is attached.' : '',
       '',
       company.phone || company.email ? [company.phone, company.email].filter(Boolean).join(' | ') : '',
     ].filter(line => line !== undefined).join('\n').replace(/\n{3,}/g, '\n\n').trim();
@@ -504,6 +711,7 @@ serve(async (req) => {
           subject,
           text: plainText,
           html: htmlBody,
+          ...(pdfBytes ? { attachments: [{ filename: pdfFilename, content: Buffer.from(pdfBytes), contentType: 'application/pdf' }] } : {}),
         });
         sent = true;
       } else {
@@ -517,8 +725,9 @@ serve(async (req) => {
               subject,
               text: plainText,
               html: htmlBody,
+              ...(pdfBytes ? { attachments: [{ filename: pdfFilename, content: toBase64(pdfBytes) }] } : {}),
             };
-          console.log('Resend payload (no html):', JSON.stringify({ ...resendPayload, html: '[omitted]' }));
+          console.log('Resend payload (no html):', JSON.stringify({ ...resendPayload, html: '[omitted]', attachments: pdfBytes ? '[pdf]' : undefined }));
           const resp = await fetch('https://api.resend.com/emails', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${resendKey}` },
@@ -546,7 +755,7 @@ serve(async (req) => {
       if (updateErr) console.error('Failed to update sent_at on payment:', updateErr.message);
     }
 
-    return new Response(JSON.stringify({ success: sent, payment_id, receipt_number: payment.receipt_number, email_error: emailError }), {
+    return new Response(JSON.stringify({ success: sent, payment_id, receipt_number: payment.receipt_number, email_error: emailError, pdf_attached: !!pdfBytes }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (err) {

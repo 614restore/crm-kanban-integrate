@@ -1,7 +1,7 @@
 // Copied from QuoteMGR (quotes-customize-manage/src/components/ReceiptPanel.tsx)
 // so payments, receipts and refunds work the same way in both apps.
 import React, { useEffect, useRef, useState } from 'react';
-import { X, Send, Save, UserPlus, Check, RefreshCw, Lock, ChevronRight, Mail, AlertTriangle, ShieldCheck, ArrowLeftRight, Pencil, Loader2, Eye, Printer } from 'lucide-react';
+import { X, Send, Save, UserPlus, Check, RefreshCw, Lock, ChevronRight, Mail, AlertTriangle, ShieldCheck, ArrowLeftRight, Pencil, Loader2, Eye, Printer, Download } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -275,7 +275,9 @@ export default function ReceiptPanel({ companyId, userId, userRole, quote, compa
 
   const [previewing, setPreviewing] = useState(false);
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
-  const [rowBusy, setRowBusy] = useState<{ id: string; action: 'preview' | 'send' } | null>(null);
+  const [rowBusy, setRowBusy] = useState<{ id: string; action: 'preview' | 'send' | 'pdf' } | null>(null);
+  // The PDF copy of the receipt being previewed, so it can be downloaded without building it again.
+  const [previewPdf, setPreviewPdf] = useState<{ base64: string; filename: string } | null>(null);
 
   const paymentPayload = () => ({
     company_id: companyId,
@@ -285,6 +287,19 @@ export default function ReceiptPanel({ companyId, userId, userRole, quote, compa
     payment_method: method,
     note: note.trim() || undefined,
   });
+
+  /** Saves a base64 PDF from the receipt function as a file. */
+  const savePdf = (pdf: { base64: string; filename: string }) => {
+    const bytes = Uint8Array.from(atob(pdf.base64), (c) => c.charCodeAt(0));
+    const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = pdf.filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
 
   /**
    * Shows the receipt as the customer will receive it, without sending it or
@@ -310,6 +325,7 @@ export default function ReceiptPanel({ companyId, userId, userRole, quote, compa
       if (error) throw error;
       if (!data?.html) throw new Error(data?.error ?? 'Could not build the receipt');
       setPreviewHtml(data.html as string);
+      setPreviewPdf(data.pdf_base64 ? { base64: data.pdf_base64 as string, filename: (data.pdf_filename as string) ?? 'Receipt.pdf' } : null);
     } catch (err: any) {
       toast.error(err?.message ?? 'Could not build the receipt preview');
     } finally {
@@ -352,8 +368,26 @@ export default function ReceiptPanel({ companyId, userId, userRole, quote, compa
       if (error) throw error;
       if (!data?.html) throw new Error(data?.error ?? 'Could not build the receipt');
       setPreviewHtml(data.html as string);
+      setPreviewPdf(data.pdf_base64 ? { base64: data.pdf_base64 as string, filename: (data.pdf_filename as string) ?? 'Receipt.pdf' } : null);
     } catch (err: any) {
       toast.error(err?.message ?? 'Could not build the receipt preview');
+    } finally {
+      setRowBusy(null);
+    }
+  };
+
+  /** Downloads the PDF for one saved payment, without opening the preview. */
+  const downloadExistingPdf = async (p: PaymentRecord) => {
+    setRowBusy({ id: p.id, action: 'pdf' });
+    try {
+      const { data, error } = await supabase.functions.invoke('send-receipt-email', {
+        body: { payment_id: p.id, company_id: companyId, to_email: quote.customer?.email ?? '', to_name: customerName, preview: true },
+      });
+      if (error) throw error;
+      if (!data?.pdf_base64) throw new Error(data?.error ?? 'The PDF could not be built');
+      savePdf({ base64: data.pdf_base64 as string, filename: (data.pdf_filename as string) ?? `Receipt-${p.receipt_number}.pdf` });
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Could not download the receipt PDF');
     } finally {
       setRowBusy(null);
     }
@@ -952,6 +986,17 @@ export default function ReceiptPanel({ companyId, userId, userRole, quote, compa
                               : <Eye className="w-3 h-3" />}
                             View
                           </button>
+                          <button
+                            onClick={() => void downloadExistingPdf(p)}
+                            disabled={!!rowBusy}
+                            className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-gray-600 border border-gray-200 bg-white hover:bg-gray-50 transition-colors text-xs font-semibold disabled:opacity-50"
+                            title="Download this receipt as a PDF"
+                          >
+                            {rowBusy?.id === p.id && rowBusy.action === 'pdf'
+                              ? <Loader2 className="w-3 h-3 animate-spin" />
+                              : <Download className="w-3 h-3" />}
+                            PDF
+                          </button>
                           {quote.customer?.email && (
                             <button
                               onClick={() => void sendExisting(p)}
@@ -1306,7 +1351,14 @@ export default function ReceiptPanel({ companyId, userId, userRole, quote, compa
                   className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">
                   <Printer className="w-3.5 h-3.5" /> Print
                 </button>
-                <button onClick={() => setPreviewHtml(null)} className="text-gray-400 hover:text-gray-600">
+                {previewPdf && (
+                  <button
+                    onClick={() => savePdf(previewPdf)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#1e3a5f] rounded-lg hover:bg-[#152d4a]">
+                    <Download className="w-3.5 h-3.5" /> Download PDF
+                  </button>
+                )}
+                <button onClick={() => { setPreviewHtml(null); setPreviewPdf(null); }} className="text-gray-400 hover:text-gray-600">
                   <X className="w-5 h-5" />
                 </button>
               </div>
