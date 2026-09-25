@@ -3,6 +3,10 @@ import jsPDF from 'jspdf';
 import { supabase } from '@/lib/supabase';
 import { foldDocumentText } from './pdfGenerator';
 import { ownerNames } from './customerName';
+import { db } from '@/lib/database';
+import { secureUpload } from '@/lib/storageUtils';
+import { buildStoredDocumentUrl } from '@/lib/documentAccess';
+import { extractStorageInfo, deleteFile } from '@/lib/storage';
 
 // The document behind "View Full Document": project details, document status and
 // both signatures, without the proposal's cover, pricing tiers or marketing
@@ -609,5 +613,57 @@ export const sendFullSignedDocumentToCustomer = async (
     },
   });
   if (error) throw error;
+  return true;
+};
+
+// TrussCTR: stores the executed PDF in the customer's Documents. The database
+// files a "Signed Agreement – <number>" entry linking to the signed page when the
+// quote is signed; this points that same entry at the PDF (or creates it), so the
+// customer has one signed entry. Re-running it, e.g. after the contractor
+// countersigns, replaces the earlier PDF. Needs a signed-in team member.
+export const saveSignedPdfToDocuments = async (quoteId: string, company: any): Promise<boolean> => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return false;
+
+  const { data: fullQuote } = await supabase
+    .from('quotes')
+    .select('*, customer:customers(id, first_name, last_name, email, phone, address, city, state, zip)')
+    .eq('id', quoteId)
+    .single();
+  const customerId: string | undefined = fullQuote?.customer_id ?? fullQuote?.customer?.id;
+  if (!fullQuote || !customerId) return false;
+
+  const { doc } = await buildFullSignedDocumentPdf(fullQuote, company, [], { includePhotos: false });
+  const blob = doc.output('blob');
+  const uploaded = await secureUpload('documents', customerId, blob, `${crypto.randomUUID()}.pdf`, 'application/pdf');
+  const url = buildStoredDocumentUrl(uploaded.publicUrl, 'documents', uploaded.path);
+
+  const label = fullQuote.contingency_enabled ? 'Signed Contingency Agreement' : 'Signed Agreement';
+  const name = `${label} – ${fullQuote.quote_number ?? ''}`;
+
+  const { data: existing } = await supabase
+    .from('documents')
+    .select('id, url')
+    .eq('contact_id', customerId)
+    .eq('type', 'signed')
+    .eq('name', name)
+    .limit(1)
+    .maybeSingle();
+
+  if (existing) {
+    const { error } = await supabase.from('documents').update({ url, size: blob.size }).eq('id', existing.id);
+    if (error) throw error;
+    const previous = existing.url ? extractStorageInfo(existing.url) : null;
+    if (previous) await deleteFile(previous.bucket, previous.path);
+  } else {
+    await db.createDocument({
+      company_id: fullQuote.company_id,
+      contact_id: customerId,
+      name,
+      type: 'signed',
+      url,
+      size: `${Math.round(blob.size / 1024)} KB`,
+    });
+  }
   return true;
 };

@@ -49,10 +49,11 @@ import {
   getMentionTargets,
   validateMentions,
 } from '@/lib/mentions';
-import { uploadDocument, validateDocumentFile, formatFileSize, getDocumentSignedUrl, isHttpUrl, isSupabaseStorageUrl } from '@/lib/storage';
+import { validateDocumentFile, formatFileSize, getDocumentSignedUrl, isHttpUrl, isSupabaseStorageUrl, extractStorageInfo, deleteFile } from '@/lib/storage';
+import { secureUpload } from '@/lib/storageUtils';
+import { buildStoredDocumentUrl, resolveDocumentSignedUrl } from '@/lib/documentAccess';
 import { compressImage } from '@/lib/imageUtils';
 import { htmlStringToPdfBlob } from '@/lib/pdfService';
-import { resolveDocumentSignedUrl } from '@/lib/documentAccess';
 import { logActivity } from '@/lib/activityLogger';
 import { toast } from 'sonner';
 import {
@@ -112,13 +113,14 @@ import {
   FolderOpen,
   Image,
   Copy,
+  FolderInput,
 } from 'lucide-react';
 
 type TabType = 'overview' | 'timeline' | 'documents' | 'financial' | 'projects' | 'jobStatus' | 'survey' | 'insurance';
 
 interface SignedDoc {
   id: string;
-  docType: 'estimate' | 'work_order' | 'change_order';
+  docType: 'estimate' | 'work_order' | 'change_order' | 'agreement';
   label: string;
   title: string;
   signedBy: string;
@@ -239,6 +241,7 @@ export default function ContactDetail() {
   const { profile } = useAuth();
   const contact = useCurrentContact();
   const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [docSubTab, setDocSubTab] = useState<'all' | 'measurements' | 'photos' | 'docs' | 'legal'>('all');
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isReassigning, setIsReassigning] = useState(false);
@@ -268,6 +271,10 @@ export default function ContactDetail() {
   const [signedDocs, setSignedDocs] = useState<SignedDoc[]>([]);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [viewingDocHtml, setViewingDocHtml] = useState<{ name: string; html: string } | null>(null);
+  const [movingDoc, setMovingDoc] = useState<Document | null>(null);
+  const [moveSearch, setMoveSearch] = useState('');
+  const [moveTargetId, setMoveTargetId] = useState<string | null>(null);
+  const [movingInProgress, setMovingInProgress] = useState(false);
   const [templateRoofrData, setTemplateRoofrData] = useState<{ measurements: any; structures?: any[] } | undefined>(undefined);
 
   // Project-related data
@@ -295,7 +302,7 @@ export default function ContactDetail() {
   // Document naming dialog state
   const [pendingUploadFile, setPendingUploadFile] = useState<File | null>(null);
   const [pendingUploadName, setPendingUploadName] = useState('');
-  const [pendingUploadCategory, setPendingUploadCategory] = useState<'contract' | 'estimate' | 'invoice' | 'photo' | 'insurance' | 'other'>('other');
+  const [pendingUploadCategory, setPendingUploadCategory] = useState<'contract' | 'estimate' | 'invoice' | 'photo' | 'insurance' | 'other' | 'measurement:roof' | 'measurement:walls' | 'measurement:premium'>('other');
   const [showUploadNameDialog, setShowUploadNameDialog] = useState(false);
 
   // Avatar state
@@ -405,12 +412,13 @@ export default function ContactDetail() {
             id: doc.id,
             contactId: doc.contact_id || '',
             name: doc.name,
-            type: doc.type as 'contract' | 'estimate' | 'invoice' | 'photo' | 'insurance' | 'other',
+            type: doc.type as 'contract' | 'estimate' | 'invoice' | 'photo' | 'insurance' | 'other' | 'measurement' | 'document' | 'signed',
             url,
             uploadedAt: doc.created_at,
             uploadedBy: doc.uploaded_by || 'Team member',
             size: doc.size || 'Unknown',
             htmlContent: doc.html_content || undefined,
+            category: (doc.category as 'roof' | 'walls' | 'premium' | 'general' | null) ?? null,
           };
         })
       );
@@ -432,6 +440,16 @@ export default function ContactDetail() {
 
       const origin = window.location.origin;
       const normalized: SignedDoc[] = [
+        // Signed quotes and contingency agreements, filed by the database when signed.
+        ...visibleDocs.filter(d => d.type === 'signed').map(d => ({
+          id: d.id,
+          docType: 'agreement' as const,
+          label: '',
+          title: d.name,
+          signedBy: '',
+          signedAt: d.uploadedAt,
+          viewUrl: d.url,
+        })),
         ...signedEstimates.map(est => ({
           id: est.id,
           docType: 'estimate' as const,
@@ -548,20 +566,24 @@ export default function ContactDetail() {
       const fileToUpload = pendingUploadFile.type.startsWith('image/')
         ? await compressImage(pendingUploadFile, { maxSide: 1600, quality: 0.85, targetBytes: 1_000_000 })
         : pendingUploadFile;
-      const uploadResult = await uploadDocument(fileToUpload, effectiveCompanyId, contactId);
+      const fileExt = fileToUpload.name.split('.').pop() || 'bin';
+      const storedName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
+      const uploadResult = await secureUpload('documents', contactId, fileToUpload, storedName, fileToUpload.type);
+      const storedUrl = buildStoredDocumentUrl(uploadResult.publicUrl, 'documents', uploadResult.path);
 
-      if (uploadResult.error) {
-        console.error('[ContactDetail] Upload failed:', uploadResult.error);
-        toast.error(`Upload failed: ${uploadResult.error}`);
-        return;
-      }
+      // Resolve measurement variants: type → 'measurement', then back-fill category
+      const isMeasurement = pendingUploadCategory.startsWith('measurement:');
+      const docType = isMeasurement ? 'measurement' : pendingUploadCategory;
+      const measurementCategory = isMeasurement
+        ? (pendingUploadCategory.split(':')[1] as 'roof' | 'walls' | 'premium')
+        : undefined;
 
       const created = await db.createDocument({
         company_id: effectiveCompanyId,
         contact_id: contactId,
         name: pendingUploadName || pendingUploadFile.name,
-        type: pendingUploadCategory,
-        url: uploadResult.path,
+        type: docType,
+        url: storedUrl,
         size: formatFileSize(fileToUpload.size),
         uploaded_by: profile?.id,
       });
@@ -572,15 +594,25 @@ export default function ContactDetail() {
         return;
       }
 
+      // Non-blocking category update for measurement docs (column may not exist on older deployments)
+      if (isMeasurement && measurementCategory) {
+        supabase
+          .from('documents')
+          .update({ category: measurementCategory })
+          .eq('id', created.id)
+          .then(() => {});
+      }
+
       const newDoc: Document = {
         id: created.id,
         contactId: created.contact_id || '',
         name: created.name,
-        type: created.type as 'contract' | 'estimate' | 'invoice' | 'photo' | 'insurance' | 'other',
+        type: created.type as 'contract' | 'estimate' | 'invoice' | 'photo' | 'insurance' | 'other' | 'measurement',
         url: created.url,
         uploadedAt: created.created_at,
         uploadedBy: created.uploaded_by || 'Team member',
         size: created.size || formatFileSize(fileToUpload.size),
+        category: measurementCategory ?? null,
       };
 
       setContactDocuments((prev) => [newDoc, ...prev]);
@@ -618,18 +650,17 @@ export default function ContactDetail() {
     setIsUploadingAvatar(true);
     try {
       const compressed = await compressImage(file, { maxSide: 1600, quality: 0.85, targetBytes: 1_000_000 });
-      const uploadResult = await uploadDocument(compressed, effectiveCompanyId, contactId);
-      if (uploadResult.error) {
-        toast.error(`Avatar upload failed: ${uploadResult.error}`);
-        return;
-      }
+      const imgExt = compressed.name?.split('.').pop() || 'jpg';
+      const imgName = `avatar-${Math.random().toString(36).substring(2)}-${Date.now()}.${imgExt}`;
+      const avatarUpload = await secureUpload('documents', contactId, compressed, imgName, compressed.type);
+      const avatarStoredUrl = buildStoredDocumentUrl(avatarUpload.publicUrl, 'documents', avatarUpload.path);
 
       const created = await db.createDocument({
         company_id: effectiveCompanyId,
         contact_id: contactId,
         name: '__contact_avatar__',
         type: 'photo',
-        url: uploadResult.path,
+        url: avatarStoredUrl,
         size: formatFileSize(compressed.size),
         uploaded_by: profile?.id,
       });
@@ -639,7 +670,7 @@ export default function ContactDetail() {
         return;
       }
 
-      const signedUrl = await getDocumentSignedUrl(uploadResult.path, 3600);
+      const signedUrl = avatarUpload.signedUrl || await getDocumentSignedUrl(avatarUpload.path, 3600);
       setContactAvatarUrl(signedUrl);
       toast.success('Profile photo updated!');
     } catch (error) {
@@ -651,14 +682,25 @@ export default function ContactDetail() {
     }
   };
 
-  const handleDeleteDocument = (docId: string) => {
-    toast.warning('Delete this document? This cannot be undone.', {
+  // Deletes the record and its stored file, e.g. a report uploaded to the wrong customer.
+  const handleDeleteDocument = (doc: Document) => {
+    toast.warning(`Delete "${doc.name}" from this customer? This cannot be undone.`, {
       action: {
         label: 'Delete',
         onClick: async () => {
-          const ok = await db.deleteDocument(docId);
+          const ok = await db.deleteDocument(doc.id);
           if (!ok) { toast.error('Failed to delete document'); return; }
-          setContactDocuments((prev) => prev.filter((doc) => doc.id !== docId));
+          const stored = doc.url ? extractStorageInfo(doc.url) : null;
+          if (stored && !(await deleteFile(stored.bucket, stored.path))) {
+            console.warn('[ContactDetail] Document record deleted but storage file remained:', stored.path);
+          }
+          if (doc.type === 'measurement' && contact) {
+            // Drop measurements the Roofr panel extracted from this upload so they
+            // don't linger on the wrong customer.
+            try { localStorage.removeItem(`roofr_order_${contact.id}`); } catch { /* private mode */ }
+            window.dispatchEvent(new CustomEvent('roofr-order-updated', { detail: { contactId: contact.id } }));
+          }
+          setContactDocuments((prev) => prev.filter((d) => d.id !== doc.id));
           toast.success('Document deleted');
         },
       },
@@ -667,21 +709,88 @@ export default function ContactDetail() {
     });
   };
 
+  const openMoveDocument = (doc: Document) => {
+    setMovingDoc(doc);
+    setMoveSearch('');
+    setMoveTargetId(null);
+  };
+
+  // Moves a document (e.g. a Roofr report uploaded to the wrong customer) to
+  // another customer. The stored file is moved into the new customer's folder
+  // too, since storage access is granted per customer folder.
+  const handleMoveDocument = async () => {
+    if (!movingDoc || !moveTargetId || !contact) return;
+    const target = state.contacts.find((c) => c.id === moveTargetId);
+    if (!target) return;
+    setMovingInProgress(true);
+    try {
+      let newUrl = movingDoc.url;
+      const stored = movingDoc.url ? extractStorageInfo(movingDoc.url) : null;
+      if (stored && stored.path.startsWith(`${contact.id}/`)) {
+        const newPath = `${target.id}/${stored.path.slice(contact.id.length + 1)}`;
+        const { error: moveError } = await supabase.storage.from(stored.bucket).move(stored.path, newPath);
+        if (moveError) throw new Error(`Could not move the file: ${moveError.message}`);
+        const { data: { publicUrl } } = supabase.storage.from(stored.bucket).getPublicUrl(newPath);
+        newUrl = buildStoredDocumentUrl(publicUrl, stored.bucket, newPath);
+      }
+
+      const { error } = await supabase
+        .from('documents')
+        .update({ contact_id: target.id, customer_id: target.id, url: newUrl })
+        .eq('id', movingDoc.id);
+      if (error) {
+        // Put the file back so the record and file stay together.
+        if (stored && newUrl !== movingDoc.url) {
+          const moved = extractStorageInfo(newUrl);
+          if (moved) await supabase.storage.from(stored.bucket).move(moved.path, stored.path);
+        }
+        throw new Error(error.message);
+      }
+
+      if (movingDoc.type === 'measurement') {
+        try { localStorage.removeItem(`roofr_order_${contact.id}`); } catch { /* private mode */ }
+        window.dispatchEvent(new CustomEvent('roofr-order-updated', { detail: { contactId: contact.id } }));
+      }
+      const movedDoc: Document = { ...movingDoc, contactId: target.id, url: newUrl };
+      setContactDocuments((prev) => prev.filter((d) => d.id !== movingDoc.id));
+      if (target.documents) {
+        dispatch({ type: 'UPDATE_CONTACT', payload: { ...target, documents: [movedDoc, ...target.documents] } });
+      }
+      const source = state.contacts.find((c) => c.id === contact.id);
+      if (source?.documents) {
+        dispatch({ type: 'UPDATE_CONTACT', payload: { ...source, documents: source.documents.filter((d) => d.id !== movingDoc.id) } });
+      }
+      toast.success(`Moved "${movingDoc.name}" to ${getContactFullName(target)}`);
+      setMovingDoc(null);
+    } catch (err) {
+      toast.error('Failed to move document: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    } finally {
+      setMovingInProgress(false);
+    }
+  };
+
   const handleOpenDocument = async (url?: string, _docName?: string) => {
     if (!url) {
       toast.error('Document URL not available.');
       return;
     }
 
-    // Open a blank tab immediately (within the user gesture) so the browser
-    // doesn't treat the later window.open as a popup. We update its location
-    // once the signed URL is ready.
-    const newTab = window.open('', '_blank', 'noopener,noreferrer');
+    // Open the tab synchronously (inside the click) so it isn't popup-blocked,
+    // then point it at the signed URL. Passing 'noopener' here would make
+    // window.open return null, leaving the tab stuck on about:blank.
+    const isNative = typeof (window as any).Capacitor?.isNativePlatform === 'function'
+      && (window as any).Capacitor.isNativePlatform();
+    const newTab = isNative ? null : window.open('about:blank', '_blank');
+    if (newTab) {
+      try { newTab.opener = null; } catch { /* cross-origin guard */ }
+      newTab.document.title = 'Loading document…';
+    }
 
     try {
       // Non-Supabase URLs (EagleView reports, external links) — open directly
       if (isHttpUrl(url) && !isSupabaseStorageUrl(url)) {
-        if (newTab) newTab.location.href = url;
+        if (newTab) newTab.location.replace(url);
+        else window.open(url, '_blank');
         return;
       }
 
@@ -695,10 +804,10 @@ export default function ContactDetail() {
         return;
       }
 
-      if (newTab) {
-        newTab.location.href = signedUrl;
+      if (newTab && !newTab.closed) {
+        newTab.location.replace(signedUrl);
       } else {
-        window.open(signedUrl, '_blank', 'noopener,noreferrer');
+        window.open(signedUrl, '_blank');
       }
     } catch (error) {
       if (newTab) newTab.close();
@@ -830,6 +939,12 @@ export default function ContactDetail() {
   const openNewQuote = () => {
     if (!contact) return;
     dispatch({ type: 'SET_PENDING_QUOTE', payload: { contactId: contact.id } });
+    dispatch({ type: 'SET_VIEW', payload: 'quotes' });
+  };
+
+  const openNewInspection = () => {
+    if (!contact) return;
+    dispatch({ type: 'SET_PENDING_QUOTE', payload: { contactId: contact.id, inspection: true } });
     dispatch({ type: 'SET_VIEW', payload: 'quotes' });
   };
 
@@ -1426,6 +1541,14 @@ export default function ContactDetail() {
                     </option>
                   ))}
                 </select>
+                <button
+                  onClick={openNewInspection}
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-indigo-200 text-indigo-700 rounded-lg hover:bg-indigo-50 transition-colors font-medium"
+                  title="New inspection report with contingency agreement and 3-day cancel notice"
+                >
+                  <Shield size={18} />
+                  Inspection Report
+                </button>
                 <button
                   onClick={handleEdit}
                   className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
@@ -2275,34 +2398,149 @@ export default function ContactDetail() {
 
         {activeTab === 'documents' && (
           <div className="space-y-4">
-            {/* ── Aerial Measurement Reports ── */}
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-              <EagleViewPanel
-                address={contact.address || ''}
-                city={contact.city || ''}
-                state={contact.state || ''}
-                zip={contact.zip || ''}
-                companyId={effectiveCompanyId || ''}
-                contactId={contact.id}
-                contactName={getContactFullName(contact)}
-                userId={profile?.id}
-                onDocumentSaved={(doc) => setContactDocuments(prev => [doc, ...prev])}
-              />
-              <RoofrPanel
-                address={contact.address || ''}
-                city={contact.city || ''}
-                state={contact.state || ''}
-                zip={contact.zip || ''}
-                companyId={effectiveCompanyId || ''}
-                contactId={contact.id}
-                contactName={getContactFullName(contact)}
-                userId={profile?.id}
-                onDocumentSaved={(doc) => setContactDocuments(prev => [doc, ...prev])}
-              />
+            {/* ── Document sub-tabs ── */}
+            <div className="flex gap-1 bg-gray-100 rounded-xl p-1 flex-wrap">
+              {(['all', 'measurements', 'photos', 'docs', 'legal'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setDocSubTab(tab)}
+                  className={`flex-1 min-w-0 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    docSubTab === tab
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  {tab === 'all' && 'All'}
+                  {tab === 'measurements' && '📐 Measurements'}
+                  {tab === 'photos' && '📷 Photos'}
+                  {tab === 'docs' && '📄 Docs'}
+                  {tab === 'legal' && '✅ Signed'}
+                </button>
+              ))}
             </div>
 
+            {/* ── Measurements sub-tab ── */}
+            {docSubTab === 'measurements' && (() => {
+              const measurementDocs = contactDocuments.filter(d => d.type === 'measurement');
+              const roofDocs = measurementDocs.filter(d => d.category === 'roof' || (!d.category));
+              const wallsDocs = measurementDocs.filter(d => d.category === 'walls');
+              const premiumDocs = measurementDocs.filter(d => d.category === 'premium');
+
+              const MeasurementSection = ({ title, docs }: { title: string; docs: typeof measurementDocs }) => (
+                docs.length > 0 ? (
+                  <div className="bg-white rounded-xl border border-gray-200">
+                    <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
+                      <h4 className="text-sm font-semibold text-gray-700">{title}</h4>
+                      <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{docs.length}</span>
+                    </div>
+                    <div className="divide-y divide-gray-100">
+                      {docs.map(doc => (
+                        <div key={doc.id} className="p-4 flex items-center justify-between hover:bg-gray-50">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 bg-blue-50 rounded-lg flex items-center justify-center flex-shrink-0">
+                              <FileText size={18} className="text-blue-600" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-gray-900 text-sm">{doc.name}</p>
+                              <p className="text-xs text-gray-500">{doc.size} · {formatDate(doc.uploadedAt)}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button onClick={() => handleViewDoc(doc)} className="p-2 hover:bg-gray-100 rounded-lg" title="View"><Eye size={16} className="text-gray-500" /></button>
+                            <button onClick={() => handleDownloadDoc(doc)} className="p-2 hover:bg-gray-100 rounded-lg" title="Download"><Download size={16} className="text-gray-500" /></button>
+                            <button onClick={() => openMoveDocument(doc)} className="p-2 hover:bg-gray-100 rounded-lg" title="Move to another customer"><FolderInput size={16} className="text-gray-500" /></button>
+                            <button onClick={() => handleDeleteDocument(doc)} className="p-2 hover:bg-red-100 rounded-lg" title="Delete"><Trash2 size={16} className="text-red-500" /></button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null
+              );
+
+              return (
+                <div className="space-y-3">
+                  {measurementDocs.length === 0 ? (
+                    <div className="bg-white rounded-xl border border-gray-200 p-12 text-center text-gray-500">
+                      <FileText size={32} className="mx-auto mb-2 opacity-40" />
+                      <p className="text-sm">No measurement reports yet</p>
+                      <p className="text-xs text-gray-400 mt-1">Upload a report above and choose a measurement category</p>
+                    </div>
+                  ) : (
+                    <>
+                      <MeasurementSection title="📐 Roof Measurements" docs={roofDocs} />
+                      <MeasurementSection title="🧱 Walls Reports" docs={wallsDocs} />
+                      <MeasurementSection title="⭐ Premium Reports" docs={premiumDocs} />
+                    </>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* ── All tab: recent measurements summary ── */}
+            {docSubTab === 'all' && (() => {
+              const recentMeasurements = contactDocuments
+                .filter(d => d.type === 'measurement')
+                .slice(0, 3);
+              if (recentMeasurements.length === 0) return null;
+              return (
+                <div className="bg-white rounded-xl border border-gray-200">
+                  <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+                    <h4 className="text-sm font-semibold text-gray-700">📐 Measurements</h4>
+                    <button onClick={() => setDocSubTab('measurements')} className="text-xs text-blue-600 hover:underline">View all</button>
+                  </div>
+                  <div className="divide-y divide-gray-100">
+                    {recentMeasurements.map(doc => (
+                      <div key={doc.id} className="p-3 flex items-center justify-between hover:bg-gray-50">
+                        <div className="flex items-center gap-3">
+                          <FileText size={16} className="text-blue-600 flex-shrink-0" />
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">{doc.name}</p>
+                            <p className="text-xs text-gray-500">{doc.size} · {formatDate(doc.uploadedAt)}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => handleViewDoc(doc)} className="p-1.5 hover:bg-gray-100 rounded-lg" title="View"><Eye size={15} className="text-gray-500" /></button>
+                          <button onClick={() => openMoveDocument(doc)} className="p-1.5 hover:bg-gray-100 rounded-lg" title="Move to another customer"><FolderInput size={15} className="text-gray-500" /></button>
+                          <button onClick={() => handleDeleteDocument(doc)} className="p-1.5 hover:bg-red-100 rounded-lg" title="Delete"><Trash2 size={15} className="text-red-500" /></button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* ── Aerial Measurement Order Panels (order new reports) ── */}
+            {(docSubTab === 'all' || docSubTab === 'measurements') && (
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                <EagleViewPanel
+                  address={contact.address || ''}
+                  city={contact.city || ''}
+                  state={contact.state || ''}
+                  zip={contact.zip || ''}
+                  companyId={effectiveCompanyId || ''}
+                  contactId={contact.id}
+                  contactName={getContactFullName(contact)}
+                  userId={profile?.id}
+                  onDocumentSaved={(doc) => setContactDocuments(prev => [doc, ...prev])}
+                />
+                <RoofrPanel
+                  address={contact.address || ''}
+                  city={contact.city || ''}
+                  state={contact.state || ''}
+                  zip={contact.zip || ''}
+                  companyId={effectiveCompanyId || ''}
+                  contactId={contact.id}
+                  contactName={getContactFullName(contact)}
+                  userId={profile?.id}
+                  onDocumentSaved={(doc) => setContactDocuments(prev => [doc, ...prev])}
+                />
+              </div>
+            )}
+
             {/* ── Signed Documents ── */}
-            <div className="bg-white rounded-xl border border-gray-200">
+            {(docSubTab === 'all' || docSubTab === 'legal') && <div className="bg-white rounded-xl border border-gray-200">
               <div className="p-5 border-b border-gray-200 flex items-center gap-3">
                 <CheckCircle size={20} className="text-green-600" />
                 <h3 className="text-lg font-semibold text-gray-900">Signed Documents</h3>
@@ -2322,13 +2560,17 @@ export default function ContactDetail() {
                       <div>
                         <div className="flex items-center gap-2 mb-0.5">
                           <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                            doc.docType === 'estimate'
+                            doc.docType === 'agreement'
+                              ? 'bg-green-100 text-green-700'
+                              : doc.docType === 'estimate'
                               ? 'bg-blue-100 text-blue-700'
                               : doc.docType === 'work_order'
                               ? 'bg-purple-100 text-purple-700'
                               : 'bg-orange-100 text-orange-700'
                           }`}>
-                            {doc.docType === 'estimate'
+                            {doc.docType === 'agreement'
+                              ? 'Agreement'
+                              : doc.docType === 'estimate'
                               ? 'Estimate'
                               : doc.docType === 'work_order'
                               ? 'Work Order'
@@ -2338,12 +2580,22 @@ export default function ContactDetail() {
                         </div>
                         <p className="font-medium text-gray-900">{doc.title}</p>
                         <p className="text-sm text-gray-500">
-                          Signed by {doc.signedBy} · {formatDate(doc.signedAt)}
+                          {doc.signedBy ? `Signed by ${doc.signedBy}` : 'Signed'} · {formatDate(doc.signedAt)}
                           {doc.amount != null && ` · ${formatCurrency(doc.amount)}`}
                         </p>
                       </div>
                     </div>
-                    {doc.viewUrl && (
+                    {doc.docType === 'agreement' && doc.viewUrl ? (
+                      // Stored PDFs need a signed URL; handleOpenDocument resolves it
+                      // (and opens plain links as-is).
+                      <button
+                        onClick={() => handleOpenDocument(doc.viewUrl, doc.title)}
+                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
+                        title="View signed document"
+                      >
+                        <ExternalLink size={18} className="text-gray-500" />
+                      </button>
+                    ) : doc.viewUrl && (
                       <a
                         href={doc.viewUrl}
                         target="_blank"
@@ -2363,17 +2615,18 @@ export default function ContactDetail() {
                   </div>
                 )}
               </div>
-            </div>
+            </div>}
 
             {/* ── Uploaded Files ── */}
-            {(() => {
+            {(docSubTab === 'all' || docSubTab === 'photos' || docSubTab === 'docs') && (() => {
               const FIELD_ROLES = new Set(['subcontractor','canvasser','field_tech','field_contractor','production_manager','project_manager']);
               const getRoleForUploader = (uploadedBy: string) => {
                 const member = state.teamMembers.find(tm => tm.id === uploadedBy);
                 return member?.role ?? null;
               };
               const photos = contactDocuments.filter(d => d.type === 'photo');
-              const nonPhotoDocs = contactDocuments.filter(d => d.type !== 'photo');
+              // Signed agreements are listed in the Signed section instead.
+              const nonPhotoDocs = contactDocuments.filter(d => d.type !== 'photo' && d.type !== 'measurement' && d.type !== 'signed');
               const salesPhotos = photos.filter(d => {
                 const role = getRoleForUploader(d.uploadedBy);
                 return role === null || !FIELD_ROLES.has(role);
@@ -2402,7 +2655,8 @@ export default function ContactDetail() {
                     {(doc.name?.toLowerCase().endsWith('.pdf') || doc.url?.toLowerCase().includes('.pdf')) && (
                       <button onClick={() => handleLoadRoofrMeasurements(doc)} className="p-2 hover:bg-blue-100 rounded-lg transition-colors" title="Load Roofr measurements"><Zap size={18} className="text-blue-500" /></button>
                     )}
-                    <button onClick={() => handleDeleteDocument(doc.id)} className="p-2 hover:bg-red-100 rounded-lg transition-colors" title="Delete"><Trash2 size={18} className="text-red-500" /></button>
+                    <button onClick={() => openMoveDocument(doc)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="Move to another customer"><FolderInput size={18} className="text-gray-500" /></button>
+                    <button onClick={() => handleDeleteDocument(doc)} className="p-2 hover:bg-red-100 rounded-lg transition-colors" title="Delete"><Trash2 size={18} className="text-red-500" /></button>
                   </div>
                 </div>
               );
@@ -2431,7 +2685,8 @@ export default function ContactDetail() {
                     </div>
                     <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-2">
                       <button onClick={() => handleOpenDocument(doc.url, doc.name)} className="p-1.5 bg-white rounded-md" title="View"><Eye size={14} className="text-gray-700" /></button>
-                      <button onClick={() => handleDeleteDocument(doc.id)} className="p-1.5 bg-white rounded-md" title="Delete"><Trash2 size={14} className="text-red-500" /></button>
+                      <button onClick={() => openMoveDocument(doc)} className="p-1.5 bg-white rounded-md" title="Move to another customer"><FolderInput size={14} className="text-gray-700" /></button>
+                      <button onClick={() => handleDeleteDocument(doc)} className="p-1.5 bg-white rounded-md" title="Delete"><Trash2 size={14} className="text-red-500" /></button>
                     </div>
                     <p className="text-xs text-gray-500 mt-1 truncate">{doc.name}</p>
                   </div>
@@ -2455,7 +2710,7 @@ export default function ContactDetail() {
                   </div>
 
                   {/* ── Photos section with folders ── */}
-                  {photos.length > 0 && (
+                  {photos.length > 0 && docSubTab !== 'docs' && (
                     <div className="border-b border-gray-100">
                       {/* Sales Team Photos folder */}
                       {salesPhotos.length > 0 && (
@@ -2498,7 +2753,7 @@ export default function ContactDetail() {
                   )}
 
                   {/* ── Non-photo documents ── */}
-                  <div className="divide-y divide-gray-100">
+                  {docSubTab !== 'photos' && <div className="divide-y divide-gray-100">
                     {nonPhotoDocs.map((doc) => <DocRow key={doc.id} doc={doc} />)}
                     {contactDocuments.length === 0 && (
                       <div className="p-12 text-center text-gray-500">
@@ -2511,7 +2766,7 @@ export default function ContactDetail() {
                         </div>
                       </div>
                     )}
-                  </div>
+                  </div>}
                 </div>
               );
             })()}
@@ -2576,6 +2831,14 @@ export default function ContactDetail() {
                 >
                   <Plus size={18} />
                   New Quote
+                </button>
+                <button
+                  onClick={openNewInspection}
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-indigo-200 text-indigo-700 rounded-lg hover:bg-indigo-50 transition-colors"
+                  title="Inspection report with contingency agreement and 3-day cancel notice"
+                >
+                  <Shield size={18} />
+                  New Inspection Report
                 </button>
                 {(() => {
                   const pdfs = (contactDocuments || []).filter(d =>
@@ -2742,13 +3005,23 @@ export default function ContactDetail() {
                   <FileText size={20} />
                   Quotes ({contactQuotes.length})
                 </h3>
-                <button
-                  onClick={openNewQuote}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                >
-                  <Plus size={18} />
-                  New Quote
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={openNewInspection}
+                    className="flex items-center gap-2 px-4 py-2 bg-white border border-indigo-200 text-indigo-700 rounded-lg hover:bg-indigo-50 transition-colors"
+                    title="Inspection report with contingency agreement and 3-day cancel notice"
+                  >
+                    <Shield size={18} />
+                    New Inspection Report
+                  </button>
+                  <button
+                    onClick={openNewQuote}
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                  >
+                    <Plus size={18} />
+                    New Quote
+                  </button>
+                </div>
               </div>
 
               {contactQuotes.length > 0 ? (
@@ -4024,6 +4297,61 @@ export default function ContactDetail() {
         companyId={profile?.company_id || ''}
       />
 
+      {/* Move document to another customer */}
+      {movingDoc && (() => {
+        const q = moveSearch.trim().toLowerCase();
+        const candidates = state.contacts
+          .filter((c) => c.id !== contact.id)
+          .filter((c) => !q || `${getContactFullName(c)} ${c.address || ''} ${c.email || ''} ${c.phone1 || ''}`.toLowerCase().includes(q))
+          .slice(0, 50);
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => !movingInProgress && setMovingDoc(null)}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[80vh]" onClick={(e) => e.stopPropagation()}>
+              <div className="px-5 py-4 border-b border-gray-200 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="text-base font-bold text-gray-900">Move to another customer</h2>
+                  <p className="text-xs text-gray-500 truncate mt-0.5">{movingDoc.name}</p>
+                </div>
+                <button onClick={() => setMovingDoc(null)} disabled={movingInProgress} className="p-1.5 hover:bg-gray-100 rounded-lg" title="Close"><X size={18} className="text-gray-500" /></button>
+              </div>
+              <div className="px-5 pt-4">
+                <input
+                  autoFocus
+                  value={moveSearch}
+                  onChange={(e) => setMoveSearch(e.target.value)}
+                  placeholder="Search customers by name, address, email or phone…"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                />
+              </div>
+              <div className="flex-1 overflow-y-auto px-5 py-3 space-y-1">
+                {candidates.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-6">No matching customers</p>
+                ) : candidates.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => setMoveTargetId(c.id)}
+                    className={`w-full text-left px-3 py-2 rounded-lg border transition-colors ${moveTargetId === c.id ? 'border-blue-500 bg-blue-50' : 'border-transparent hover:bg-gray-50'}`}
+                  >
+                    <p className="text-sm font-medium text-gray-900">{getContactFullName(c)}</p>
+                    {c.address && <p className="text-xs text-gray-500 truncate">{[c.address, c.city, c.state].filter(Boolean).join(', ')}</p>}
+                  </button>
+                ))}
+              </div>
+              <div className="px-5 py-4 border-t border-gray-200 flex justify-end gap-2">
+                <button onClick={() => setMovingDoc(null)} disabled={movingInProgress} className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50">Cancel</button>
+                <button
+                  onClick={handleMoveDocument}
+                  disabled={!moveTargetId || movingInProgress}
+                  className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {movingInProgress ? 'Moving…' : 'Move document'}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* In-app document viewer for template documents (HTML-based) */}
       {viewingDocHtml && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -4094,12 +4422,19 @@ export default function ContactDetail() {
                   onChange={(e) => setPendingUploadCategory(e.target.value as typeof pendingUploadCategory)}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="insurance">Insurance Documents</option>
-                  <option value="contract">Contracts</option>
-                  <option value="estimate">Estimates</option>
-                  <option value="invoice">Invoices</option>
-                  <option value="photo">Photos</option>
-                  <option value="other">Other</option>
+                  <optgroup label="Measurements">
+                    <option value="measurement:roof">📐 Roof Measurement</option>
+                    <option value="measurement:walls">🧱 Walls Report</option>
+                    <option value="measurement:premium">⭐ Premium Report (All)</option>
+                  </optgroup>
+                  <optgroup label="Documents">
+                    <option value="insurance">Insurance Documents</option>
+                    <option value="contract">Contracts</option>
+                    <option value="estimate">Estimates</option>
+                    <option value="invoice">Invoices</option>
+                    <option value="photo">Photos</option>
+                    <option value="other">Other</option>
+                  </optgroup>
                 </select>
               </div>
             </div>

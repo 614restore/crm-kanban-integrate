@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../lib/supabase';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '@/lib/authContext';
 
 interface NewContactModalProps {
   isOpen: boolean;
@@ -36,7 +36,7 @@ export default function NewContactModal({ isOpen, onClose, onSuccess }: NewConta
 
     setLoading(true);
     try {
-      const { error } = await supabase
+      const insertPromise = supabase
         .from('contacts')
         .insert({
           ...formData,
@@ -44,6 +44,15 @@ export default function NewContactModal({ isOpen, onClose, onSuccess }: NewConta
           assigned_to: profile.id,
           status_changed_at: new Date().toISOString(),
         } as any);
+
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Request timed out after 15 seconds')), 15000)
+      );
+
+      const { error } = await Promise.race([
+        Promise.resolve(insertPromise),
+        timeoutPromise,
+      ]);
 
       if (error) throw error;
       onSuccess();

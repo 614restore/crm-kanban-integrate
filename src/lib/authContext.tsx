@@ -48,12 +48,23 @@ interface AuthContextType {
   clearPasswordReset: () => void;
 }
 
+const PROFILE_CACHE_KEY = 'crm_profile_v2';
+function readProfileCache(): Profile | null {
+  try { return JSON.parse(localStorage.getItem(PROFILE_CACHE_KEY) ?? 'null'); } catch { return null; }
+}
+function writeProfileCache(data: Profile) {
+  try { localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(data)); } catch {}
+}
+function clearProfileCache() {
+  try { localStorage.removeItem(PROFILE_CACHE_KEY); } catch {}
+}
+
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(() => readProfileCache());
   const [loading, setLoading] = useState(true);
   const [isRecoverySession, setIsRecoverySession] = useState(false);
 
@@ -111,6 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         // Fast path: existing user with company_id — return immediately
         if (profileData?.company_id) {
+          writeProfileCache(profileData);
           return profileData;
         }
 
@@ -137,6 +149,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
+        if (profileData) writeProfileCache(profileData);
         return profileData;
       } finally {
         // Clear the shared promise so future sign-ins / refreshes work normally
@@ -335,7 +348,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .then(({ data }) => {
         if (cancelled) return;
         if (data && data.length > 0) {
-          setProfile(prev => prev ? { ...prev, companies: data[0] } : null);
+          setProfile(prev => {
+            if (!prev) return null;
+            const updated = { ...prev, companies: data[0] };
+            writeProfileCache(updated);
+            return updated;
+          });
         }
       })
       .catch(() => {}); // non-fatal — company branding just won't appear
@@ -464,6 +482,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null);
       setProfile(null);
       profileFetchPromise.current = null;
+      clearProfileCache();
 
       const { error } = await supabase.auth.signOut();
       if (error) console.error('[Auth] Sign out error:', error);

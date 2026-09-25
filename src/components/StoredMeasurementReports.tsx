@@ -70,14 +70,21 @@ export async function saveMeasurementReportToCustomer(
     if (uploaded.error || !uploaded.path) return;
     // db.createDocument leaves uploaded_by out (the column references
     // team_members.id, which the auth user id is not) and stores size in bytes.
-    await db.createDocument({
+    const row = {
       company_id: companyId,
       contact_id: customerId,
       name: file.name.replace(/\.pdf$/i, ''),
-      type: 'other',
       url: uploaded.path,
       size: formatFileSize(file.size),
-    });
+    };
+    // The Roofr and EagleView panels file reports as type 'measurement', so they
+    // show under the customer's Measurements. Fall back to 'other' if this
+    // database's documents.type check does not allow that value.
+    try {
+      await db.createDocument({ ...row, type: 'measurement', category: 'measurements' });
+    } catch {
+      await db.createDocument({ ...row, type: 'other' });
+    }
   } catch (err) {
     console.warn('[StoredMeasurementReports] could not file the report with the customer:', err);
   }

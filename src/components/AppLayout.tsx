@@ -1039,13 +1039,6 @@ function CRMApp() {
         (cur.suppliers?.length || 0) + (cur.projects?.length || 0) > 0;
       if (totalEntities === 0 && (loadedFromCache || alreadyHaveData)) {
         console.warn('[loadData] Fresh fetch returned empty — keeping existing data to avoid data loss.');
-        if (!silent) {
-          // Show warning banner that we're using cached data
-          toast.warning('Using cached data - connection issues detected', {
-            description: 'Your data is safe. We\'ll keep trying to reconnect.',
-            duration: 5000,
-          });
-        }
         return;
       }
 
@@ -1234,7 +1227,7 @@ function CRMApp() {
         }
       },
       onStatusChange: (status, error) => {
-        if ((status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') && !realtimeFailedRef.current) {
+        if ((status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') && !realtimeFailedRef.current) {
           realtimeFailedRef.current = true;
           setConnectionUnstable(true);
           console.warn('Realtime unavailable; continuing with periodic reload fallback.', { status, error });

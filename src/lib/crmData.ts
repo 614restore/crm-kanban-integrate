@@ -141,12 +141,15 @@ export interface Document {
   id: string;
   contactId: string;
   name: string;
-  type: 'contract' | 'estimate' | 'invoice' | 'photo' | 'insurance' | 'other' | 'avatar';
+  type: 'contract' | 'estimate' | 'invoice' | 'photo' | 'insurance' | 'other' | 'avatar' | 'measurement' | 'document' | 'signed';
   url: string;
   uploadedAt: string;
   uploadedBy: string;
   size: string;
-  htmlContent?: string; // Rendered HTML for in-app preview (template documents)
+  htmlContent?: string;
+  category?: 'roof' | 'walls' | 'premium' | 'general' | null;
+  starred?: boolean;
+  photo_notes?: string | null;
 }
 
 export interface TeamMember {

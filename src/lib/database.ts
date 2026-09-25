@@ -252,7 +252,10 @@ function toDbDocumentRow(document: Partial<DbDocument>): Record<string, unknown>
     const match = size.trim().match(/^([\d.]+)\s*(bytes|kb|mb|gb)?$/i);
     if (match) bytes = Math.round(parseFloat(match[1]) * DOCUMENT_SIZE_UNITS[(match[2] || 'bytes').toUpperCase()]);
   }
-  return bytes === null ? rest : { ...rest, size: bytes };
+  // customer_id is NOT NULL in the schema and mirrors contact_id
+  const row = { ...rest } as Record<string, unknown>;
+  if (rest.contact_id && !row.customer_id) row.customer_id = rest.contact_id;
+  return bytes === null ? row : { ...row, size: bytes };
 }
 
 function fromDbDocumentRow(row: DbDocument): DbDocument {
@@ -1184,8 +1187,12 @@ class DatabaseService {
 
   async createDocument(document: Partial<DbDocument>): Promise<DbDocument | null> {
     assertCompanyId(document.company_id, 'createDocument');
-    const { data, error } = await supabase.from('documents').insert(toDbDocumentRow(document)).select().single();
-    if (error) { console.error('Error creating document:', error); return null; }
+    const row = toDbDocumentRow(document);
+    const { data, error } = await supabase.from('documents').insert(row).select().single();
+    if (error) {
+      console.error('Error creating document:', error.code, error.message, error.details, error.hint, JSON.stringify(row));
+      throw new Error(`Document save failed: ${error.message} (${error.code})`);
+    }
     return fromDbDocumentRow(data);
   }
 

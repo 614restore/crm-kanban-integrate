@@ -478,6 +478,15 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInitialLoad = useRef(true);
+  // TrussCTR change: a brand-new quote is only autosaved after the rep types or
+  // picks something. Prefills (measurement imports, customer handoff) change
+  // state programmatically and used to create a draft quote on every upload.
+  const userEdited = useRef(false);
+  const markUserEdit = (e: React.SyntheticEvent) => {
+    const t = e.target as HTMLInputElement;
+    if (t?.type === 'file') return;
+    userEdited.current = true;
+  };
   // Prevents concurrent silent saves (perTierLoadSaveDone + autosave can both fire
   // within 700ms of each other; without a lock the second save's DELETE runs while
   // the first save's INSERT is still in-flight → duplicate line items in the DB).
@@ -3804,6 +3813,7 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
     // save's DELETE runs while the first save's INSERT is in-flight, producing
     // duplicate line items in the database.
     if (silent && silentSaveInProgress.current) return null;
+    if (silent && !quoteId && !userEdited.current) return null;
     if (silent) {
       silentSaveInProgress.current = true;
       setAutoSaveStatus('saving');
@@ -4368,7 +4378,7 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
   }
 
   return (
-    <div className="p-4 lg:p-8 max-w-6xl mx-auto">
+    <div className="p-4 lg:p-8 max-w-6xl mx-auto" onInputCapture={markUserEdit} onChangeCapture={markUserEdit}>
       {/* Header */}
       <div className="flex items-center gap-4 mb-6">
         <button onClick={onBack} className="p-2 hover:bg-gray-100 rounded-xl transition-colors">

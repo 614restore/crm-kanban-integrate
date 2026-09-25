@@ -38,6 +38,8 @@ export interface PendingQuote {
   quoteId?: string | null;
   title?: string;
   items?: QuoteDraftItem[];
+  /** Open the builder as an inspection report (contingency + 3-day cancel). */
+  inspection?: boolean;
 }
 
 /** Another screen asked to invoice a customer's job or record a payment on it. */
