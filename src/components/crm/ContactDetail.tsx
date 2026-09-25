@@ -27,6 +27,7 @@ import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
 import { supabase } from '@/lib/supabase';
 import { quoteValue, toQuoteSummary, type QuoteSummary } from '@/lib/crmData';
+import { describeQuoteStatus, type QuoteStatusFields } from '@/lib/quoteStatus';
 import { formatPhoneNumber } from '@/lib/utils';
 import JobStatusTimeline from './JobStatusTimeline';
 import CustomerSurvey from './CustomerSurvey';
@@ -225,16 +226,6 @@ Best regards,
   }
 ];
 
-// Same palette as QuotesView so a status reads the same in both places.
-const QUOTE_STATUS_COLORS: Record<string, string> = {
-  draft: 'bg-gray-100 text-gray-700',
-  sent: 'bg-blue-100 text-blue-700',
-  viewed: 'bg-purple-100 text-purple-700',
-  signed: 'bg-green-100 text-green-700',
-  declined: 'bg-red-100 text-red-700',
-  expired: 'bg-amber-100 text-amber-700',
-};
-
 
 export default function ContactDetail() {
   const { state, dispatch } = useCRM();
@@ -295,6 +286,8 @@ export default function ContactDetail() {
   
   const [showRoofrPicker, setShowRoofrPicker] = useState(false);
   const [contactQuotes, setContactQuotes] = useState<QuoteSummary[]>([]);
+  // When each quote was sent, opened, signed and so on, keyed by quote id.
+  const [quoteStatusById, setQuoteStatusById] = useState<Record<string, QuoteStatusFields>>({});
   const noteInputRef = useRef<HTMLInputElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
@@ -923,7 +916,7 @@ export default function ContactDetail() {
     let cancelled = false;
     supabase
       .from('quotes')
-      .select('id, quote_number, cover_page_title, status, contact_id, customer_id, good_total, better_total, best_total, selected_tier, created_at')
+      .select('id, quote_number, cover_page_title, status, contact_id, customer_id, good_total, better_total, best_total, selected_tier, created_at, project_type, sent_at, viewed_at, signed_at, contingency_enabled, contingency_signed_at, inspection_report_sent_at, inspection_report_viewed_at, completion_certificate_sent_at, completion_certificate_viewed_at, certificate_customer_signed_at, contractor_signed_at, countersigned_copy_sent_at')
       .eq('company_id', profile.company_id)
       .eq('is_archived', false)
       .or(`customer_id.eq.${contactId},contact_id.eq.${contactId}`)
@@ -932,6 +925,7 @@ export default function ContactDetail() {
         if (cancelled) return;
         if (error) { console.error('[ContactDetail] Failed to load quotes:', error); return; }
         setContactQuotes((data || []).map(toQuoteSummary));
+        setQuoteStatusById(Object.fromEntries((data || []).map((row: any) => [row.id, row as QuoteStatusFields])));
       });
     return () => { cancelled = true; };
   }, [contactId, profile?.company_id]);
@@ -3038,9 +3032,17 @@ export default function ContactDetail() {
                             <p className="font-semibold text-gray-900">{q.quoteNumber}</p>
                             <p className="text-xs text-gray-500 mt-0.5">{new Date(q.createdAt).toLocaleDateString()}</p>
                           </div>
-                          <span className={`text-xs px-2 py-1 rounded-full font-medium ${QUOTE_STATUS_COLORS[q.status] || 'bg-gray-100 text-gray-700'}`}>
-                            {q.status}
-                          </span>
+                          {(() => {
+                            const st = describeQuoteStatus(quoteStatusById[q.id] ?? { status: q.status });
+                            return (
+                              <div className="text-right">
+                                <span className={`text-xs px-2 py-1 rounded-full font-medium ${st.pill}`}>{st.label}</span>
+                                {st.details.map((d) => (
+                                  <p key={d.text} className={`mt-1 text-[11px] font-medium ${d.tone}`}>{d.text}</p>
+                                ))}
+                              </div>
+                            );
+                          })()}
                           <p className="font-bold text-blue-600 whitespace-nowrap">
                             {q.status === 'signed' ? formatCurrency(quoteValue(q)) : `From ${formatCurrency(q.goodTotal)}`}
                           </p>

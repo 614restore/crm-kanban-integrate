@@ -5,7 +5,6 @@ import { toQuoteSummary } from '@/lib/crmData';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
 import { supabase } from '@/lib/supabase';
-import { sendEmail } from '@/lib/emailApi';
 import { toast } from 'sonner';
 import WorkOrderPanel from './WorkOrderPanel';
 import ReceiptPanel from './ReceiptPanel';
@@ -14,6 +13,7 @@ import QuoteBuilder from '@/components/QuoteBuilder';
 import QuotePreview from '@/components/QuotePreview';
 import type { Company, TeamMember } from '@/data/quoteData';
 import { quoteUrl } from '@/lib/appUrl';
+import { describeQuoteStatus } from '@/lib/quoteStatus';
 import { quoteProjectTemplates, TemplateLineItem } from '@/data/quoteTemplates';
 import {
   FileText, Plus, Search, Trash2, X, Save, User, Send, Link2, Eye, ChevronDown,
@@ -61,6 +61,18 @@ interface QuoteRow {
   share_token: string | null;
   cover_page_title: string | null;
   project_description: string | null;
+  sent_at?: string | null;
+  viewed_at?: string | null;
+  signed_at?: string | null;
+  contingency_enabled?: boolean | null;
+  contingency_signed_at?: string | null;
+  inspection_report_sent_at?: string | null;
+  inspection_report_viewed_at?: string | null;
+  completion_certificate_sent_at?: string | null;
+  completion_certificate_viewed_at?: string | null;
+  certificate_customer_signed_at?: string | null;
+  contractor_signed_at?: string | null;
+  countersigned_copy_sent_at?: string | null;
 }
 
 const ICON_MAP: Record<string, React.ReactNode> = {
@@ -118,15 +130,6 @@ interface FinancingOptionRow {
   apr_high: number | null;
   term_months: number | null;
 }
-
-const STATUS_COLORS: Record<string, string> = {
-  draft: 'bg-gray-100 text-gray-700',
-  sent: 'bg-blue-100 text-blue-700',
-  viewed: 'bg-purple-100 text-purple-700',
-  signed: 'bg-green-100 text-green-700',
-  declined: 'bg-red-100 text-red-700',
-  expired: 'bg-amber-100 text-amber-700',
-};
 
 export default function QuotesView() {
   const { state, dispatch } = useCRM();
@@ -226,7 +229,7 @@ export default function QuotesView() {
     try {
       const { data, error } = await supabase
         .from('quotes')
-        .select('id, quote_number, status, contact_id, customer_id, project_type, good_total, better_total, best_total, selected_tier, created_at, share_token, cover_page_title, project_description')
+        .select('id, quote_number, status, contact_id, customer_id, project_type, good_total, better_total, best_total, selected_tier, created_at, share_token, cover_page_title, project_description, sent_at, viewed_at, signed_at, contingency_enabled, contingency_signed_at, inspection_report_sent_at, inspection_report_viewed_at, completion_certificate_sent_at, completion_certificate_viewed_at, certificate_customer_signed_at, contractor_signed_at, countersigned_copy_sent_at')
         .eq('company_id', companyId)
         .eq('is_archived', showArchived)
         .order('created_at', { ascending: false });
@@ -260,50 +263,94 @@ export default function QuotesView() {
     }
   };
 
+  // Sends through the same send-quote-email function as the quote preview, so the
+  // customer gets the same email (greeting, layout, inspection wording) whichever way
+  // it is sent, and the quote moves to Sent without un-signing one that is signed.
   const handleSendQuote = async (q: QuoteRow) => {
     if (!q.share_token) { toast.error('This quote has no share link yet.'); return; }
     const contact = state.contacts.find((c) => c.id === (q.contact_id || q.customer_id));
     if (!contact?.email) { toast.error('This customer has no email on file.'); return; }
     if (!companyId) return;
+    if (isReadOnlyProject()) { toast.error('Quotes are read-only in this environment.'); return; }
     try {
-      const companyProfile = await db.getCompany(companyId).catch(() => null);
-      const companyName = (companyProfile as any)?.name || 'Your Company';
-      const companyPhone = (companyProfile as any)?.phone || '';
-      const companyAddress = (companyProfile as any)?.address || '';
-      const url = shareUrl(q.share_token);
+      const loaded = await loadFullQuote(q);
+      if (!loaded) return;
+      const { full, company } = loaded;
+      const companyName = company.name || 'Your Company';
+      const customerName = `${contact.firstName} ${contact.lastName}`.trim();
+      const isReport = q.project_type === 'inspection_report';
 
-      await sendEmail({
-        to: contact.email,
-        subject: `${q.cover_page_title || 'Your Proposal'} — ${companyName}`,
-        html: `
-          <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
-            <div style="background:#1e40af;color:white;padding:24px;border-radius:8px 8px 0 0">
-              <h2 style="margin:0;font-size:24px">${companyName}</h2>
-              ${companyAddress ? `<p style="margin:4px 0 0 0;opacity:0.9;font-size:13px">${companyAddress}</p>` : ''}
-              ${companyPhone ? `<p style="margin:2px 0 0 0;opacity:0.9;font-size:13px">${companyPhone}</p>` : ''}
-            </div>
-            <div style="padding:24px;background:#f9fafb">
-              <h3 style="color:#1e40af;margin-top:0">${q.cover_page_title || 'Your Proposal'}</h3>
-              <p>Hi ${contact.firstName},</p>
-              <p>Your quote <strong>${q.quote_number}</strong> is ready to view. Please click below to review the details and sign.</p>
-              <div style="text-align:center;margin:28px 0">
-                <a href="${url}" style="background:#2563eb;color:white;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block">
-                  View & Sign Quote
-                </a>
-              </div>
-              <p style="font-size:12px;color:#6b7280">Or copy this link: ${url}</p>
-            </div>
-          </div>
-        `,
+      // The total the customer is quoted: the tier they picked, else the tier the quote includes.
+      const tierTotal = (tier: 'good' | 'better' | 'best') => {
+        const manual = full[`manual_${tier}_total`];
+        return Number(full.use_manual_totals && manual != null ? manual : full[`${tier}_total`]) || 0;
+      };
+      const picked = full.selected_tier;
+      const quoteTotal =
+        picked === 'all' ? tierTotal('good') + tierTotal('better') + tierTotal('best')
+        : picked === 'good' || picked === 'better' || picked === 'best' ? tierTotal(picked)
+        : full.include_better !== false ? tierTotal('better') || tierTotal('good')
+        : full.include_best !== false ? tierTotal('best') || tierTotal('good')
+        : tierTotal('good');
+
+      const repName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ');
+      const fromName = repName ? `${company.quote_sender_name || companyName} | ${repName}` : (company.quote_sender_name || companyName);
+      const subject = isReport
+        ? `Your inspection report from ${companyName} — Quote #${q.quote_number}`
+        : `${q.cover_page_title || 'Your Proposal'} — ${companyName}`;
+      const message = isReport
+        ? `Hi ${contact.firstName || 'there'},\n\nThank you for the opportunity to inspect your property. Please review your inspection report using the link below.\n\nThank you,\n${companyName}`
+        : `Hi ${contact.firstName || 'there'},\n\nYour quote is ready to review. Please click the link to view your proposal.\n\nThank you,\n${companyName}`;
+
+      const { error: sendError } = await supabase.functions.invoke('send-quote-email', {
+        body: {
+          company_id: companyId,
+          to_email: contact.email,
+          to_name: customerName,
+          from_company: companyName,
+          from_name: fromName,
+          from_email: company.quote_sender_email || company.email,
+          reply_to_email: profile?.email || company.quote_reply_to_email || company.email,
+          bcc_email: profile?.email || company.quote_sender_email || company.email,
+          bcc_customer_name: customerName,
+          quote_number: q.quote_number,
+          share_token: q.share_token,
+          quote_url: shareUrl(q.share_token),
+          quote_type: q.project_type,
+          quote_total: quoteTotal,
+          project_description: q.project_description,
+          dashboard_url: `${window.location.origin}/?view=estimate-preview&estimate_id=${q.id}`,
+          email_subject: subject,
+          email_message: message,
+        },
       });
+      if (sendError) {
+        let detail = sendError.message;
+        try {
+          const ctx = (sendError as any).context;
+          const parsed = ctx && typeof ctx.json === 'function' ? await ctx.json() : ctx;
+          if (parsed?.details) detail = parsed.details;
+          else if (parsed?.error) detail = parsed.error;
+        } catch { /* keep the generic message */ }
+        throw new Error(detail);
+      }
 
+      const nowIso = new Date().toISOString();
+      const alreadySigned = q.status === 'signed' || !!q.signed_at;
       const { error } = await supabase
         .from('quotes')
-        .update({ status: 'sent', sent_at: new Date().toISOString() })
-        .eq('id', q.id);
+        .update({
+          ...(alreadySigned ? {} : { status: 'sent', viewed_at: null }),
+          sent_at: nowIso,
+          ...(isReport ? { inspection_report_sent_at: nowIso, inspection_report_viewed_at: null } : {}),
+          last_sent_subject: subject,
+          last_sent_message: message,
+        })
+        .eq('id', q.id)
+        .eq('company_id', companyId);
       if (error) throw error;
 
-      toast.success('Quote sent to ' + contact.email);
+      toast.success('Sent to ' + contact.email);
       loadQuotes();
     } catch (err: any) {
       toast.error('Failed to send quote: ' + (err.message || 'unknown error'));
@@ -825,9 +872,17 @@ export default function QuotesView() {
                   <td className="px-4 py-3 font-medium text-gray-900">{q.quote_number}</td>
                   <td className="px-4 py-3 text-gray-700">{contactName(q.contact_id || q.customer_id)}</td>
                   <td className="px-4 py-3">
-                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${STATUS_COLORS[q.status] || 'bg-gray-100 text-gray-700'}`}>
-                      {q.status}
-                    </span>
+                    {(() => {
+                      const st = describeQuoteStatus(q);
+                      return (
+                        <>
+                          <span className={`text-xs px-2 py-1 rounded-full font-medium ${st.pill}`}>{st.label}</span>
+                          {st.details.map((d) => (
+                            <p key={d.text} className={`mt-1 text-[11px] font-medium ${d.tone}`}>{d.text}</p>
+                          ))}
+                        </>
+                      );
+                    })()}
                   </td>
                   <td className="px-4 py-3 text-right text-gray-700">{money(q.good_total)}</td>
                   <td className="px-4 py-3 text-right text-gray-700">{money(q.better_total)}</td>
