@@ -19,6 +19,7 @@ import {
   FileText, Plus, Search, Trash2, X, Save, User, Send, Link2, Eye, ChevronDown,
   Home, Wrench, Hammer, Sun, Droplets, Layers, Grid3x3,
   Scroll, Tablet, PackageOpen, Box, ClipboardList, DollarSign, Archive, ArchiveRestore, Shield,
+  MoreVertical, Copy, Pencil, Receipt,
 } from 'lucide-react';
 
 // ── QuoteMGR-parity quote builder for web ─────────────────────────────────
@@ -138,6 +139,37 @@ export default function QuotesView() {
   const [showArchived, setShowArchived] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  // Row "⋯" menu. Rendered once with fixed positioning so the table's
+  // overflow-hidden container cannot clip it.
+  const [actionMenu, setActionMenu] = useState<{ quote: QuoteRow; top: number; right: number; up: boolean } | null>(null);
+
+  useEffect(() => {
+    if (!actionMenu) return;
+    const close = () => setActionMenu(null);
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+    window.addEventListener('mousedown', close);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('mousedown', close);
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [actionMenu]);
+
+  const toggleActionMenu = (q: QuoteRow, button: HTMLElement) => {
+    if (actionMenu?.quote.id === q.id) { setActionMenu(null); return; }
+    const rect = button.getBoundingClientRect();
+    const up = window.innerHeight - rect.bottom < 380;
+    setActionMenu({
+      quote: q,
+      top: up ? rect.top - 4 : rect.bottom + 4,
+      right: window.innerWidth - rect.right,
+      up,
+    });
+  };
   const [showBuilder, setShowBuilder] = useState(false);
   const [editingQuoteId, setEditingQuoteId] = useState<string | null>(null);
   const [builderPrefill, setBuilderPrefill] = useState<PendingQuote | null>(null);
@@ -368,6 +400,27 @@ export default function QuotesView() {
         },
       },
     );
+  };
+
+  const handleDuplicate = async (q: QuoteRow) => {
+    try {
+      const { data: newId, error } = await supabase.rpc('duplicate_quote', { p_quote_id: q.id });
+      if (error) throw error;
+      await loadQuotes();
+      const isInspection = q.project_type === 'inspection_report';
+      toast.success(`${isInspection ? 'Inspection report' : 'Quote'} ${q.quote_number} duplicated as a new draft`, {
+        duration: 8000,
+        action: {
+          label: 'Open copy',
+          onClick: () => {
+            openEdit(newId as string);
+            setBuilderInspection(isInspection);
+          },
+        },
+      });
+    } catch (err: any) {
+      toast.error('Failed to duplicate: ' + (err.message || 'unknown error'));
+    }
   };
 
   const toggleSelected = (id: string) =>
@@ -706,84 +759,17 @@ export default function QuotesView() {
                   <td className="px-4 py-3 text-right text-gray-700">{money(q.better_total)}</td>
                   <td className="px-4 py-3 text-right text-gray-700">{money(q.best_total)}</td>
                   <td className="px-4 py-3 text-gray-500">{new Date(q.created_at).toLocaleDateString()}</td>
-                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex items-center justify-end gap-1">
-                      {q.share_token && (
-                        <a
-                          href={shareUrl(q.share_token)}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                          title="View customer page"
-                        >
-                          <Eye size={15} />
-                        </a>
-                      )}
-                      <button
-                        onClick={() => openPreview(q.id)}
-                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                        title="Preview quote"
-                      >
-                        <FileText size={15} />
-                      </button>
-                      <button
-                        onClick={() => handleCopyLink(q)}
-                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                        title="Copy share link"
-                      >
-                        <Link2 size={15} />
-                      </button>
-                      <button
-                        onClick={() => handleSendQuote(q)}
-                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                        title="Email quote to customer"
-                      >
-                        <Send size={15} />
-                      </button>
-                      <button
-                        onClick={() => openReceipts(q)}
-                        className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
-                        title="Payments & receipts"
-                      >
-                        <DollarSign size={15} />
-                      </button>
-                      {q.status === 'signed' && (
-                        <button
-                          onClick={() => openInvoice(q)}
-                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                          title="Create invoice"
-                        >
-                          <FileText size={15} />
-                        </button>
-                      )}
-                      {q.status === 'signed' && (
-                        <button
-                          onClick={() => openWorkOrder(q)}
-                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                          title="Create work order"
-                        >
-                          <ClipboardList size={15} />
-                        </button>
-                      )}
-                      <button
-                        onClick={() => setArchived([q.id], !showArchived)}
-                        disabled={bulkBusy}
-                        className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors disabled:opacity-50"
-                        title={showArchived ? 'Restore quote' : 'Archive quote'}
-                      >
-                        {showArchived ? <ArchiveRestore size={15} /> : <Archive size={15} />}
-                      </button>
-                      {q.status !== 'signed' && (
-                        <button
-                          onClick={() => deleteQuotes([q.id])}
-                          disabled={bulkBusy}
-                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
-                          title="Delete quote"
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      )}
-                    </div>
+                  <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={(e) => toggleActionMenu(q, e.currentTarget)}
+                      className={`p-1.5 rounded-lg transition-colors ${actionMenu?.quote.id === q.id ? 'bg-gray-100 text-gray-700' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100'}`}
+                      title="Actions"
+                      aria-haspopup="menu"
+                      aria-expanded={actionMenu?.quote.id === q.id}
+                    >
+                      <MoreVertical size={16} />
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -791,6 +777,48 @@ export default function QuotesView() {
           </table>
         </div>
       )}
+
+      {actionMenu && (() => {
+        const q = actionMenu.quote;
+        const run = (fn: () => void) => () => { setActionMenu(null); fn(); };
+        const item = 'w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left';
+        return (
+          <div
+            role="menu"
+            onMouseDown={(e) => e.stopPropagation()}
+            className="fixed z-50 w-56 bg-white border border-gray-200 rounded-xl shadow-lg py-1"
+            style={{
+              right: actionMenu.right,
+              ...(actionMenu.up ? { bottom: window.innerHeight - actionMenu.top } : { top: actionMenu.top }),
+            }}
+          >
+            <button role="menuitem" className={item} onClick={run(() => openEdit(q.id))}><Pencil size={15} className="text-gray-400" /> Edit</button>
+            <button role="menuitem" className={item} onClick={run(() => openPreview(q.id))}><FileText size={15} className="text-gray-400" /> Preview</button>
+            {q.share_token && (
+              <button role="menuitem" className={item} onClick={run(() => window.open(shareUrl(q.share_token!), '_blank', 'noopener,noreferrer'))}><Eye size={15} className="text-gray-400" /> View customer page</button>
+            )}
+            <button role="menuitem" className={item} onClick={run(() => handleCopyLink(q))}><Link2 size={15} className="text-gray-400" /> Copy share link</button>
+            <button role="menuitem" className={item} onClick={run(() => handleSendQuote(q))}><Send size={15} className="text-gray-400" /> Email to customer</button>
+            <button role="menuitem" className={item} onClick={run(() => handleDuplicate(q))}><Copy size={15} className="text-gray-400" /> Duplicate</button>
+            <div className="my-1 border-t border-gray-100" />
+            <button role="menuitem" className={item} onClick={run(() => openReceipts(q))}><DollarSign size={15} className="text-emerald-500" /> Payments &amp; receipts</button>
+            {q.status === 'signed' && (
+              <button role="menuitem" className={item} onClick={run(() => openInvoice(q))}><Receipt size={15} className="text-gray-400" /> Create invoice</button>
+            )}
+            {q.status === 'signed' && (
+              <button role="menuitem" className={item} onClick={run(() => openWorkOrder(q))}><ClipboardList size={15} className="text-gray-400" /> Create work order</button>
+            )}
+            <div className="my-1 border-t border-gray-100" />
+            <button role="menuitem" className={item} disabled={bulkBusy} onClick={run(() => setArchived([q.id], !showArchived))}>
+              {showArchived ? <ArchiveRestore size={15} className="text-amber-500" /> : <Archive size={15} className="text-amber-500" />}
+              {showArchived ? 'Restore' : 'Archive'}
+            </button>
+            {q.status !== 'signed' && (
+              <button role="menuitem" className={`${item} text-red-600 hover:bg-red-50`} disabled={bulkBusy} onClick={run(() => deleteQuotes([q.id]))}><Trash2 size={15} /> Delete</button>
+            )}
+          </div>
+        );
+      })()}
 
       {workOrderQuote && workOrderCompany && companyId && (() => {
         const customerId = workOrderQuote.customer_id || workOrderQuote.contact_id;
