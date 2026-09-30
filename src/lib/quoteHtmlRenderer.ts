@@ -1104,7 +1104,9 @@ export const generateQuoteHTML = ({
 
     // Build a human-readable label for the selection
     const tierLabels: Record<string, string> = { good: goodTierName, better: betterTierName, best: bestTierName };
-    const selectedTierName = selectedKeys.length === 0 ? betterTierName
+    // Single-tier quote (Better and Best both off): nothing selected means Good, never Better.
+    const isSingleTierQuote = quote.include_better === false && quote.include_best === false;
+    const selectedTierName = selectedKeys.length === 0 ? (isSingleTierQuote ? goodTierName : betterTierName)
       : selectedKeys.length >= 3 || quote.selected_tier === 'all' ? 'All Tiers'
       : selectedKeys.map(k => tierLabels[k] || k).join(' + ');
 
@@ -1120,7 +1122,7 @@ export const generateQuoteHTML = ({
       if (k === 'better' && quote.include_better !== false) return sum + resolvedTotals.better;
       if (k === 'best' && quote.include_best !== false) return sum + resolvedTotals.best;
       return sum;
-    }, 0) || resolvedTotals.better; // fallback to better if nothing matched
+    }, 0) || (isSingleTierQuote ? resolvedTotals.good : resolvedTotals.better); // fallback when nothing matched
 
     // Customer-selected upgrades saved on signing
     const customerUpgrades: any[] = Array.isArray((quote as any).customer_selected_upgrades) ? (quote as any).customer_selected_upgrades : [];

@@ -1387,7 +1387,7 @@ export default function ContactDetail() {
                       statusColors[contact.status]
                     }`}
                   >
-                    {statusLabels[contact.status]}
+                    {contact.isRetail && contact.status === 'contingency' ? statusLabels.retail : statusLabels[contact.status]}
                   </span>
                   {(contact.inspectionCompleted ?? (contact as any).inspection_completed) && (
                     <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium flex items-center gap-1">
