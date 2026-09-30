@@ -7313,12 +7313,16 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
                 <span className={`font-medium transition-opacity ${usePerTierItems && perTierEditorTab !== 'good' ? 'opacity-30 text-gray-400' : 'text-emerald-600'}`}>
                   {goodTierName}: {formatCurrency(totals.good)}
                 </span>
-                <span className={`font-medium transition-opacity ${usePerTierItems && perTierEditorTab !== 'better' ? 'opacity-30 text-gray-400' : 'text-blue-600'}`}>
-                  {betterTierName}: {formatCurrency(totals.better)}
-                </span>
-                <span className={`font-medium transition-opacity ${usePerTierItems && perTierEditorTab !== 'best' ? 'opacity-30 text-gray-400' : 'text-amber-600'}`}>
-                  {bestTierName}: {formatCurrency(totals.best)}
-                </span>
+                {includeBetter && (
+                  <span className={`font-medium transition-opacity ${usePerTierItems && perTierEditorTab !== 'better' ? 'opacity-30 text-gray-400' : 'text-blue-600'}`}>
+                    {betterTierName}: {formatCurrency(totals.better)}
+                  </span>
+                )}
+                {includeBest && (
+                  <span className={`font-medium transition-opacity ${usePerTierItems && perTierEditorTab !== 'best' ? 'opacity-30 text-gray-400' : 'text-amber-600'}`}>
+                    {bestTierName}: {formatCurrency(totals.best)}
+                  </span>
+                )}
               </div>
             </div>
 
@@ -8446,45 +8450,57 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
               </div>
             ) : (
               <>
-                {/* Tier Name Editor — tiered quotes only */}
-                <div className="bg-gray-50 rounded-xl p-4">
-                  <h3 className="text-sm font-semibold text-gray-700 mb-1">Tier Names</h3>
-                  <p className="text-xs text-gray-400 mb-4">Customize what each tier is called on the customer proposal (e.g. "Silver / Gold / Platinum").</p>
-                  <div className="grid grid-cols-3 gap-3">
-                    {[
-                      { label: 'Good', value: goodTierName, setter: setGoodTierName, color: 'emerald' },
-                      { label: 'Better', value: betterTierName, setter: setBetterTierName, color: 'blue', disabled: !includeBetter },
-                      { label: 'Best', value: bestTierName, setter: setBestTierName, color: 'amber', disabled: !includeBest },
-                    ].map(({ label, value, setter, color, disabled }) => (
-                      <div key={label} className={disabled ? 'opacity-40 pointer-events-none' : ''}>
-                        <label className={`block text-xs font-semibold mb-1 ${color === 'emerald' ? 'text-emerald-700' : color === 'blue' ? 'text-blue-700' : 'text-amber-700'}`}>{label}</label>
-                        <input
-                          type="text"
-                          value={value}
-                          onChange={e => setter(e.target.value)}
-                          maxLength={20}
-                          className={`w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 ${color === 'emerald' ? 'border-emerald-200 focus:ring-emerald-300' : color === 'blue' ? 'border-blue-200 focus:ring-blue-300' : 'border-amber-200 focus:ring-amber-300'}`}
-                        />
-                      </div>
-                    ))}
+                {/* Tier Name Editor — only shown when multiple tiers are active */}
+                {(includeBetter || includeBest) && (
+                  <div className="bg-gray-50 rounded-xl p-4">
+                    <h3 className="text-sm font-semibold text-gray-700 mb-1">Tier Names</h3>
+                    <p className="text-xs text-gray-400 mb-4">Customize what each tier is called on the customer proposal (e.g. "Silver / Gold / Platinum").</p>
+                    <div className="grid grid-cols-3 gap-3">
+                      {[
+                        { label: 'Good', value: goodTierName, setter: setGoodTierName, color: 'emerald', show: true },
+                        { label: 'Better', value: betterTierName, setter: setBetterTierName, color: 'blue', show: includeBetter },
+                        { label: 'Best', value: bestTierName, setter: setBestTierName, color: 'amber', show: includeBest },
+                      ].filter(t => t.show).map(({ label, value, setter, color }) => (
+                        <div key={label}>
+                          <label className={`block text-xs font-semibold mb-1 ${color === 'emerald' ? 'text-emerald-700' : color === 'blue' ? 'text-blue-700' : 'text-amber-700'}`}>{label}</label>
+                          <input
+                            type="text"
+                            value={value}
+                            onChange={e => setter(e.target.value)}
+                            maxLength={20}
+                            className={`w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 ${color === 'emerald' ? 'border-emerald-200 focus:ring-emerald-300' : color === 'blue' ? 'border-blue-200 focus:ring-blue-300' : 'border-amber-200 focus:ring-amber-300'}`}
+                          />
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
 
-                {/* Summary Cards — tiered quotes only */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {(['good', 'better', 'best'] as const).map(tier => {
-                    const colors = tier === 'good' ? 'border-emerald-200 bg-emerald-50' : tier === 'better' ? 'border-blue-200 bg-blue-50' : 'border-amber-200 bg-amber-50';
-                    const textColor = tier === 'good' ? 'text-emerald-700' : tier === 'better' ? 'text-blue-700' : 'text-amber-700';
-                    const tierName = tier === 'good' ? goodTierName : tier === 'better' ? betterTierName : bestTierName;
-                    return (
-                      <div key={tier} className={`rounded-xl border-2 p-5 ${colors}`}>
-                        <h3 className={`text-sm font-semibold uppercase ${textColor}`}>{tierName} Option</h3>
-                        <p className={`text-3xl font-bold mt-2 ${textColor}`}>{formatCurrency(displayTotals[tier])}</p>
-                        <p className="text-xs text-gray-500 mt-1">{lineItems.length} line items</p>
-                      </div>
-                    );
-                  })}
-                </div>
+                {/* Summary Cards — only show tiers that are enabled */}
+                {(() => {
+                  const activeTiers = (['good', 'better', 'best'] as const).filter(tier => {
+                    if (tier === 'better') return includeBetter;
+                    if (tier === 'best') return includeBest;
+                    return true;
+                  });
+                  const gridCols = activeTiers.length === 1 ? 'md:grid-cols-1 max-w-sm' : activeTiers.length === 2 ? 'md:grid-cols-2' : 'md:grid-cols-3';
+                  return (
+                    <div className={`grid grid-cols-1 ${gridCols} gap-4`}>
+                      {activeTiers.map(tier => {
+                        const colors = tier === 'good' ? 'border-emerald-200 bg-emerald-50' : tier === 'better' ? 'border-blue-200 bg-blue-50' : 'border-amber-200 bg-amber-50';
+                        const textColor = tier === 'good' ? 'text-emerald-700' : tier === 'better' ? 'text-blue-700' : 'text-amber-700';
+                        const tierName = tier === 'good' ? goodTierName : tier === 'better' ? betterTierName : bestTierName;
+                        return (
+                          <div key={tier} className={`rounded-xl border-2 p-5 ${colors}`}>
+                            <h3 className={`text-sm font-semibold uppercase ${textColor}`}>{activeTiers.length === 1 ? tierName : `${tierName} Option`}</h3>
+                            <p className={`text-3xl font-bold mt-2 ${textColor}`}>{formatCurrency(displayTotals[tier])}</p>
+                            <p className="text-xs text-gray-500 mt-1">{lineItems.length} line items</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </>
             )}
 

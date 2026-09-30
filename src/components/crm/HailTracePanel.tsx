@@ -32,6 +32,9 @@ interface HailEvent {
   location?: string;
 }
 
+const WIND_OPTIONS = [0, 30, 35, 40, 50, 58, 65, 75];
+const HAIL_OPTIONS = [0, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+
 const severityConfig = {
   minor:    { label: 'Minor',    className: 'bg-yellow-100 text-yellow-800 border border-yellow-200' },
   moderate: { label: 'Moderate', className: 'bg-orange-100 text-orange-800 border border-orange-200' },
@@ -75,6 +78,8 @@ function formatClaimText(events: HailEvent[], address: string, city: string, sta
 
 export default function HailTracePanel({ address, city, state, zip, companyId, contactId, contactName, onEventsFound, onStartClaim }: HailTracePanelProps) {
   const [months, setMonths] = useState(12);
+  const [minWind, setMinWind] = useState(0);
+  const [minHail, setMinHail] = useState(0);
   const [loading, setLoading] = useState(false);
   const [events, setEvents] = useState<HailEvent[] | null>(null);
   const [status, setStatus] = useState<'idle' | 'no-events' | 'events'>('idle');
@@ -231,7 +236,13 @@ export default function HailTracePanel({ address, city, state, zip, companyId, c
     });
   }
 
-  const showResults = !loading && status === 'events' && events && events.length > 0;
+  const filteredEvents = events?.filter((e) => {
+    if (minWind > 0 && !(e.windSpeed != null && e.windSpeed >= minWind)) return false;
+    if (minHail > 0 && !(e.hailSize != null && e.hailSize >= minHail)) return false;
+    return true;
+  }) ?? [];
+
+  const showResults = !loading && status === 'events' && filteredEvents.length > 0;
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
@@ -272,6 +283,30 @@ export default function HailTracePanel({ address, city, state, zip, companyId, c
           >
             {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
               <option key={m} value={m}>{m} {m === 1 ? 'month' : 'months'}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-500 mb-1">Min wind</label>
+          <select
+            value={minWind}
+            onChange={(e) => setMinWind(Number(e.target.value))}
+            className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+          >
+            {WIND_OPTIONS.map((w) => (
+              <option key={w} value={w}>{w === 0 ? 'Any speed' : `${w}+ mph`}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-500 mb-1">Min hail</label>
+          <select
+            value={minHail}
+            onChange={(e) => setMinHail(Number(e.target.value))}
+            className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+          >
+            {HAIL_OPTIONS.map((h) => (
+              <option key={h} value={h}>{h === 0 ? 'Any size' : `${h}"`}</option>
             ))}
           </select>
         </div>
@@ -321,7 +356,7 @@ export default function HailTracePanel({ address, city, state, zip, companyId, c
       {/* Event cards */}
       {showResults && (
         <div className="space-y-3">
-          {events!.map((event, i) => (
+          {filteredEvents.map((event, i) => (
             <div key={i} className="border border-gray-200 rounded-xl p-4 bg-gray-50">
               {/* Header row */}
               <div className="flex items-center justify-between mb-3">
