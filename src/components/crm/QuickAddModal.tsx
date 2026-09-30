@@ -20,6 +20,7 @@ export default function QuickAddModal() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [duplicates, setDuplicates] = useState<DbContact[]>([]);
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
+  const [customProjectType, setCustomProjectType] = useState(false);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -136,6 +137,7 @@ export default function QuickAddModal() {
 
   const handleClose = () => {
     dispatch({ type: 'TOGGLE_QUICK_ADD' });
+    setCustomProjectType(false);
     setFormData({
       firstName: '',
       lastName: '',
@@ -566,19 +568,49 @@ export default function QuickAddModal() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Project Type</label>
                 <select
-                  value={formData.projectType}
-                  onChange={(e) => setFormData({ ...formData, projectType: e.target.value })}
+                  value={customProjectType ? '__custom__' : formData.projectType}
+                  onChange={(e) => {
+                    if (e.target.value === '__custom__') {
+                      setCustomProjectType(true);
+                      setFormData({ ...formData, projectType: '' });
+                    } else {
+                      setCustomProjectType(false);
+                      setFormData({ ...formData, projectType: e.target.value });
+                    }
+                  }}
                   className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                 >
                   <option value="">Select project type...</option>
-                  <option value="Roof Inspection">Roof Inspection</option>
-                  <option value="Roof Repair">Roof Repair</option>
-                  <option value="Full Roof Replacement">Full Roof Replacement</option>
-                  <option value="Gutter Installation">Gutter Installation</option>
-                  <option value="Siding">Siding</option>
-                  <option value="Windows">Windows</option>
-                  <option value="Full Exterior">Full Exterior</option>
+                  <optgroup label="Exterior">
+                    <option value="Roof Inspection">Roof Inspection</option>
+                    <option value="Roof Repair">Roof Repair</option>
+                    <option value="Full Roof Replacement">Full Roof Replacement</option>
+                    <option value="Gutter Installation">Gutter Installation</option>
+                    <option value="Siding">Siding</option>
+                    <option value="Windows">Windows</option>
+                    <option value="Full Exterior">Full Exterior</option>
+                  </optgroup>
+                  <optgroup label="Interior">
+                    <option value="Interior Remodel">Interior Remodel</option>
+                    <option value="Kitchen Remodel">Kitchen Remodel</option>
+                    <option value="Bathroom Remodel">Bathroom Remodel</option>
+                    <option value="Basement Finishing">Basement Finishing</option>
+                    <option value="Flooring">Flooring</option>
+                    <option value="Drywall & Paint">Drywall &amp; Paint</option>
+                    <option value="Water / Fire Damage Restoration">Water / Fire Damage Restoration</option>
+                  </optgroup>
+                  <option value="__custom__">Custom…</option>
                 </select>
+                {customProjectType && (
+                  <input
+                    type="text"
+                    autoFocus
+                    value={formData.projectType}
+                    onChange={(e) => setFormData({ ...formData, projectType: e.target.value })}
+                    placeholder="Type the project type (e.g. Deck Build)"
+                    className="mt-2 w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                  />
+                )}
               </div>
 
               <div>

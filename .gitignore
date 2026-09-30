@@ -15,3 +15,6 @@ summary.section-label*
 public/crm-user-tier-comparison.html
 supabase/.temp/
 .vercel/output
+
+# Supabase CLI local link/cache — never commit (was linked to QuoteMGR)
+supabase/.temp/

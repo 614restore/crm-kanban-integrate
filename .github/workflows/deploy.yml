@@ -30,8 +30,8 @@ jobs:
       - name: Build application
         run: npm run build
         env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          # Supabase URL/key come from .env.production (TrussCTR production project).
+          # Do not set them from secrets: the repo secret points at read-only QuoteMGR.
           VITE_EMAIL_API_BASE_URL: ${{ secrets.VITE_EMAIL_API_BASE_URL }}
           VITE_STRIPE_PUBLISHABLE_KEY: ${{ secrets.VITE_STRIPE_PUBLISHABLE_KEY }}
           VITE_STRIPE_STARTER_MONTHLY: ${{ secrets.VITE_STRIPE_STARTER_MONTHLY }}

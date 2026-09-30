@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
 import { ThemeProvider } from "@/components/theme-provider";
 import { useServiceWorker } from "@/lib/serviceWorker";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import Index from "./pages/Index";
 import Photos from "./pages/Photos";
@@ -44,9 +44,42 @@ const queryClient = new QueryClient({
 // Get base path from environment (set by Vite)
 const basename = import.meta.env.BASE_URL || "/";
 
+const VERSION_CHECK_MS = 5 * 60 * 1000;
+
+// Reports when a newer deployment is live than the code this tab is running.
+function useNewDeploymentAvailable() {
+  const [available, setAvailable] = useState(false);
+  useEffect(() => {
+    const isNative = typeof (window as any).Capacitor?.isNativePlatform === 'function'
+      && (window as any).Capacitor.isNativePlatform();
+    if (import.meta.env.DEV || isNative) return;
+    let stopped = false;
+    const check = async () => {
+      try {
+        const res = await fetch(`${basename}version.json?t=${Date.now()}`, { cache: 'no-store' });
+        if (!res.ok) return;
+        const { buildId } = await res.json();
+        if (!stopped && buildId && buildId !== __BUILD_ID__) setAvailable(true);
+      } catch { /* offline — try again later */ }
+    };
+    const onVisible = () => { if (document.visibilityState === 'visible') check(); };
+    const timer = window.setInterval(check, VERSION_CHECK_MS);
+    document.addEventListener('visibilitychange', onVisible);
+    check();
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
+  return available;
+}
+
 // PWA Update notification component
 const PWAUpdateNotification = () => {
-  const { updateAvailable, activateUpdate, isOffline } = useServiceWorker();
+  const { updateAvailable: swUpdate, activateUpdate, isOffline } = useServiceWorker();
+  const newDeployment = useNewDeploymentAvailable();
+  const updateAvailable = swUpdate || newDeployment;
 
   useEffect(() => {
     // updateAvailable is handled by the banner below
@@ -64,7 +97,7 @@ const PWAUpdateNotification = () => {
           </span>
         </div>
         <button
-          onClick={activateUpdate}
+          onClick={swUpdate ? activateUpdate : () => window.location.reload()}
           className="bg-white text-blue-600 px-3 py-1 rounded text-sm font-medium hover:bg-blue-50 transition-colors"
         >
           Update Now
