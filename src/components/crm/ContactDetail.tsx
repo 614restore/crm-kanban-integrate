@@ -590,13 +590,6 @@ export default function ContactDetail() {
         ? (pendingUploadCategory.split(':')[1] as 'roof' | 'walls' | 'premium')
         : undefined;
 
-      // Resolve measurement variants: type → 'measurement', then back-fill category
-      const isMeasurement = pendingUploadCategory.startsWith('measurement:');
-      const docType = isMeasurement ? 'measurement' : pendingUploadCategory;
-      const measurementCategory = isMeasurement
-        ? (pendingUploadCategory.split(':')[1] as 'roof' | 'walls' | 'premium')
-        : undefined;
-
       const created = await db.createDocument({
         company_id: effectiveCompanyId,
         contact_id: contactId,
