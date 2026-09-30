@@ -11,6 +11,7 @@ import WorkOrderPanel from './WorkOrderPanel';
 import ReceiptPanel from './ReceiptPanel';
 import InvoiceBuilder from './InvoiceBuilder';
 import QuoteBuilder from '@/components/QuoteBuilder';
+import ChangeOrderModal from './ChangeOrderModal';
 import QuotePreview from '@/components/QuotePreview';
 import type { Company, TeamMember } from '@/data/quoteData';
 import { quoteUrl } from '@/lib/appUrl';
@@ -141,6 +142,8 @@ export default function QuotesView() {
   const [bulkBusy, setBulkBusy] = useState(false);
   // Row "⋯" menu. Rendered once with fixed positioning so the table's
   // overflow-hidden container cannot clip it.
+  // Change order started from a signed quote (builder lock banner or ⋯ menu).
+  const [changeOrderFor, setChangeOrderFor] = useState<{ id: string; quoteNumber: string; customerId: string | null } | null>(null);
   const [actionMenu, setActionMenu] = useState<{ quote: QuoteRow; top: number; right: number; up: boolean } | null>(null);
 
   useEffect(() => {
@@ -423,6 +426,33 @@ export default function QuotesView() {
     }
   };
 
+  // The change order belongs to the quote's customer, in this company's account.
+  const changeOrderContact = changeOrderFor?.customerId
+    ? state.contacts.find((c) => c.id === changeOrderFor.customerId)
+    : undefined;
+  useEffect(() => {
+    if (changeOrderFor && !changeOrderContact) {
+      toast.error('This quote has no customer attached. Assign a customer to the quote before creating a change order.');
+      setChangeOrderFor(null);
+    }
+  }, [changeOrderFor, changeOrderContact]);
+  const changeOrderModal = changeOrderFor && changeOrderContact && companyId ? (
+    <ChangeOrderModal
+      isOpen
+      onClose={() => setChangeOrderFor(null)}
+      onSave={() => {
+        const name = `${changeOrderContact.firstName} ${changeOrderContact.lastName}`.trim();
+        toast.success(`Change order for ${changeOrderFor.quoteNumber} saved to ${name}'s account`);
+        setChangeOrderFor(null);
+      }}
+      contactId={changeOrderContact.id}
+      contactName={`${changeOrderContact.firstName} ${changeOrderContact.lastName}`.trim()}
+      contactEmail={changeOrderContact.email || undefined}
+      companyId={companyId}
+      quote={{ id: changeOrderFor.id, quoteNumber: changeOrderFor.quoteNumber }}
+    />
+  ) : null;
+
   const toggleSelected = (id: string) =>
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -547,6 +577,19 @@ export default function QuotesView() {
     const request = state.pendingQuoteAction;
     if (!request || loading) return;
     dispatch({ type: 'SET_PENDING_QUOTE_ACTION', payload: null });
+    if (request.quoteId) {
+      const q = quotes.find((row) => row.id === request.quoteId);
+      if (!q) { toast.error('That quote could not be found.'); return; }
+      if (request.action === 'invoice') openInvoice(q);
+      else if (request.action === 'payment') openReceipts(q);
+      else if (request.action === 'work_order') openWorkOrder(q);
+      else if (request.action === 'send') handleSendQuote(q);
+      else if (request.action === 'preview') openPreview(q.id);
+      else if (request.action === 'change_order') {
+        setChangeOrderFor({ id: q.id, quoteNumber: q.quote_number, customerId: q.customer_id || q.contact_id });
+      }
+      return;
+    }
     const customerQuotes = quotes.filter((q) => (q.customer_id || q.contact_id) === request.contactId);
     const target = request.action === 'invoice'
       ? customerQuotes.find((q) => q.status === 'signed')
@@ -601,6 +644,7 @@ export default function QuotesView() {
 
   if (showBuilder && quoteCompany && teamMember && companyId) {
     return (
+      <>
       <QuoteBuilder
         key={`${editingQuoteId ?? `new-${builderNonce}`}-${builderInspection ? 'inspection' : 'quote'}`}
         companyId={companyId}
@@ -616,7 +660,10 @@ export default function QuotesView() {
         onPreview={(id, step) => { setEditingQuoteId(id); setPreviewReturnStep(step); setPreviewQuoteId(id); }}
         onBack={closeBuilder}
         onOpenSettings={() => dispatch({ type: 'SET_VIEW', payload: 'settings' })}
+        onCreateChangeOrder={(q) => setChangeOrderFor(q)}
       />
+      {changeOrderModal}
+      </>
     );
   }
 
@@ -778,6 +825,8 @@ export default function QuotesView() {
         </div>
       )}
 
+      {changeOrderModal}
+
       {actionMenu && (() => {
         const q = actionMenu.quote;
         const run = (fn: () => void) => () => { setActionMenu(null); fn(); };
@@ -800,6 +849,9 @@ export default function QuotesView() {
             <button role="menuitem" className={item} onClick={run(() => handleCopyLink(q))}><Link2 size={15} className="text-gray-400" /> Copy share link</button>
             <button role="menuitem" className={item} onClick={run(() => handleSendQuote(q))}><Send size={15} className="text-gray-400" /> Email to customer</button>
             <button role="menuitem" className={item} onClick={run(() => handleDuplicate(q))}><Copy size={15} className="text-gray-400" /> Duplicate</button>
+            {q.status === 'signed' && (
+              <button role="menuitem" className={item} onClick={run(() => setChangeOrderFor({ id: q.id, quoteNumber: q.quote_number, customerId: q.customer_id || q.contact_id }))}><Pencil size={15} className="text-amber-500" /> Create change order</button>
+            )}
             <div className="my-1 border-t border-gray-100" />
             <button role="menuitem" className={item} onClick={run(() => openReceipts(q))}><DollarSign size={15} className="text-emerald-500" /> Payments &amp; receipts</button>
             {q.status === 'signed' && (

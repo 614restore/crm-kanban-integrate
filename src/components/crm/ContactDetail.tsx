@@ -56,6 +56,7 @@ import { compressImage } from '@/lib/imageUtils';
 import { htmlStringToPdfBlob } from '@/lib/pdfService';
 import { logActivity } from '@/lib/activityLogger';
 import { toast } from 'sonner';
+import { quoteUrl } from '@/lib/appUrl';
 import {
   Contact,
   Job,
@@ -114,6 +115,11 @@ import {
   Image,
   Copy,
   FolderInput,
+  MoreVertical,
+  Link2,
+  Archive,
+  Pencil,
+  Receipt,
 } from 'lucide-react';
 
 type TabType = 'overview' | 'timeline' | 'documents' | 'financial' | 'projects' | 'jobStatus' | 'survey' | 'insurance';
@@ -288,6 +294,12 @@ export default function ContactDetail() {
   const [contactChangeOrders, setContactChangeOrders] = useState<ChangeOrder[]>([]);
   const [showChangeOrderModal, setShowChangeOrderModal] = useState(false);
   const [viewingChangeOrder, setViewingChangeOrder] = useState<ChangeOrder | null>(null);
+  // Set when a change order is started from a signed quote, so it is linked to it.
+  const [changeOrderQuote, setChangeOrderQuote] = useState<{ id: string; quoteNumber: string } | null>(null);
+  // Quotes list "⋯" menu (fixed-position so the card layout cannot clip it).
+  const [quoteMenu, setQuoteMenu] = useState<{ quote: QuoteSummary; top: number; right: number; up: boolean } | null>(null);
+  const [quotesVersion, setQuotesVersion] = useState(0);
+  const [quoteExtras, setQuoteExtras] = useState<Record<string, { shareToken: string | null; projectType: string | null }>>({});
   const [showSurveyModal, setShowSurveyModal] = useState(false);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
@@ -923,7 +935,7 @@ export default function ContactDetail() {
     let cancelled = false;
     supabase
       .from('quotes')
-      .select('id, quote_number, cover_page_title, status, contact_id, customer_id, good_total, better_total, best_total, selected_tier, created_at')
+      .select('id, quote_number, cover_page_title, status, contact_id, customer_id, good_total, better_total, best_total, selected_tier, created_at, share_token, project_type')
       .eq('company_id', profile.company_id)
       .eq('is_archived', false)
       .or(`customer_id.eq.${contactId},contact_id.eq.${contactId}`)
@@ -932,9 +944,26 @@ export default function ContactDetail() {
         if (cancelled) return;
         if (error) { console.error('[ContactDetail] Failed to load quotes:', error); return; }
         setContactQuotes((data || []).map(toQuoteSummary));
+        setQuoteExtras(Object.fromEntries((data || []).map((row: any) => [row.id, { shareToken: row.share_token ?? null, projectType: row.project_type ?? null }])));
       });
     return () => { cancelled = true; };
-  }, [contactId, profile?.company_id]);
+  }, [contactId, profile?.company_id, quotesVersion]);
+
+  useEffect(() => {
+    if (!quoteMenu) return;
+    const close = () => setQuoteMenu(null);
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+    window.addEventListener('mousedown', close);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('mousedown', close);
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [quoteMenu]);
 
   const openNewQuote = () => {
     if (!contact) return;
@@ -958,6 +987,84 @@ export default function ContactDetail() {
     if (!contact) return;
     dispatch({ type: 'SET_PENDING_QUOTE_ACTION', payload: { contactId: contact.id, action } });
     dispatch({ type: 'SET_VIEW', payload: 'quotes' });
+  };
+
+  // ── Quote row "⋯" menu actions ────────────────────────────────────────────
+  const toggleQuoteMenu = (q: QuoteSummary, button: HTMLElement) => {
+    if (quoteMenu?.quote.id === q.id) { setQuoteMenu(null); return; }
+    const rect = button.getBoundingClientRect();
+    const up = window.innerHeight - rect.bottom < 380;
+    setQuoteMenu({ quote: q, top: up ? rect.top - 4 : rect.bottom + 4, right: window.innerWidth - rect.right, up });
+  };
+
+  // Hand off to the Quotes page for flows that live there (preview, email, payments, invoice, work order).
+  const runQuoteAction = (action: 'invoice' | 'payment' | 'work_order' | 'send' | 'preview', quoteId: string) => {
+    if (!contact) return;
+    dispatch({ type: 'SET_PENDING_QUOTE_ACTION', payload: { contactId: contact.id, action, quoteId } });
+    dispatch({ type: 'SET_VIEW', payload: 'quotes' });
+  };
+
+  const copyQuoteLink = async (quoteId: string) => {
+    const token = quoteExtras[quoteId]?.shareToken;
+    if (!token) { toast.error('This quote has no share link yet.'); return; }
+    try {
+      await navigator.clipboard.writeText(quoteUrl(token));
+      toast.success('Link copied');
+    } catch {
+      toast.error('Could not copy the link');
+    }
+  };
+
+  const duplicateContactQuote = async (q: QuoteSummary) => {
+    try {
+      const { data: newId, error } = await supabase.rpc('duplicate_quote', { p_quote_id: q.id });
+      if (error) throw error;
+      setQuotesVersion((v) => v + 1);
+      toast.success(`${q.quoteNumber} duplicated as a new draft`, {
+        duration: 8000,
+        action: { label: 'Open copy', onClick: () => openQuote(newId as string) },
+      });
+    } catch (err: any) {
+      toast.error('Failed to duplicate: ' + (err.message || 'unknown error'));
+    }
+  };
+
+  const archiveContactQuote = async (q: QuoteSummary) => {
+    const { error } = await supabase
+      .from('quotes')
+      .update({ is_archived: true, updated_at: new Date().toISOString() })
+      .eq('id', q.id)
+      .eq('company_id', profile?.company_id || '');
+    if (error) { toast.error('Failed to archive: ' + error.message); return; }
+    setQuotesVersion((v) => v + 1);
+    toast.success(`${q.quoteNumber} archived — restore it from Quotes → Archived`);
+  };
+
+  const deleteContactQuote = (q: QuoteSummary) => {
+    toast.warning(`Permanently delete ${q.quoteNumber}? This cannot be undone.`, {
+      duration: 10000,
+      cancel: { label: 'Cancel', onClick: () => {} },
+      action: {
+        label: 'Delete',
+        onClick: async () => {
+          const { error } = await supabase
+            .from('quotes')
+            .delete()
+            .eq('id', q.id)
+            .eq('company_id', profile?.company_id || '')
+            .neq('status', 'signed');
+          if (error) { toast.error('Failed to delete: ' + error.message); return; }
+          setQuotesVersion((v) => v + 1);
+          toast.success(`${q.quoteNumber} deleted`);
+        },
+      },
+    });
+  };
+
+  const openChangeOrderForQuote = (q: QuoteSummary) => {
+    setChangeOrderQuote({ id: q.id, quoteNumber: q.quoteNumber });
+    setViewingChangeOrder(null);
+    setShowChangeOrderModal(true);
   };
 
   if (!contact) {
@@ -3030,10 +3137,13 @@ export default function ContactDetail() {
                 <div className="grid gap-3">
                   {contactQuotes.map((q) => {
                     return (
-                      <button
+                      <div
                         key={q.id}
+                        role="button"
+                        tabIndex={0}
                         onClick={() => openQuote(q.id)}
-                        className="w-full text-left bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow"
+                        onKeyDown={(e) => { if (e.key === 'Enter') openQuote(q.id); }}
+                        className="w-full text-left bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow cursor-pointer"
                       >
                         <div className="flex items-center justify-between gap-4">
                           <div className="min-w-0">
@@ -3046,8 +3156,19 @@ export default function ContactDetail() {
                           <p className="font-bold text-blue-600 whitespace-nowrap">
                             {q.status === 'signed' ? formatCurrency(quoteValue(q)) : `From ${formatCurrency(q.goodTotal)}`}
                           </p>
+                          <button
+                            type="button"
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onClick={(e) => { e.stopPropagation(); toggleQuoteMenu(q, e.currentTarget); }}
+                            className={`p-1.5 rounded-lg transition-colors shrink-0 ${quoteMenu?.quote.id === q.id ? 'bg-gray-100 text-gray-700' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100'}`}
+                            title="Actions"
+                            aria-haspopup="menu"
+                            aria-expanded={quoteMenu?.quote.id === q.id}
+                          >
+                            <MoreVertical size={16} />
+                          </button>
                         </div>
-                      </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -4276,12 +4397,54 @@ export default function ContactDetail() {
       )}
 
       {/* Change Order Modal */}
+      {quoteMenu && (() => {
+        const q = quoteMenu.quote;
+        const token = quoteExtras[q.id]?.shareToken;
+        const run = (fn: () => void) => () => { setQuoteMenu(null); fn(); };
+        const item = 'w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left';
+        return (
+          <div
+            role="menu"
+            onMouseDown={(e) => e.stopPropagation()}
+            className="fixed z-50 w-56 bg-white border border-gray-200 rounded-xl shadow-lg py-1"
+            style={{ right: quoteMenu.right, ...(quoteMenu.up ? { bottom: window.innerHeight - quoteMenu.top } : { top: quoteMenu.top }) }}
+          >
+            <button role="menuitem" className={item} onClick={run(() => openQuote(q.id))}><Pencil size={15} className="text-gray-400" /> Edit</button>
+            <button role="menuitem" className={item} onClick={run(() => runQuoteAction('preview', q.id))}><FileText size={15} className="text-gray-400" /> Preview</button>
+            {token && (
+              <button role="menuitem" className={item} onClick={run(() => window.open(quoteUrl(token), '_blank', 'noopener,noreferrer'))}><Eye size={15} className="text-gray-400" /> View customer page</button>
+            )}
+            <button role="menuitem" className={item} onClick={run(() => copyQuoteLink(q.id))}><Link2 size={15} className="text-gray-400" /> Copy share link</button>
+            <button role="menuitem" className={item} onClick={run(() => runQuoteAction('send', q.id))}><Send size={15} className="text-gray-400" /> Email to customer</button>
+            <button role="menuitem" className={item} onClick={run(() => duplicateContactQuote(q))}><Copy size={15} className="text-gray-400" /> Duplicate</button>
+            {q.status === 'signed' && (
+              <button role="menuitem" className={item} onClick={run(() => openChangeOrderForQuote(q))}><Pencil size={15} className="text-amber-500" /> Create change order</button>
+            )}
+            <div className="my-1 border-t border-gray-100" />
+            <button role="menuitem" className={item} onClick={run(() => runQuoteAction('payment', q.id))}><DollarSign size={15} className="text-emerald-500" /> Payments &amp; receipts</button>
+            {q.status === 'signed' && (
+              <button role="menuitem" className={item} onClick={run(() => runQuoteAction('invoice', q.id))}><Receipt size={15} className="text-gray-400" /> Create invoice</button>
+            )}
+            {q.status === 'signed' && (
+              <button role="menuitem" className={item} onClick={run(() => runQuoteAction('work_order', q.id))}><ClipboardList size={15} className="text-gray-400" /> Create work order</button>
+            )}
+            <div className="my-1 border-t border-gray-100" />
+            <button role="menuitem" className={item} onClick={run(() => archiveContactQuote(q))}><Archive size={15} className="text-amber-500" /> Archive</button>
+            {q.status !== 'signed' && (
+              <button role="menuitem" className={`${item} text-red-600 hover:bg-red-50`} onClick={run(() => deleteContactQuote(q))}><Trash2 size={15} /> Delete</button>
+            )}
+          </div>
+        );
+      })()}
+
       <ChangeOrderModal
         isOpen={showChangeOrderModal}
-        onClose={() => { setShowChangeOrderModal(false); setViewingChangeOrder(null); }}
+        onClose={() => { setShowChangeOrderModal(false); setViewingChangeOrder(null); setChangeOrderQuote(null); }}
+        quote={changeOrderQuote}
         onSave={async () => {
           setShowChangeOrderModal(false);
           setViewingChangeOrder(null);
+          setChangeOrderQuote(null);
           // Reload change orders after save
           if (contactId) {
             const { data } = await supabase

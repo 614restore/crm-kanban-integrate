@@ -56,6 +56,8 @@ interface QuoteBuilderProps {
   onPreview: (quoteId: string, step: number) => void;
   onBack: () => void;
   onOpenSettings?: (tab: string) => void;
+  /** Signed quotes are locked; opens a change order linked to this quote and customer. */
+  onCreateChangeOrder?: (quote: { id: string; quoteNumber: string; customerId: string | null }) => void;
 }
 
 const steps = [
@@ -89,6 +91,7 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
   onPreview,
   onBack,
   onOpenSettings,
+  onCreateChangeOrder,
 }) => {
   const activeSteps = inspectionOnly
     ? steps.filter(s => ['customer', 'project', 'photos', 'review'].includes(s.id))
@@ -4398,9 +4401,18 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
       {existingStatus === 'signed' && (
         <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4">
           <span className="text-amber-700 text-lg">🔒</span>
-          <p className="text-sm font-medium text-amber-800">
+          <p className="text-sm font-medium text-amber-800 flex-1">
             This quote has been signed and is locked. To make changes, create a Change Order.
           </p>
+          {onCreateChangeOrder && quoteId && (
+            <button
+              type="button"
+              onClick={() => onCreateChangeOrder({ id: quoteId, quoteNumber, customerId: selectedCustomerId })}
+              className="shrink-0 px-3 py-1.5 text-sm font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-lg transition-colors"
+            >
+              Create Change Order
+            </button>
+          )}
         </div>
       )}
 

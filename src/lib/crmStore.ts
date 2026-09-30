@@ -45,7 +45,9 @@ export interface PendingQuote {
 /** Another screen asked to invoice a customer's job or record a payment on it. */
 export interface PendingQuoteAction {
   contactId: string;
-  action: 'invoice' | 'payment';
+  action: 'invoice' | 'payment' | 'work_order' | 'send' | 'preview' | 'change_order';
+  /** Act on this quote rather than picking one of the customer's quotes. */
+  quoteId?: string;
 }
 
 export type ViewType =
