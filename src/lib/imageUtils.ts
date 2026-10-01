@@ -142,9 +142,30 @@ export const compressImage = async (
   });
 };
 
+/**
+ * Decodes a file without a blob: URL. createImageBitmap reads the bytes directly, so the page's
+ * Content-Security-Policy (img-src) cannot block it the way it blocks <img src="blob:...">.
+ * Returns null when the browser cannot decode the file, or has no createImageBitmap.
+ */
+const decodeBitmap = async (file: Blob): Promise<ImageBitmap | null | undefined> => {
+  if (typeof createImageBitmap !== 'function') return undefined; // cannot tell; caller falls back
+  try {
+    return await createImageBitmap(file);
+  } catch {
+    return null;
+  }
+};
+
 /** True when this browser can actually draw the file as an image. */
-export const canBrowserDecode = (file: Blob): Promise<boolean> =>
-  new Promise((resolve) => {
+export const canBrowserDecode = async (file: Blob): Promise<boolean> => {
+  const bitmap = await decodeBitmap(file);
+  if (bitmap) {
+    const ok = bitmap.width > 0;
+    bitmap.close();
+    return ok;
+  }
+  if (bitmap === null) return false;
+  return new Promise((resolve) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
     let settled = false;
@@ -159,6 +180,7 @@ export const canBrowserDecode = (file: Blob): Promise<boolean> =>
     setTimeout(() => done(false), 10_000);
     img.src = url;
   });
+};
 
 /**
  * True when the image is solid black. Some iPhone HEIC photos "convert" without error but
@@ -166,37 +188,27 @@ export const canBrowserDecode = (file: Blob): Promise<boolean> =>
  * Samples a 48x48 downscale and treats it as blank only if every sampled pixel is near-black,
  * so a dark but real photo (night shot, shadowed roof) is not mistaken for one.
  */
-export const isSolidBlack = (file: Blob): Promise<boolean> =>
-  new Promise((resolve) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    const finish = (blank: boolean) => {
-      URL.revokeObjectURL(url);
-      resolve(blank);
-    };
-    img.onerror = () => finish(false);
-    img.onload = () => {
-      try {
-        const size = 48;
-        const canvas = document.createElement('canvas');
-        canvas.width = size;
-        canvas.height = size;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return finish(false);
-        ctx.drawImage(img, 0, 0, size, size);
-        const { data } = ctx.getImageData(0, 0, size, size);
-        let brightest = 0;
-        for (let i = 0; i < data.length; i += 4) {
-          brightest = Math.max(brightest, data[i], data[i + 1], data[i + 2]);
-          if (brightest > 12) return finish(false);
-        }
-        finish(true);
-      } catch {
-        finish(false);
-      }
-    };
-    img.src = url;
-  });
+export const isSolidBlack = async (file: Blob): Promise<boolean> => {
+  try {
+    const bitmap = await decodeBitmap(file);
+    if (!bitmap) return false; // cannot tell; the decode check already vouched for the file
+    const size = 48;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) { bitmap.close(); return false; }
+    ctx.drawImage(bitmap, 0, 0, size, size);
+    bitmap.close();
+    const { data } = ctx.getImageData(0, 0, size, size);
+    for (let i = 0; i < data.length; i += 4) {
+      if (Math.max(data[i], data[i + 1], data[i + 2]) > 12) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 /**
  * compressImage, but never hands back a file the browser cannot show.
