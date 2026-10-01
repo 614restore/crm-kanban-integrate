@@ -126,6 +126,43 @@ export const compressImage = async (
   });
 };
 
+/** True when this browser can actually draw the file as an image. */
+export const canBrowserDecode = (file: Blob): Promise<boolean> =>
+  new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    let settled = false;
+    const done = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      URL.revokeObjectURL(url);
+      resolve(ok);
+    };
+    img.onload = () => done(img.naturalWidth > 0);
+    img.onerror = () => done(false);
+    setTimeout(() => done(false), 10_000);
+    img.src = url;
+  });
+
+/**
+ * compressImage, but never hands back a file the browser cannot show.
+ *
+ * compressImage falls back to the ORIGINAL file whenever HEIC conversion or canvas decoding
+ * fails. Uploading that (as callers did, labelled image/jpeg) stores bytes that Chrome cannot
+ * draw: the photo appears as a black box with a broken-image icon, forever. Better to say so
+ * at upload time.
+ */
+export const compressForUpload = async (file: File, options?: CompressOptions): Promise<File> => {
+  const out = await compressImage(file, options);
+  if (!(await canBrowserDecode(out))) {
+    throw new Error(
+      `${file.name} could not be converted to a photo this browser can show. ` +
+        'iPhone HEIC photos can fail outside Safari -- try Safari, or send the photo as a JPEG.',
+    );
+  }
+  return out;
+};
+
 /**
  * Recommended presets for each upload type.
  *

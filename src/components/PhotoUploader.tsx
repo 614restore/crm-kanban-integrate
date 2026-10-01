@@ -7,7 +7,7 @@ import { damageTypes, photoLocations } from '@/data/quoteData';
 import type { EstimatePhoto } from '@/data/quoteData';
 import PhotoMarkupEditor from './PhotoMarkupEditor';
 import Lightbox from './Lightbox';
-import { compressImage, COMPRESS_PRESETS, STORAGE_CACHE_CONTROL } from '@/lib/imageUtils';
+import { compressForUpload, COMPRESS_PRESETS, STORAGE_CACHE_CONTROL } from '@/lib/imageUtils';
 
 // ─── Photo Crop Modal ─────────────────────────────────────────────────────────
 
@@ -241,11 +241,11 @@ const PhotoUploader: React.FC<PhotoUploaderProps> = ({
         if (!isImage) continue;
 
         try {
-          const compressed = await compressImage(file, COMPRESS_PRESETS.quotePhoto);
+          const compressed = await compressForUpload(file, COMPRESS_PRESETS.quotePhoto);
 
           const fileName = `photo-${Date.now()}-${Math.random().toString(36).substring(7)}.jpg`;
           const { error } = await supabase.storage.from('quote-photos').upload(fileName, compressed, {
-            contentType: 'image/jpeg',
+            contentType: compressed.type || 'image/jpeg',
             cacheControl: STORAGE_CACHE_CONTROL,
           });
           if (error) throw error;
@@ -262,8 +262,9 @@ const PhotoUploader: React.FC<PhotoUploaderProps> = ({
             notes: '',
             sort_order: photos.length + i,
           });
-        } catch (err) {
-          toast.error(`Failed to upload ${file.name}`);
+        } catch (err: any) {
+          // A photo this browser cannot show says why; anything else is an upload failure.
+          toast.error(err?.message?.includes('could not be converted') ? err.message : `Failed to upload ${file.name}`, { duration: 8000 });
         }
       }
 
