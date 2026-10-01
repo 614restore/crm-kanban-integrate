@@ -56,21 +56,6 @@ const getEmailQuoteTotal = (q: Quote & { use_per_tier_items?: boolean }): number
 const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, isCustomerView = false, shareToken, currentUser, isPreviewLink = false, onConvertToQuote, onEdit, initialCustomer }) => {
   const previewIframeRef = useRef<HTMLIFrameElement>(null);
   const viewTrackedRef = useRef(false);
-  useEffect(() => {
-    if (!showContractorSign || isCustomerView) return;
-    let cancelled = false;
-    (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data } = await (supabase.from('team_members') as any)
-        .select('signature_data, signature_adopted_at')
-        .or(`id.eq.${user.id},user_id.eq.${user.id}`)
-        .limit(1)
-        .maybeSingle();
-      if (!cancelled) setMySavedSignature(data?.signature_adopted_at ? data.signature_data ?? null : null);
-    })();
-    return () => { cancelled = true; };
-  }, [showContractorSign, isCustomerView]);
   const [quote, setQuote] = useState<any>(null);
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [quoteOptions, setQuoteOptions] = useState<QuoteOption[]>([]);
@@ -112,6 +97,24 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
   const [showContractorSign, setShowContractorSign] = useState(false);
   // The signed-in rep's saved signature (Settings > My Signature), offered when countersigning by hand.
   const [mySavedSignature, setMySavedSignature] = useState<string | null>(null);
+
+  // Declared after the state it reads: a hook's dependency array is evaluated during render,
+  // so placing this above `showContractorSign` crashed the whole quote view.
+  useEffect(() => {
+    if (!showContractorSign || isCustomerView) return;
+    let cancelled = false;
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await (supabase.from('team_members') as any)
+        .select('signature_data, signature_adopted_at')
+        .or(`id.eq.${user.id},user_id.eq.${user.id}`)
+        .limit(1)
+        .maybeSingle();
+      if (!cancelled) setMySavedSignature(data?.signature_adopted_at ? data.signature_data ?? null : null);
+    })();
+    return () => { cancelled = true; };
+  }, [showContractorSign, isCustomerView]);
   // Tracks whether the saved contractor signature image failed to render (a
   // stale/broken storage URL, etc.) -- lets the re-sign option surface even
   // when contractor_signature_data is technically present but not actually
