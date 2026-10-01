@@ -42,7 +42,7 @@ import {
   CloudRain,
   Radio,
 } from 'lucide-react';
-import { openLiveRadar, openStormHistory } from '@/lib/stormNavigation';
+import { openLiveRadarFor, openStormHistoryFor } from '@/lib/stormNavigation';
 import { getStormSearchMode, STORM_MODE_EVENT, type StormSearchMode } from '@/lib/stormReports';
 
 interface NavItem {
@@ -174,8 +174,10 @@ export default function Sidebar() {
   useEffect(() => { if (activeInMore) setMoreOpen(true); }, [activeInMore]);
 
   const handleNavClick = (item: NavItem) => {
-    if (item.stormMode === 'live') return openLiveRadar(dispatch);
-    if (item.stormMode === 'history') return openStormHistory(dispatch);
+    // With a customer open, weather opens on their address rather than blank.
+    const openContact = state.selectedContactId ? state.contacts.find((c) => c.id === state.selectedContactId) : null;
+    if (item.stormMode === 'live') return openLiveRadarFor(dispatch, openContact);
+    if (item.stormMode === 'history') return void openStormHistoryFor(dispatch, openContact);
     if (item.boardType) {
       const board = state.boards.find((b) => b.type === item.boardType);
       if (board) dispatch({ type: 'SELECT_BOARD', payload: board.id });
