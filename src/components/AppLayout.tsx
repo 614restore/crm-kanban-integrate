@@ -320,6 +320,7 @@ function dbContactToAppContact(dbContact: any): Contact {
     adjusterPhone: dbContact.adjuster_phone,
     adjusterEmail: dbContact.adjuster_email,
     deductible: dbContact.deductible,
+    dateOfLoss: (dbContact as any).date_of_loss ?? undefined,
     projectType: dbContact.project_type,
     projectValue: dbContact.project_value,
     depositAmount: dbContact.deposit_amount,

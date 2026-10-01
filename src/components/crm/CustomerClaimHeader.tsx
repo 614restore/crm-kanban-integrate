@@ -3,6 +3,7 @@
 import React from 'react';
 import { Mail, MapPin, Phone, ShieldCheck } from 'lucide-react';
 import { formatCurrency, getContactFullName, type Contact } from '@/lib/crmData';
+import { formatLossDate } from '@/lib/claimStorm';
 
 const Row = ({ label, children }: { label: string; children: React.ReactNode }) => (
   <div className="min-w-0">
@@ -15,7 +16,7 @@ export default function CustomerClaimHeader({ contact }: { contact: Contact }) {
   const address = [contact.address, contact.city, [contact.state, contact.zip].filter(Boolean).join(' ')]
     .filter(Boolean)
     .join(', ');
-  const hasInsurance = !!(contact.insuranceCompany || contact.policyNumber || contact.claimNumber || contact.adjusterName);
+  const hasInsurance = !!(contact.insuranceCompany || contact.policyNumber || contact.claimNumber || contact.adjusterName || contact.dateOfLoss);
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-5">
@@ -43,10 +44,11 @@ export default function CustomerClaimHeader({ contact }: { contact: Contact }) {
         </div>
       </div>
       {hasInsurance ? (
-        <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-7">
           <Row label="Insurance">{contact.insuranceCompany}</Row>
           <Row label="Policy #">{contact.policyNumber}</Row>
           <Row label="Claim #">{contact.claimNumber}</Row>
+          <Row label="Date of loss">{contact.dateOfLoss ? formatLossDate(contact.dateOfLoss) : ''}</Row>
           <Row label="Adjuster">{contact.adjusterName}</Row>
           <Row label="Adjuster phone">{contact.adjusterPhone}</Row>
           <Row label="Deductible">{contact.deductible ? formatCurrency(contact.deductible) : ''}</Row>
