@@ -16,6 +16,8 @@ export default function MySignatureSettings() {
   const [drawing, setDrawing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [companyAuto, setCompanyAuto] = useState<boolean | null>(null);
+  const canManageCompany = ['owner', 'admin', 'manager'].includes(profile?.role ?? '');
 
   useEffect(() => {
     if (!uid) return;
@@ -33,6 +35,23 @@ export default function MySignatureSettings() {
     })();
     return () => { cancelled = true; };
   }, [uid]);
+
+  useEffect(() => {
+    if (!profile?.company_id || !canManageCompany) return;
+    (supabase.from('companies') as any)
+      .select('auto_countersign_enabled')
+      .eq('id', profile.company_id)
+      .maybeSingle()
+      .then(({ data }: any) => setCompanyAuto(data ? !!data.auto_countersign_enabled : null));
+  }, [profile?.company_id, canManageCompany]);
+
+  const toggleCompanyAuto = async () => {
+    const next = !companyAuto;
+    const { error } = await (supabase as any).rpc('set_company_auto_countersign', { p_enabled: next });
+    if (error) { toast.error(error.message || 'Could not change the setting'); return; }
+    setCompanyAuto(next);
+    toast.success(next ? 'Automatic countersigning is on for your company' : 'Automatic countersigning is off');
+  };
 
   const save = async (dataUrl: string | null) => {
     setSaving(true);
@@ -67,6 +86,27 @@ export default function MySignatureSettings() {
           marked ready for the down payment.
         </p>
       </div>
+
+      {canManageCompany && companyAuto !== null && (
+        <div className="bg-white border border-gray-200 rounded-xl p-5 flex items-start justify-between gap-4">
+          <div>
+            <p className="font-semibold text-gray-900">Countersign automatically for the company</p>
+            <p className="text-sm text-gray-600 mt-1">
+              When on, a customer's signature is countersigned right away with the saved signature of the
+              person who created the quote. Each person still has to save their own signature below; anyone
+              without one countersigns by hand.
+            </p>
+          </div>
+          <button
+            onClick={toggleCompanyAuto}
+            role="switch"
+            aria-checked={companyAuto}
+            className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${companyAuto ? 'bg-emerald-500' : 'bg-gray-300'}`}
+          >
+            <span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${companyAuto ? 'left-6' : 'left-1'}`} />
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <p className="text-sm text-gray-500">Loading…</p>
