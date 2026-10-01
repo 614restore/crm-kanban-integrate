@@ -26,6 +26,7 @@ const SEVERITY_BY_KIND: Record<string, FeedNotification['type']> = {
   error: 'error',
   unassigned_appointment: 'warning',
   storm_alert: 'warning',
+  quote_signed: 'success',
   storm_area_alert: 'warning',
 };
 

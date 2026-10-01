@@ -1,4 +1,6 @@
-// Copied from QuoteMGR supabase/functions/track-quote-event (read-only reference).
+// Copied from QuoteMGR supabase/functions/track-quote-event, then changed: the 60-minute
+// view dedupe is now 2 minutes. The salesperson's bell notification is created by the
+// notify_quote_creator trigger on quote_notifications.
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 
@@ -63,10 +65,11 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Invalid share token' }), { status: 404, headers: corsHeaders });
     }
 
-    // Deduplicate: for 'viewed', skip if the same quote was already logged within 60 min
-    // (prevents double-fires from rapid page refreshes while still notifying on every real open)
+    // Every real open notifies the salesperson, including opens after signing. The only
+    // thing skipped is a double-fire of the same page load (React re-renders, a quick
+    // refresh), so the window is two minutes rather than the old hour.
     if (event_type === 'viewed' || event_type === 'report_opened') {
-      const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+      const since = new Date(Date.now() - 2 * 60 * 1000).toISOString();
       const { data: recent } = await supabase
         .from('quote_notifications')
         .select('id')
@@ -74,7 +77,7 @@ serve(async (req) => {
         .eq('event_type', event_type)
         .gte('created_at', since)
         .limit(1)
-        .single();
+        .maybeSingle();
       if (recent) {
         return new Response(JSON.stringify({ ok: true, skipped: true }), { status: 200, headers: corsHeaders });
       }
@@ -96,9 +99,9 @@ serve(async (req) => {
     const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
     // 2. Send email alert to the quote creator / company (fire-and-forget)
-    //    For 'viewed' and 'tier_selected' we call send-quote-alert which handles
-    //    the email. For 'signing_started' we skip email (sign flow sends its own).
-    if (event_type === 'viewed' || event_type === 'tier_selected') {
+    //    For 'viewed' we call send-quote-alert which handles the email (it only
+    //    knows 'viewed' and 'signed', so other events must not go through it). For 'signing_started' we skip email (sign flow sends its own).
+    if (event_type === 'viewed') {
       fetch(`${supabaseUrl}/functions/v1/send-quote-alert`, {
         method: 'POST',
         headers: {
