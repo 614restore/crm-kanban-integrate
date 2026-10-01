@@ -34,6 +34,7 @@ import AppointmentModal from './AppointmentModal';
 import ContactTemplateModal from './ContactTemplateModal';
 import ChangeOrderModal, { ChangeOrder } from './ChangeOrderModal';
 import HailTracePanel from './HailTracePanel';
+import CustomerClaimHeader from './CustomerClaimHeader';
 import { openLiveRadar } from '@/lib/stormNavigation';
 import WeatherWidget from '@/components/integrations/WeatherWidget';
 import EagleViewPanel from './EagleViewPanel';
@@ -3488,6 +3489,17 @@ export default function ContactDetail() {
 
         {activeTab === 'insurance' && (
           <div className="space-y-6">
+            <CustomerClaimHeader contact={contact} />
+            <div data-section="insurance-claims">
+              <InsuranceTrackingView
+                contactId={contact.id}
+                contactName={getContactFullName(contact)}
+              />
+            </div>
+            <SupplementTrackingView
+              contactId={contact.id}
+              contactName={getContactFullName(contact)}
+            />
             {(() => {
               const propertyAddress = [contact.address, contact.city, [contact.state, contact.zip].filter(Boolean).join(' ')]
                 .filter(Boolean)
@@ -3542,16 +3554,6 @@ export default function ContactDetail() {
                   document.querySelector('[data-section="insurance-claims"]')?.scrollIntoView({ behavior: 'smooth' });
                 }, 100);
               }}
-            />
-            <div data-section="insurance-claims">
-              <InsuranceTrackingView
-                contactId={contact.id}
-                contactName={getContactFullName(contact)}
-              />
-            </div>
-            <SupplementTrackingView
-              contactId={contact.id}
-              contactName={getContactFullName(contact)}
             />
           </div>
         )}

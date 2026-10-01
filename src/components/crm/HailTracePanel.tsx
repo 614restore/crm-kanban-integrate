@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import StormEventDetail, { type StormEventForDetail } from '@/components/crm/StormEventDetail';
 import { geocodeAddress } from '@/lib/geocode';
-import { CloudRain, Loader2, AlertTriangle, CheckCircle, Wind, Copy, Check, FileText } from 'lucide-react';
+import { CloudRain, Loader2, AlertTriangle, CheckCircle, Wind, Copy, Check, FileText, ChevronDown, ChevronUp, FilePlus } from 'lucide-react';
+import { addStormToClaim, stormLossDate } from '@/lib/claimStorm';
 import { HailTraceIntegration, NOAAWeatherIntegration, NOAAStormEvent } from '@/lib/integrations/weather';
 import { supabase } from '@/lib/supabase';
 import { db } from '@/lib/database';
@@ -58,7 +59,7 @@ function getDateRange(months: number) {
   };
 }
 
-function formatClaimText(events: HailEvent[], address: string, city: string, state: string, zip: string): string {
+function formatClaimText(events: HailEvent[], address: string, city: string, state: string, zip: string, source: 'hailtrace' | 'noaa' | null): string {
   const fullAddress = [address, city, state, zip].filter(Boolean).join(', ');
   const lines = [
     `HAIL & WIND EVENT REPORT`,
@@ -70,7 +71,8 @@ function formatClaimText(events: HailEvent[], address: string, city: string, sta
   ];
   events.forEach((e, i) => {
     lines.push(`Event ${i + 1}`);
-    lines.push(`  Date:       ${e.date}${e.time ? ' at ' + e.time : ''}`);
+    // NOAA radar times are UTC; say so, since the storm date a claim needs is the local one.
+    lines.push(`  Date:       ${e.date}${e.time ? ' at ' + e.time + (source === 'noaa' ? ' UTC' : '') : ''}`);
     lines.push(`  Severity:   ${severityConfig[e.severity]?.label ?? e.severity}`);
     if (e.hailSize != null)    lines.push(`  Hail Size:  ${e.hailSize}" diameter`);
     if (e.windSpeed != null)   lines.push(`  Wind Speed: ${e.windSpeed} mph`);
@@ -79,7 +81,7 @@ function formatClaimText(events: HailEvent[], address: string, city: string, sta
     if (e.stormId)             lines.push(`  Storm ID:   ${e.stormId}`);
     lines.push(`─────────────────────────────────────`);
   });
-  lines.push(`Source: HailTrace — hailtrace.com`);
+  lines.push(source === 'noaa' ? `Source: NOAA radar (SWDI) — ncei.noaa.gov` : `Source: HailTrace — hailtrace.com`);
   return lines.join('\n');
 }
 
@@ -95,6 +97,17 @@ export default function HailTracePanel({ address, city, state, zip, companyId, c
   const [copied, setCopied] = useState(false);
   const [propertyCoords, setPropertyCoords] = useState<{ lat: number; lon: number } | null>(null);
   const [openEvent, setOpenEvent] = useState<HailEvent | null>(null);
+  // Storm history can run to pages, so it folds away; the choice is remembered on this device.
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try { return localStorage.getItem('trussctr.stormHistoryCollapsed') === '1'; } catch { return false; }
+  });
+  const toggleCollapsed = () => {
+    setCollapsed((c) => {
+      const next = !c;
+      try { localStorage.setItem('trussctr.stormHistoryCollapsed', next ? '1' : '0'); } catch { /* storage unavailable */ }
+      return next;
+    });
+  };
 
   function normalizeNoaaEvents(noaaEvents: NOAAStormEvent[]): HailEvent[] {
     return noaaEvents.map((e) => ({
@@ -119,6 +132,27 @@ export default function HailTracePanel({ address, city, state, zip, companyId, c
     setPropertyCoords(coords);
     return coords;
   }
+
+  /** One line the adjuster can read: what, when, how far, and where it came from. */
+  const describeStorm = (e: HailEvent): string => {
+    const what = [
+      e.kind === 'tornado' ? 'Tornado signature' : e.hailSize != null ? `${e.hailSize}" hail` : 'Storm event',
+      e.windSpeed != null ? `${e.windSpeed} mph wind` : null,
+      e.windGust != null ? `${e.windGust} mph gusts` : null,
+    ].filter(Boolean).join(', ');
+    const utc = e.time && /^\d{2}:\d{2}$/.test(e.time) && /^\d{4}-\d{2}-\d{2}$/.test(e.date) ? new Date(`${e.date}T${e.time}:00Z`) : null;
+    const when = utc
+      ? utc.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
+      : e.date;
+    const where = e.distanceMiles != null ? `, ${e.distanceMiles} mi from the property` : '';
+    const from = source === 'noaa' ? ` (NOAA radar${e.stormId ? ` ${e.stormId}` : ''})` : source === 'hailtrace' ? ' (HailTrace)' : '';
+    return `${what} on ${when}${where}${from}`;
+  };
+
+  const addEventToClaim = (e: HailEvent, mode: 'new' | 'choose') => {
+    addStormToClaim({ lossDate: stormLossDate(e.date, e.time), summary: describeStorm(e), mode });
+    onStartClaim?.(); // brings the claims section into view
+  };
 
   // An event can open on the map only when we know where it was and when (radar events do).
   const canOpenEvent = (e: HailEvent): e is HailEvent & { lat: number; lon: number; time: string; kind: 'hail' | 'tornado' } =>
@@ -251,7 +285,8 @@ export default function HailTracePanel({ address, city, state, zip, companyId, c
 
   function handleCopy() {
     if (!events) return;
-    const text = formatClaimText(events, address, city, state, zip);
+    // The events on screen (after the wind and hail filters), not every event found.
+    const text = formatClaimText(filteredEvents, address, city, state, zip, source);
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
@@ -268,12 +303,24 @@ export default function HailTracePanel({ address, city, state, zip, companyId, c
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
+      <div className={`flex items-center justify-between ${collapsed ? '' : 'mb-4'}`}>
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          aria-expanded={!collapsed}
+          className="flex items-center gap-2 text-left"
+          title={collapsed ? 'Expand storm history' : 'Minimize storm history'}
+        >
           <CloudRain className="text-blue-600" size={20} />
           <h3 className="text-lg font-semibold text-gray-900">Hail &amp; Wind Event Lookup</h3>
-        </div>
-        {showResults && (
+          {collapsed && events && events.length > 0 && (
+            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+              {events.length} {events.length === 1 ? 'event' : 'events'}
+            </span>
+          )}
+          {collapsed ? <ChevronDown size={18} className="text-gray-500" /> : <ChevronUp size={18} className="text-gray-500" />}
+        </button>
+        {!collapsed && showResults && (
           <div className="flex items-center gap-2">
             {onStartClaim && (
               <button
@@ -286,15 +333,19 @@ export default function HailTracePanel({ address, city, state, zip, companyId, c
             )}
             <button
               onClick={handleCopy}
+              title="Copies a plain-text list of the events shown here, to paste into an email or an insurer's portal"
+
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-gray-600"
             >
               {copied ? <Check size={13} className="text-green-600" /> : <Copy size={13} />}
-              {copied ? 'Copied!' : 'Copy for Claim'}
+              {copied ? 'Copied!' : 'Copy event report'}
             </button>
           </div>
         )}
       </div>
 
+      {!collapsed && (
+      <>
       <div className="flex flex-wrap items-end gap-3 mb-4">
         <div>
           <label className="block text-xs font-medium text-gray-500 mb-1">Look back</label>
@@ -443,10 +494,31 @@ export default function HailTracePanel({ address, city, state, zip, companyId, c
                 {canOpenEvent(event) && (
                   <span className="ml-auto font-medium text-blue-600">View on map — was this address inside it? →</span>
                 )}
+                <div className={`${canOpenEvent(event) ? '' : 'ml-auto'} flex items-center gap-2`}>
+                  <button
+                    type="button"
+                    onClick={(ev) => { ev.stopPropagation(); addEventToClaim(event, 'choose'); }}
+                    className="inline-flex items-center gap-1 rounded-lg border border-orange-300 bg-white px-2.5 py-1 text-xs font-semibold text-orange-700 hover:bg-orange-50"
+                    title="Set this storm as the date of loss on a claim you already have"
+                  >
+                    <FilePlus size={12} /> Add to claim
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(ev) => { ev.stopPropagation(); addEventToClaim(event, 'new'); }}
+                    className="inline-flex items-center gap-1 rounded-lg bg-orange-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-orange-700"
+                    title="Start a new claim with this storm's date and this customer's details filled in"
+                  >
+                    <FilePlus size={12} /> Start new claim
+                  </button>
+                </div>
               </div>
             </div>
           ))}
         </div>
+      )}
+
+      </>
       )}
 
       {openEvent && propertyCoords && canOpenEvent(openEvent) && (

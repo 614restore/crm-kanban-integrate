@@ -24,6 +24,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { CLAIM_STORM_EVENT, formatLossDate, takePendingClaimStorm, type ClaimStorm } from '@/lib/claimStorm';
 
 type ClaimStatus =
   | 'pending'
@@ -152,6 +153,76 @@ export default function InsuranceTrackingView({ contactId, contactName }: Insura
   };
 
   useEffect(() => { loadClaims(); }, [companyId, contactId]);
+
+  // A storm picked from the storm history. With no claim yet it starts one with that date of loss;
+  // otherwise the user chooses which claim it belongs to.
+  const [incomingStorm, setIncomingStorm] = useState<ClaimStorm | null>(null);
+  const [applyingStormTo, setApplyingStormTo] = useState<string | null>(null);
+
+  useEffect(() => {
+    const pick = () => {
+      const storm = takePendingClaimStorm();
+      if (storm) setIncomingStorm(storm);
+    };
+    pick();
+    window.addEventListener(CLAIM_STORM_EVENT, pick);
+    return () => window.removeEventListener(CLAIM_STORM_EVENT, pick);
+  }, []);
+
+  // A new claim with everything already known filled in: the storm's date of loss, and the
+  // customer's insurer, adjuster and deductible when their record has them. What is left to type
+  // is the claim number (unless the customer's record already has one that is not yet a claim),
+  // the policy number if there is one, and any notes.
+  const startClaimFromStorm = (storm: ClaimStorm) => {
+    const customer = contactId ? state.contacts.find((c) => c.id === contactId) : undefined;
+    const knownNumber = customer?.claimNumber?.trim();
+    const alreadyAClaim = !!knownNumber && claims.some((c) => c.claim_number.trim().toLowerCase() === knownNumber.toLowerCase());
+    setEditingClaim(null);
+    setForm({
+      ...EMPTY_FORM,
+      claim_number: knownNumber && !alreadyAClaim ? knownNumber : '',
+      insurance_company: customer?.insuranceCompany ?? '',
+      adjuster_name: customer?.adjusterName ?? '',
+      adjuster_phone: customer?.adjusterPhone ?? '',
+      adjuster_email: customer?.adjusterEmail ?? '',
+      deductible: customer?.deductible ? String(customer.deductible) : '',
+      loss_date: storm.lossDate,
+      notes: [`Storm: ${storm.summary}`, customer?.policyNumber ? `Policy #: ${customer.policyNumber}` : ''].filter(Boolean).join('\n'),
+    });
+    setShowModal(true);
+    setIncomingStorm(null);
+  };
+
+  // "Start new claim" goes straight to the form. "Add to claim" with no claim yet does too (once the
+  // list has loaded, so an existing claim is not missed); otherwise the user chooses below.
+  useEffect(() => {
+    if (!incomingStorm) return;
+    if (incomingStorm.mode === 'new') startClaimFromStorm(incomingStorm);
+    else if (!loading && claims.length === 0) startClaimFromStorm(incomingStorm);
+  }, [incomingStorm, loading, claims.length]);
+
+  const applyStormToClaim = async (claim: InsuranceClaim, storm: ClaimStorm) => {
+    setApplyingStormTo(claim.id);
+    try {
+      const line = `Storm: ${storm.summary}`;
+      const notes = claim.notes?.includes(storm.summary) ? claim.notes : [claim.notes, line].filter(Boolean).join('\n\n');
+      const { error } = await withTimeout(
+        supabase
+          .from('insurance_claims')
+          .update({ loss_date: storm.lossDate, notes, updated_at: new Date().toISOString() })
+          .eq('id', claim.id),
+        10000, 'setClaimStormDate'
+      );
+      if (error) throw error;
+      toast.success(`Date of loss for ${claim.claim_number} set to ${formatLossDate(storm.lossDate)}`);
+      setIncomingStorm(null);
+      loadClaims();
+    } catch (err: any) {
+      toast.error('Could not update the claim: ' + err.message);
+    } finally {
+      setApplyingStormTo(null);
+    }
+  };
 
   const openCreate = () => {
     setEditingClaim(null);
@@ -616,6 +687,49 @@ export default function InsuranceTrackingView({ contactId, contactName }: Insura
               >
                 <Save size={16} />
                 {isSaving ? 'Saving...' : editingClaim ? 'Update Claim' : 'Create Claim'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Which claim does this storm belong to? */}
+      {incomingStorm && incomingStorm.mode !== 'new' && claims.length > 0 && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setIncomingStorm(null)}>
+          <div className="bg-white rounded-xl shadow-xl p-6 max-w-lg w-full" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-semibold text-gray-900">Add this storm to a claim</h3>
+            <p className="mt-1 text-sm text-gray-600">{incomingStorm.summary}</p>
+            <p className="mt-2 text-sm font-medium text-gray-900">Date of loss: {formatLossDate(incomingStorm.lossDate)}</p>
+            <div className="mt-4 space-y-2 max-h-72 overflow-y-auto">
+              {claims.map((claim) => {
+                const replaces = !!claim.loss_date && claim.loss_date.slice(0, 10) !== incomingStorm.lossDate;
+                return (
+                  <button
+                    key={claim.id}
+                    type="button"
+                    disabled={applyingStormTo !== null}
+                    onClick={() => applyStormToClaim(claim, incomingStorm)}
+                    className="w-full text-left rounded-lg border border-gray-200 p-3 hover:border-orange-300 hover:bg-orange-50/40 disabled:opacity-60"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-semibold text-gray-900">{claim.claim_number}</span>
+                      <span className="text-xs text-gray-500">{claim.insurance_company}</span>
+                    </div>
+                    <p className="mt-0.5 text-xs text-gray-500">
+                      {claim.loss_date
+                        ? `Currently ${formatLossDate(claim.loss_date)}${replaces ? ' — will be replaced' : ' — already this date'}`
+                        : 'No date of loss yet'}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+              <button type="button" onClick={() => startClaimFromStorm(incomingStorm)} className="text-sm font-medium text-blue-600 hover:underline">
+                Start a new claim with this storm
+              </button>
+              <button type="button" onClick={() => setIncomingStorm(null)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50">
+                Cancel
               </button>
             </div>
           </div>
