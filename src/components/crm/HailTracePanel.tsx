@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import StormEventDetail, { type StormEventForDetail } from '@/components/crm/StormEventDetail';
 import { geocodeAddress } from '@/lib/geocode';
 import { CloudRain, Loader2, AlertTriangle, CheckCircle, Wind, Copy, Check, FileText } from 'lucide-react';
 import { HailTraceIntegration, NOAAWeatherIntegration, NOAAStormEvent } from '@/lib/integrations/weather';
@@ -30,6 +31,12 @@ interface HailEvent {
   stormId?: string;
   distanceMiles?: number;
   location?: string;
+  /** Radar events only: the storm cell's spot, and what it was, so the event can open on a map. */
+  lat?: number;
+  lon?: number;
+  kind?: 'hail' | 'tornado';
+  hailProbability?: number;
+  severeProbability?: number;
 }
 
 const WIND_OPTIONS = [0, 30, 35, 40, 50, 58, 65, 75];
@@ -86,6 +93,8 @@ export default function HailTracePanel({ address, city, state, zip, companyId, c
   const [source, setSource] = useState<'hailtrace' | 'noaa' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [propertyCoords, setPropertyCoords] = useState<{ lat: number; lon: number } | null>(null);
+  const [openEvent, setOpenEvent] = useState<HailEvent | null>(null);
 
   function normalizeNoaaEvents(noaaEvents: NOAAStormEvent[]): HailEvent[] {
     return noaaEvents.map((e) => ({
@@ -96,13 +105,26 @@ export default function HailTracePanel({ address, city, state, zip, companyId, c
       distanceMiles: e.distanceMiles,
       stormId: e.radarStation,
       location: e.type === 'tornado' ? 'Tornado vortex signature (radar)' : undefined,
+      lat: e.lat,
+      lon: e.lon,
+      kind: e.type,
+      hailProbability: e.hailProbability,
+      severeProbability: e.severeProbability,
     }));
   }
 
   async function geocode(): Promise<{ lat: number; lon: number } | null> {
     const found = await geocodeAddress(`${address}, ${city}, ${state} ${zip}`);
-    return found ? { lat: found.lat, lon: found.lon } : null;
+    const coords = found ? { lat: found.lat, lon: found.lon } : null;
+    setPropertyCoords(coords);
+    return coords;
   }
+
+  // An event can open on the map only when we know where it was and when (radar events do).
+  const canOpenEvent = (e: HailEvent): e is HailEvent & { lat: number; lon: number; time: string; kind: 'hail' | 'tornado' } =>
+    propertyCoords != null &&
+    e.lat != null && e.lon != null && !!e.time && !!e.date && !!e.kind &&
+    /^\d{4}-\d{2}-\d{2}$/.test(e.date) && /^\d{2}:\d{2}$/.test(e.time);
 
   async function notifyActionableEvents(normalized: HailEvent[], eventSource: 'hailtrace' | 'noaa') {
     const actionable = normalized.filter(e => e.severity === 'moderate' || e.severity === 'severe');
@@ -357,7 +379,19 @@ export default function HailTracePanel({ address, city, state, zip, companyId, c
       {showResults && (
         <div className="space-y-3">
           {filteredEvents.map((event, i) => (
-            <div key={i} className="border border-gray-200 rounded-xl p-4 bg-gray-50">
+            <div
+              key={i}
+              className={`border border-gray-200 rounded-xl p-4 bg-gray-50 ${canOpenEvent(event) ? 'cursor-pointer hover:border-blue-300 hover:bg-blue-50/40 transition-colors' : ''}`}
+              {...(canOpenEvent(event)
+                ? {
+                    role: 'button',
+                    tabIndex: 0,
+                    onClick: () => setOpenEvent(event),
+                    onKeyDown: (ev: React.KeyboardEvent) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); setOpenEvent(event); } },
+                    'aria-label': 'Show this storm on the map',
+                  }
+                : {})}
+            >
               {/* Header row */}
               <div className="flex items-center justify-between mb-3">
                 <div>
@@ -406,10 +440,33 @@ export default function HailTracePanel({ address, city, state, zip, companyId, c
               <div className="flex items-center gap-4 mt-2.5 text-xs text-gray-400">
                 {event.stormId && <span>Storm ID: {event.stormId}</span>}
                 {event.location && <span>{event.location}</span>}
+                {canOpenEvent(event) && (
+                  <span className="ml-auto font-medium text-blue-600">View on map — was this address inside it? →</span>
+                )}
               </div>
             </div>
           ))}
         </div>
+      )}
+
+      {openEvent && propertyCoords && canOpenEvent(openEvent) && (
+        <StormEventDetail
+          event={{
+            date: openEvent.date,
+            time: openEvent.time,
+            kind: openEvent.kind,
+            severity: openEvent.severity,
+            hailSize: openEvent.hailSize,
+            lat: openEvent.lat,
+            lon: openEvent.lon,
+            radarStation: openEvent.stormId,
+            hailProbability: openEvent.hailProbability,
+            severeProbability: openEvent.severeProbability,
+          } satisfies StormEventForDetail}
+          property={{ ...propertyCoords, label: [address, city].filter(Boolean).join(', ') || 'This address' }}
+          radiusMiles={10}
+          onClose={() => setOpenEvent(null)}
+        />
       )}
 
       {/* Error */}
