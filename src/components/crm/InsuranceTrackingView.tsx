@@ -169,16 +169,36 @@ export default function InsuranceTrackingView({ contactId, contactName }: Insura
     return () => window.removeEventListener(CLAIM_STORM_EVENT, pick);
   }, []);
 
+  // A new claim with everything already known filled in: the storm's date of loss, and the
+  // customer's insurer, adjuster and deductible when their record has them. What is left to type
+  // is the claim number (unless the customer's record already has one that is not yet a claim),
+  // the policy number if there is one, and any notes.
   const startClaimFromStorm = (storm: ClaimStorm) => {
+    const customer = contactId ? state.contacts.find((c) => c.id === contactId) : undefined;
+    const knownNumber = customer?.claimNumber?.trim();
+    const alreadyAClaim = !!knownNumber && claims.some((c) => c.claim_number.trim().toLowerCase() === knownNumber.toLowerCase());
     setEditingClaim(null);
-    setForm({ ...EMPTY_FORM, loss_date: storm.lossDate, notes: `Storm: ${storm.summary}` });
+    setForm({
+      ...EMPTY_FORM,
+      claim_number: knownNumber && !alreadyAClaim ? knownNumber : '',
+      insurance_company: customer?.insuranceCompany ?? '',
+      adjuster_name: customer?.adjusterName ?? '',
+      adjuster_phone: customer?.adjusterPhone ?? '',
+      adjuster_email: customer?.adjusterEmail ?? '',
+      deductible: customer?.deductible ? String(customer.deductible) : '',
+      loss_date: storm.lossDate,
+      notes: [`Storm: ${storm.summary}`, customer?.policyNumber ? `Policy #: ${customer.policyNumber}` : ''].filter(Boolean).join('\n'),
+    });
     setShowModal(true);
     setIncomingStorm(null);
   };
 
-  // No claims yet: go straight to a new one (once the list has loaded, so a claim is not missed).
+  // "Start new claim" goes straight to the form. "Add to claim" with no claim yet does too (once the
+  // list has loaded, so an existing claim is not missed); otherwise the user chooses below.
   useEffect(() => {
-    if (incomingStorm && !loading && claims.length === 0) startClaimFromStorm(incomingStorm);
+    if (!incomingStorm) return;
+    if (incomingStorm.mode === 'new') startClaimFromStorm(incomingStorm);
+    else if (!loading && claims.length === 0) startClaimFromStorm(incomingStorm);
   }, [incomingStorm, loading, claims.length]);
 
   const applyStormToClaim = async (claim: InsuranceClaim, storm: ClaimStorm) => {
@@ -674,7 +694,7 @@ export default function InsuranceTrackingView({ contactId, contactName }: Insura
       )}
 
       {/* Which claim does this storm belong to? */}
-      {incomingStorm && claims.length > 0 && (
+      {incomingStorm && incomingStorm.mode !== 'new' && claims.length > 0 && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setIncomingStorm(null)}>
           <div className="bg-white rounded-xl shadow-xl p-6 max-w-lg w-full" onClick={(e) => e.stopPropagation()}>
             <h3 className="font-semibold text-gray-900">Add this storm to a claim</h3>

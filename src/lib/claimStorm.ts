@@ -9,6 +9,8 @@ export interface ClaimStorm {
   lossDate: string;
   /** One line describing the storm, kept with the claim for the adjuster. */
   summary: string;
+  /** 'new' starts a new claim straight away; otherwise the user chooses between claims. */
+  mode?: 'new' | 'choose';
 }
 
 export const CLAIM_STORM_EVENT = 'trussctr:claim-storm';

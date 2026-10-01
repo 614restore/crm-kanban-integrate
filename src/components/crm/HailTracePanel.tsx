@@ -59,7 +59,7 @@ function getDateRange(months: number) {
   };
 }
 
-function formatClaimText(events: HailEvent[], address: string, city: string, state: string, zip: string): string {
+function formatClaimText(events: HailEvent[], address: string, city: string, state: string, zip: string, source: 'hailtrace' | 'noaa' | null): string {
   const fullAddress = [address, city, state, zip].filter(Boolean).join(', ');
   const lines = [
     `HAIL & WIND EVENT REPORT`,
@@ -71,7 +71,8 @@ function formatClaimText(events: HailEvent[], address: string, city: string, sta
   ];
   events.forEach((e, i) => {
     lines.push(`Event ${i + 1}`);
-    lines.push(`  Date:       ${e.date}${e.time ? ' at ' + e.time : ''}`);
+    // NOAA radar times are UTC; say so, since the storm date a claim needs is the local one.
+    lines.push(`  Date:       ${e.date}${e.time ? ' at ' + e.time + (source === 'noaa' ? ' UTC' : '') : ''}`);
     lines.push(`  Severity:   ${severityConfig[e.severity]?.label ?? e.severity}`);
     if (e.hailSize != null)    lines.push(`  Hail Size:  ${e.hailSize}" diameter`);
     if (e.windSpeed != null)   lines.push(`  Wind Speed: ${e.windSpeed} mph`);
@@ -80,7 +81,7 @@ function formatClaimText(events: HailEvent[], address: string, city: string, sta
     if (e.stormId)             lines.push(`  Storm ID:   ${e.stormId}`);
     lines.push(`─────────────────────────────────────`);
   });
-  lines.push(`Source: HailTrace — hailtrace.com`);
+  lines.push(source === 'noaa' ? `Source: NOAA radar (SWDI) — ncei.noaa.gov` : `Source: HailTrace — hailtrace.com`);
   return lines.join('\n');
 }
 
@@ -148,8 +149,8 @@ export default function HailTracePanel({ address, city, state, zip, companyId, c
     return `${what} on ${when}${where}${from}`;
   };
 
-  const addEventToClaim = (e: HailEvent) => {
-    addStormToClaim({ lossDate: stormLossDate(e.date, e.time), summary: describeStorm(e) });
+  const addEventToClaim = (e: HailEvent, mode: 'new' | 'choose') => {
+    addStormToClaim({ lossDate: stormLossDate(e.date, e.time), summary: describeStorm(e), mode });
     onStartClaim?.(); // brings the claims section into view
   };
 
@@ -284,7 +285,8 @@ export default function HailTracePanel({ address, city, state, zip, companyId, c
 
   function handleCopy() {
     if (!events) return;
-    const text = formatClaimText(events, address, city, state, zip);
+    // The events on screen (after the wind and hail filters), not every event found.
+    const text = formatClaimText(filteredEvents, address, city, state, zip, source);
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
@@ -331,10 +333,12 @@ export default function HailTracePanel({ address, city, state, zip, companyId, c
             )}
             <button
               onClick={handleCopy}
+              title="Copies a plain-text list of the events shown here, to paste into an email or an insurer's portal"
+
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-gray-600"
             >
               {copied ? <Check size={13} className="text-green-600" /> : <Copy size={13} />}
-              {copied ? 'Copied!' : 'Copy for Claim'}
+              {copied ? 'Copied!' : 'Copy event report'}
             </button>
           </div>
         )}
@@ -490,14 +494,24 @@ export default function HailTracePanel({ address, city, state, zip, companyId, c
                 {canOpenEvent(event) && (
                   <span className="ml-auto font-medium text-blue-600">View on map — was this address inside it? →</span>
                 )}
-                <button
-                  type="button"
-                  onClick={(ev) => { ev.stopPropagation(); addEventToClaim(event); }}
-                  className={`${canOpenEvent(event) ? '' : 'ml-auto'} inline-flex items-center gap-1 rounded-lg bg-orange-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-orange-700`}
-                  title="Use this storm's date as the claim's date of loss"
-                >
-                  <FilePlus size={12} /> Add to claim
-                </button>
+                <div className={`${canOpenEvent(event) ? '' : 'ml-auto'} flex items-center gap-2`}>
+                  <button
+                    type="button"
+                    onClick={(ev) => { ev.stopPropagation(); addEventToClaim(event, 'choose'); }}
+                    className="inline-flex items-center gap-1 rounded-lg border border-orange-300 bg-white px-2.5 py-1 text-xs font-semibold text-orange-700 hover:bg-orange-50"
+                    title="Set this storm as the date of loss on a claim you already have"
+                  >
+                    <FilePlus size={12} /> Add to claim
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(ev) => { ev.stopPropagation(); addEventToClaim(event, 'new'); }}
+                    className="inline-flex items-center gap-1 rounded-lg bg-orange-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-orange-700"
+                    title="Start a new claim with this storm's date and this customer's details filled in"
+                  >
+                    <FilePlus size={12} /> Start new claim
+                  </button>
+                </div>
               </div>
             </div>
           ))}
