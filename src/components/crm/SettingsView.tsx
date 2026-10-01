@@ -10,6 +10,7 @@ import useIntegrations from '@/hooks/useIntegrations';
 import IntegrationConfigDialog from '@/components/IntegrationConfigDialog';
 import AIEstimatingPanel from '@/components/AIEstimatingPanel';
 import MapProviderSettings from '@/components/settings/MapProviderSettings';
+import MySignatureSettings from '@/components/settings/MySignatureSettings';
 import { formatPhoneNumber } from '@/lib/utils';
 import SubscriptionView from '@/components/crm/SubscriptionView';
 import FeatureToggles from '@/components/crm/FeatureToggles';
@@ -55,6 +56,7 @@ import {
   ChevronDown,
   ChevronUp,
   HelpCircle,
+  PenLine,
 } from 'lucide-react';
 import { supabase, isDemoMode } from '@/lib/supabase';
 import { ensureDefaultLeadSources } from '@/lib/setupCompany';
@@ -1440,6 +1442,7 @@ export default function SettingsView() {
   const tabs = [
     { id: 'company', label: 'Company', icon: <Building2 size={18} /> },
     { id: 'profile', label: 'My Profile', icon: <User size={18} /> },
+    { id: 'signature', label: 'My Signature', icon: <PenLine size={18} /> },
     { id: 'features', label: 'Feature Toggles', icon: <ToggleLeft size={18} /> },
     { id: 'pipeline', label: 'Pipeline Triggers', icon: <Target size={18} /> },
     { id: 'guidebook', label: 'User Guidebook', icon: <HelpCircle size={18} /> },
@@ -2301,6 +2304,8 @@ export default function SettingsView() {
             />
           </div>
         )}
+
+        {activeTab === 'signature' && <MySignatureSettings />}
 
         {activeTab === 'maps' && (
           <div className="max-w-3xl">

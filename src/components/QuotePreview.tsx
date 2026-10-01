@@ -56,6 +56,21 @@ const getEmailQuoteTotal = (q: Quote & { use_per_tier_items?: boolean }): number
 const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, isCustomerView = false, shareToken, currentUser, isPreviewLink = false, onConvertToQuote, onEdit, initialCustomer }) => {
   const previewIframeRef = useRef<HTMLIFrameElement>(null);
   const viewTrackedRef = useRef(false);
+  useEffect(() => {
+    if (!showContractorSign || isCustomerView) return;
+    let cancelled = false;
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await (supabase.from('team_members') as any)
+        .select('signature_data, signature_adopted_at')
+        .or(`id.eq.${user.id},user_id.eq.${user.id}`)
+        .limit(1)
+        .maybeSingle();
+      if (!cancelled) setMySavedSignature(data?.signature_adopted_at ? data.signature_data ?? null : null);
+    })();
+    return () => { cancelled = true; };
+  }, [showContractorSign, isCustomerView]);
   const [quote, setQuote] = useState<any>(null);
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [quoteOptions, setQuoteOptions] = useState<QuoteOption[]>([]);
@@ -95,6 +110,8 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
   const [showRevisionPending, setShowRevisionPending] = useState(false);
   const [showFundingChoice, setShowFundingChoice] = useState(false);
   const [showContractorSign, setShowContractorSign] = useState(false);
+  // The signed-in rep's saved signature (Settings > My Signature), offered when countersigning by hand.
+  const [mySavedSignature, setMySavedSignature] = useState<string | null>(null);
   // Tracks whether the saved contractor signature image failed to render (a
   // stale/broken storage URL, etc.) -- lets the re-sign option surface even
   // when contractor_signature_data is technically present but not actually
@@ -2106,7 +2123,9 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
             <div className="flex items-center justify-between w-full gap-3 flex-wrap">
               <div className="flex items-center gap-2 text-green-700 font-semibold">
                 <CheckCircle className="w-5 h-5" />
-                <span>{isInspectionReport ? 'Agreement Signed — Thank you!' : 'Quote Accepted & Signed — Thank you!'}</span>
+                <span>{!isCustomerView && quote.fully_executed_at
+                  ? 'Fully executed — ready to collect the down payment'
+                  : isInspectionReport ? 'Agreement Signed — Thank you!' : 'Quote Accepted & Signed — Thank you!'}</span>
               </div>
               {isCustomerView ? (
                 <button
@@ -3640,6 +3659,15 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
               </button>
             </div>
             <div className="p-4">
+              {mySavedSignature && (
+                <button
+                  onClick={() => handleContractorSign(mySavedSignature, currentUser?.full_name || company.name)}
+                  className="w-full mb-3 flex items-center justify-center gap-3 px-4 py-3 border-2 border-blue-200 bg-blue-50 rounded-xl text-sm font-semibold text-blue-700 hover:bg-blue-100"
+                >
+                  <img src={mySavedSignature} alt="" className="h-8 object-contain bg-white rounded border border-blue-100 px-2" />
+                  Use my saved signature
+                </button>
+              )}
               <SignatureCanvas
                 onSign={(sigData, signerName) => handleContractorSign(sigData, signerName)}
                 signerName={currentUser?.full_name || company.name}

@@ -6,22 +6,49 @@
 -- was never told. This copies each quote_notifications row to a notification
 -- addressed to the quote's creator, on every occurrence (no first-time-only logic).
 
--- The log must accept every event the app records, not just viewed/signed.
+-- The log itself: normally already present; created only if this database lacks it.
+create table if not exists public.quote_notifications (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies(id) on delete cascade,
+  quote_id uuid references public.quotes(id) on delete cascade,
+  event_type text not null,
+  message text not null,
+  actor_name text,
+  actor_email text,
+  created_at timestamptz not null default now(),
+  read_at timestamptz
+);
+alter table public.quote_notifications enable row level security;
 do $$
 begin
-  if exists (
-    select 1 from pg_constraint
-    where conrelid = 'public.quote_notifications'::regclass
-      and conname = 'quote_notifications_event_type_check'
-  ) then
-    alter table public.quote_notifications drop constraint quote_notifications_event_type_check;
+  if not exists (select 1 from pg_policies
+                  where schemaname = 'public' and tablename = 'quote_notifications') then
+    create policy quote_notifications_company_read on public.quote_notifications
+      for select using (company_id = public.get_my_company_id());
   end if;
+end $$;
+
+-- The log must accept every event the app records, not just viewed/signed. Any older
+-- check on event_type is replaced (whatever it was named); NOT VALID leaves existing
+-- rows alone and applies the rule to new ones.
+do $$
+declare
+  c record;
+begin
+  for c in
+    select conname from pg_constraint
+     where conrelid = 'public.quote_notifications'::regclass
+       and contype = 'c'
+       and pg_get_constraintdef(oid) ilike '%event_type%'
+  loop
+    execute format('alter table public.quote_notifications drop constraint %I', c.conname);
+  end loop;
   alter table public.quote_notifications
     add constraint quote_notifications_event_type_check
     check (event_type in (
       'viewed', 'report_opened', 'tier_selected', 'signing_started', 'signed',
-      'email_opened', 'email_clicked'
-    ));
+      'countersigned', 'email_opened', 'email_clicked'
+    )) not valid;
 end $$;
 
 create or replace function public.notify_quote_creator()
@@ -45,7 +72,8 @@ begin
     return new;
   end if;
 
-  select qt.id, qt.company_id, qt.created_by, qt.customer_id, qt.quote_number
+  select qt.id, qt.company_id, qt.created_by, qt.customer_id, qt.quote_number,
+         (qt.contractor_signature_data is not null) as countersigned
     into q
     from public.quotes qt
    where qt.id = new.quote_id;
@@ -72,9 +100,15 @@ begin
       return new;
     end if;
     v_type    := 'quote_signed';
-    v_title   := '✍️ Quote Signed — reach out now';
-    v_message := who || ' signed Quote ' || q.quote_number
-                 || '. Contact them to start the next steps.';
+    if q.countersigned then
+      v_title   := '✅ Quote Signed & Countersigned';
+      v_message := who || ' signed Quote ' || q.quote_number
+                   || ' and your saved signature was applied. Reach out to collect the down payment and start the next steps.';
+    else
+      v_title   := '✍️ Quote Signed — countersign it';
+      v_message := who || ' signed Quote ' || q.quote_number
+                   || '. Countersign it, then reach out to start the next steps.';
+    end if;
   elsif new.event_type = 'report_opened' then
     v_type    := 'quote_viewed';
     v_title   := '📷 Report Opened';
