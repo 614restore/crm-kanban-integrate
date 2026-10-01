@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { PenLine, Trash2, CheckCircle2 } from 'lucide-react';
+import { PenLine, Trash2, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/authContext';
@@ -112,9 +112,27 @@ export default function MySignatureSettings() {
         <p className="text-sm text-gray-500">Loading…</p>
       ) : signature && !drawing ? (
         <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
-          <div className="flex items-center gap-2 text-sm font-medium text-emerald-700">
-            <CheckCircle2 className="w-4 h-4" /> Automatic countersigning is on
-          </div>
+          {/* What is true depends on the company switch, not just on having a signature saved. */}
+          {companyAuto === true && (
+            <div className="flex items-center gap-2 text-sm font-medium text-emerald-700">
+              <CheckCircle2 className="w-4 h-4" /> Automatic countersigning is on
+            </div>
+          )}
+          {companyAuto === false && (
+            <div className="flex items-start gap-2 text-sm font-medium text-amber-700">
+              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+              <span>
+                Signature saved, but automatic countersigning is <strong>off</strong> for your company.
+                Turn on the switch above and quotes you create will be countersigned for you.
+              </span>
+            </div>
+          )}
+          {companyAuto === null && (
+            <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+              <CheckCircle2 className="w-4 h-4 text-gray-400" />
+              Signature saved. It is used once automatic countersigning is turned on for your company.
+            </div>
+          )}
           <img src={signature} alt="Your saved signature" className="max-h-28 border border-gray-200 rounded-lg bg-white p-2" />
           {adoptedAt && (
             <p className="text-xs text-gray-500">Saved {new Date(adoptedAt).toLocaleString()}</p>
