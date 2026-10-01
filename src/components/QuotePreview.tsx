@@ -55,6 +55,7 @@ const getEmailQuoteTotal = (q: Quote & { use_per_tier_items?: boolean }): number
 
 const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, isCustomerView = false, shareToken, currentUser, isPreviewLink = false, onConvertToQuote, onEdit, initialCustomer }) => {
   const previewIframeRef = useRef<HTMLIFrameElement>(null);
+  const viewTrackedRef = useRef(false);
   const [quote, setQuote] = useState<any>(null);
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [quoteOptions, setQuoteOptions] = useState<QuoteOption[]>([]);
@@ -289,8 +290,11 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
               await supabase.rpc('mark_quote_viewed', { share_token: shareToken });
             }
           }
-          // Track viewed event for all non-signed customer visits (deduped 60 min server-side)
-          if (isCustomerView && shareToken && q.status !== 'signed') {
+          // Track a view on every customer visit -- including after the quote is signed,
+          // so the salesperson hears about each return. loadQuote() also runs after
+          // signing and on refreshes within the page, so only the first load per visit counts.
+          if (isCustomerView && shareToken && !viewTrackedRef.current) {
+            viewTrackedRef.current = true;
             const c = q.customer;
             const actorName = c ? `${c.first_name || ''} ${c.last_name || ''}`.trim() || undefined : undefined;
             // An inspection report reports 'report_opened' rather than
