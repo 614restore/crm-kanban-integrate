@@ -35,6 +35,7 @@ import ContactTemplateModal from './ContactTemplateModal';
 import ChangeOrderModal, { ChangeOrder } from './ChangeOrderModal';
 import HailTracePanel from './HailTracePanel';
 import CustomerClaimHeader from './CustomerClaimHeader';
+import { formatLossDate } from '@/lib/claimStorm';
 import { openLiveRadar } from '@/lib/stormNavigation';
 import WeatherWidget from '@/components/integrations/WeatherWidget';
 import EagleViewPanel from './EagleViewPanel';
@@ -1188,6 +1189,7 @@ export default function ContactDetail() {
           adjuster_phone: editedContact.adjusterPhone,
           adjuster_email: editedContact.adjusterEmail,
           deductible: editedContact.deductible ?? null,
+          date_of_loss: editedContact.dateOfLoss || null,
           is_retail: editedContact.isRetail ?? false,
           retail_notes: editedContact.retailNotes,
           notes: editedContact.notes,
@@ -1984,6 +1986,21 @@ export default function ContactDetail() {
                             />
                           ) : (
                             <p className="text-gray-900">{contact.claimNumber || '-'}</p>
+                          )}
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-500 mb-1">Date of Loss</label>
+                          {isEditing ? (
+                            <input
+                              type="date"
+                              value={(currentData.dateOfLoss || '').slice(0, 10)}
+                              onChange={(e) =>
+                                setEditedContact({ ...currentData, dateOfLoss: e.target.value })
+                              }
+                              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                            />
+                          ) : (
+                            <p className="text-gray-900">{contact.dateOfLoss ? formatLossDate(contact.dateOfLoss) : '-'}</p>
                           )}
                         </div>
                         <div>

@@ -71,6 +71,8 @@ export interface Contact {
   adjusterPhone?: string;
   adjusterEmail?: string;
   deductible?: number;
+  /** The date of the storm or incident the claim is for, YYYY-MM-DD. */
+  dateOfLoss?: string;
   // Project Info
   projectType?: string;
   projectValue?: number;

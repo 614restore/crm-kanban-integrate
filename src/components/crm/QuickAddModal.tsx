@@ -44,6 +44,7 @@ export default function QuickAddModal() {
     adjusterName: '',
     adjusterPhone: '',
     deductible: '',
+    dateOfLoss: '',
     notes: '',
   });
 
@@ -161,6 +162,7 @@ export default function QuickAddModal() {
       adjusterName: '',
       adjusterPhone: '',
       deductible: '',
+      dateOfLoss: '',
       notes: '',
     });
     setCurrentStep('basic');
@@ -248,6 +250,7 @@ export default function QuickAddModal() {
           adjuster_name: formData.adjusterName || undefined,
           adjuster_phone: formData.adjusterPhone || undefined,
           deductible: formData.deductible ? parseFloat(formData.deductible) : undefined,
+          date_of_loss: formData.dateOfLoss || undefined,
           notes: formData.notes || undefined,
         }),
         45000,
@@ -285,6 +288,7 @@ export default function QuickAddModal() {
           adjusterName: dbContact.adjuster_name || undefined,
           adjusterPhone: dbContact.adjuster_phone || undefined,
           deductible: dbContact.deductible || undefined,
+          dateOfLoss: (dbContact as any).date_of_loss || undefined,
           notes: dbContact.notes || undefined,
         };
 
@@ -741,6 +745,17 @@ export default function QuickAddModal() {
                     placeholder="SF-12345678"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Date of Loss</label>
+                <input
+                  type="date"
+                  value={formData.dateOfLoss}
+                  onChange={(e) => setFormData({ ...formData, dateOfLoss: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                />
+                <p className="mt-1 text-xs text-gray-500">The day of the storm. You can also set it later from a storm in the weather check.</p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">

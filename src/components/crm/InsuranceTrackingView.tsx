@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { supabase } from '@/lib/supabase';
+import { db } from '@/lib/database';
 import { formatPhoneNumber, withTimeout } from '@/lib/utils';
 import {
   Shield,
@@ -201,6 +202,20 @@ export default function InsuranceTrackingView({ contactId, contactName }: Insura
     else if (!loading && claims.length === 0) startClaimFromStorm(incomingStorm);
   }, [incomingStorm, loading, claims.length]);
 
+  // The customer's own date of loss follows the first claim that has one, so it is never left empty
+  // while a claim knows it. A date already on the customer is never overwritten.
+  const fillCustomerLossDate = async (forContactId: string | undefined, lossDate: string | null | undefined) => {
+    const ymd = (lossDate ?? '').slice(0, 10);
+    const customer = forContactId ? state.contacts.find((c) => c.id === forContactId) : undefined;
+    if (!customer || customer.dateOfLoss || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return;
+    try {
+      await db.updateContact(customer.id, { date_of_loss: ymd } as any);
+      dispatch({ type: 'UPDATE_CONTACT', payload: { ...customer, dateOfLoss: ymd } });
+    } catch {
+      /* not critical: the claim itself is saved */
+    }
+  };
+
   const applyStormToClaim = async (claim: InsuranceClaim, storm: ClaimStorm) => {
     setApplyingStormTo(claim.id);
     try {
@@ -215,6 +230,7 @@ export default function InsuranceTrackingView({ contactId, contactName }: Insura
       );
       if (error) throw error;
       toast.success(`Date of loss for ${claim.claim_number} set to ${formatLossDate(storm.lossDate)}`);
+      void fillCustomerLossDate(claim.contact_id, storm.lossDate);
       setIncomingStorm(null);
       loadClaims();
     } catch (err: any) {
@@ -243,8 +259,8 @@ export default function InsuranceTrackingView({ contactId, contactName }: Insura
       approved_amount: claim.approved_amount?.toString() ?? '',
       deductible: claim.deductible?.toString() ?? '',
       status: claim.status,
-      inspection_date: claim.inspection_date ?? '',
-      loss_date: claim.loss_date ?? '',
+      inspection_date: (claim.inspection_date ?? '').slice(0, 10),
+      loss_date: (claim.loss_date ?? '').slice(0, 10),
       notes: claim.notes ?? '',
     });
     setShowModal(true);
@@ -300,6 +316,7 @@ export default function InsuranceTrackingView({ contactId, contactName }: Insura
       }
 
       setShowModal(false);
+      void fillCustomerLossDate(claimContactId, form.loss_date);
       loadClaims();
     } catch (err: any) {
       toast.error('Failed to save claim: ' + err.message);
@@ -462,6 +479,11 @@ export default function InsuranceTrackingView({ contactId, contactName }: Insura
                       )}
                       {claim.deductible != null && (
                         <span>Deductible: ${claim.deductible.toLocaleString()}</span>
+                      )}
+                      {claim.loss_date && (
+                        <span className="flex items-center gap-1 font-medium text-gray-700">
+                          <Calendar size={11} /> Date of loss: {formatLossDate(claim.loss_date)}
+                        </span>
                       )}
                     </div>
                   </div>
