@@ -185,6 +185,9 @@ export interface QuoteSummary {
   betterTotal: number;
   bestTotal: number;
   selectedTier: string | null;
+  /** False when the quote does not offer that tier (a single-tier quote has both off). Missing means offered. */
+  includeBetter: boolean;
+  includeBest: boolean;
   createdAt: string;
 }
 
@@ -200,6 +203,8 @@ export function toQuoteSummary(row: any): QuoteSummary {
     betterTotal: Number(row.better_total ?? 0),
     bestTotal: Number(row.best_total ?? 0),
     selectedTier: row.selected_tier ?? null,
+    includeBetter: row.include_better !== false,
+    includeBest: row.include_best !== false,
     createdAt: row.created_at,
   };
 }

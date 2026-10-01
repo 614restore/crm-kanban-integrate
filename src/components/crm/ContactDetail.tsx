@@ -935,7 +935,7 @@ export default function ContactDetail() {
     let cancelled = false;
     supabase
       .from('quotes')
-      .select('id, quote_number, cover_page_title, status, contact_id, customer_id, good_total, better_total, best_total, selected_tier, created_at, share_token, project_type')
+      .select('id, quote_number, cover_page_title, status, contact_id, customer_id, good_total, better_total, best_total, include_better, include_best, selected_tier, created_at, share_token, project_type')
       .eq('company_id', profile.company_id)
       .eq('is_archived', false)
       .or(`customer_id.eq.${contactId},contact_id.eq.${contactId}`)
@@ -3154,7 +3154,7 @@ export default function ContactDetail() {
                             {q.status}
                           </span>
                           <p className="font-bold text-blue-600 whitespace-nowrap">
-                            {q.status === 'signed' ? formatCurrency(quoteValue(q)) : `From ${formatCurrency(q.goodTotal)}`}
+                            {q.status === 'signed' ? formatCurrency(quoteValue(q)) : (q.includeBetter || q.includeBest) ? `From ${formatCurrency(q.goodTotal)}` : formatCurrency(q.goodTotal)}
                           </p>
                           <button
                             type="button"

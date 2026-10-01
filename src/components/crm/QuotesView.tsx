@@ -58,6 +58,8 @@ interface QuoteRow {
   good_total: number | null;
   better_total: number | null;
   best_total: number | null;
+  include_better: boolean | null;
+  include_best: boolean | null;
   created_at: string;
   share_token: string | null;
   cover_page_title: string | null;
@@ -257,7 +259,7 @@ export default function QuotesView() {
     try {
       const { data, error } = await supabase
         .from('quotes')
-        .select('id, quote_number, status, contact_id, customer_id, project_type, good_total, better_total, best_total, selected_tier, created_at, share_token, cover_page_title, project_description')
+        .select('id, quote_number, status, contact_id, customer_id, project_type, good_total, better_total, best_total, include_better, include_best, selected_tier, created_at, share_token, cover_page_title, project_description')
         .eq('company_id', companyId)
         .eq('is_archived', showArchived)
         .order('created_at', { ascending: false });
@@ -803,8 +805,8 @@ export default function QuotesView() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right text-gray-700">{money(q.good_total)}</td>
-                  <td className="px-4 py-3 text-right text-gray-700">{money(q.better_total)}</td>
-                  <td className="px-4 py-3 text-right text-gray-700">{money(q.best_total)}</td>
+                  <td className="px-4 py-3 text-right text-gray-700">{q.include_better === false ? <span className="text-gray-300">—</span> : money(q.better_total)}</td>
+                  <td className="px-4 py-3 text-right text-gray-700">{q.include_best === false ? <span className="text-gray-300">—</span> : money(q.best_total)}</td>
                   <td className="px-4 py-3 text-gray-500">{new Date(q.created_at).toLocaleDateString()}</td>
                   <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                     <button
