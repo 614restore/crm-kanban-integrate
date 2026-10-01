@@ -31,6 +31,8 @@ interface QuotePreviewProps {
   onEdit?: () => void;
   /** Pre-loaded customer data from the share-token RPC, used as fallback when RLS blocks the customers join */
   initialCustomer?: any;
+  /** Open the countersign window as soon as the signed quote has loaded (from a "customer signed" alert). */
+  autoOpenCountersign?: boolean;
 }
 
 // Mirrors DashboardView.tsx's getPrimaryVisibleTier/getPrimaryVisibleTierTotal.
@@ -53,7 +55,7 @@ const getEmailQuoteTotal = (q: Quote & { use_per_tier_items?: boolean }): number
   return tierTotal('good');
 };
 
-const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, isCustomerView = false, shareToken, currentUser, isPreviewLink = false, onConvertToQuote, onEdit, initialCustomer }) => {
+const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, isCustomerView = false, shareToken, currentUser, isPreviewLink = false, onConvertToQuote, onEdit, initialCustomer, autoOpenCountersign = false }) => {
   const previewIframeRef = useRef<HTMLIFrameElement>(null);
   const viewTrackedRef = useRef(false);
   const [quote, setQuote] = useState<any>(null);
@@ -115,6 +117,17 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
     })();
     return () => { cancelled = true; };
   }, [showContractorSign, isCustomerView]);
+
+  // Arriving from a "customer signed" alert: open the countersign window once, as soon as the quote
+  // has loaded and is signed but not yet countersigned. (After the state it reads, on purpose.)
+  const autoOpenedRef = useRef(false);
+  useEffect(() => {
+    if (!autoOpenCountersign || autoOpenedRef.current || isCustomerView || !quote) return;
+    if (quote.status === 'signed' && !quote.contractor_signature_data) {
+      autoOpenedRef.current = true;
+      setShowContractorSign(true);
+    }
+  }, [autoOpenCountersign, isCustomerView, quote]);
   // Tracks whether the saved contractor signature image failed to render (a
   // stale/broken storage URL, etc.) -- lets the re-sign option surface even
   // when contractor_signature_data is technically present but not actually
