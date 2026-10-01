@@ -21,16 +21,32 @@ const isHeicFile = (file: File): boolean => {
   );
 };
 
-/** Convert a HEIC/HEIF file to a JPEG blob using heic2any. */
+/**
+ * Convert a HEIC/HEIF file to JPEG.
+ *
+ * heic-to (libheif 1.22) is tried first: heic2any is built on a libheif from 2021 and cannot
+ * read some newer iPhone HEIC photos, which is how an unconvertible original used to reach
+ * storage and show as a black box in Chrome. heic2any stays as the fallback.
+ */
 const heicToJpeg = async (file: File): Promise<File> => {
-  try {
-    const heic2any = (await import('heic2any')).default;
-    const result = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 });
-    const blob = Array.isArray(result) ? result[0] : result;
-    return new File([blob], file.name.replace(/\.hei[cf]$/i, '.jpg'), {
+  const asJpegFile = (blob: Blob) =>
+    new File([blob], file.name.replace(/\.hei[cf]$/i, '.jpg'), {
       type: 'image/jpeg',
       lastModified: Date.now(),
     });
+
+  try {
+    const { heicTo } = await import('heic-to');
+    const blob = await heicTo({ blob: file, type: 'image/jpeg', quality: 0.92 });
+    return asJpegFile(blob);
+  } catch {
+    // fall through to the older converter
+  }
+
+  try {
+    const heic2any = (await import('heic2any')).default;
+    const result = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 });
+    return asJpegFile(Array.isArray(result) ? result[0] : result);
   } catch {
     // If conversion fails, return the original and let the canvas try
     return file;
@@ -124,6 +140,87 @@ export const compressImage = async (
 
     img.src = objUrl;
   });
+};
+
+/** True when this browser can actually draw the file as an image. */
+export const canBrowserDecode = (file: Blob): Promise<boolean> =>
+  new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    let settled = false;
+    const done = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      URL.revokeObjectURL(url);
+      resolve(ok);
+    };
+    img.onload = () => done(img.naturalWidth > 0);
+    img.onerror = () => done(false);
+    setTimeout(() => done(false), 10_000);
+    img.src = url;
+  });
+
+/**
+ * True when the image is solid black. Some iPhone HEIC photos "convert" without error but
+ * come out entirely black; they decode fine, so a decode check alone passes them.
+ * Samples a 48x48 downscale and treats it as blank only if every sampled pixel is near-black,
+ * so a dark but real photo (night shot, shadowed roof) is not mistaken for one.
+ */
+export const isSolidBlack = (file: Blob): Promise<boolean> =>
+  new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    const finish = (blank: boolean) => {
+      URL.revokeObjectURL(url);
+      resolve(blank);
+    };
+    img.onerror = () => finish(false);
+    img.onload = () => {
+      try {
+        const size = 48;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return finish(false);
+        ctx.drawImage(img, 0, 0, size, size);
+        const { data } = ctx.getImageData(0, 0, size, size);
+        let brightest = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          brightest = Math.max(brightest, data[i], data[i + 1], data[i + 2]);
+          if (brightest > 12) return finish(false);
+        }
+        finish(true);
+      } catch {
+        finish(false);
+      }
+    };
+    img.src = url;
+  });
+
+/**
+ * compressImage, but never hands back a file the browser cannot show.
+ *
+ * compressImage falls back to the ORIGINAL file whenever HEIC conversion or canvas decoding
+ * fails. Uploading that (as callers did, labelled image/jpeg) stores bytes that Chrome cannot
+ * draw: the photo appears as a black box with a broken-image icon, forever. Better to say so
+ * at upload time.
+ */
+export const compressForUpload = async (file: File, options?: CompressOptions): Promise<File> => {
+  const out = await compressImage(file, options);
+  if ((await canBrowserDecode(out)) && (await isSolidBlack(out))) {
+    throw new Error(
+      `${file.name} came out completely black when it was converted. ` +
+        'This happens with some iPhone HEIC photos -- try Safari, or send the photo as a JPEG.',
+    );
+  }
+  if (!(await canBrowserDecode(out))) {
+    throw new Error(
+      `${file.name} could not be converted to a photo this browser can show. ` +
+        'iPhone HEIC photos can fail outside Safari -- try Safari, or send the photo as a JPEG.',
+    );
+  }
+  return out;
 };
 
 /**

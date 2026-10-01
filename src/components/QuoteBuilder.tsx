@@ -33,7 +33,7 @@ import type { RoofrImportMode, RoofrParsedReport, EagleViewWallsReport, EagleVie
 import { buildMeasurementLineItems } from '@/lib/measurementImport';
 import type { MeasurementProviderId } from '@/lib/measurementProviders';
 import type { AIQuotePhotoAnalysis, AIQuotePhotoSuggestedLineItem } from '@/lib/aiHelper';
-import { compressImage, COMPRESS_PRESETS, STORAGE_CACHE_CONTROL } from '@/lib/imageUtils';
+import { compressForUpload, COMPRESS_PRESETS, STORAGE_CACHE_CONTROL } from '@/lib/imageUtils';
 
 interface QuoteBuilderProps {
   companyId: string;
@@ -2028,7 +2028,7 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
     setUploadingSalesRepPhoto(true);
     const toastId = toast.loading('Uploading photo…');
     try {
-      const compressed = await compressImage(file, COMPRESS_PRESETS.salesRepPhoto);
+      const compressed = await compressForUpload(file, COMPRESS_PRESETS.salesRepPhoto);
       const path = `${companyId}/rep-photo-${Date.now()}.jpg`;
 
       // Race the upload against a 20 s timeout so the spinner never hangs
@@ -3763,10 +3763,11 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
     setUploadingCoverPhoto(true);
     const toastId = toast.loading('Uploading cover photo…');
     try {
-      const ext = file.name.split('.').pop() || 'jpg';
-      const fileName = `cover-${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
+      // Converted to a JPEG this browser can show (an iPhone HEIC otherwise uploads as a black box).
+      const compressed = await compressForUpload(file, COMPRESS_PRESETS.coverPhoto);
+      const fileName = `cover-${Date.now()}-${Math.random().toString(36).substring(7)}.jpg`;
       const uploadResult = await Promise.race([
-        supabase.storage.from('quote-photos').upload(fileName, file, { contentType: file.type, upsert: true }),
+        supabase.storage.from('quote-photos').upload(fileName, compressed, { contentType: compressed.type || 'image/jpeg', upsert: true }),
         new Promise<{ error: Error }>((_resolve, reject) =>
           setTimeout(() => reject(new Error('Upload timed out — please try again.')), 20_000)
         ),
@@ -8538,11 +8539,11 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
                             setUploadingTierPhoto(tier);
                             const tierToastId = toast.loading('Uploading photo…');
                             try {
-                              const ext = file.name.split('.').pop() || 'jpg';
+                              const compressed = await compressForUpload(file, COMPRESS_PRESETS.coverPhoto);
                               // flat path — no subfolders, keeps same policy as regular photos
-                              const path = `tier-${tier.toLowerCase()}-${companyId}-${Date.now()}.${ext}`;
+                              const path = `tier-${tier.toLowerCase()}-${companyId}-${Date.now()}.jpg`;
                               const uploadResult = await Promise.race([
-                                supabase.storage.from('quote-photos').upload(path, file, { contentType: file.type, upsert: true }),
+                                supabase.storage.from('quote-photos').upload(path, compressed, { contentType: compressed.type || 'image/jpeg', upsert: true }),
                                 new Promise<{ error: Error }>((_resolve, reject) =>
                                   setTimeout(() => reject(new Error('Upload timed out — please try again.')), 20_000)
                                 ),
