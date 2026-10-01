@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/authContext';
 import { useNotificationFeed, type FeedNotification } from '@/hooks/useNotificationFeed';
 import { openNotificationTarget } from '@/lib/notificationNavigation';
 import NotificationDetailDialog from './NotificationDetailDialog';
-import { openLiveRadar } from '@/lib/stormNavigation';
+import { openLiveRadarFor } from '@/lib/stormNavigation';
 import {
   Search,
   Bell,
@@ -213,7 +213,7 @@ export default function TopBar() {
         {/* Live radar, one click from anywhere */}
         <button
           type="button"
-          onClick={() => openLiveRadar(dispatch)}
+          onClick={() => openLiveRadarFor(dispatch, state.selectedContactId ? state.contacts.find((c) => c.id === state.selectedContactId) : null)}
           title="Live radar"
           aria-label="Live radar"
           className="flex items-center gap-1.5 p-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
