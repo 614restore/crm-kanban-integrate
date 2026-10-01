@@ -264,7 +264,7 @@ const PhotoUploader: React.FC<PhotoUploaderProps> = ({
           });
         } catch (err: any) {
           // A photo this browser cannot show says why; anything else is an upload failure.
-          toast.error(err?.message?.includes('could not be converted') ? err.message : `Failed to upload ${file.name}`, { duration: 8000 });
+          toast.error((err?.message?.includes('could not be converted') || err?.message?.includes('came out completely black')) ? err.message : `Failed to upload ${file.name}`, { duration: 8000 });
         }
       }
 
