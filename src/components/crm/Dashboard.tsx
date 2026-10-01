@@ -1,4 +1,5 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { supabase } from '@/lib/supabase';
 import { useCRM, usePipelineStats, useFinancialStats, useUpcomingAppointments } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import {
@@ -7,6 +8,7 @@ import {
   statusLabels,
   statusColors,
   getContactFullName,
+  type Contact,
 } from '@/lib/crmData';
 import {
   TrendingUp,
@@ -24,7 +26,39 @@ import {
   ChevronRight,
   Target,
   Zap,
+  Eye,
+  PenLine,
 } from 'lucide-react';
+
+interface QuoteActivity {
+  id: string;
+  quote_id: string | null;
+  event_type: string;
+  actor_name: string | null;
+  created_at: string;
+  quotes: { quote_number: string | null; customer_id: string | null } | null;
+}
+
+type ActivityItem =
+  | { kind: 'contact'; time: number; contact: Contact }
+  | { kind: 'quote'; time: number; ev: QuoteActivity };
+
+const QUOTE_EVENT_TEXT: Record<string, { verb: string; icon: 'eye' | 'sign'; tint: string }> = {
+  viewed: { verb: 'opened', icon: 'eye', tint: 'bg-violet-100 text-violet-600' },
+  report_opened: { verb: 'opened the photo report on', icon: 'eye', tint: 'bg-violet-100 text-violet-600' },
+  signed: { verb: 'signed', icon: 'sign', tint: 'bg-emerald-100 text-emerald-600' },
+  countersigned: { verb: 'completed signing on', icon: 'sign', tint: 'bg-emerald-100 text-emerald-600' },
+};
+
+const timeAgo = (ms: number): string => {
+  const mins = Math.floor((Date.now() - ms) / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return days < 7 ? `${days}d ago` : new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+};
 
 export default function Dashboard() {
   const { state, dispatch } = useCRM();
@@ -56,10 +90,38 @@ export default function Dashboard() {
     return { contactGrowth, valueGrowth };
   }, [state.contacts]);
 
-  // Get recent activity (last 5 updated contacts)
-  const recentActivity = [...state.contacts]
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-    .slice(0, 5);
+  // Quote activity from customers (opened, photo report opened, signed, countersigned) -- the
+  // same log that raises the salesperson's alerts. Every occurrence is listed, not just the first.
+  const [quoteEvents, setQuoteEvents] = useState<QuoteActivity[]>([]);
+  const companyId = state.companyId;
+  useEffect(() => {
+    if (!companyId) return;
+    let cancelled = false;
+    const load = async () => {
+      const { data, error } = await (supabase.from('quote_notifications') as any)
+        .select('id, quote_id, event_type, actor_name, created_at, quotes:quote_id(quote_number, customer_id)')
+        .eq('company_id', companyId)
+        .in('event_type', ['viewed', 'report_opened', 'signed', 'countersigned'])
+        .order('created_at', { ascending: false })
+        .limit(10);
+      if (cancelled || error) return;
+      setQuoteEvents((data ?? []) as QuoteActivity[]);
+    };
+    void load();
+    const timer = window.setInterval(load, 45000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [companyId]);
+
+  // Recent activity: contacts updated lately, mixed with what customers did on their quotes.
+  const feed: ActivityItem[] = [
+    ...[...state.contacts]
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+      .slice(0, 5)
+      .map((contact): ActivityItem => ({ kind: 'contact', time: new Date(contact.updatedAt).getTime(), contact })),
+    ...quoteEvents.map((ev): ActivityItem => ({ kind: 'quote', time: new Date(ev.created_at).getTime(), ev })),
+  ]
+    .sort((a, b) => b.time - a.time)
+    .slice(0, 8);
 
   // Get urgent items (pending payments, overdue, etc.)
   const urgentItems = state.contacts.filter(
@@ -258,7 +320,32 @@ export default function Dashboard() {
             <h3 className="text-lg font-semibold text-gray-900">Recent Activity</h3>
           </div>
           <div className="divide-y divide-gray-50">
-            {recentActivity.map((contact) => {
+            {feed.map((item) => {
+              if (item.kind === 'quote') {
+                const cfg = QUOTE_EVENT_TEXT[item.ev.event_type] ?? QUOTE_EVENT_TEXT.viewed;
+                const customerId = item.ev.quotes?.customer_id ?? null;
+                const quoteNo = item.ev.quotes?.quote_number ?? 'a quote';
+                return (
+                  <div
+                    key={`q-${item.ev.id}`}
+                    onClick={() => customerId && handleViewContact(customerId)}
+                    className={`p-4 hover:bg-gray-50 transition-colors ${customerId ? 'cursor-pointer' : ''}`}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${cfg.tint}`}>
+                        {cfg.icon === 'sign' ? <PenLine size={18} /> : <Eye size={18} />}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-medium text-gray-900 truncate">
+                          {item.ev.actor_name || 'A customer'} {cfg.verb} {quoteNo}
+                        </p>
+                        <p className="text-sm text-gray-500">{timeAgo(item.time)}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+              const contact = item.contact;
               const assignee = state.teamMembers.find((tm) => tm.id === contact.assignedTo);
               return (
                 <div
