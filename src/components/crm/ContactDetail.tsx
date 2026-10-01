@@ -35,6 +35,7 @@ import ContactTemplateModal from './ContactTemplateModal';
 import ChangeOrderModal, { ChangeOrder } from './ChangeOrderModal';
 import HailTracePanel from './HailTracePanel';
 import CustomerClaimHeader from './CustomerClaimHeader';
+import CountersignBanner from './CountersignBanner';
 import { formatLossDate } from '@/lib/claimStorm';
 import { openLiveRadar } from '@/lib/stormNavigation';
 import WeatherWidget from '@/components/integrations/WeatherWidget';
@@ -1693,6 +1694,7 @@ export default function ContactDetail() {
 
       {/* Content */}
       <div className="flex-1 overflow-auto p-6">
+        <CountersignBanner contactId={contact.id} />
         {activeTab === 'overview' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Contact Info */}

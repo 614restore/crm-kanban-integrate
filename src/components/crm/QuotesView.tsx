@@ -60,6 +60,7 @@ interface QuoteRow {
   best_total: number | null;
   include_better: boolean | null;
   include_best: boolean | null;
+  contractor_signed_at: string | null;
   created_at: string;
   share_token: string | null;
   cover_page_title: string | null;
@@ -186,6 +187,8 @@ export default function QuotesView() {
   const [invoiceCompany, setInvoiceCompany] = useState<{ name: string; email?: string; phone?: string; address?: string; logo_url?: string } | null>(null);
   // QuoteMGR's quote builder and preview open full page inside Quotes.
   const [previewQuoteId, setPreviewQuoteId] = useState<string | null>(null);
+  // Set when arriving from a "customer signed" notification: the preview opens the countersign window.
+  const [countersignOnOpen, setCountersignOnOpen] = useState(false);
   const [previewReturnStep, setPreviewReturnStep] = useState<number | null>(null);
   const [builderNonce, setBuilderNonce] = useState(0);
   // Inspection reports use the builder's inspection mode (contingency + 3-day cancel steps).
@@ -259,7 +262,7 @@ export default function QuotesView() {
     try {
       const { data, error } = await supabase
         .from('quotes')
-        .select('id, quote_number, status, contact_id, customer_id, project_type, good_total, better_total, best_total, include_better, include_best, selected_tier, created_at, share_token, cover_page_title, project_description')
+        .select('id, quote_number, status, contact_id, customer_id, project_type, good_total, better_total, best_total, include_better, include_best, contractor_signed_at, selected_tier, created_at, share_token, cover_page_title, project_description')
         .eq('company_id', companyId)
         .eq('is_archived', showArchived)
         .order('created_at', { ascending: false });
@@ -587,6 +590,7 @@ export default function QuotesView() {
       else if (request.action === 'work_order') openWorkOrder(q);
       else if (request.action === 'send') handleSendQuote(q);
       else if (request.action === 'preview') openPreview(q.id);
+      else if (request.action === 'countersign') { setCountersignOnOpen(true); openPreview(q.id); }
       else if (request.action === 'change_order') {
         setChangeOrderFor({ id: q.id, quoteNumber: q.quote_number, customerId: q.customer_id || q.contact_id });
       }
@@ -633,8 +637,10 @@ export default function QuotesView() {
         quoteId={currentPreviewId}
         company={quoteCompany}
         currentUser={teamMember}
+        autoOpenCountersign={countersignOnOpen}
         onBack={() => {
           setPreviewQuoteId(null);
+          setCountersignOnOpen(false);
           // Opened from the list: go back to it. Opened from the builder: the
           // builder is still mounted underneath and returns at the same step.
           if (previewReturnStep === null) { setShowBuilder(false); loadQuotes(); }
@@ -803,6 +809,11 @@ export default function QuotesView() {
                     <span className={`text-xs px-2 py-1 rounded-full font-medium ${STATUS_COLORS[q.status] || 'bg-gray-100 text-gray-700'}`}>
                       {q.status}
                     </span>
+                    {q.status === 'signed' && !q.contractor_signed_at && (
+                      <span className="ml-1.5 text-xs px-2 py-1 rounded-full font-medium bg-amber-100 text-amber-800" title="The customer has signed. Open the quote and add your signature to send them the completed copy.">
+                        Needs countersign
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-right text-gray-700">{money(q.good_total)}</td>
                   <td className="px-4 py-3 text-right text-gray-700">{q.include_better === false ? <span className="text-gray-300">—</span> : money(q.better_total)}</td>

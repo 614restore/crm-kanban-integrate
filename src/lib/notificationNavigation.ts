@@ -39,8 +39,27 @@ export function openStormMap(data: Record<string, any> | null | undefined, dispa
 }
 
 /** Opens what the notification is about. Returns false when it has nowhere to go. */
+const QUOTE_ALERT_KINDS = new Set(['quote_signed', 'quote_viewed', 'quote_activity', 'quote_executed']);
+
+/** The quote a quote alert is about, from what the alert recorded. */
+function quoteAlertTarget(target: NotificationTarget): { quoteId: string; contactId: string } | null {
+  if (!target.kind || !QUOTE_ALERT_KINDS.has(target.kind)) return null;
+  const quoteId = typeof target.data?.quote_id === 'string' ? target.data.quote_id : null;
+  return quoteId && target.relatedId ? { quoteId, contactId: target.relatedId } : null;
+}
+
 export function openNotificationTarget(target: NotificationTarget, dispatch: Dispatch<CRMAction>): boolean {
   const { kind, relatedType, relatedId } = target;
+  // "Customer signed": open that quote with the countersign window ready. Other quote alerts open the quote.
+  const quoteAlert = quoteAlertTarget(target);
+  if (quoteAlert) {
+    dispatch({
+      type: 'SET_PENDING_QUOTE_ACTION',
+      payload: { contactId: quoteAlert.contactId, quoteId: quoteAlert.quoteId, action: kind === 'quote_signed' ? 'countersign' : 'preview' },
+    });
+    dispatch({ type: 'SET_VIEW', payload: 'quotes' });
+    return true;
+  }
   switch (relatedType) {
     case 'contact':
     case 'customer':
@@ -69,6 +88,7 @@ export function openNotificationTarget(target: NotificationTarget, dispatch: Dis
 
 /** Label for the button that goes where a notification leads, or null if it leads nowhere. */
 export function describeNotificationTarget(target: NotificationTarget): string | null {
+  if (quoteAlertTarget(target)) return target.kind === 'quote_signed' ? 'Countersign this quote' : 'Open quote';
   switch (target.relatedType) {
     case 'contact':
     case 'customer':
