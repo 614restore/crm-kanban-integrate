@@ -47,7 +47,7 @@ import { useToast } from '@/hooks/use-toast';
 import { toast as sonnerToast } from 'sonner';
 import { useAuth } from '@/lib/authContext';
 import { db, DbCompany } from '@/lib/database';
-import { useCRM } from '@/lib/crmStore';
+import { useCRM, getActiveContactId } from '@/lib/crmStore';
 import { getContactFullName } from '@/lib/crmData';
 import { getContractorEstimateTemplates } from '@/lib/contractorTemplates';
 import { getLocationAwareContractorTemplates, generateLocationAwareTemplate } from '@/lib/locationAwareTemplates';
@@ -128,6 +128,12 @@ const DocumentTemplates: React.FC = () => {
   const { toast } = useToast();
   const { profile } = useAuth();
   const { state: crmState, dispatch } = useCRM();
+  // Coming from a customer's page, the customer picker starts on them.
+  useEffect(() => {
+    const carried = getActiveContactId(crmState);
+    if (carried) setSelectedContactId((current) => current || carried);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Load company profile for template variable replacement
   useEffect(() => {

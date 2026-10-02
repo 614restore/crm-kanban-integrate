@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useCRM } from '@/lib/crmStore';
+import { useCRM, getActiveContactId } from '@/lib/crmStore';
 import { db, DbNotification } from '@/lib/database';
 import { useAuth } from '@/lib/authContext';
 import { useNotificationFeed, type FeedNotification } from '@/hooks/useNotificationFeed';
@@ -20,7 +20,7 @@ import {
   RefreshCw,
   Radio,
 } from 'lucide-react';
-import { statusLabels, CustomerStatus } from '@/lib/crmData';
+import { statusLabels, CustomerStatus, getContactFullName } from '@/lib/crmData';
 
 export default function TopBar() {
   const { state, dispatch } = useCRM();
@@ -210,10 +210,38 @@ export default function TopBar() {
           )}
         </div>
 
+        {/* The customer being worked on: the screens opened next start on them. */}
+        {state.contextContactId && state.currentView !== 'contact-detail' && (() => {
+          const working = state.contacts.find((c) => c.id === state.contextContactId);
+          if (!working) return null;
+          return (
+            <div
+              className="flex items-center gap-0.5 rounded-full border border-blue-200 bg-blue-50 py-0.5 pl-3 pr-1 text-sm"
+              title="The screens you open next start on this customer. Click the name to return to their page."
+            >
+              <button
+                type="button"
+                onClick={() => dispatch({ type: 'SELECT_CONTACT', payload: working.id })}
+                className="max-w-[220px] truncate font-medium text-blue-800 hover:underline"
+              >
+                Working on: {getContactFullName(working)}
+              </button>
+              <button
+                type="button"
+                onClick={() => dispatch({ type: 'CLEAR_CONTEXT_CONTACT' })}
+                aria-label="Stop working on this customer"
+                className="rounded-full p-1 text-blue-500 hover:bg-blue-100"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          );
+        })()}
+
         {/* Live radar, one click from anywhere */}
         <button
           type="button"
-          onClick={() => openLiveRadarFor(dispatch, state.selectedContactId ? state.contacts.find((c) => c.id === state.selectedContactId) : null)}
+          onClick={() => { const id = getActiveContactId(state); openLiveRadarFor(dispatch, id ? state.contacts.find((c) => c.id === id) : null); }}
           title="Live radar"
           aria-label="Live radar"
           className="flex items-center gap-1.5 p-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"

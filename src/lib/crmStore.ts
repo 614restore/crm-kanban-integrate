@@ -96,6 +96,12 @@ export interface CRMState {
   // View state
   currentView: ViewType;
   selectedContactId: string | null;
+  /**
+   * The customer you were working on, kept when you move from their page to the next step (calendar,
+   * quotes, weather, orders...) so that screen can already have them selected. Cleared when you go
+   * back to a screen where you pick a customer (dashboard, contacts, pipeline) or clear it yourself.
+   */
+  contextContactId: string | null;
   selectedBoardId: string;
   /** Screens you came through, newest last, so a back arrow returns to the last one. */
   viewHistory: ViewHistoryEntry[];
@@ -157,6 +163,7 @@ export type CRMAction =
   | { type: 'SET_VIEW'; payload: ViewType }
   | { type: 'GO_BACK' }
   | { type: 'SELECT_CONTACT'; payload: string | null }
+  | { type: 'CLEAR_CONTEXT_CONTACT' }
   | { type: 'SELECT_BOARD'; payload: string }
   | { type: 'TOGGLE_SIDEBAR' }
   | { type: 'SET_SEARCH'; payload: string }
@@ -241,6 +248,20 @@ export type CRMAction =
       companyGoals: CompanyGoals[];
     }};
 
+/** Screens where you choose a customer, so any customer being worked on is let go when you land on one. */
+const CUSTOMER_PICKER_VIEWS: ViewType[] = ['dashboard', 'contacts', 'pipeline'];
+
+/** The customer the next screen should start with: the open one, else the one carried from their page. */
+export function getActiveContactId(state: Pick<CRMState, 'selectedContactId' | 'contextContactId'>): string | null {
+  return state.selectedContactId ?? state.contextContactId ?? null;
+}
+
+/** What the working-on customer becomes when moving to `view`. */
+function contextAfterMoving(state: CRMState, view: ViewType): string | null {
+  if (CUSTOMER_PICKER_VIEWS.includes(view)) return null;
+  return getActiveContactId(state);
+}
+
 /** Screens kept in the back history. Older ones fall off the end. */
 const MAX_VIEW_HISTORY = 20;
 
@@ -262,6 +283,7 @@ export function crmReducer(state: CRMState, action: CRMAction): CRMState {
         ...state,
         currentView: action.payload,
         selectedContactId: null,
+        contextContactId: contextAfterMoving(state, action.payload),
         viewHistory: pushViewHistory(state),
       };
 
@@ -274,21 +296,33 @@ export function crmReducer(state: CRMState, action: CRMAction): CRMState {
           ...state,
           currentView: previous ? 'contacts' : 'dashboard',
           selectedContactId: null,
+          contextContactId: null,
           viewHistory: history,
         };
       }
-      return { ...state, currentView: previous.view, selectedContactId: previous.contactId, viewHistory: history };
+      return {
+        ...state,
+        currentView: previous.view,
+        selectedContactId: previous.contactId,
+        // Back onto a customer's page means working on them again; back onto a picker screen lets go.
+        contextContactId: previous.contactId ?? contextAfterMoving(state, previous.view),
+        viewHistory: history,
+      };
     }
 
     case 'SELECT_CONTACT':
-      if (!action.payload) return { ...state, selectedContactId: null };
+      if (!action.payload) return { ...state, selectedContactId: null, contextContactId: null };
       if (state.selectedContactId === action.payload && state.currentView === 'contact-detail') return state;
       return {
         ...state,
         selectedContactId: action.payload,
+        contextContactId: action.payload,
         currentView: 'contact-detail',
         viewHistory: pushViewHistory(state),
       };
+
+    case 'CLEAR_CONTEXT_CONTACT':
+      return { ...state, contextContactId: null };
     
     case 'SELECT_BOARD':
       return { ...state, selectedBoardId: action.payload };
@@ -684,6 +718,13 @@ export function useCurrentContact() {
   const { state } = useCRM();
   if (!state.selectedContactId) return null;
   return state.contacts.find((c) => c.id === state.selectedContactId) || null;
+}
+
+/** The customer the screen you are on should start with: the open one, else the one carried from their page. */
+export function useActiveContact() {
+  const { state } = useCRM();
+  const id = getActiveContactId(state);
+  return id ? state.contacts.find((c) => c.id === id) || null : null;
 }
 
 export function useFilteredContacts() {

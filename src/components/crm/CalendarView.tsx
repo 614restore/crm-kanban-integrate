@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { useCRM } from '@/lib/crmStore';
+import { useCRM, getActiveContactId } from '@/lib/crmStore';
 import { Appointment, formatDate } from '@/lib/crmData';
 import { db } from '@/lib/database';
 import { fireAutomationEvent } from '@/lib/automationEngine';
@@ -672,7 +672,7 @@ export default function CalendarView() {
         onClose={() => { setShowModal(false); setEditingAppointment(null); setPendingContactId(null); }}
         selectedDate={selectedDate || undefined}
         editingAppointment={editingAppointment}
-        preselectedContactId={pendingContactId || undefined}
+        preselectedContactId={pendingContactId || getActiveContactId(state) || undefined}
       />
     </div>
   );

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useCRM, ViewType, canViewFinancials, canManageTeam } from '@/lib/crmStore';
+import { useCRM, ViewType, canViewFinancials, canManageTeam, getActiveContactId } from '@/lib/crmStore';
 import type { BoardType } from '@/lib/crmData';
 import { useAuth } from '@/lib/authContext';
 import { useCompanyBrand } from '@/lib/useCompanyBrand';
@@ -175,7 +175,8 @@ export default function Sidebar() {
 
   const handleNavClick = (item: NavItem) => {
     // With a customer open, weather opens on their address rather than blank.
-    const openContact = state.selectedContactId ? state.contacts.find((c) => c.id === state.selectedContactId) : null;
+    const activeId = getActiveContactId(state);
+    const openContact = activeId ? state.contacts.find((c) => c.id === activeId) : null;
     if (item.stormMode === 'live') return openLiveRadarFor(dispatch, openContact);
     if (item.stormMode === 'history') return void openStormHistoryFor(dispatch, openContact);
     if (item.boardType) {

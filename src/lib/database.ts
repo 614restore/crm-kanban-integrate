@@ -140,6 +140,8 @@ export interface DbContact {
   adjuster_phone?: string;
   adjuster_email?: string;
   deductible?: number;
+  /** The date of the storm or incident a claim is for, YYYY-MM-DD. */
+  date_of_loss?: string | null;
   project_type?: string;
   project_value?: number;
   deposit_amount?: number;

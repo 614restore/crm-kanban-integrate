@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useCRM } from '@/lib/crmStore';
+import { useCRM, getActiveContactId } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { useFormDraft } from '@/lib/useFormDraft';
 import { db } from '@/lib/database';
@@ -234,6 +234,8 @@ export default function WorkOrdersView() {
         toast.info('Draft restored — your previous work order was recovered.');
       } else {
         setWorkOrderNumber(`WO-${Date.now().toString().slice(-6)}`);
+        const carried = getActiveContactId(state);
+        if (carried) setSelectedContactId(carried);
       }
     }
     setShowModal(true);
