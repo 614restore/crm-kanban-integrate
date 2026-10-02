@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useCRM } from '@/lib/crmStore';
+import { useCRM, getActiveContactId } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
 import { fireAutomationEvent } from '@/lib/automationEngine';
@@ -12,7 +12,7 @@ export default function InvoiceModal() {
   const { state, dispatch } = useCRM();
   const { profile } = useAuth();
   const prefill = state.invoiceModalPrefill;
-  const [selectedContactId, setSelectedContactId] = useState(prefill?.contactId || '');
+  const [selectedContactId, setSelectedContactId] = useState(prefill?.contactId || getActiveContactId(state) || '');
   const [dueDate, setDueDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [items, setItems] = useState<InvoiceItem[]>(
     prefill?.items?.length

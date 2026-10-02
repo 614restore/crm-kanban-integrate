@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import ScheduleName from './ScheduleName';
-import { useCRM } from '@/lib/crmStore';
+import { useCRM, getActiveContactId } from '@/lib/crmStore';
 import type { PendingQuote, QuoteDraftItem } from '@/lib/crmStore';
 import { toQuoteSummary } from '@/lib/crmData';
 import { useAuth } from '@/lib/authContext';
@@ -477,7 +477,8 @@ export default function QuotesView() {
   }, [quotes, search, state.contacts]);
 
   const openNew = () => {
-    setEditingQuoteId(null); setBuilderPrefill(null); setPreviewQuoteId(null); setPreviewReturnStep(null);
+    const carriedCustomer = getActiveContactId(state);
+    setEditingQuoteId(null); setBuilderPrefill(carriedCustomer ? { contactId: carriedCustomer } : null); setPreviewQuoteId(null); setPreviewReturnStep(null);
     setBuilderInspection(false);
     setBuilderNonce((n) => n + 1); setShowBuilder(true);
   };

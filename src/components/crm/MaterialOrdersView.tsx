@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useCRM } from '@/lib/crmStore';
+import { useCRM, getActiveContactId } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { useFormDraft } from '@/lib/useFormDraft';
 import { db } from '@/lib/database';
@@ -246,6 +246,8 @@ export default function MaterialOrdersView() {
       } else {
         setOrderNumber(`MO-${Date.now().toString().slice(-6)}`);
         setOrderDate(new Date().toISOString().split('T')[0]);
+        const carried = getActiveContactId(state);
+        if (carried) setSelectedContactId(carried);
       }
     }
     setShowModal(true);

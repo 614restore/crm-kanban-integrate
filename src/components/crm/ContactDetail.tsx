@@ -1295,8 +1295,9 @@ export default function ContactDetail() {
         handleScheduleAppointment();
         break;
       case 'inspection':
+        // Selecting the contact again here switched straight back to their page; the customer is carried
+        // to the inspections screen as the one being worked on.
         dispatch({ type: 'SET_VIEW', payload: 'inspections' });
-        dispatch({ type: 'SELECT_CONTACT', payload: contact.id });
         break;
       case 'quotes':
         if (latestQuote) openQuote(latestQuote.id);

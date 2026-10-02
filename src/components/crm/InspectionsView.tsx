@@ -4,7 +4,7 @@ import {
   Search, User, Calendar, ArrowLeft, Loader2, AlertTriangle,
   Home, Wind, CloudLightning, Minus,
 } from 'lucide-react';
-import { useCRM, useCurrentContact } from '@/lib/crmStore';
+import { useCRM, useActiveContact } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { supabase } from '@/lib/supabase';
 
@@ -45,7 +45,7 @@ const totalPhotos = (counts: Record<string, number>) =>
 ════════════════════════════════════════════════════════════ */
 export default function InspectionsView() {
   const { state, dispatch } = useCRM();
-  const preselected = useCurrentContact();          // non-null when navigated from ContactDetail
+  const preselected = useActiveContact();           // the customer you came from, if you came from one
   const { profile } = useAuth();
 
   const [records, setRecords] = useState<InspectionRecord[]>([]);

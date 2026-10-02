@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useCRM } from '@/lib/crmStore';
+import { useCRM, getActiveContactId } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
 import { Project } from '@/lib/crmData';
@@ -199,6 +199,8 @@ export default function ProjectsView() {
       // Generate project number
       const nextNumber = `PRJ-${Date.now().toString().slice(-6)}`;
       setProjectNumber(nextNumber);
+      const carried = getActiveContactId(state);
+      if (carried) setSelectedContactId(carried);
     }
     setShowModal(true);
   };
