@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import ScheduleName from './ScheduleName';
 import { useCRM } from '@/lib/crmStore';
 import type { PendingQuote, QuoteDraftItem } from '@/lib/crmStore';
 import { toQuoteSummary } from '@/lib/crmData';
@@ -804,7 +805,7 @@ export default function QuotesView() {
                     />
                   </td>
                   <td className="px-4 py-3 font-medium text-gray-900">{q.quote_number}</td>
-                  <td className="px-4 py-3 text-gray-700">{contactName(q.contact_id || q.customer_id)}</td>
+                  <td className="px-4 py-3"><ScheduleName contactId={q.customer_id || q.contact_id} fallbackClass="text-gray-700">{contactName(q.contact_id || q.customer_id)}</ScheduleName></td>
                   <td className="px-4 py-3">
                     <span className={`text-xs px-2 py-1 rounded-full font-medium ${STATUS_COLORS[q.status] || 'bg-gray-100 text-gray-700'}`}>
                       {q.status}
