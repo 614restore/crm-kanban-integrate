@@ -119,7 +119,7 @@ export default async function handler(req, res) {
     if (req.method === 'GET') {
       const { token } = req.query;
       if (!token) return res.status(400).json({ error: 'Missing token' });
-      const { data: estimate } = await db.from('estimates').select('*,companies(name,from_email,phone,address,city,state,zip)').eq('sign_token', token).single();
+      const { data: estimate } = await db.from('estimates').select('*,companies(name,from_email:email,phone,address,city,state,zip)').eq('sign_token', token).single();
       if (!estimate) return res.status(404).json({ error: 'Estimate not found' });
       return res.status(200).json({ estimate, alreadySigned: estimate.status === 'accepted' });
     }
@@ -179,7 +179,7 @@ export default async function handler(req, res) {
     if (req.method === 'POST') {
       const { token, signedBy, signatureData } = req.body || {};
       if (!token || !signedBy) return res.status(400).json({ error: 'Missing required fields' });
-      const { data: existing } = await db.from('change_orders').select('id,status').eq('sign_token', token).single();
+      const { data: existing } = await db.from('change_orders').select('id,status,title,change_order_number,total,created_by,contact_id,company_id').eq('sign_token', token).single();
       if (!existing) return res.status(404).json({ error: 'Change order not found' });
       if (existing.status === 'signed') return res.status(409).json({ error: 'Already signed' });
 
@@ -192,6 +192,40 @@ export default async function handler(req, res) {
         signed_ip: ip,
       }).eq('sign_token', token).select().single();
 
+      // Let the person who sent it know. A problem here must never undo the customer's signature.
+      try {
+        if (existing.created_by) {
+          const label = existing.change_order_number ? `Change order ${existing.change_order_number}` : 'A change order';
+          await db.from('notifications').insert({
+            user_id: existing.created_by,
+            company_id: existing.company_id,
+            type: 'change_order_signed',
+            title: 'Change Order Signed',
+            message: `${label} — "${existing.title || 'Untitled'}" — was signed by ${signedBy}`,
+            related_type: 'contact',
+            related_id: existing.contact_id ?? null,
+          });
+          const { data: sender } = await db.from('profiles').select('email,full_name').eq('id', existing.created_by).single();
+          if (sender?.email) {
+            const { data: company } = await db.from('companies').select('name,from_email:email').eq('id', existing.company_id).single();
+            const smtp = await getCompanySmtp(existing.company_id);
+            const fromAddress = company?.from_email
+              ? `${company.name || 'Your contractor'} <${company.from_email}>`
+              : '614 Restore <scopemgr@614restore.com>';
+            const total = existing.total != null ? ` (total $${Number(existing.total).toFixed(2)})` : '';
+            await sendEmail(
+              sender.email,
+              `Change Order Signed: ${existing.title || label}`,
+              `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;"><h2 style="color:#16a34a;">✅ Change Order Signed</h2><p>Hi ${sender.full_name || 'there'},</p><p><strong>${signedBy}</strong> has signed <strong>"${existing.title || label}"</strong>${total}.</p></div>`,
+              fromAddress,
+              smtp,
+            );
+          }
+        }
+      } catch (notifyErr) {
+        console.error('change order signed alert failed:', notifyErr);
+      }
+
       return res.status(200).json({ success: true, changeOrder: data });
     }
   }
@@ -203,7 +237,7 @@ export default async function handler(req, res) {
     if (!req.query.token) return res.status(400).json({ error: 'Missing token' });
     const { data: doc, error } = await db
       .from('documents')
-      .select('id,name,status,html_content,signed_by,signed_at,companies(name,from_email)')
+      .select('id,name,status,html_content,signed_by,signed_at,companies(name,from_email:email)')
       .eq('sign_token', req.query.token)
       .single();
     if (error || !doc) return res.status(404).json({ error: 'Document not found' });
@@ -222,13 +256,13 @@ export default async function handler(req, res) {
     const { token: bodyToken } = req.body || {};
     const tok = bodyToken || req.query.token;
     if (!tok) return res.status(400).json({ error: 'Missing token' });
-    const { data: doc } = await db.from('documents').select('id,name,status,viewed_at,sent_by,contact_email,companies(name,from_email)').eq('sign_token', tok).single();
+    const { data: doc } = await db.from('documents').select('id,name,status,viewed_at,sent_by,company_id,contact_id,contact_email,companies(name,from_email:email)').eq('sign_token', tok).single();
     if (!doc) return res.status(404).json({ error: 'Document not found' });
     if (doc.viewed_at) return res.status(200).json({ success: true, alreadyViewed: true });
     await db.from('documents').update({ status: 'viewed', viewed_at: new Date().toISOString() }).eq('id', doc.id);
     if (doc.sent_by) {
       const { data: sender } = await db.from('profiles').select('email,full_name').eq('id', doc.sent_by).single();
-      await db.from('notifications').insert({ user_id: doc.sent_by, type: 'document_viewed', title: 'Document Opened', message: `"${doc.name}" has been opened by the customer`, link: '/documents' });
+      await db.from('notifications').insert({ user_id: doc.sent_by, company_id: doc.company_id, type: 'document_viewed', title: 'Document Opened', message: `"${doc.name}" has been opened by the customer`, related_type: 'contact', related_id: doc.contact_id ?? null });
       const smtp = await getCompanySmtp(doc.company_id);
       const fromAddress = doc.companies?.from_email
         ? `${doc.companies.name || 'Your contractor'} <${doc.companies.from_email}>`
@@ -248,7 +282,7 @@ export default async function handler(req, res) {
     const tok = bodyToken || req.query.token;
     if (!tok) return res.status(400).json({ error: 'Missing token' });
     if (!signedBy || !signatureData) return res.status(400).json({ error: 'Missing signedBy or signatureData' });
-    const { data: doc } = await db.from('documents').select('id,name,status,sign_token,sent_by,contact_id,company_id,html_content,contact_email,companies(name,from_email)').eq('sign_token', tok).single();
+    const { data: doc } = await db.from('documents').select('id,name,status,sign_token,sent_by,contact_id,company_id,html_content,contact_email,companies(name,from_email:email)').eq('sign_token', tok).single();
     if (!doc) return res.status(404).json({ error: 'Document not found' });
     if (doc.status === 'signed') return res.status(409).json({ error: 'Already signed' });
     if (tok !== doc.sign_token) return res.status(403).json({ error: 'Invalid token' });
@@ -260,11 +294,11 @@ export default async function handler(req, res) {
     signedHtml = signedHtml.replace(/<\/body>/, `${stamp}</body>`);
     await db.from('documents').update({ status: 'signed', signed_by: signedBy, signature_data: signatureData, signed_at: new Date().toISOString(), html_content: signedHtml }).eq('id', doc.id);
     if (doc.contact_id && doc.company_id) {
-      await db.from('documents').insert({ company_id: doc.company_id, contact_id: doc.contact_id, name: `${doc.name} — Signed`, type: 'signed-document', url: '', html_content: signedHtml, status: 'signed', signed_by: signedBy, signed_at: new Date().toISOString() });
+      await db.from('documents').insert({ company_id: doc.company_id, contact_id: doc.contact_id, name: `${doc.name} — Signed`, type: 'signed', url: '', html_content: signedHtml, status: 'signed', signed_by: signedBy, signed_at: new Date().toISOString() });
     }
     if (doc.sent_by) {
       const { data: sender } = await db.from('profiles').select('email,full_name').eq('id', doc.sent_by).single();
-      await db.from('notifications').insert({ user_id: doc.sent_by, type: 'document_signed', title: 'Document Signed', message: `"${doc.name}" has been signed by ${signedBy}`, link: '/documents' });
+      await db.from('notifications').insert({ user_id: doc.sent_by, company_id: doc.company_id, type: 'document_signed', title: 'Document Signed', message: `"${doc.name}" has been signed by ${signedBy}`, related_type: 'contact', related_id: doc.contact_id ?? null });
       const appUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://crm-kanban-integrate.vercel.app';
       const smtp = await getCompanySmtp(doc.company_id);
       const companyFromEmail = doc.companies?.from_email || null;

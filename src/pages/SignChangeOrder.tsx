@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import SignaturePad from "@/components/ui/SignaturePad";
 
 const API_BASE = "/api/document-handler?action=sign-change-order";
@@ -37,7 +37,10 @@ interface ChangeOrder {
 }
 
 export default function SignChangeOrder() {
-  const { token } = useParams<{ token: string }>();
+  // The emailed link carries the token in the path; a ?token= link works too.
+  const { token: pathToken } = useParams<{ token: string }>();
+  const [searchParams] = useSearchParams();
+  const token = pathToken || searchParams.get("token") || undefined;
   const [changeOrder, setChangeOrder] = useState<ChangeOrder | null>(null);
   const [alreadySigned, setAlreadySigned] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -50,8 +53,12 @@ export default function SignChangeOrder() {
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!token) return;
-    fetch(`${API_BASE}?token=${token}`)
+    if (!token) {
+      setError("This link is missing its signing code. Please use the link from your email.");
+      setLoading(false);
+      return;
+    }
+    fetch(`${API_BASE}&token=${encodeURIComponent(token)}`)
       .then((res) => {
         if (!res.ok) throw new Error("Change order not found or link is invalid.");
         return res.json();

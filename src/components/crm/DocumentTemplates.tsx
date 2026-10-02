@@ -2641,7 +2641,7 @@ const DocumentTemplates: React.FC = () => {
         company_id: profile.company_id,
         contact_id: contactId,
         name: docName,
-        type: 'template-document',
+        type: 'document',
         url: storedUrl,
         size: `${Math.round(pdfBlob.size / 1024)} KB`,
         html_content: html,
