@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
+import ScheduleName from './ScheduleName';
 import { db } from '@/lib/database';
 import { supabase } from '@/lib/supabase';
 import { useCRM, useFilteredContacts } from '@/lib/crmStore';
@@ -485,9 +486,9 @@ Jane,Smith,jane@example.com,555-9999,555-8888,456 Oak Ave,Boulder,CO,80301,Prosp
                         {contact.lastName[0]}
                       </div>
                       <div className="min-w-0">
-                        <p className="font-medium text-gray-900 truncate">
+                        <ScheduleName as="p" contactId={contact.id} className="font-medium truncate">
                           {getContactFullName(contact)}
-                        </p>
+                        </ScheduleName>
                         <p className="text-sm text-gray-500 truncate">{contact.email}</p>
                       </div>
                     </div>
@@ -582,9 +583,9 @@ Jane,Smith,jane@example.com,555-9999,555-8888,456 Oak Ave,Boulder,CO,80301,Prosp
                         {contact.lastName[0]}
                       </div>
                       <div>
-                        <h3 className="font-semibold text-gray-900">
+                        <ScheduleName as="h3" contactId={contact.id} className="font-semibold">
                           {getContactFullName(contact)}
-                        </h3>
+                        </ScheduleName>
                         <span
                           className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium mt-1 ${
                             statusColors[contact.status]
@@ -674,7 +675,7 @@ Jane,Smith,jane@example.com,555-9999,555-8888,456 Oak Ave,Boulder,CO,80301,Prosp
               {archivedContacts.map(contact => (
                 <div key={contact.id} className="bg-white border border-amber-200 rounded-lg px-4 py-3 flex items-center justify-between">
                   <div>
-                    <p className="font-medium text-gray-900">{getContactFullName(contact)}</p>
+                    <ScheduleName as="p" contactId={contact.id} className="font-medium">{getContactFullName(contact)}</ScheduleName>
                     <p className="text-sm text-gray-500">{contact.email} · {contact.phone1}</p>
                   </div>
                   <button

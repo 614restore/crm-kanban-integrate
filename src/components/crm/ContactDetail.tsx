@@ -36,6 +36,8 @@ import ChangeOrderModal, { ChangeOrder } from './ChangeOrderModal';
 import HailTracePanel from './HailTracePanel';
 import CustomerClaimHeader from './CustomerClaimHeader';
 import CountersignBanner from './CountersignBanner';
+import ScheduleName from './ScheduleName';
+import NextAppointmentCard from './NextAppointmentCard';
 import { formatLossDate } from '@/lib/claimStorm';
 import { openLiveRadar } from '@/lib/stormNavigation';
 import WeatherWidget from '@/components/integrations/WeatherWidget';
@@ -1585,9 +1587,9 @@ export default function ContactDetail() {
               </div>
               <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">
+                <ScheduleName as="h1" contactId={contact.id} className="text-2xl font-bold">
                   {getContactFullName(contact)}
-                </h1>
+                </ScheduleName>
                 <div className="flex items-center gap-3 mt-1">
                   <span
                     className={`px-3 py-1 rounded-full text-sm font-medium ${
@@ -1694,6 +1696,7 @@ export default function ContactDetail() {
 
       {/* Content */}
       <div className="flex-1 overflow-auto p-6">
+        <NextAppointmentCard contactId={contact.id} />
         <CountersignBanner contactId={contact.id} />
         {activeTab === 'overview' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

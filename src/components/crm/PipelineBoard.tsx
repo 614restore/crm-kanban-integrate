@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import ScheduleName from './ScheduleName';
 import { quoteValue } from '@/lib/crmData';
 import { useCRM, useCurrentBoard, canCreateBoard, canEditBoard } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
@@ -955,7 +956,7 @@ export default function PipelineBoard() {
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-center gap-1.5">
                                   <GripVertical size={12} className="text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab flex-shrink-0" />
-                                  <p className="font-medium text-gray-900 text-sm truncate">{getContactFullName(contact)}</p>
+                                  <ScheduleName as="p" contactId={contact.id} className="font-medium text-sm truncate">{getContactFullName(contact)}</ScheduleName>
                                 </div>
                                 <div className="flex items-center gap-1 ml-4 mt-0.5 flex-wrap">
                                   {contact.projectType && <span className="text-xs text-gray-400 truncate">{contact.projectType}</span>}
@@ -1124,7 +1125,7 @@ export default function PipelineBoard() {
                               >
                                 <div className="flex items-start justify-between gap-2">
                                   <div className="min-w-0 flex-1">
-                                    <p className="font-medium text-gray-900 text-sm truncate">{getContactFullName(contact)}</p>
+                                    <ScheduleName as="p" contactId={contact.id} className="font-medium text-sm truncate">{getContactFullName(contact)}</ScheduleName>
                                     {contact.address && (
                                       <p
                                         className="text-xs text-gray-500 hover:text-blue-600 flex items-center gap-1 mt-1 truncate cursor-pointer transition-colors group/addr"
@@ -1266,7 +1267,7 @@ export default function PipelineBoard() {
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
                                 <GripVertical size={14} className="text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab" />
-                                <h4 className="font-medium text-gray-900 truncate">{getContactFullName(contact)}</h4>
+                                <ScheduleName as="h4" contactId={contact.id} className="font-medium truncate">{getContactFullName(contact)}</ScheduleName>
                               </div>
                               {contact.projectType && <p className="text-sm text-gray-500 mt-1 truncate">{contact.projectType}</p>}
                             </div>

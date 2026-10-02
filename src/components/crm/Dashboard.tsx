@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import ScheduleName from './ScheduleName';
 import { supabase } from '@/lib/supabase';
 import { useCRM, usePipelineStats, useFinancialStats, useUpcomingAppointments } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
@@ -360,7 +361,7 @@ export default function Dashboard() {
                         {contact.lastName[0]}
                       </div>
                       <div>
-                        <p className="font-medium text-gray-900">{getContactFullName(contact)}</p>
+                        <ScheduleName as="p" contactId={contact.id} className="font-medium">{getContactFullName(contact)}</ScheduleName>
                         <div className="flex items-center gap-2 text-sm text-gray-500">
                           <MapPin size={12} />
                           <span>
@@ -410,7 +411,7 @@ export default function Dashboard() {
                   onClick={() => handleViewContact(contact.id)}
                   className="p-4 hover:bg-gray-50 transition-colors cursor-pointer"
                 >
-                  <p className="font-medium text-gray-900">{getContactFullName(contact)}</p>
+                  <ScheduleName as="p" contactId={contact.id} className="font-medium">{getContactFullName(contact)}</ScheduleName>
                   <p className="text-sm text-amber-600 mt-1">
                     {contact.status === 'pending_payment'
                       ? `Payment pending: ${formatCurrency(contact.finalPaymentAmount || 0)}`
