@@ -34,6 +34,7 @@ import CustomerSurvey from './CustomerSurvey';
 import AppointmentModal from './AppointmentModal';
 import ContactTemplateModal from './ContactTemplateModal';
 import ChangeOrderModal, { ChangeOrder } from './ChangeOrderModal';
+import InsuranceScopePanel from './InsuranceScopePanel';
 import HailTracePanel from './HailTracePanel';
 import CustomerClaimHeader from './CustomerClaimHeader';
 import CountersignBanner from './CountersignBanner';
@@ -2288,6 +2289,18 @@ export default function ContactDetail() {
                 nextStep={nextStep}
                 onNextStep={nextStep ? () => runNextStep(nextStep) : undefined}
               />
+
+              {/* Insurance scope of work: upload the carrier's scope, the AI reads the total, a person applies it */}
+              {effectiveCompanyId && (
+                <InsuranceScopePanel
+                  contactId={contact.id}
+                  companyId={effectiveCompanyId}
+                  currentProjectValue={contact.projectValue ?? null}
+                  onApplied={(amount) =>
+                    dispatch({ type: 'UPDATE_CONTACT', payload: { ...contact, projectValue: amount, updatedAt: new Date().toISOString() } })
+                  }
+                />
+              )}
 
               {/* Project Pricing Card */}
               <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl p-6 text-white">
