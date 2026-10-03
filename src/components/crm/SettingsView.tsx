@@ -1042,7 +1042,7 @@ export default function SettingsView() {
     } catch (error) {
       console.error('Delete account error:', error);
       toast.error(
-        'Account deletion requires a server-side function. For now, use "Start fresh workspace" or contact admin to run account deletion.'
+        'We could not delete your account. Please try again, or email privacy@614restore.com and we will delete it for you.'
       );
     } finally {
       setIsDeletingAccount(false);
@@ -2366,7 +2366,7 @@ export default function SettingsView() {
                 Delete Account
               </h4>
               <p className="text-sm text-red-700">
-                Permanent delete requires a backend function (`delete_my_account`) with elevated Supabase permissions.
+                This permanently deletes your login and profile. If you are the last member of your company workspace, the workspace and its customers, quotes, and photos are deleted too. This cannot be undone.
               </p>
               <div>
                 <label className="block text-sm font-medium text-red-800 mb-1">

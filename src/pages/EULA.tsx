@@ -4,7 +4,8 @@ import { ArrowLeft } from 'lucide-react';
 
 export default function EULA() {
   const navigate = useNavigate();
-  const effectiveDate = 'March 7, 2026';
+  // Update this date on the day the revised EULA is published.
+  const effectiveDate = 'October 3, 2026';
   const companyName = 'TrussCTR';
   const contactEmail = 'legal@614restore.com';
 
@@ -74,6 +75,11 @@ export default function EULA() {
                 <li><strong>Supabase</strong> — Database, authentication, and storage infrastructure</li>
                 <li><strong>Intuit QuickBooks</strong> — Accounting integration (subject to Intuit's developer terms)</li>
                 <li><strong>Resend</strong> — Transactional email delivery</li>
+                <li><strong>Twilio</strong> — Text messaging, through your own account</li>
+                <li><strong>Stripe</strong> — Payment processing</li>
+                <li><strong>Apple and RevenueCat</strong> — Mobile app subscriptions</li>
+                <li><strong>EagleView</strong> — Aerial measurement reports</li>
+                <li><strong>OpenAI, Anthropic, Google, and Groq</strong> — Optional AI features, through your own account</li>
                 <li><strong>Vercel</strong> — API hosting and serverless functions</li>
                 <li><strong>React, Vite, Tailwind CSS</strong> — Open-source UI framework components</li>
               </ul>
@@ -104,8 +110,24 @@ export default function EULA() {
             </section>
 
             <section>
+              <h2 className="text-xl font-semibold text-gray-900 mb-3">7A. Mobile App (Apple App Store)</h2>
+              <p>If you obtain the TrussCENTER mobile app from the Apple App Store, the following also applies. In this section "Apple" means Apple Inc.</p>
+              <ul className="list-disc pl-6 space-y-2 mt-2">
+                <li><strong>Acknowledgement:</strong> This EULA is between you and Licensor only, not Apple. Licensor, not Apple, is responsible for the app and its content.</li>
+                <li><strong>Scope of license:</strong> Your license is limited to use of the app on Apple-branded devices you own or control, as allowed by the Apple Media Services Terms.</li>
+                <li><strong>Maintenance and support:</strong> Licensor is solely responsible for support. Apple has no obligation to provide maintenance or support for the app.</li>
+                <li><strong>Warranty:</strong> If the app fails to meet any applicable warranty, you may tell Apple and Apple will refund the purchase price, if any. Apple has no other warranty obligation for the app. Any other claim, loss, or cost for failure to meet a warranty is Licensor's responsibility.</li>
+                <li><strong>Product claims:</strong> Licensor, not Apple, is responsible for claims about the app, including product liability, legal or regulatory compliance, and consumer-protection claims.</li>
+                <li><strong>Intellectual property claims:</strong> If a third party claims the app infringes its intellectual property, Licensor, not Apple, is responsible for investigating and resolving the claim.</li>
+                <li><strong>Legal compliance:</strong> You confirm you are not in a country subject to a U.S. embargo or listed as a restricted party, and that you will follow applicable third-party terms (for example, your wireless carrier's) when using the app.</li>
+                <li><strong>Developer contact:</strong> 614 Restore LLC, Columbus, Ohio, United States. Questions or complaints: <a href="mailto:legal@614restore.com" className="text-blue-600 hover:underline">legal@614restore.com</a>.</li>
+                <li><strong>Third-party beneficiary:</strong> Apple and its subsidiaries are third-party beneficiaries of this EULA. When you accept it, Apple can enforce it against you.</li>
+              </ul>
+            </section>
+
+            <section>
               <h2 className="text-xl font-semibold text-gray-900 mb-3">8. Data Privacy</h2>
-              <p>Your use of the Software is also governed by our <a href="/crm-kanban-integrate/privacy" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Privacy Policy</a>, which is incorporated into this EULA by reference. By using the Software, you consent to the collection and use of information as described in the Privacy Policy.</p>
+              <p>Your use of the Software is also governed by our <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Privacy Policy</a>, which is incorporated into this EULA by reference. By using the Software, you consent to the collection and use of information as described in the Privacy Policy.</p>
             </section>
 
             <section>
@@ -130,7 +152,7 @@ export default function EULA() {
                 <li><strong>Termination by You:</strong> You may terminate this EULA at any time by cancelling your account and ceasing use of the Software</li>
                 <li><strong>Termination by Licensor:</strong> Licensor may terminate this EULA immediately, without notice, if you breach any provision. Licensor may also terminate with 30 days' notice for any reason</li>
                 <li><strong>Effect of Termination:</strong> Upon termination, your license to use the Software ends immediately. Sections 3, 9, 10, 11, and 13 survive termination</li>
-                <li><strong>Data Export:</strong> Following termination, you will have 30 days to export your data before it is permanently deleted</li>
+                <li><strong>Data Export and Deletion:</strong> Export anything you need before you delete your account. How account and company data are deleted is described in the Privacy Policy</li>
               </ul>
             </section>
 
@@ -141,7 +163,7 @@ export default function EULA() {
 
             <section>
               <h2 className="text-xl font-semibold text-gray-900 mb-3">14. Entire Agreement</h2>
-              <p>This EULA, together with the <a href="/crm-kanban-integrate/terms" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Terms of Service</a> and <a href="/crm-kanban-integrate/privacy" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Privacy Policy</a>, constitutes the entire agreement between you and 614 Restore LLC regarding the Software and supersedes all prior agreements, understandings, or representations.</p>
+              <p>This EULA, together with the <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Terms of Service</a> and <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Privacy Policy</a>, constitutes the entire agreement between you and 614 Restore LLC regarding the Software and supersedes all prior agreements, understandings, or representations.</p>
             </section>
 
             <section>

@@ -4,7 +4,8 @@ import { ArrowLeft } from 'lucide-react';
 
 export default function TermsOfService() {
   const navigate = useNavigate();
-  const effectiveDate = 'March 7, 2026';
+  // Update this date on the day the revised terms are published.
+  const effectiveDate = 'October 3, 2026';
   const companyName = 'TrussCTR';
   const contactEmail = 'legal@614restore.com';
 
@@ -32,7 +33,7 @@ export default function TermsOfService() {
 
             <section>
               <h2 className="text-xl font-semibold text-gray-900 mb-3">2. Description of Service</h2>
-              <p>{companyName} is a cloud-based customer relationship management (CRM) platform designed for roofing, restoration, and general contracting businesses. The Service includes tools for managing contacts, projects, estimates, invoices, documents, team members, scheduling, and third-party integrations (including QuickBooks and email services).</p>
+              <p>{companyName} is a cloud-based customer relationship management (CRM) and quoting platform designed for roofing, restoration, and general contracting businesses. It is available as a website and as the TrussCENTER mobile app. The Service includes tools for managing contacts, projects, inspections, estimates, quotes, change orders, invoices, receipts, documents, photos, team members, scheduling, optional AI features, and third-party integrations (including QuickBooks, EagleView, email, and text messaging).</p>
             </section>
 
             <section>
@@ -73,7 +74,34 @@ export default function TermsOfService() {
 
             <section>
               <h2 className="text-xl font-semibold text-gray-900 mb-3">7. Third-Party Integrations</h2>
-              <p>The Service integrates with third-party platforms including but not limited to QuickBooks (Intuit Inc.), Resend (email delivery), and Supabase (database infrastructure). Your use of these integrations is subject to those providers' respective terms of service and privacy policies. We are not responsible for the availability, accuracy, or conduct of third-party services.</p>
+              <p>The Service integrates with third-party platforms including but not limited to QuickBooks (Intuit Inc.), EagleView, Resend (email delivery), Twilio (text messaging), Stripe (payments), Apple and RevenueCat (mobile subscriptions), AI providers (OpenAI, Anthropic, Google, and Groq), and Supabase (database infrastructure). Your use of these integrations is subject to those providers' respective terms of service and privacy policies. We are not responsible for the availability, accuracy, or conduct of third-party services.</p>
+            </section>
+
+            <section>
+              <h2 className="text-xl font-semibold text-gray-900 mb-3">7A. AI Features</h2>
+              <p>Optional AI features may draft text, suggest estimate items, or review photos. They run on an AI provider account that your company supplies, and the content you submit is sent to that provider (see our Privacy Policy). You agree that:</p>
+              <ul className="list-disc pl-6 space-y-2 mt-2">
+                <li>AI output may be inaccurate or incomplete. You must review it before relying on it or sending it to a customer.</li>
+                <li>AI output is not legal, engineering, structural, insurance, or building-code advice, and it does not replace a licensed professional's judgment.</li>
+                <li>You will not submit information you are not allowed to share with the provider.</li>
+                <li>You are responsible for the provider's charges and terms on your account.</li>
+              </ul>
+            </section>
+
+            <section>
+              <h2 className="text-xl font-semibold text-gray-900 mb-3">7B. Email and Text Messages You Send</h2>
+              <p>The Service lets you send emails and, if you connect a Twilio account, text messages to your customers. You are the sender. You are responsible for:</p>
+              <ul className="list-disc pl-6 space-y-2 mt-2">
+                <li>Having the permission the law requires before you contact a customer, including consent under the Telephone Consumer Protection Act (TCPA), the CAN-SPAM Act, and state laws</li>
+                <li>Honoring requests to stop, such as a reply of STOP to a text message</li>
+                <li>The content of every message, quote, report, and document you send</li>
+              </ul>
+              <p className="mt-3">We do not review your messages and are not responsible for whether you were permitted to send them.</p>
+            </section>
+
+            <section>
+              <h2 className="text-xl font-semibold text-gray-900 mb-3">7C. Your Contracts and Legal Notices</h2>
+              <p>{companyName} is software. It is not a law firm and does not give legal advice. The quote, change order, receipt, and cancellation-notice wording the Service provides is a starting point. Some states give customers a right to cancel certain home-improvement and home-solicitation sales, and require specific notices, licensing information, deposit limits, or contract terms. Some of these notices are built in for certain states, and the rest use a general federal notice. You are responsible for checking that your documents, pricing, licensing, and cancellation notices meet the laws that apply where you work, and for adding anything your state requires. Consider having an attorney review your contract templates.</p>
             </section>
 
             <section>
@@ -83,7 +111,7 @@ export default function TermsOfService() {
 
             <section>
               <h2 className="text-xl font-semibold text-gray-900 mb-3">9. Payment and Billing</h2>
-              <p>Access to premium features of the Service may require payment of subscription fees. All fees are stated in U.S. dollars. Subscriptions auto-renew unless cancelled before the renewal date. Refunds are provided at our discretion. We reserve the right to modify pricing with 30 days' notice.</p>
+              <p>Access to premium features of the Service may require payment of subscription fees. All fees are stated in U.S. dollars. Subscriptions auto-renew unless cancelled before the renewal date. If you subscribe through the Apple App Store, Apple charges your Apple ID account, renews the subscription each period unless you cancel at least 24 hours before it ends, and handles cancellation and refunds under its own rules; you can manage or cancel it in your Apple ID subscription settings. If you subscribe on the website, you can manage or cancel from the Subscription page, or by contacting us. Refunds for purchases made directly with us are provided at our discretion. We reserve the right to modify pricing with 30 days' notice.</p>
             </section>
 
             <section>
@@ -108,7 +136,7 @@ export default function TermsOfService() {
 
             <section>
               <h2 className="text-xl font-semibold text-gray-900 mb-3">14. Termination</h2>
-              <p>Either party may terminate this agreement at any time. Upon termination, your access to the Service will cease. We will retain your data for 30 days after termination, during which you may export it. After 30 days, your data may be permanently deleted. We may terminate accounts that violate these Terms without notice.</p>
+              <p>Either party may terminate this agreement at any time. You can delete your account yourself at any time in Settings. Upon termination, your access to the Service will cease. Deleting your account removes your login right away, and the handling of company records is described in our Privacy Policy; export anything you need before you delete. We may terminate accounts that violate these Terms without notice.</p>
             </section>
 
             <section>
