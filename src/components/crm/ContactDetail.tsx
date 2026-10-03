@@ -1748,6 +1748,29 @@ export default function ContactDetail() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-500 mb-1">
+                      Project Value <span className="font-normal text-gray-400">(fills in when a quote is signed; type it for insurance jobs)</span>
+                    </label>
+                    {isEditing ? (
+                      <input
+                        type="number"
+                        value={currentData.projectValue ?? ''}
+                        onChange={(e) =>
+                          setEditedContact({
+                            ...currentData,
+                            projectValue: e.target.value === '' ? undefined : parseFloat(e.target.value),
+                          })
+                        }
+                        placeholder="0.00"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                      />
+                    ) : (
+                      <span className="text-gray-900">
+                        {contact.projectValue ? formatCurrency(contact.projectValue) : '-'}
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-500 mb-1">
                       Rough Estimate <span className="font-normal text-gray-400">(not counted in project value)</span>
                     </label>
                     {isEditing ? (
@@ -2276,6 +2299,11 @@ export default function ContactDetail() {
                       {contact.projectValue ? formatCurrency(contact.projectValue) : '-'}
                     </p>
                   </div>
+                  {!contact.projectValue && contact.status === 'contingency' && (
+                    <div className="rounded-lg bg-amber-400/20 border border-amber-300/40 p-3 text-sm text-amber-100">
+                      Insurance job: once the scope is received, click Edit and enter the project total in Project Value.
+                    </div>
+                  )}
                   <div>
                     <p className="text-blue-200 text-sm">Rough Estimate</p>
                     <p className="text-lg font-semibold">
