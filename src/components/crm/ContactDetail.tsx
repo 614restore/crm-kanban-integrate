@@ -1,3 +1,4 @@
+import { PROJECT_TYPE_GROUPS, isPresetProjectType } from '@/lib/projectTypes';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { consumePendingContactTab, getNextStepForStatus, type NextStep } from '@/lib/nextStepActions';
 
@@ -304,6 +305,8 @@ export default function ContactDetail() {
   // Quotes list "⋯" menu (fixed-position so the card layout cannot clip it).
   const [quoteMenu, setQuoteMenu] = useState<{ quote: QuoteSummary; top: number; right: number; up: boolean } | null>(null);
   const [quotesVersion, setQuotesVersion] = useState(0);
+  // Edit form: "Custom…" chosen for project type (shows a text box).
+  const [projectTypeCustom, setProjectTypeCustom] = useState(false);
   const [quoteExtras, setQuoteExtras] = useState<Record<string, { shareToken: string | null; projectType: string | null }>>({});
   const [showSurveyModal, setShowSurveyModal] = useState(false);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
@@ -953,6 +956,10 @@ export default function ContactDetail() {
       });
     return () => { cancelled = true; };
   }, [contactId, profile?.company_id, quotesVersion]);
+
+  useEffect(() => {
+    if (!isEditing) setProjectTypeCustom(false);
+  }, [isEditing]);
 
   useEffect(() => {
     if (!quoteMenu) return;
@@ -1830,6 +1837,54 @@ export default function ContactDetail() {
                       <div className="flex items-center gap-2">
                         <Tag size={16} className="text-gray-400" />
                         <span className="text-gray-900">{contact.leadSource || '-'}</span>
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-500 mb-1">
+                      Project Type
+                    </label>
+                    {isEditing ? (() => {
+                      const value = currentData.projectType || '';
+                      const showCustom = projectTypeCustom || (!!value && !isPresetProjectType(value));
+                      return (
+                        <>
+                          <select
+                            value={showCustom ? '__custom__' : value}
+                            onChange={(e) => {
+                              if (e.target.value === '__custom__') {
+                                setProjectTypeCustom(true);
+                                setEditedContact({ ...currentData, projectType: '' });
+                              } else {
+                                setProjectTypeCustom(false);
+                                setEditedContact({ ...currentData, projectType: e.target.value || undefined });
+                              }
+                            }}
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                          >
+                            <option value="">Select project type...</option>
+                            {PROJECT_TYPE_GROUPS.map((group) => (
+                              <optgroup key={group.label} label={group.label}>
+                                {group.types.map((type) => <option key={type} value={type}>{type}</option>)}
+                              </optgroup>
+                            ))}
+                            <option value="__custom__">Custom…</option>
+                          </select>
+                          {showCustom && (
+                            <input
+                              type="text"
+                              value={value}
+                              onChange={(e) => setEditedContact({ ...currentData, projectType: e.target.value })}
+                              placeholder="Type the project type (e.g. Deck Build)"
+                              className="mt-2 w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                            />
+                          )}
+                        </>
+                      );
+                    })() : (
+                      <div className="flex items-center gap-2">
+                        <Briefcase size={16} className="text-gray-400" />
+                        <span className="text-gray-900">{contact.projectType || '-'}</span>
                       </div>
                     )}
                   </div>

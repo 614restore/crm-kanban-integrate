@@ -1,3 +1,4 @@
+import { PROJECT_TYPE_GROUPS } from '@/lib/projectTypes';
 import React, { useState } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
@@ -585,24 +586,11 @@ export default function QuickAddModal() {
                   className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                 >
                   <option value="">Select project type...</option>
-                  <optgroup label="Exterior">
-                    <option value="Roof Inspection">Roof Inspection</option>
-                    <option value="Roof Repair">Roof Repair</option>
-                    <option value="Full Roof Replacement">Full Roof Replacement</option>
-                    <option value="Gutter Installation">Gutter Installation</option>
-                    <option value="Siding">Siding</option>
-                    <option value="Windows">Windows</option>
-                    <option value="Full Exterior">Full Exterior</option>
-                  </optgroup>
-                  <optgroup label="Interior">
-                    <option value="Interior Remodel">Interior Remodel</option>
-                    <option value="Kitchen Remodel">Kitchen Remodel</option>
-                    <option value="Bathroom Remodel">Bathroom Remodel</option>
-                    <option value="Basement Finishing">Basement Finishing</option>
-                    <option value="Flooring">Flooring</option>
-                    <option value="Drywall & Paint">Drywall &amp; Paint</option>
-                    <option value="Water / Fire Damage Restoration">Water / Fire Damage Restoration</option>
-                  </optgroup>
+                  {PROJECT_TYPE_GROUPS.map((group) => (
+                    <optgroup key={group.label} label={group.label}>
+                      {group.types.map((type) => <option key={type} value={type}>{type}</option>)}
+                    </optgroup>
+                  ))}
                   <option value="__custom__">Custom…</option>
                 </select>
                 {customProjectType && (
