@@ -66,6 +66,9 @@ create policy insurance_scopes_del on public.insurance_scopes
   for delete to authenticated
   using (company_id in (select get_my_company_ids()));
 
+-- Only signed-in users touch this table (it holds homeowner names, addresses and claim numbers).
+revoke all on public.insurance_scopes from anon;
+revoke all on public.insurance_scopes from public;
 grant select, insert, update, delete on public.insurance_scopes to authenticated;
 
 notify pgrst, 'reload schema';
