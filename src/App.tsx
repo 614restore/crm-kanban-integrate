@@ -156,6 +156,7 @@ const App = () => {
               <Route path="/sign-estimate/:token" element={<SignEstimate />} />
               <Route path="/sign-estimate" element={<SignEstimate />} />
               <Route path="/quote/:token" element={<LegacyQuoteLinkRedirect />} />
+              <Route path="/sign-change-order/:token" element={<SignChangeOrder />} />
               <Route path="/sign-change-order" element={<SignChangeOrder />} />
               <Route path="/sign-doc" element={<SignDocTemplate />} />
               <Route path="/accept-invite" element={<AcceptInvite />} />

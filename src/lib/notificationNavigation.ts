@@ -18,6 +18,9 @@ export interface NotificationTarget {
 const CONTACT_TAB_BY_KIND: Record<string, string> = {
   roofr_report_ready: 'documents',
   eagleview_report_ready: 'documents',
+  document_viewed: 'documents',
+  document_signed: 'documents',
+  change_order_signed: 'projects',
   hail_event: 'insurance',
   storm_alert: 'insurance',
 };
