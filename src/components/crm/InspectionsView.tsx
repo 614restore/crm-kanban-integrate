@@ -43,12 +43,55 @@ const totalPhotos = (counts: Record<string, number>) =>
 /* ════════════════════════════════════════════════════════════
    InspectionsView — main component
 ════════════════════════════════════════════════════════════ */
+/* ── Inspection reports ─────────────────────────────────────
+   An inspection report is its own document: shared with the homeowner or the insurance adjuster as
+   documentation of the damage, and it may carry the contingency agreement (the company agrees to handle
+   approved damage; the customer agrees to work with the contractor), which has a 3-business-day window
+   for the customer to cancel. It is stored alongside quotes but is not a quote. Shown here, and on the
+   mobile Inspections list, with the same wording. */
+interface InspectionReportRow {
+  id: string;
+  quote_number: string;
+  status: string;
+  contingency_enabled: boolean | null;
+  contingency_signed_at: string | null;
+  contingency_cancel_signed_at: string | null;
+  viewed_at: string | null;
+  created_at: string;
+  customer_id: string | null;
+  customer: { first_name: string; last_name: string; address?: string } | null;
+}
+
+function addBusinessDays(from: Date, days: number): Date {
+  const d = new Date(from);
+  let left = days;
+  while (left > 0) {
+    d.setDate(d.getDate() + 1);
+    if (d.getDay() !== 0 && d.getDay() !== 6) left--;
+  }
+  return d;
+}
+
+function reportState(r: InspectionReportRow): { label: string; tone: 'gray' | 'blue' | 'amber' | 'green' | 'red' } {
+  if (r.contingency_cancel_signed_at) return { label: 'Contingency cancelled by customer', tone: 'red' };
+  if (r.contingency_signed_at) {
+    const end = addBusinessDays(new Date(r.contingency_signed_at), 3);
+    return end.getTime() > Date.now()
+      ? { label: `Contingency signed · cancel window ends ${end.toLocaleDateString()}`, tone: 'amber' }
+      : { label: 'Contingency signed', tone: 'green' };
+  }
+  if (r.viewed_at || r.status === 'viewed') return { label: 'Viewed by customer', tone: 'blue' };
+  if (r.status === 'sent') return { label: 'Sent', tone: 'blue' };
+  return { label: 'Draft', tone: 'gray' };
+}
+
 export default function InspectionsView() {
   const { state, dispatch } = useCRM();
   const preselected = useActiveContact();           // the customer you came from, if you came from one
   const { profile } = useAuth();
 
   const [records, setRecords] = useState<InspectionRecord[]>([]);
+  const [reports, setReports] = useState<InspectionReportRow[]>([]);
   const [loadingList, setLoadingList] = useState(true);
   const [search, setSearch] = useState('');
 
@@ -76,6 +119,31 @@ export default function InspectionsView() {
   }, [profile?.company_id]);
 
   useEffect(() => { fetchInspections(); }, [fetchInspections]);
+
+  const fetchReports = useCallback(async () => {
+    if (!profile?.company_id) return;
+    const { data } = await supabase
+      .from('quotes')
+      .select('id, quote_number, status, contingency_enabled, contingency_signed_at, contingency_cancel_signed_at, viewed_at, created_at, customer_id, customer:customers(first_name, last_name, address)')
+      .eq('company_id', profile.company_id)
+      .eq('project_type', 'inspection_report')
+      .order('created_at', { ascending: false });
+    setReports((data as unknown as InspectionReportRow[]) ?? []);
+  }, [profile?.company_id]);
+
+  useEffect(() => { fetchReports(); }, [fetchReports]);
+
+  const filteredReports = reports.filter((r) => {
+    const q = search.toLowerCase();
+    const name = `${r.customer?.first_name ?? ''} ${r.customer?.last_name ?? ''}`.toLowerCase();
+    return !q || name.includes(q) || (r.quote_number ?? '').toLowerCase().includes(q) || (r.customer?.address ?? '').toLowerCase().includes(q);
+  });
+
+  const openReport = (r: InspectionReportRow) => {
+    if (!r.customer_id) return;
+    dispatch({ type: 'SET_PENDING_QUOTE', payload: { contactId: r.customer_id, quoteId: r.id } });
+    dispatch({ type: 'SET_VIEW', payload: 'quotes' });
+  };
 
   /* ── filtered list ───────────────────────────────────── */
   const filtered = records.filter((r) => {
@@ -122,6 +190,45 @@ export default function InspectionsView() {
               />
             </div>
           </div>
+
+          {/* Inspection reports: documents for the homeowner or insurance adjuster, not quotes */}
+          {filteredReports.length > 0 && (
+            <div className="border-b border-gray-100 bg-white">
+              <p className="px-4 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Inspection Reports ({filteredReports.length})
+              </p>
+              {filteredReports.map((r) => {
+                const st = reportState(r);
+                const tone = {
+                  gray: 'bg-gray-100 text-gray-700',
+                  blue: 'bg-blue-50 text-blue-700',
+                  amber: 'bg-amber-50 text-amber-700',
+                  green: 'bg-green-50 text-green-700',
+                  red: 'bg-red-50 text-red-700',
+                }[st.tone];
+                return (
+                  <button
+                    key={r.id}
+                    onClick={() => openReport(r)}
+                    className="w-full text-left px-4 py-3 border-t border-gray-50 hover:bg-gray-50"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-medium text-gray-900 truncate">
+                        {r.customer ? `${r.customer.first_name} ${r.customer.last_name}`.trim() : 'Customer'}
+                      </span>
+                      <span className="text-xs text-gray-400 flex-shrink-0">{r.quote_number}</span>
+                    </div>
+                    <div className="mt-1 flex items-center gap-2">
+                      <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${tone}`}>{st.label}</span>
+                      {r.contingency_enabled && !r.contingency_signed_at && (
+                        <span className="text-xs text-gray-400">includes contingency</span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {loadingList ? (
             <div className="flex-1 flex items-center justify-center py-16">
