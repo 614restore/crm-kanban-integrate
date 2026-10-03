@@ -324,6 +324,7 @@ function dbContactToAppContact(dbContact: any): Contact {
     dateOfLoss: (dbContact as any).date_of_loss ?? undefined,
     projectType: dbContact.project_type,
     projectValue: dbContact.project_value,
+    roughEstimate: (dbContact as any).rough_estimate ?? undefined,
     depositAmount: dbContact.deposit_amount,
     depositPaid: dbContact.deposit_paid,
     depositDate: dbContact.deposit_date,

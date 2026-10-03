@@ -46,6 +46,7 @@ export interface Database {
           tags: string[] | null
           project_type: string | null
           project_value: number | null
+          rough_estimate: number | null
           deposit_amount: number | null
           deposit_paid: boolean
           deposit_date: string | null

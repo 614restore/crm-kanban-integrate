@@ -1185,6 +1185,7 @@ export default function ContactDetail() {
           // Project / Financial fields — critical for pipeline board dollar totals
           project_type: editedContact.projectType,
           project_value: editedContact.projectValue ?? null,
+          rough_estimate: editedContact.roughEstimate ?? null,
           deposit_amount: editedContact.depositAmount ?? null,
           deposit_paid: editedContact.depositPaid ?? false,
           deposit_date: editedContact.depositDate ?? null,
@@ -1227,6 +1228,7 @@ export default function ContactDetail() {
           if (editedContact.insuranceCompany !== contact.insuranceCompany) changedFields.push('insurance company');
           if (editedContact.claimNumber !== contact.claimNumber) changedFields.push('claim number');
           if (editedContact.projectValue !== contact.projectValue) changedFields.push('project value');
+          if (editedContact.roughEstimate !== contact.roughEstimate) changedFields.push('rough estimate');
           if (editedContact.notes !== contact.notes) changedFields.push('notes');
           const summary = changedFields.length > 0 ? changedFields.join(', ') : 'details';
           logActivity({
@@ -1745,6 +1747,29 @@ export default function ContactDetail() {
                     )}
                   </div>
                   <div>
+                    <label className="block text-sm font-medium text-gray-500 mb-1">
+                      Rough Estimate <span className="font-normal text-gray-400">(not counted in project value)</span>
+                    </label>
+                    {isEditing ? (
+                      <input
+                        type="number"
+                        value={currentData.roughEstimate ?? ''}
+                        onChange={(e) =>
+                          setEditedContact({
+                            ...currentData,
+                            roughEstimate: e.target.value === '' ? undefined : parseFloat(e.target.value),
+                          })
+                        }
+                        placeholder="0.00"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                      />
+                    ) : (
+                      <span className="text-gray-900">
+                        {contact.roughEstimate ? formatCurrency(contact.roughEstimate) : '-'}
+                      </span>
+                    )}
+                  </div>
+                  <div>
                     <label className="block text-sm font-medium text-gray-500 mb-1">Email</label>
                     {isEditing ? (
                       <input
@@ -2250,6 +2275,13 @@ export default function ContactDetail() {
                     <p className="text-3xl font-bold">
                       {contact.projectValue ? formatCurrency(contact.projectValue) : '-'}
                     </p>
+                  </div>
+                  <div>
+                    <p className="text-blue-200 text-sm">Rough Estimate</p>
+                    <p className="text-lg font-semibold">
+                      {contact.roughEstimate ? formatCurrency(contact.roughEstimate) : '-'}
+                    </p>
+                    <p className="text-blue-200 text-xs">A ballpark, not counted in Project Value</p>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -2968,6 +3000,9 @@ export default function ContactDetail() {
                 <p className="text-sm text-gray-500">Project Value</p>
                 <p className="text-2xl font-bold text-gray-900 mt-1">
                   {contact.projectValue ? formatCurrency(contact.projectValue) : '-'}
+                </p>
+                <p className="text-xs text-gray-400 mt-2">
+                  Rough estimate: {contact.roughEstimate ? formatCurrency(contact.roughEstimate) : '-'} (not included)
                 </p>
               </div>
               <div className="bg-white rounded-xl border border-gray-200 p-6">

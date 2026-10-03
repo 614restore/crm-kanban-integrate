@@ -23,7 +23,7 @@ function assertCompanyId(companyId: string | undefined | null, method: string): 
 // for those column types with a 400, so send null instead.
 const CONTACT_NON_TEXT_COLUMNS = new Set([
   'assigned_to', 'added_by', 'pickup_cleared_by', 'inspection_completed_by',
-  'deductible', 'project_value', 'deposit_amount', 'final_payment_amount',
+  'deductible', 'project_value', 'rough_estimate', 'deposit_amount', 'final_payment_amount',
   'date_of_loss', 'appointment_date', 'deposit_date', 'final_payment_date',
   'status_changed_at', 'archived_at', 'pickup_cleared_at', 'contingency_signed_at',
   'inspection_completed_at', 'claim_denied_at',
@@ -144,6 +144,8 @@ export interface DbContact {
   date_of_loss?: string | null;
   project_type?: string;
   project_value?: number;
+  /** Ballpark entered before a quote exists; not part of project_value. */
+  rough_estimate?: number | null;
   deposit_amount?: number;
   deposit_paid: boolean;
   deposit_date?: string;

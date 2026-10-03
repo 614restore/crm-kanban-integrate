@@ -76,6 +76,8 @@ export interface Contact {
   // Project Info
   projectType?: string;
   projectValue?: number;
+  /** A rough ballpark entered before any quote exists. Never counted in Project Value. */
+  roughEstimate?: number;
   depositAmount?: number;
   depositPaid?: boolean;
   depositDate?: string;
