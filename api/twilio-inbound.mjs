@@ -158,13 +158,22 @@ export default async function handler(req, res) {
   // ------------------------------------------------------------------
   // 3. Look up contact by phone number within this company
   // ------------------------------------------------------------------
-  const { data: contacts } = await svcDb
-    .from('contacts')
-    .select('id, first_name, last_name')
+  // Phone numbers are stored in whatever format they were typed, so compare the last ten digits
+  // rather than an exact string.
+  const last10 = (v) => String(v || '').replace(/\D/g, '').slice(-10);
+  const wanted = last10(fromNumber);
+  const { data: candidates } = await svcDb
+    .from('customers')
+    .select('id, first_name, last_name, phone, phone1, phone2, secondary_phone, second_phone')
     .eq('company_id', companyId)
-    .or(`phone1.eq.${fromNumber},phone2.eq.${fromNumber},phone1.eq.${params.From},phone2.eq.${params.From}`);
+    .or('phone.not.is.null,phone1.not.is.null,phone2.not.is.null,secondary_phone.not.is.null,second_phone.not.is.null');
 
-  const contact = contacts?.[0] || null;
+  const contact =
+    wanted.length === 10
+      ? (candidates || []).find((c) =>
+          [c.phone, c.phone1, c.phone2, c.secondary_phone, c.second_phone].some((p) => last10(p) === wanted),
+        ) || null
+      : null;
   const contactId = contact?.id || null;
   const contactName = contact
     ? `${contact.first_name || ''} ${contact.last_name || ''}`.trim()
@@ -173,23 +182,24 @@ export default async function handler(req, res) {
   // ------------------------------------------------------------------
   // 4. Insert into communications table
   // ------------------------------------------------------------------
-  const { error } = await svcDb.from('communications').insert({
-    company_id:   companyId,
-    contact_id:   contactId,
-    type:         'sms',
-    direction:    'inbound',
-    subject:      `SMS from ${contactName}`,
-    body:         body,
-    from_address: fromNumber,
-    to_address:   toNumber,
-    external_id:  messageSid,
-    status:       'received',
-    created_at:   new Date().toISOString(),
-  });
+  // The table needs a customer (customer_id is required) and stores the text in `content`. A text from
+  // a number that matches no customer has nowhere to go and is not stored.
+  if (contactId) {
+    const { error } = await svcDb.from('communications').insert({
+      company_id:  companyId,
+      customer_id: contactId,
+      type:        'sms',
+      direction:   'inbound',
+      subject:     `SMS from ${contactName}`,
+      content:     body,
+    });
 
-  if (error) {
-    console.error('twilio-inbound: DB insert error', error.message);
-    // Still return 200 so Twilio does not retry
+    if (error) {
+      console.error('twilio-inbound: DB insert error', error.message);
+      // Still return 200 so Twilio does not retry
+    }
+  } else {
+    console.warn(`twilio-inbound: no customer matches ${fromNumber}; message not stored (${messageSid})`);
   }
 
   // Return empty TwiML — no auto-reply
