@@ -148,6 +148,23 @@ async function sendViaTwilio(accountSid, authToken, from, to, body) {
   return data;
 }
 
+// Record a text message on the customer's thread. The communications table holds `content` and
+// `customer_id` (required); the earlier code wrote `body`, `from_address` and other columns that table
+// does not have, so no text message was ever saved. A message with no customer to attach to is not logged.
+async function logSms({ companyId, customerId, userId, direction, subject, content }) {
+  if (!companyId || !customerId) return;
+  const { error } = await svcDb.from('communications').insert({
+    company_id: companyId,
+    customer_id: customerId,
+    type: 'sms',
+    direction,
+    subject,
+    content,
+    user_id: userId || null,
+  });
+  if (error) console.error('[send/sms] could not log message:', error.message);
+}
+
 // ── Handler ───────────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
   setCors(req, res);
@@ -233,19 +250,7 @@ export default async function handler(req, res) {
 
         try {
           const result = await sendViaTwilio(twilio.accountSid, twilio.authToken, from, toNum, personalised);
-          await svcDb.from('communications').insert({
-            company_id: companyId,
-            contact_id: contact.id || null,
-            type: 'sms',
-            direction: 'outbound',
-            subject: `SMS to ${toNum}`,
-            body: personalised,
-            from_address: from,
-            to_address: toNum,
-            external_id: result.sid,
-            status: 'sent',
-            created_at: new Date().toISOString(),
-          });
+          await logSms({ companyId, customerId: contact.id, userId: user.id, direction: 'outbound', subject: `SMS to ${toNum}`, content: personalised });
           results.push({ id: contact.id, status: 'sent', sid: result.sid });
         } catch (err) {
           results.push({ id: contact.id, status: 'failed', error: err.message });
@@ -276,19 +281,7 @@ export default async function handler(req, res) {
 
     try {
       const result = await sendViaTwilio(twilio.accountSid, twilio.authToken, fromNorm, toNorm, smsBody);
-      await svcDb.from('communications').insert({
-        company_id: companyId,
-        contact_id: contactId || null,
-        type: 'sms',
-        direction: 'outbound',
-        subject: `SMS to ${toNorm}`,
-        body: smsBody,
-        from_address: fromNorm,
-        to_address: toNorm,
-        external_id: result.sid,
-        status: 'sent',
-        created_at: new Date().toISOString(),
-      });
+      await logSms({ companyId, customerId: contactId, userId: user.id, direction: 'outbound', subject: `SMS to ${toNorm}`, content: smsBody });
       return res.status(200).json({ sid: result.sid, status: result.status });
     } catch (error) {
       return res.status(error?.status || 500).json({ error: error.message });
