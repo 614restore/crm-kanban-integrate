@@ -321,8 +321,13 @@ const LineItemEditor: React.FC<LineItemEditorProps> = ({
   const dimGood   = activeTier !== undefined && activeTier !== 'good';
   const dimBetter = activeTier !== undefined && activeTier !== 'better';
   const dimBest   = activeTier !== undefined && activeTier !== 'best';
-  // Single-tier mode: collapse to one price column instead of Good/Better/Best
-  const singleTier = activeTier !== undefined;
+  // Single-tier mode: collapse to one price column.
+  // True when in per-tier editor (activeTier set) OR when both Better and Best
+  // are disabled on the quote (single-tier quote — only Good is offered).
+  const singleTier = activeTier !== undefined || (!betterEnabled && !bestEnabled);
+  // When singleTier is active but no explicit activeTier is set (disabled-tiers case),
+  // fall back to 'good' so all downstream activeTier! accesses are safe.
+  const effectiveTier: 'good' | 'better' | 'best' = activeTier ?? 'good';
   // Active item: track which row is currently focused/selected for visual highlight
   const [activeItemId, setActiveItemId] = useState<string | null>(null);
   // Autocomplete: track which item's dropdown is open (by item id)
@@ -961,9 +966,9 @@ const LineItemEditor: React.FC<LineItemEditorProps> = ({
                 <div className={`hidden sm:flex items-center gap-3 text-xs transition-opacity ${showSectionTotals ? 'opacity-100' : 'opacity-30'}`}>
                   {!showSectionTotals && <span className="text-gray-400 italic mr-1">hidden from customer</span>}
                   {singleTier ? (
-                    <span className={`font-medium ${activeTier === 'good' ? 'text-emerald-600' : activeTier === 'better' ? 'text-blue-600' : 'text-amber-600'}`}>
-                      {tierDisplayNames[activeTier!]}: {formatCurrency(
-                        activeTier === 'good' ? categoryGoodTotal : activeTier === 'better' ? categoryBetterTotal : categoryBestTotal
+                    <span className={`font-medium ${effectiveTier === 'good' ? 'text-emerald-600' : effectiveTier === 'better' ? 'text-blue-600' : 'text-amber-600'}`}>
+                      {tierDisplayNames[effectiveTier]}: {formatCurrency(
+                        effectiveTier === 'good' ? categoryGoodTotal : effectiveTier === 'better' ? categoryBetterTotal : categoryBestTotal
                       )}
                     </span>
                   ) : (
@@ -994,8 +999,8 @@ const LineItemEditor: React.FC<LineItemEditorProps> = ({
                         <div className="col-span-6">Item</div>
                         <div className="col-span-1">Unit</div>
                         <div className="col-span-1">Qty</div>
-                        <div className={`col-span-3 ${activeTier === 'good' ? 'text-emerald-600' : activeTier === 'better' ? 'text-blue-600' : 'text-amber-600'}`}>
-                          Price ({tierDisplayNames[activeTier!]})
+                        <div className={`col-span-3 ${effectiveTier === 'good' ? 'text-emerald-600' : effectiveTier === 'better' ? 'text-blue-600' : 'text-amber-600'}`}>
+                          Price ({tierDisplayNames[effectiveTier]})
                         </div>
                         <div className="col-span-1"></div>
                       </>
@@ -1285,23 +1290,23 @@ const LineItemEditor: React.FC<LineItemEditorProps> = ({
                         </div>
                       ) : singleTier ? (
                         <div className={`lg:col-span-3 transition-opacity ${!showLineItemPrices ? 'opacity-30' : ''}`}>
-                          <label className={`lg:hidden text-xs mb-1 block ${activeTier === 'good' ? 'text-emerald-600' : activeTier === 'better' ? 'text-blue-600' : 'text-amber-600'}`}>
-                            {tierDisplayNames[activeTier!]} Price
+                          <label className={`lg:hidden text-xs mb-1 block ${effectiveTier === 'good' ? 'text-emerald-600' : effectiveTier === 'better' ? 'text-blue-600' : 'text-amber-600'}`}>
+                            {tierDisplayNames[effectiveTier]} Price
                           </label>
                           <input
                             type="number"
                             inputMode="decimal"
                             enterKeyHint="done"
-                            value={activeTier === 'good' ? item.good_price : activeTier === 'better' ? item.better_price : item.best_price}
+                            value={effectiveTier === 'good' ? item.good_price : effectiveTier === 'better' ? item.better_price : item.best_price}
                             onChange={(e) => {
-                              const field = activeTier === 'good' ? 'good_price' : activeTier === 'better' ? 'better_price' : 'best_price';
+                              const field = effectiveTier === 'good' ? 'good_price' : effectiveTier === 'better' ? 'better_price' : 'best_price';
                               updateItem(item._index, field as keyof LineItem, parseFloat(e.target.value) || 0);
                             }}
                             onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
                             className={`w-full pl-1 pr-2 py-2 border rounded-lg text-sm text-right focus:ring-2 focus:border-transparent outline-none ${
-                              activeTier === 'good'
+                              effectiveTier === 'good'
                                 ? 'border-emerald-200 focus:ring-emerald-400 bg-emerald-50/50'
-                                : activeTier === 'better'
+                                : effectiveTier === 'better'
                                 ? 'border-blue-200 focus:ring-blue-400 bg-blue-50/50'
                                 : 'border-amber-200 focus:ring-amber-400 bg-amber-50/50'
                             }`}
@@ -1473,12 +1478,12 @@ const LineItemEditor: React.FC<LineItemEditorProps> = ({
                           <span className="text-xs font-semibold text-gray-900 tabular-nums">{formatCurrency(item.quantity * item.good_price)}</span>
                         ) : singleTier ? (
                           (() => {
-                            const tierPrice = activeTier === 'good' ? item.good_price : activeTier === 'better' ? item.better_price : item.best_price;
-                            const tierProduct = activeTier === 'good' ? item.good_product : activeTier === 'better' ? item.better_product : item.best_product;
-                            const tierColor = activeTier === 'good' ? 'text-emerald-600' : activeTier === 'better' ? 'text-blue-600' : 'text-amber-600';
+                            const tierPrice = effectiveTier === 'good' ? item.good_price : effectiveTier === 'better' ? item.better_price : item.best_price;
+                            const tierProduct = effectiveTier === 'good' ? item.good_product : effectiveTier === 'better' ? item.better_product : item.best_product;
+                            const tierColor = effectiveTier === 'good' ? 'text-emerald-600' : effectiveTier === 'better' ? 'text-blue-600' : 'text-amber-600';
                             return tierPrice > 0 ? (
                               <div className="flex items-center gap-1.5">
-                                <span className={`text-[10px] font-semibold ${tierColor}`}>{tierDisplayNames[activeTier!]}</span>
+                                <span className={`text-[10px] font-semibold ${tierColor}`}>{tierDisplayNames[effectiveTier]}</span>
                                 <span className="text-xs font-semibold text-gray-900 tabular-nums">{formatCurrency(item.quantity * tierPrice)}</span>
                                 {tierProduct && <span className="text-[10px] text-gray-400 italic">— {tierProduct}</span>}
                               </div>
