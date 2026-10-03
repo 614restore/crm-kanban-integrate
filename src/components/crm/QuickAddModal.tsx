@@ -36,7 +36,7 @@ export default function QuickAddModal() {
     assignedTo: state.currentUser?.id || state.teamMembers[0]?.id || '',
     status: 'prospect' as CustomerStatus,
     projectType: '',
-    projectValue: '',
+    roughEstimate: '',
     isRetail: false,
     retailNotes: '',
     insuranceCompany: '',
@@ -154,7 +154,7 @@ export default function QuickAddModal() {
       assignedTo: state.currentUser?.id || state.teamMembers[0]?.id || '',
       status: 'lead',
       projectType: '',
-      projectValue: '',
+      roughEstimate: '',
       isRetail: false,
       retailNotes: '',
       insuranceCompany: '',
@@ -242,7 +242,9 @@ export default function QuickAddModal() {
           assigned_to: assignedTo,
           tags: [],
           project_type: formData.projectType || undefined,
-          project_value: formData.projectValue ? parseFloat(formData.projectValue) : undefined,
+          // A ballpark entered before any quote exists. It is kept apart from project_value, which
+          // feeds pipeline totals, reports and commissions.
+          rough_estimate: formData.roughEstimate ? parseFloat(formData.roughEstimate) : undefined,
           is_retail: formData.isRetail,
           retail_notes: formData.retailNotes || undefined,
           insurance_company: formData.insuranceCompany || undefined,
@@ -281,6 +283,7 @@ export default function QuickAddModal() {
           tags: dbContact.tags || [],
           projectType: dbContact.project_type || undefined,
           projectValue: dbContact.project_value || undefined,
+          roughEstimate: (dbContact as any).rough_estimate || undefined,
           isRetail: dbContact.is_retail,
           retailNotes: dbContact.retail_notes || undefined,
           insuranceCompany: dbContact.insurance_company || undefined,
@@ -607,7 +610,7 @@ export default function QuickAddModal() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Estimated Project Value
+                  Rough Estimate <span className="text-gray-400 font-normal">(optional, not counted in project value)</span>
                 </label>
                 <div className="relative">
                   <DollarSign
@@ -616,8 +619,8 @@ export default function QuickAddModal() {
                   />
                   <input
                     type="number"
-                    value={formData.projectValue}
-                    onChange={(e) => setFormData({ ...formData, projectValue: e.target.value })}
+                    value={formData.roughEstimate}
+                    onChange={(e) => setFormData({ ...formData, roughEstimate: e.target.value })}
                     className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                     placeholder="0.00"
                   />
