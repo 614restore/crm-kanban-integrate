@@ -49,12 +49,14 @@ import {
   getMentionTargets,
   validateMentions,
 } from '@/lib/mentions';
-import { uploadDocument, validateDocumentFile, formatFileSize, getDocumentSignedUrl, isHttpUrl, isSupabaseStorageUrl } from '@/lib/storage';
+import { validateDocumentFile, formatFileSize, getDocumentSignedUrl, isHttpUrl, isSupabaseStorageUrl, extractStorageInfo, deleteFile } from '@/lib/storage';
+import { secureUpload } from '@/lib/storageUtils';
+import { buildStoredDocumentUrl, resolveDocumentSignedUrl } from '@/lib/documentAccess';
 import { compressImage } from '@/lib/imageUtils';
 import { htmlStringToPdfBlob } from '@/lib/pdfService';
-import { resolveDocumentSignedUrl } from '@/lib/documentAccess';
 import { logActivity } from '@/lib/activityLogger';
 import { toast } from 'sonner';
+import { quoteUrl } from '@/lib/appUrl';
 import {
   Contact,
   Job,
@@ -112,13 +114,19 @@ import {
   FolderOpen,
   Image,
   Copy,
+  FolderInput,
+  MoreVertical,
+  Link2,
+  Archive,
+  Pencil,
+  Receipt,
 } from 'lucide-react';
 
 type TabType = 'overview' | 'timeline' | 'documents' | 'financial' | 'projects' | 'jobStatus' | 'survey' | 'insurance';
 
 interface SignedDoc {
   id: string;
-  docType: 'estimate' | 'work_order' | 'change_order';
+  docType: 'estimate' | 'work_order' | 'change_order' | 'agreement';
   label: string;
   title: string;
   signedBy: string;
@@ -269,6 +277,10 @@ export default function ContactDetail() {
   const [signedDocs, setSignedDocs] = useState<SignedDoc[]>([]);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [viewingDocHtml, setViewingDocHtml] = useState<{ name: string; html: string } | null>(null);
+  const [movingDoc, setMovingDoc] = useState<Document | null>(null);
+  const [moveSearch, setMoveSearch] = useState('');
+  const [moveTargetId, setMoveTargetId] = useState<string | null>(null);
+  const [movingInProgress, setMovingInProgress] = useState(false);
   const [templateRoofrData, setTemplateRoofrData] = useState<{ measurements: any; structures?: any[] } | undefined>(undefined);
 
   // Project-related data
@@ -282,6 +294,12 @@ export default function ContactDetail() {
   const [contactChangeOrders, setContactChangeOrders] = useState<ChangeOrder[]>([]);
   const [showChangeOrderModal, setShowChangeOrderModal] = useState(false);
   const [viewingChangeOrder, setViewingChangeOrder] = useState<ChangeOrder | null>(null);
+  // Set when a change order is started from a signed quote, so it is linked to it.
+  const [changeOrderQuote, setChangeOrderQuote] = useState<{ id: string; quoteNumber: string } | null>(null);
+  // Quotes list "⋯" menu (fixed-position so the card layout cannot clip it).
+  const [quoteMenu, setQuoteMenu] = useState<{ quote: QuoteSummary; top: number; right: number; up: boolean } | null>(null);
+  const [quotesVersion, setQuotesVersion] = useState(0);
+  const [quoteExtras, setQuoteExtras] = useState<Record<string, { shareToken: string | null; projectType: string | null }>>({});
   const [showSurveyModal, setShowSurveyModal] = useState(false);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
@@ -434,6 +452,16 @@ export default function ContactDetail() {
 
       const origin = window.location.origin;
       const normalized: SignedDoc[] = [
+        // Signed quotes and contingency agreements, filed by the database when signed.
+        ...visibleDocs.filter(d => d.type === 'signed').map(d => ({
+          id: d.id,
+          docType: 'agreement' as const,
+          label: '',
+          title: d.name,
+          signedBy: '',
+          signedAt: d.uploadedAt,
+          viewUrl: d.url,
+        })),
         ...signedEstimates.map(est => ({
           id: est.id,
           docType: 'estimate' as const,
@@ -550,13 +578,10 @@ export default function ContactDetail() {
       const fileToUpload = pendingUploadFile.type.startsWith('image/')
         ? await compressImage(pendingUploadFile, { maxSide: 1600, quality: 0.85, targetBytes: 1_000_000 })
         : pendingUploadFile;
-      const uploadResult = await uploadDocument(fileToUpload, effectiveCompanyId, contactId);
-
-      if (uploadResult.error) {
-        console.error('[ContactDetail] Upload failed:', uploadResult.error);
-        toast.error(`Upload failed: ${uploadResult.error}`);
-        return;
-      }
+      const fileExt = fileToUpload.name.split('.').pop() || 'bin';
+      const storedName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
+      const uploadResult = await secureUpload('documents', contactId, fileToUpload, storedName, fileToUpload.type);
+      const storedUrl = buildStoredDocumentUrl(uploadResult.publicUrl, 'documents', uploadResult.path);
 
       // Resolve measurement variants: type → 'measurement', then back-fill category
       const isMeasurement = pendingUploadCategory.startsWith('measurement:');
@@ -570,7 +595,7 @@ export default function ContactDetail() {
         contact_id: contactId,
         name: pendingUploadName || pendingUploadFile.name,
         type: docType,
-        url: uploadResult.path,
+        url: storedUrl,
         size: formatFileSize(fileToUpload.size),
         uploaded_by: profile?.id,
       });
@@ -637,18 +662,17 @@ export default function ContactDetail() {
     setIsUploadingAvatar(true);
     try {
       const compressed = await compressImage(file, { maxSide: 1600, quality: 0.85, targetBytes: 1_000_000 });
-      const uploadResult = await uploadDocument(compressed, effectiveCompanyId, contactId);
-      if (uploadResult.error) {
-        toast.error(`Avatar upload failed: ${uploadResult.error}`);
-        return;
-      }
+      const imgExt = compressed.name?.split('.').pop() || 'jpg';
+      const imgName = `avatar-${Math.random().toString(36).substring(2)}-${Date.now()}.${imgExt}`;
+      const avatarUpload = await secureUpload('documents', contactId, compressed, imgName, compressed.type);
+      const avatarStoredUrl = buildStoredDocumentUrl(avatarUpload.publicUrl, 'documents', avatarUpload.path);
 
       const created = await db.createDocument({
         company_id: effectiveCompanyId,
         contact_id: contactId,
         name: '__contact_avatar__',
         type: 'photo',
-        url: uploadResult.path,
+        url: avatarStoredUrl,
         size: formatFileSize(compressed.size),
         uploaded_by: profile?.id,
       });
@@ -658,7 +682,7 @@ export default function ContactDetail() {
         return;
       }
 
-      const signedUrl = await getDocumentSignedUrl(uploadResult.path, 3600);
+      const signedUrl = avatarUpload.signedUrl || await getDocumentSignedUrl(avatarUpload.path, 3600);
       setContactAvatarUrl(signedUrl);
       toast.success('Profile photo updated!');
     } catch (error) {
@@ -670,14 +694,25 @@ export default function ContactDetail() {
     }
   };
 
-  const handleDeleteDocument = (docId: string) => {
-    toast.warning('Delete this document? This cannot be undone.', {
+  // Deletes the record and its stored file, e.g. a report uploaded to the wrong customer.
+  const handleDeleteDocument = (doc: Document) => {
+    toast.warning(`Delete "${doc.name}" from this customer? This cannot be undone.`, {
       action: {
         label: 'Delete',
         onClick: async () => {
-          const ok = await db.deleteDocument(docId);
+          const ok = await db.deleteDocument(doc.id);
           if (!ok) { toast.error('Failed to delete document'); return; }
-          setContactDocuments((prev) => prev.filter((doc) => doc.id !== docId));
+          const stored = doc.url ? extractStorageInfo(doc.url) : null;
+          if (stored && !(await deleteFile(stored.bucket, stored.path))) {
+            console.warn('[ContactDetail] Document record deleted but storage file remained:', stored.path);
+          }
+          if (doc.type === 'measurement' && contact) {
+            // Drop measurements the Roofr panel extracted from this upload so they
+            // don't linger on the wrong customer.
+            try { localStorage.removeItem(`roofr_order_${contact.id}`); } catch { /* private mode */ }
+            window.dispatchEvent(new CustomEvent('roofr-order-updated', { detail: { contactId: contact.id } }));
+          }
+          setContactDocuments((prev) => prev.filter((d) => d.id !== doc.id));
           toast.success('Document deleted');
         },
       },
@@ -686,21 +721,88 @@ export default function ContactDetail() {
     });
   };
 
+  const openMoveDocument = (doc: Document) => {
+    setMovingDoc(doc);
+    setMoveSearch('');
+    setMoveTargetId(null);
+  };
+
+  // Moves a document (e.g. a Roofr report uploaded to the wrong customer) to
+  // another customer. The stored file is moved into the new customer's folder
+  // too, since storage access is granted per customer folder.
+  const handleMoveDocument = async () => {
+    if (!movingDoc || !moveTargetId || !contact) return;
+    const target = state.contacts.find((c) => c.id === moveTargetId);
+    if (!target) return;
+    setMovingInProgress(true);
+    try {
+      let newUrl = movingDoc.url;
+      const stored = movingDoc.url ? extractStorageInfo(movingDoc.url) : null;
+      if (stored && stored.path.startsWith(`${contact.id}/`)) {
+        const newPath = `${target.id}/${stored.path.slice(contact.id.length + 1)}`;
+        const { error: moveError } = await supabase.storage.from(stored.bucket).move(stored.path, newPath);
+        if (moveError) throw new Error(`Could not move the file: ${moveError.message}`);
+        const { data: { publicUrl } } = supabase.storage.from(stored.bucket).getPublicUrl(newPath);
+        newUrl = buildStoredDocumentUrl(publicUrl, stored.bucket, newPath);
+      }
+
+      const { error } = await supabase
+        .from('documents')
+        .update({ contact_id: target.id, customer_id: target.id, url: newUrl })
+        .eq('id', movingDoc.id);
+      if (error) {
+        // Put the file back so the record and file stay together.
+        if (stored && newUrl !== movingDoc.url) {
+          const moved = extractStorageInfo(newUrl);
+          if (moved) await supabase.storage.from(stored.bucket).move(moved.path, stored.path);
+        }
+        throw new Error(error.message);
+      }
+
+      if (movingDoc.type === 'measurement') {
+        try { localStorage.removeItem(`roofr_order_${contact.id}`); } catch { /* private mode */ }
+        window.dispatchEvent(new CustomEvent('roofr-order-updated', { detail: { contactId: contact.id } }));
+      }
+      const movedDoc: Document = { ...movingDoc, contactId: target.id, url: newUrl };
+      setContactDocuments((prev) => prev.filter((d) => d.id !== movingDoc.id));
+      if (target.documents) {
+        dispatch({ type: 'UPDATE_CONTACT', payload: { ...target, documents: [movedDoc, ...target.documents] } });
+      }
+      const source = state.contacts.find((c) => c.id === contact.id);
+      if (source?.documents) {
+        dispatch({ type: 'UPDATE_CONTACT', payload: { ...source, documents: source.documents.filter((d) => d.id !== movingDoc.id) } });
+      }
+      toast.success(`Moved "${movingDoc.name}" to ${getContactFullName(target)}`);
+      setMovingDoc(null);
+    } catch (err) {
+      toast.error('Failed to move document: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    } finally {
+      setMovingInProgress(false);
+    }
+  };
+
   const handleOpenDocument = async (url?: string, _docName?: string) => {
     if (!url) {
       toast.error('Document URL not available.');
       return;
     }
 
-    // Open a blank tab immediately (within the user gesture) so the browser
-    // doesn't treat the later window.open as a popup. We update its location
-    // once the signed URL is ready.
-    const newTab = window.open('', '_blank', 'noopener,noreferrer');
+    // Open the tab synchronously (inside the click) so it isn't popup-blocked,
+    // then point it at the signed URL. Passing 'noopener' here would make
+    // window.open return null, leaving the tab stuck on about:blank.
+    const isNative = typeof (window as any).Capacitor?.isNativePlatform === 'function'
+      && (window as any).Capacitor.isNativePlatform();
+    const newTab = isNative ? null : window.open('about:blank', '_blank');
+    if (newTab) {
+      try { newTab.opener = null; } catch { /* cross-origin guard */ }
+      newTab.document.title = 'Loading document…';
+    }
 
     try {
       // Non-Supabase URLs (EagleView reports, external links) — open directly
       if (isHttpUrl(url) && !isSupabaseStorageUrl(url)) {
-        if (newTab) newTab.location.href = url;
+        if (newTab) newTab.location.replace(url);
+        else window.open(url, '_blank');
         return;
       }
 
@@ -714,10 +816,10 @@ export default function ContactDetail() {
         return;
       }
 
-      if (newTab) {
-        newTab.location.href = signedUrl;
+      if (newTab && !newTab.closed) {
+        newTab.location.replace(signedUrl);
       } else {
-        window.open(signedUrl, '_blank', 'noopener,noreferrer');
+        window.open(signedUrl, '_blank');
       }
     } catch (error) {
       if (newTab) newTab.close();
@@ -833,7 +935,7 @@ export default function ContactDetail() {
     let cancelled = false;
     supabase
       .from('quotes')
-      .select('id, quote_number, cover_page_title, status, contact_id, customer_id, good_total, better_total, best_total, selected_tier, created_at')
+      .select('id, quote_number, cover_page_title, status, contact_id, customer_id, good_total, better_total, best_total, selected_tier, created_at, share_token, project_type')
       .eq('company_id', profile.company_id)
       .eq('is_archived', false)
       .or(`customer_id.eq.${contactId},contact_id.eq.${contactId}`)
@@ -842,13 +944,36 @@ export default function ContactDetail() {
         if (cancelled) return;
         if (error) { console.error('[ContactDetail] Failed to load quotes:', error); return; }
         setContactQuotes((data || []).map(toQuoteSummary));
+        setQuoteExtras(Object.fromEntries((data || []).map((row: any) => [row.id, { shareToken: row.share_token ?? null, projectType: row.project_type ?? null }])));
       });
     return () => { cancelled = true; };
-  }, [contactId, profile?.company_id]);
+  }, [contactId, profile?.company_id, quotesVersion]);
+
+  useEffect(() => {
+    if (!quoteMenu) return;
+    const close = () => setQuoteMenu(null);
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+    window.addEventListener('mousedown', close);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('mousedown', close);
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [quoteMenu]);
 
   const openNewQuote = () => {
     if (!contact) return;
     dispatch({ type: 'SET_PENDING_QUOTE', payload: { contactId: contact.id } });
+    dispatch({ type: 'SET_VIEW', payload: 'quotes' });
+  };
+
+  const openNewInspection = () => {
+    if (!contact) return;
+    dispatch({ type: 'SET_PENDING_QUOTE', payload: { contactId: contact.id, inspection: true } });
     dispatch({ type: 'SET_VIEW', payload: 'quotes' });
   };
 
@@ -862,6 +987,84 @@ export default function ContactDetail() {
     if (!contact) return;
     dispatch({ type: 'SET_PENDING_QUOTE_ACTION', payload: { contactId: contact.id, action } });
     dispatch({ type: 'SET_VIEW', payload: 'quotes' });
+  };
+
+  // ── Quote row "⋯" menu actions ────────────────────────────────────────────
+  const toggleQuoteMenu = (q: QuoteSummary, button: HTMLElement) => {
+    if (quoteMenu?.quote.id === q.id) { setQuoteMenu(null); return; }
+    const rect = button.getBoundingClientRect();
+    const up = window.innerHeight - rect.bottom < 380;
+    setQuoteMenu({ quote: q, top: up ? rect.top - 4 : rect.bottom + 4, right: window.innerWidth - rect.right, up });
+  };
+
+  // Hand off to the Quotes page for flows that live there (preview, email, payments, invoice, work order).
+  const runQuoteAction = (action: 'invoice' | 'payment' | 'work_order' | 'send' | 'preview', quoteId: string) => {
+    if (!contact) return;
+    dispatch({ type: 'SET_PENDING_QUOTE_ACTION', payload: { contactId: contact.id, action, quoteId } });
+    dispatch({ type: 'SET_VIEW', payload: 'quotes' });
+  };
+
+  const copyQuoteLink = async (quoteId: string) => {
+    const token = quoteExtras[quoteId]?.shareToken;
+    if (!token) { toast.error('This quote has no share link yet.'); return; }
+    try {
+      await navigator.clipboard.writeText(quoteUrl(token));
+      toast.success('Link copied');
+    } catch {
+      toast.error('Could not copy the link');
+    }
+  };
+
+  const duplicateContactQuote = async (q: QuoteSummary) => {
+    try {
+      const { data: newId, error } = await supabase.rpc('duplicate_quote', { p_quote_id: q.id });
+      if (error) throw error;
+      setQuotesVersion((v) => v + 1);
+      toast.success(`${q.quoteNumber} duplicated as a new draft`, {
+        duration: 8000,
+        action: { label: 'Open copy', onClick: () => openQuote(newId as string) },
+      });
+    } catch (err: any) {
+      toast.error('Failed to duplicate: ' + (err.message || 'unknown error'));
+    }
+  };
+
+  const archiveContactQuote = async (q: QuoteSummary) => {
+    const { error } = await supabase
+      .from('quotes')
+      .update({ is_archived: true, updated_at: new Date().toISOString() })
+      .eq('id', q.id)
+      .eq('company_id', profile?.company_id || '');
+    if (error) { toast.error('Failed to archive: ' + error.message); return; }
+    setQuotesVersion((v) => v + 1);
+    toast.success(`${q.quoteNumber} archived — restore it from Quotes → Archived`);
+  };
+
+  const deleteContactQuote = (q: QuoteSummary) => {
+    toast.warning(`Permanently delete ${q.quoteNumber}? This cannot be undone.`, {
+      duration: 10000,
+      cancel: { label: 'Cancel', onClick: () => {} },
+      action: {
+        label: 'Delete',
+        onClick: async () => {
+          const { error } = await supabase
+            .from('quotes')
+            .delete()
+            .eq('id', q.id)
+            .eq('company_id', profile?.company_id || '')
+            .neq('status', 'signed');
+          if (error) { toast.error('Failed to delete: ' + error.message); return; }
+          setQuotesVersion((v) => v + 1);
+          toast.success(`${q.quoteNumber} deleted`);
+        },
+      },
+    });
+  };
+
+  const openChangeOrderForQuote = (q: QuoteSummary) => {
+    setChangeOrderQuote({ id: q.id, quoteNumber: q.quoteNumber });
+    setViewingChangeOrder(null);
+    setShowChangeOrderModal(true);
   };
 
   if (!contact) {
@@ -1387,7 +1590,7 @@ export default function ContactDetail() {
                       statusColors[contact.status]
                     }`}
                   >
-                    {statusLabels[contact.status]}
+                    {contact.isRetail && contact.status === 'contingency' ? statusLabels.retail : statusLabels[contact.status]}
                   </span>
                   {(contact.inspectionCompleted ?? (contact as any).inspection_completed) && (
                     <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium flex items-center gap-1">
@@ -1446,6 +1649,14 @@ export default function ContactDetail() {
                     </option>
                   ))}
                 </select>
+                <button
+                  onClick={openNewInspection}
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-indigo-200 text-indigo-700 rounded-lg hover:bg-indigo-50 transition-colors font-medium"
+                  title="New inspection report with contingency agreement and 3-day cancel notice"
+                >
+                  <Shield size={18} />
+                  Inspection Report
+                </button>
                 <button
                   onClick={handleEdit}
                   className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
@@ -2346,6 +2557,8 @@ export default function ContactDetail() {
                           <div className="flex items-center gap-1">
                             <button onClick={() => handleViewDoc(doc)} className="p-2 hover:bg-gray-100 rounded-lg" title="View"><Eye size={16} className="text-gray-500" /></button>
                             <button onClick={() => handleDownloadDoc(doc)} className="p-2 hover:bg-gray-100 rounded-lg" title="Download"><Download size={16} className="text-gray-500" /></button>
+                            <button onClick={() => openMoveDocument(doc)} className="p-2 hover:bg-gray-100 rounded-lg" title="Move to another customer"><FolderInput size={16} className="text-gray-500" /></button>
+                            <button onClick={() => handleDeleteDocument(doc)} className="p-2 hover:bg-red-100 rounded-lg" title="Delete"><Trash2 size={16} className="text-red-500" /></button>
                           </div>
                         </div>
                       ))}
@@ -2395,7 +2608,11 @@ export default function ContactDetail() {
                             <p className="text-xs text-gray-500">{doc.size} · {formatDate(doc.uploadedAt)}</p>
                           </div>
                         </div>
-                        <button onClick={() => handleViewDoc(doc)} className="p-1.5 hover:bg-gray-100 rounded-lg"><Eye size={15} className="text-gray-500" /></button>
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => handleViewDoc(doc)} className="p-1.5 hover:bg-gray-100 rounded-lg" title="View"><Eye size={15} className="text-gray-500" /></button>
+                          <button onClick={() => openMoveDocument(doc)} className="p-1.5 hover:bg-gray-100 rounded-lg" title="Move to another customer"><FolderInput size={15} className="text-gray-500" /></button>
+                          <button onClick={() => handleDeleteDocument(doc)} className="p-1.5 hover:bg-red-100 rounded-lg" title="Delete"><Trash2 size={15} className="text-red-500" /></button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -2452,13 +2669,17 @@ export default function ContactDetail() {
                       <div>
                         <div className="flex items-center gap-2 mb-0.5">
                           <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                            doc.docType === 'estimate'
+                            doc.docType === 'agreement'
+                              ? 'bg-green-100 text-green-700'
+                              : doc.docType === 'estimate'
                               ? 'bg-blue-100 text-blue-700'
                               : doc.docType === 'work_order'
                               ? 'bg-purple-100 text-purple-700'
                               : 'bg-orange-100 text-orange-700'
                           }`}>
-                            {doc.docType === 'estimate'
+                            {doc.docType === 'agreement'
+                              ? 'Agreement'
+                              : doc.docType === 'estimate'
                               ? 'Estimate'
                               : doc.docType === 'work_order'
                               ? 'Work Order'
@@ -2468,12 +2689,22 @@ export default function ContactDetail() {
                         </div>
                         <p className="font-medium text-gray-900">{doc.title}</p>
                         <p className="text-sm text-gray-500">
-                          Signed by {doc.signedBy} · {formatDate(doc.signedAt)}
+                          {doc.signedBy ? `Signed by ${doc.signedBy}` : 'Signed'} · {formatDate(doc.signedAt)}
                           {doc.amount != null && ` · ${formatCurrency(doc.amount)}`}
                         </p>
                       </div>
                     </div>
-                    {doc.viewUrl && (
+                    {doc.docType === 'agreement' && doc.viewUrl ? (
+                      // Stored PDFs need a signed URL; handleOpenDocument resolves it
+                      // (and opens plain links as-is).
+                      <button
+                        onClick={() => handleOpenDocument(doc.viewUrl, doc.title)}
+                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
+                        title="View signed document"
+                      >
+                        <ExternalLink size={18} className="text-gray-500" />
+                      </button>
+                    ) : doc.viewUrl && (
                       <a
                         href={doc.viewUrl}
                         target="_blank"
@@ -2503,7 +2734,8 @@ export default function ContactDetail() {
                 return member?.role ?? null;
               };
               const photos = contactDocuments.filter(d => d.type === 'photo');
-              const nonPhotoDocs = contactDocuments.filter(d => d.type !== 'photo' && d.type !== 'measurement');
+              // Signed agreements are listed in the Signed section instead.
+              const nonPhotoDocs = contactDocuments.filter(d => d.type !== 'photo' && d.type !== 'measurement' && d.type !== 'signed');
               const salesPhotos = photos.filter(d => {
                 const role = getRoleForUploader(d.uploadedBy);
                 return role === null || !FIELD_ROLES.has(role);
@@ -2532,7 +2764,8 @@ export default function ContactDetail() {
                     {(doc.name?.toLowerCase().endsWith('.pdf') || doc.url?.toLowerCase().includes('.pdf')) && (
                       <button onClick={() => handleLoadRoofrMeasurements(doc)} className="p-2 hover:bg-blue-100 rounded-lg transition-colors" title="Load Roofr measurements"><Zap size={18} className="text-blue-500" /></button>
                     )}
-                    <button onClick={() => handleDeleteDocument(doc.id)} className="p-2 hover:bg-red-100 rounded-lg transition-colors" title="Delete"><Trash2 size={18} className="text-red-500" /></button>
+                    <button onClick={() => openMoveDocument(doc)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="Move to another customer"><FolderInput size={18} className="text-gray-500" /></button>
+                    <button onClick={() => handleDeleteDocument(doc)} className="p-2 hover:bg-red-100 rounded-lg transition-colors" title="Delete"><Trash2 size={18} className="text-red-500" /></button>
                   </div>
                 </div>
               );
@@ -2561,7 +2794,8 @@ export default function ContactDetail() {
                     </div>
                     <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-2">
                       <button onClick={() => handleOpenDocument(doc.url, doc.name)} className="p-1.5 bg-white rounded-md" title="View"><Eye size={14} className="text-gray-700" /></button>
-                      <button onClick={() => handleDeleteDocument(doc.id)} className="p-1.5 bg-white rounded-md" title="Delete"><Trash2 size={14} className="text-red-500" /></button>
+                      <button onClick={() => openMoveDocument(doc)} className="p-1.5 bg-white rounded-md" title="Move to another customer"><FolderInput size={14} className="text-gray-700" /></button>
+                      <button onClick={() => handleDeleteDocument(doc)} className="p-1.5 bg-white rounded-md" title="Delete"><Trash2 size={14} className="text-red-500" /></button>
                     </div>
                     <p className="text-xs text-gray-500 mt-1 truncate">{doc.name}</p>
                   </div>
@@ -2706,6 +2940,14 @@ export default function ContactDetail() {
                 >
                   <Plus size={18} />
                   New Quote
+                </button>
+                <button
+                  onClick={openNewInspection}
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-indigo-200 text-indigo-700 rounded-lg hover:bg-indigo-50 transition-colors"
+                  title="Inspection report with contingency agreement and 3-day cancel notice"
+                >
+                  <Shield size={18} />
+                  New Inspection Report
                 </button>
                 {(() => {
                   const pdfs = (contactDocuments || []).filter(d =>
@@ -2872,23 +3114,36 @@ export default function ContactDetail() {
                   <FileText size={20} />
                   Quotes ({contactQuotes.length})
                 </h3>
-                <button
-                  onClick={openNewQuote}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                >
-                  <Plus size={18} />
-                  New Quote
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={openNewInspection}
+                    className="flex items-center gap-2 px-4 py-2 bg-white border border-indigo-200 text-indigo-700 rounded-lg hover:bg-indigo-50 transition-colors"
+                    title="Inspection report with contingency agreement and 3-day cancel notice"
+                  >
+                    <Shield size={18} />
+                    New Inspection Report
+                  </button>
+                  <button
+                    onClick={openNewQuote}
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                  >
+                    <Plus size={18} />
+                    New Quote
+                  </button>
+                </div>
               </div>
 
               {contactQuotes.length > 0 ? (
                 <div className="grid gap-3">
                   {contactQuotes.map((q) => {
                     return (
-                      <button
+                      <div
                         key={q.id}
+                        role="button"
+                        tabIndex={0}
                         onClick={() => openQuote(q.id)}
-                        className="w-full text-left bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow"
+                        onKeyDown={(e) => { if (e.key === 'Enter') openQuote(q.id); }}
+                        className="w-full text-left bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow cursor-pointer"
                       >
                         <div className="flex items-center justify-between gap-4">
                           <div className="min-w-0">
@@ -2901,8 +3156,19 @@ export default function ContactDetail() {
                           <p className="font-bold text-blue-600 whitespace-nowrap">
                             {q.status === 'signed' ? formatCurrency(quoteValue(q)) : `From ${formatCurrency(q.goodTotal)}`}
                           </p>
+                          <button
+                            type="button"
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onClick={(e) => { e.stopPropagation(); toggleQuoteMenu(q, e.currentTarget); }}
+                            className={`p-1.5 rounded-lg transition-colors shrink-0 ${quoteMenu?.quote.id === q.id ? 'bg-gray-100 text-gray-700' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100'}`}
+                            title="Actions"
+                            aria-haspopup="menu"
+                            aria-expanded={quoteMenu?.quote.id === q.id}
+                          >
+                            <MoreVertical size={16} />
+                          </button>
                         </div>
-                      </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -4131,12 +4397,54 @@ export default function ContactDetail() {
       )}
 
       {/* Change Order Modal */}
+      {quoteMenu && (() => {
+        const q = quoteMenu.quote;
+        const token = quoteExtras[q.id]?.shareToken;
+        const run = (fn: () => void) => () => { setQuoteMenu(null); fn(); };
+        const item = 'w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left';
+        return (
+          <div
+            role="menu"
+            onMouseDown={(e) => e.stopPropagation()}
+            className="fixed z-50 w-56 bg-white border border-gray-200 rounded-xl shadow-lg py-1"
+            style={{ right: quoteMenu.right, ...(quoteMenu.up ? { bottom: window.innerHeight - quoteMenu.top } : { top: quoteMenu.top }) }}
+          >
+            <button role="menuitem" className={item} onClick={run(() => openQuote(q.id))}><Pencil size={15} className="text-gray-400" /> Edit</button>
+            <button role="menuitem" className={item} onClick={run(() => runQuoteAction('preview', q.id))}><FileText size={15} className="text-gray-400" /> Preview</button>
+            {token && (
+              <button role="menuitem" className={item} onClick={run(() => window.open(quoteUrl(token), '_blank', 'noopener,noreferrer'))}><Eye size={15} className="text-gray-400" /> View customer page</button>
+            )}
+            <button role="menuitem" className={item} onClick={run(() => copyQuoteLink(q.id))}><Link2 size={15} className="text-gray-400" /> Copy share link</button>
+            <button role="menuitem" className={item} onClick={run(() => runQuoteAction('send', q.id))}><Send size={15} className="text-gray-400" /> Email to customer</button>
+            <button role="menuitem" className={item} onClick={run(() => duplicateContactQuote(q))}><Copy size={15} className="text-gray-400" /> Duplicate</button>
+            {q.status === 'signed' && (
+              <button role="menuitem" className={item} onClick={run(() => openChangeOrderForQuote(q))}><Pencil size={15} className="text-amber-500" /> Create change order</button>
+            )}
+            <div className="my-1 border-t border-gray-100" />
+            <button role="menuitem" className={item} onClick={run(() => runQuoteAction('payment', q.id))}><DollarSign size={15} className="text-emerald-500" /> Payments &amp; receipts</button>
+            {q.status === 'signed' && (
+              <button role="menuitem" className={item} onClick={run(() => runQuoteAction('invoice', q.id))}><Receipt size={15} className="text-gray-400" /> Create invoice</button>
+            )}
+            {q.status === 'signed' && (
+              <button role="menuitem" className={item} onClick={run(() => runQuoteAction('work_order', q.id))}><ClipboardList size={15} className="text-gray-400" /> Create work order</button>
+            )}
+            <div className="my-1 border-t border-gray-100" />
+            <button role="menuitem" className={item} onClick={run(() => archiveContactQuote(q))}><Archive size={15} className="text-amber-500" /> Archive</button>
+            {q.status !== 'signed' && (
+              <button role="menuitem" className={`${item} text-red-600 hover:bg-red-50`} onClick={run(() => deleteContactQuote(q))}><Trash2 size={15} /> Delete</button>
+            )}
+          </div>
+        );
+      })()}
+
       <ChangeOrderModal
         isOpen={showChangeOrderModal}
-        onClose={() => { setShowChangeOrderModal(false); setViewingChangeOrder(null); }}
+        onClose={() => { setShowChangeOrderModal(false); setViewingChangeOrder(null); setChangeOrderQuote(null); }}
+        quote={changeOrderQuote}
         onSave={async () => {
           setShowChangeOrderModal(false);
           setViewingChangeOrder(null);
+          setChangeOrderQuote(null);
           // Reload change orders after save
           if (contactId) {
             const { data } = await supabase
@@ -4153,6 +4461,61 @@ export default function ContactDetail() {
         changeOrder={viewingChangeOrder}
         companyId={profile?.company_id || ''}
       />
+
+      {/* Move document to another customer */}
+      {movingDoc && (() => {
+        const q = moveSearch.trim().toLowerCase();
+        const candidates = state.contacts
+          .filter((c) => c.id !== contact.id)
+          .filter((c) => !q || `${getContactFullName(c)} ${c.address || ''} ${c.email || ''} ${c.phone1 || ''}`.toLowerCase().includes(q))
+          .slice(0, 50);
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => !movingInProgress && setMovingDoc(null)}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[80vh]" onClick={(e) => e.stopPropagation()}>
+              <div className="px-5 py-4 border-b border-gray-200 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="text-base font-bold text-gray-900">Move to another customer</h2>
+                  <p className="text-xs text-gray-500 truncate mt-0.5">{movingDoc.name}</p>
+                </div>
+                <button onClick={() => setMovingDoc(null)} disabled={movingInProgress} className="p-1.5 hover:bg-gray-100 rounded-lg" title="Close"><X size={18} className="text-gray-500" /></button>
+              </div>
+              <div className="px-5 pt-4">
+                <input
+                  autoFocus
+                  value={moveSearch}
+                  onChange={(e) => setMoveSearch(e.target.value)}
+                  placeholder="Search customers by name, address, email or phone…"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                />
+              </div>
+              <div className="flex-1 overflow-y-auto px-5 py-3 space-y-1">
+                {candidates.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-6">No matching customers</p>
+                ) : candidates.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => setMoveTargetId(c.id)}
+                    className={`w-full text-left px-3 py-2 rounded-lg border transition-colors ${moveTargetId === c.id ? 'border-blue-500 bg-blue-50' : 'border-transparent hover:bg-gray-50'}`}
+                  >
+                    <p className="text-sm font-medium text-gray-900">{getContactFullName(c)}</p>
+                    {c.address && <p className="text-xs text-gray-500 truncate">{[c.address, c.city, c.state].filter(Boolean).join(', ')}</p>}
+                  </button>
+                ))}
+              </div>
+              <div className="px-5 py-4 border-t border-gray-200 flex justify-end gap-2">
+                <button onClick={() => setMovingDoc(null)} disabled={movingInProgress} className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50">Cancel</button>
+                <button
+                  onClick={handleMoveDocument}
+                  disabled={!moveTargetId || movingInProgress}
+                  className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {movingInProgress ? 'Moving…' : 'Move document'}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* In-app document viewer for template documents (HTML-based) */}
       {viewingDocHtml && (

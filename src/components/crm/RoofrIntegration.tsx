@@ -12,9 +12,11 @@ import { getDocumentSignedUrl } from '@/lib/storage';
 interface RoofrIntegrationProps {
   contact: Contact;
   onEstimateGenerated?: (lineItems: any[], measurements: RoofrMeasurements, multiStructureResult?: MultiStructureResult, file?: File) => void;
+  /** Persists the raw PDF to the customer's documents before parsing. */
+  onPdfSelected?: (file: File) => Promise<boolean>;
 }
 
-export function RoofrIntegration({ contact, onEstimateGenerated }: RoofrIntegrationProps) {
+export function RoofrIntegration({ contact, onEstimateGenerated, onPdfSelected }: RoofrIntegrationProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [measurements, setMeasurements] = useState<RoofrMeasurements | null>(null);
   const [multiStructureResult, setMultiStructureResult] = useState<MultiStructureResult | null>(null);
@@ -106,6 +108,11 @@ export function RoofrIntegration({ contact, onEstimateGenerated }: RoofrIntegrat
     setValidationWarnings([]);
     setEstimateSummary(null);
 
+    if (onPdfSelected) {
+      toast.info('Saving PDF to customer documents...');
+      await onPdfSelected(file);
+    }
+
     try {
       const { parseRoofrPDFWithStructures } = await import('@/lib/roofrParser');
       const result = await parseRoofrPDFWithStructures(file);
@@ -113,7 +120,12 @@ export function RoofrIntegration({ contact, onEstimateGenerated }: RoofrIntegrat
     } catch (error) {
       const msg = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
       console.error('[RoofrImport] error:', msg);
-      toast.error(msg || 'Failed to parse PDF', { duration: 10000 });
+      toast.error(
+        onPdfSelected
+          ? `PDF saved, but measurements couldn't be read automatically (${msg}). You can still view it in Documents.`
+          : msg || 'Failed to parse PDF',
+        { duration: 10000 },
+      );
     } finally {
       setIsProcessing(false);
       event.target.value = '';
@@ -194,7 +206,7 @@ export function RoofrIntegration({ contact, onEstimateGenerated }: RoofrIntegrat
             <div className="text-center">
               <h3 className="font-semibold text-gray-900">Upload Roofr Measurement Report</h3>
               <p className="text-sm text-gray-500 mt-1">
-                Upload a PDF to auto-generate an estimate
+                Upload a Roofr or EagleView PDF — it's saved to this customer and used to auto-generate an estimate
               </p>
             </div>
 

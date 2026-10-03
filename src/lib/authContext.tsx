@@ -53,10 +53,10 @@ function readProfileCache(): Profile | null {
   try { return JSON.parse(localStorage.getItem(PROFILE_CACHE_KEY) ?? 'null'); } catch { return null; }
 }
 function writeProfileCache(data: Profile) {
-  try { localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(data)); } catch {}
+  try { localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(data)); } catch { /* storage unavailable */ }
 }
 function clearProfileCache() {
-  try { localStorage.removeItem(PROFILE_CACHE_KEY); } catch {}
+  try { localStorage.removeItem(PROFILE_CACHE_KEY); } catch { /* storage unavailable */ }
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);

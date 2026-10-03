@@ -321,9 +321,9 @@ const LineItemEditor: React.FC<LineItemEditorProps> = ({
   const dimGood   = activeTier !== undefined && activeTier !== 'good';
   const dimBetter = activeTier !== undefined && activeTier !== 'better';
   const dimBest   = activeTier !== undefined && activeTier !== 'best';
-  // Single-tier mode: collapse to one price column.
-  // True when in per-tier editor (activeTier set) OR when both Better and Best
-  // are disabled on the quote (single-tier quote — only Good is offered).
+  // Single-tier mode: collapse to one price column instead of Good/Better/Best
+  // Also collapses when Better and Best are both off in Project Details: the quote only
+  // has one tier, so showing placeholder Better/Best columns just looks like extra tiers.
   const singleTier = activeTier !== undefined || (!betterEnabled && !bestEnabled);
   // When singleTier is active but no explicit activeTier is set (disabled-tiers case),
   // fall back to 'good' so all downstream activeTier! accesses are safe.

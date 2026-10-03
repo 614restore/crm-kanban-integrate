@@ -13,8 +13,9 @@ import { supabase } from '@/lib/supabase';
 import { db } from '@/lib/database';
 import { RoofrIntegration as RoofrAPI, RoofrReport } from '@/lib/integrations/roofr';
 import { RoofrIntegration as RoofrUploadComponent } from './RoofrIntegration';
-import { uploadDocument } from '@/lib/storage';
 import { Document } from '@/lib/crmData';
+import { secureUpload } from '@/lib/storageUtils';
+import { buildStoredDocumentUrl } from '@/lib/documentAccess';
 import type { RoofrMeasurements, StructureMeasurements } from '@/lib/roofrParser';
 
 interface Props {
@@ -42,6 +43,8 @@ interface StoredOrder {
   measurements?: RoofrReport['measurements'];
   /** Per-structure breakdowns from a multi-structure Roofr PDF */
   structures?: StructureMeasurements[];
+  /** The source PDF is already in the customer's documents */
+  savedToDocuments?: boolean;
 }
 
 const STATUS_LABEL: Record<OrderStatus, string> = {
@@ -90,7 +93,7 @@ export default function RoofrPanel({
   const [checkingStatus, setCheckingStatus] = useState(false);
   const [saving, setSaving] = useState(false);
   const [configStatus, setConfigStatus] = useState<'unknown' | 'ok' | 'missing'>('unknown');
-  const [roofr, setRoofr] = useState<RoofrIntegration | null>(null);
+  const [roofr, setRoofr] = useState<RoofrAPI | null>(null);
   const [order, setOrder] = useState<StoredOrder | null>(null);
   const [reportType, setReportType] = useState<'standard' | 'premium'>('standard');
   const [error, setError] = useState<string | null>(null);
@@ -161,7 +164,7 @@ export default function RoofrPanel({
         const apiKey = data?.credentials?.apiKey;
         if (!apiKey) { setConfigStatus('missing'); return; }
 
-        setRoofr(new RoofrIntegration(apiKey));
+        setRoofr(new RoofrAPI(apiKey));
         setConfigStatus('ok');
       } catch {
         setConfigStatus('missing');
@@ -172,8 +175,8 @@ export default function RoofrPanel({
     // Re-read when another component loads Roofr measurements from a document PDF
     const onExternalUpdate = (e: Event) => {
       if ((e as CustomEvent).detail?.contactId === contactId) {
-        const updated = readOrderFromStorage(contactId);
-        if (updated) setOrder(updated);
+        // null when the source document was deleted — clear the panel too
+        setOrder(readOrderFromStorage(contactId));
       }
     };
     window.addEventListener('roofr-order-updated', onExternalUpdate);
@@ -298,6 +301,62 @@ export default function RoofrPanel({
     }
   };
 
+  const saveFileAsDocument = async (
+    fileBlob: Blob,
+    ext: string,
+    displayName: string,
+    category: 'roof' | 'walls' | 'premium',
+  ): Promise<Document> => {
+    const contentType = ext === 'pdf' ? 'application/pdf' : fileBlob.type || 'text/html';
+    const safeName = (contactName || contactId).replace(/\s+/g, '_');
+    const date = new Date().toISOString().slice(0, 10);
+    const file = new File([fileBlob], `Measurement_${safeName}_${date}.${ext}`, { type: contentType });
+    const storedName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${ext}`;
+    const uploadResult = await secureUpload('documents', contactId, file, storedName, contentType);
+    const storedUrl = buildStoredDocumentUrl(uploadResult.publicUrl, 'documents', uploadResult.path);
+
+    const newDbDoc = await db.createDocument({
+      company_id: companyId,
+      contact_id: contactId,
+      name: displayName,
+      type: 'measurement',
+      category,
+      url: storedUrl,
+      size: `${Math.round(fileBlob.size / 1024)} KB`,
+      uploaded_by: userId || null,
+    });
+    if (!newDbDoc) throw new Error('Failed to create document record');
+
+    const frontendDoc: Document = {
+      id: newDbDoc.id,
+      contactId,
+      name: newDbDoc.name,
+      type: 'measurement',
+      url: newDbDoc.url,
+      uploadedAt: newDbDoc.created_at || new Date().toISOString(),
+      uploadedBy: userId || 'Upload',
+      size: newDbDoc.size || '',
+      category,
+    };
+    onDocumentSaved?.(frontendDoc);
+    return frontendDoc;
+  };
+
+  // Saves an uploaded Roofr/EagleView PDF right away so it is never lost,
+  // even if measurement parsing fails or the Roofr API isn't connected.
+  const handlePdfUploaded = async (file: File) => {
+    try {
+      const displayName = file.name.replace(/\.pdf$/i, '') || `Measurement Report — ${repName}`;
+      await saveFileAsDocument(file, 'pdf', displayName, 'roof');
+      toast.success(`"${displayName}" saved to ${repName}'s documents`);
+      return true;
+    } catch (err: any) {
+      console.error('[RoofrPanel] Upload save error:', err);
+      toast.error(err?.message || 'Failed to save the uploaded PDF.', { duration: 10000 });
+      return false;
+    }
+  };
+
   // ── Save report to customer documents ─────────────────────────────────────
   const handleSaveReport = async () => {
     if (!order) return;
@@ -362,54 +421,18 @@ export default function RoofrPanel({
         fileBlob = new Blob([html], { type: 'text/html' });
       }
 
-      const safeName = (contactName || contactId).replace(/\s+/g, '_');
-      const date = new Date().toISOString().slice(0, 10);
-      const fileName = `Roofr_${order.reportType}_${safeName}_${date}.${ext}`;
-      const file = new File([fileBlob], fileName, { type: fileBlob.type });
-
-      const uploadResult = await uploadDocument(file, companyId, contactId);
-      if (uploadResult.error || !uploadResult.path) {
-        throw new Error(uploadResult.error || 'Upload failed');
-      }
-
-      const newDbDoc = await db.createDocument({
-        company_id: companyId,
-        contact_id: contactId,
-        name: `Roofr ${order.reportType.charAt(0).toUpperCase() + order.reportType.slice(1)} Report — ${repName}`,
-        type: 'measurement',
-        url: uploadResult.path,
-        size: `${Math.round(fileBlob.size / 1024)} KB`,
-        uploaded_by: userId || null,
-      });
-
-      if (!newDbDoc) throw new Error('Failed to create document record');
-
-      // Derive measurement category from report type; non-blocking (column may not exist on older deployments)
       const reportName = order.reportType.toLowerCase();
       const measurementCategory: 'roof' | 'walls' | 'premium' =
         reportName.includes('wall') ? 'walls'
         : reportName.includes('premium') || reportName.includes('enhanced') ? 'premium'
         : 'roof';
 
-      supabase
-        .from('documents')
-        .update({ category: measurementCategory })
-        .eq('id', newDbDoc.id)
-        .then(() => {});
-
-      const frontendDoc: Document = {
-        id: newDbDoc.id,
-        contactId,
-        name: newDbDoc.name,
-        type: 'measurement',
-        url: newDbDoc.url,
-        uploadedAt: newDbDoc.created_at || new Date().toISOString(),
-        uploadedBy: 'Roofr',
-        size: newDbDoc.size || '',
-        category: measurementCategory,
-      };
-
-      onDocumentSaved?.(frontendDoc);
+      await saveFileAsDocument(
+        fileBlob,
+        ext,
+        `Roofr ${order.reportType.charAt(0).toUpperCase() + order.reportType.slice(1)} Report — ${repName}`,
+        measurementCategory,
+      );
       toast.success('Roofr report saved to customer documents!');
       persistOrder(null);
       setUploadedPdfFile(null);
@@ -422,7 +445,7 @@ export default function RoofrPanel({
   };
 
   // ── Render: not configured ─────────────────────────────────────────────────
-  if (configStatus === 'missing') {
+  if (configStatus === 'missing' && !order) {
     return (
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <div className="flex items-center gap-2 mb-3">
@@ -443,8 +466,10 @@ export default function RoofrPanel({
             firstName: contactName?.split(' ')[0] || '',
             lastName: contactName?.split(' ').slice(1).join(' ') || '',
           } as any}
+          onPdfSelected={handlePdfUploaded}
           onEstimateGenerated={(lineItems, measurements, multiResult) => {
             persistOrder({
+              savedToDocuments: true,
               reportId: `UPLOADED-${Date.now()}`,
               address: fullAddress,
               reportType: 'premium',
@@ -596,6 +621,11 @@ export default function RoofrPanel({
                       View on Roofr
                     </a>
                   )}
+                  {order.savedToDocuments ? (
+                    <span className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-green-50 text-green-700 border border-green-200 rounded-lg">
+                      <CheckCircle size={13} /> Saved to Documents
+                    </span>
+                  ) : (
                   <button
                     onClick={handleSaveReport}
                     disabled={saving}
@@ -603,6 +633,13 @@ export default function RoofrPanel({
                   >
                     {saving ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
                     {saving ? 'Saving…' : 'Save to Customer Documents'}
+                  </button>
+                  )}
+                  <button
+                    onClick={() => persistOrder(null)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-300 rounded-lg hover:bg-white transition-colors text-gray-700"
+                  >
+                    Upload Another
                   </button>
                 </>
               )}
@@ -621,7 +658,9 @@ export default function RoofrPanel({
           {order.status === 'completed' && (
             <div className="flex items-start gap-2 bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-700">
               <CheckCircle size={16} className="mt-0.5 shrink-0" />
-              Report ready! Review the measurements above, then click <strong>Save to Customer Documents</strong> to attach it permanently.
+              {order.savedToDocuments
+                ? <>PDF saved to this customer's Documents (Measurements). Review the measurements above or create a quote from them.</>
+                : <>Report ready! Review the measurements above, then click <strong>Save to Customer Documents</strong> to attach it permanently.</>}
             </div>
           )}
 
@@ -646,9 +685,10 @@ export default function RoofrPanel({
                 firstName: contactName?.split(' ')[0] || '',
                 lastName: contactName?.split(' ').slice(1).join(' ') || '',
               } as any}
-              onEstimateGenerated={(lineItems, measurements, multiResult, file) => {
-                if (file) setUploadedPdfFile(file);
+              onPdfSelected={handlePdfUploaded}
+              onEstimateGenerated={(lineItems, measurements, multiResult) => {
                 persistOrder({
+                  savedToDocuments: true,
                   reportId: `UPLOADED-${Date.now()}`,
                   address: fullAddress,
                   reportType: 'premium',

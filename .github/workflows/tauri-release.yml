@@ -50,8 +50,7 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          # Supabase URL/key come from .env.production; the repo secret points at read-only QuoteMGR.
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           VITE_STRIPE_STARTER_MONTHLY: ${{ secrets.VITE_STRIPE_STARTER_MONTHLY }}
           VITE_STRIPE_STARTER_YEARLY: ${{ secrets.VITE_STRIPE_STARTER_YEARLY }}

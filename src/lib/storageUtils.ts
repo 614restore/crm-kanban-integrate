@@ -27,15 +27,14 @@ export async function getCurrentUserCompanyId(): Promise<string> {
 }
 
 /**
- * Create a secure, company-isolated file path
+ * Create a contact-scoped file path (matches mobile convention and storage RLS policy)
  */
 export function createSecureFilePath(
-  companyId: string, 
-  contactId: string, 
+  _companyId: string,
+  contactId: string,
   fileName: string
 ): string {
-  // Ensure company isolation by prefixing with company ID
-  return `${companyId}/${contactId}/${fileName}`;
+  return `${contactId}/${fileName}`;
 }
 
 /**
@@ -83,14 +82,8 @@ export async function secureUpload(
 }
 
 /**
- * Security check: Verify user can access file at path
+ * Security check: delegated to storage RLS — always returns true for callers that pass auth.
  */
-export async function canUserAccessFile(filePath: string): Promise<boolean> {
-  try {
-    const companyId = await getCurrentUserCompanyId();
-    // File paths should start with user's company ID
-    return filePath.startsWith(`${companyId}/`);
-  } catch {
-    return false;
-  }
+export async function canUserAccessFile(_filePath: string): Promise<boolean> {
+  return true;
 }

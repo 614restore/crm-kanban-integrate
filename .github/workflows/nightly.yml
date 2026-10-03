@@ -38,8 +38,7 @@ jobs:
       - name: Production build
         run: npm run build
         env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          # Supabase URL/key come from .env.production; the repo secret points at read-only QuoteMGR.
 
       - name: Verify dist output
         run: |

@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { formatDate, getContactFullName } from '@/lib/crmData';
 import { db } from '@/lib/database';
-import { uploadDocument, validateDocumentFile, formatFileSize, getDocumentSignedUrl, isHttpUrl, isSupabaseStorageUrl, deleteFile } from '@/lib/storage';
+import { uploadDocument, validateDocumentFile, formatFileSize, getDocumentSignedUrl, isHttpUrl, isSupabaseStorageUrl, deleteFile, extractStorageInfo } from '@/lib/storage';
 import { toast } from 'sonner';
 import {
   FileText,
@@ -236,14 +236,21 @@ export default function DocumentCenter() {
     }
   };
 
-  const handleDeleteDocument = (docId: string) => {
+  // Deletes the record and its stored file, e.g. a report uploaded to the wrong customer.
+  const handleDeleteDocument = (docId: string, url?: string) => {
     toast.warning('Delete this document? This cannot be undone.', {
       action: {
         label: 'Delete',
         onClick: async () => {
           const ok = await db.deleteDocument(docId);
           if (!ok) { toast.error('Failed to delete document'); return; }
+          const stored = url ? extractStorageInfo(url) : null;
+          if (stored) await deleteFile(stored.bucket, stored.path);
           setUploadedDocuments((prev) => prev.filter((doc) => doc.id !== docId));
+          const owner = state.contacts.find((c) => c.documents?.some((d) => d.id === docId));
+          if (owner) {
+            dispatch({ type: 'UPDATE_CONTACT', payload: { ...owner, documents: owner.documents!.filter((d) => d.id !== docId) } });
+          }
           toast.success('Document deleted');
         },
       },
@@ -605,7 +612,7 @@ export default function DocumentCenter() {
                             <Share2 size={16} className="text-gray-500" />
                           </button>
                           <button
-                            onClick={() => handleDeleteDocument(doc.id)}
+                            onClick={() => handleDeleteDocument(doc.id, doc.url)}
                             className="p-2 hover:bg-red-100 rounded-lg transition-colors"
                           >
                             <Trash2 size={16} className="text-red-500" />
@@ -662,7 +669,7 @@ export default function DocumentCenter() {
                       >
                         <Download size={14} className="text-gray-500" />
                       </button>
-                      <button onClick={() => handleDeleteDocument(doc.id)} className="p-1 hover:bg-red-100 rounded">
+                      <button onClick={() => handleDeleteDocument(doc.id, doc.url)} className="p-1 hover:bg-red-100 rounded">
                         <Trash2 size={14} className="text-red-500" />
                       </button>
                     </div>

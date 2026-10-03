@@ -34,6 +34,8 @@ export interface ChangeOrder {
   notes: string | null;
   created_by: string | null;
   created_at: string;
+  /** The signed quote this change order revises, when created from one. */
+  quote_id?: string | null;
 }
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -47,6 +49,8 @@ interface ChangeOrderModalProps {
   contactEmail?: string;
   changeOrder?: ChangeOrder | null;
   companyId: string;
+  /** When creating from a signed quote: links the change order to it and pre-fills the title. */
+  quote?: { id: string; quoteNumber: string } | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -80,6 +84,7 @@ export default function ChangeOrderModal({
   contactEmail,
   changeOrder,
   companyId,
+  quote = null,
 }: ChangeOrderModalProps) {
   const { profile } = useAuth();
 
@@ -115,15 +120,15 @@ export default function ChangeOrderModal({
         setSignLink(`${window.location.origin}/sign-change-order/${changeOrder.sign_token}`);
       }
     } else {
-      setTitle('');
-      setDescription('');
+      setTitle(quote ? `Change Order – ${quote.quoteNumber}` : '');
+      setDescription(quote ? `Changes to signed quote ${quote.quoteNumber}.` : '');
       setNotes('');
       setTaxRate(0);
       setItems([{ description: '', quantity: 1, unitPrice: 0, total: 0 }]);
       setSignLink(null);
     }
     setCopied(false);
-  }, [changeOrder, isOpen]);
+  }, [changeOrder, isOpen, quote?.id]);
 
   if (!isOpen) return null;
 
@@ -179,6 +184,8 @@ export default function ChangeOrderModal({
     items,
     notes: notes || null,
     created_by: profile?.id ?? null,
+    // Keep an existing link when editing; set it when created from a signed quote.
+    quote_id: changeOrder?.quote_id ?? quote?.id ?? null,
     ...(signToken !== undefined ? { sign_token: signToken } : {}),
     ...(sentAt !== undefined ? { sent_at: sentAt } : {}),
   });
