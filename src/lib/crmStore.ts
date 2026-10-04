@@ -1,5 +1,6 @@
 // CRM State Management using React Context
-import { createContext, useContext } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
+import { supabase } from './supabase';
 import { isSoldStatus, isLostStatus } from './statusDefinitions';
 import { quoteValue } from './crmData';
 import type {
@@ -841,6 +842,26 @@ export function usePipelineStats() {
 export function useFinancialStats() {
   const { state } = useCRM();
 
+  // Collected / outstanding come from one database function that both the web and mobile apps read, so
+  // receipts (payments recorded from either app) are counted and the two apps show the same figures.
+  // If it cannot be reached, the figures below are used as they were.
+  const [shared, setShared] = useState<null | {
+    total_collected: number;
+    total_outstanding: number;
+    invoices_paid: number;
+    invoices_sent_balance: number;
+    invoices_overdue_balance: number;
+  }>(null);
+  useEffect(() => {
+    let cancelled = false;
+    supabase.rpc('company_financial_summary').then(({ data, error }) => {
+      if (!cancelled && !error && data) setShared(data as any);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [state.invoices.length, state.contacts.length, state.companyId]);
+
   const stats = {
     // ── Revenue ──────────────────────────────────────────────────────────────
     /** Collected payments from contact-level deposit + final payment fields */
@@ -1001,6 +1022,15 @@ export function useFinancialStats() {
       stats.totalLaborCost += (wo.laborCost || 0);
     }
   });
+
+  if (shared) {
+    stats.totalCollected = Number(shared.total_collected);
+    stats.totalRevenue = Number(shared.total_collected);
+    stats.totalOutstanding = Number(shared.total_outstanding);
+    stats.paidInvoices = Number(shared.invoices_paid);
+    stats.outstandingInvoices = Number(shared.invoices_sent_balance);
+    stats.overdueInvoices = Number(shared.invoices_overdue_balance);
+  }
 
   return stats;
 }
