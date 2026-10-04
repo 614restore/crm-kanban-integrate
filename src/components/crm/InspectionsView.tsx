@@ -218,7 +218,11 @@ export default function InspectionsView() {
                       <ReportListItem
                         key={r.id}
                         report={r}
-                        onOpen={() => r.customer_id && dispatch({ type: 'SELECT_CONTACT', payload: r.customer_id })}
+                        onOpen={() => {
+                          if (!r.customer_id) return;
+                          dispatch({ type: 'SET_PENDING_QUOTE', payload: { contactId: r.customer_id, quoteId: r.id } });
+                          dispatch({ type: 'SET_VIEW', payload: 'quotes' });
+                        }}
                       />
                     ))}
                   </div>
