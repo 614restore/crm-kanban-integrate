@@ -29,6 +29,8 @@ interface SendInvoicePayload {
   from_company?: string;
   invoice_number: string;
   invoice_total: number;
+  /** Already paid (receipts, a down payment). When set, the email shows it and asks only for the balance. */
+  amount_paid?: number;
   due_date?: string;
   payment_instructions?: string;
   line_items?: LineItemPayload[];
@@ -64,6 +66,7 @@ const buildInvoiceHtml = (payload: SendInvoicePayload): string => {
     </tr>
   `).join('');
 
+  const paidSoFar = Math.max(0, Number(payload.amount_paid) || 0);
   const dueDate = payload.due_date ? new Date(payload.due_date) : null;
   const dueLine = dueDate && !isNaN(dueDate.getTime())
     ? `Payment is due by <strong>${dueDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</strong>.`
@@ -100,9 +103,14 @@ const buildInvoiceHtml = (payload: SendInvoicePayload): string => {
       </table>
       ` : ''}
 
+      ${paidSoFar > 0 && !payload.is_receipt ? `
+      <table style="width:100%;border-collapse:collapse;margin-bottom:12px;font-size:14px;color:#374151;">
+        <tr><td style="padding:6px 12px;">Invoice total</td><td style="padding:6px 12px;text-align:right;">${formatCurrency(payload.invoice_total)}</td></tr>
+        <tr><td style="padding:6px 12px;color:#15803d;">Payments received</td><td style="padding:6px 12px;text-align:right;color:#15803d;">− ${formatCurrency(paidSoFar)}</td></tr>
+      </table>` : ''}
       <div style="background:#1e3a5f;border-radius:12px;padding:20px 24px;display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
-        <span style="color:#fff;font-weight:600;font-size:16px;">${payload.is_receipt ? 'Total Paid' : 'Total Amount Due'}</span>
-        <span style="color:#fff;font-weight:700;font-size:24px;">${formatCurrency(payload.invoice_total)}</span>
+        <span style="color:#fff;font-weight:600;font-size:16px;">${payload.is_receipt ? 'Total Paid' : paidSoFar > 0 ? 'Balance Due' : 'Total Amount Due'}</span>
+        <span style="color:#fff;font-weight:700;font-size:24px;">${formatCurrency(payload.is_receipt ? payload.invoice_total : Math.max(0, payload.invoice_total - paidSoFar))}</span>
       </div>
 
       ${payload.payment_instructions ? `
