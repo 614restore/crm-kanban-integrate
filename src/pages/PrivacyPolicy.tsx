@@ -4,7 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 
 export default function PrivacyPolicy() {
   const navigate = useNavigate();
-  const effectiveDate = 'March 7, 2026';
+  const effectiveDate = 'October 4, 2026';
   const companyName = 'TrussCTR';
   const contactEmail = 'privacy@614restore.com';
 
@@ -37,7 +37,8 @@ export default function PrivacyPolicy() {
               <ul className="list-disc pl-6 space-y-2">
                 <li><strong>Account Information:</strong> Name, email address, company name, phone number, and password when you register</li>
                 <li><strong>Business Data:</strong> Customer contacts, estimates, invoices, project details, documents, photos, and communications you enter into the Service</li>
-                <li><strong>Payment Information:</strong> Billing details processed through our payment partners (we do not store full card numbers)</li>
+                <li><strong>Payment Information:</strong> Billing details processed through our payment partners (we do not store full card numbers). Subscriptions bought in the iOS app are processed by Apple; we receive only the subscription status, not your payment details</li>
+                <li><strong>Photos and Files:</strong> Job site photos, documents, and signatures you capture or upload. The mobile app asks for camera and photo library access only to take or attach photos, and saves photos to your library only when you choose to</li>
                 <li><strong>Communications:</strong> Messages you send to our support team</li>
               </ul>
 
@@ -45,7 +46,10 @@ export default function PrivacyPolicy() {
               <ul className="list-disc pl-6 space-y-2">
                 <li><strong>Usage Data:</strong> Pages visited, features used, actions taken, and timestamps</li>
                 <li><strong>Device Information:</strong> Browser type, operating system, IP address, and device identifiers</li>
-                <li><strong>Cookies and Local Storage:</strong> Session tokens and preference data stored in your browser to keep you logged in</li>
+                <li><strong>Cookies and Local Storage:</strong> Session tokens and preference data stored in your browser or on your device to keep you logged in</li>
+                <li><strong>Push Notification Tokens:</strong> If you allow notifications in the mobile app, a device token used to send you alerts (for example, quote and storm alerts)</li>
+                <li><strong>Addresses and Map Data:</strong> Property addresses you enter are converted to map locations (geocoded) to show jobs, storm data, and weather on a map</li>
+                <li><strong>Device Location (optional):</strong> When you take a job site photo in the web app and allow location access, the photo is tagged with your device's location at that moment. We do not track your location in the background, and the TrussCENTER iOS app does not access your device's location</li>
               </ul>
 
               <h3 className="font-semibold text-gray-800 mt-4 mb-2">2c. Information from Third Parties</h3>
@@ -78,11 +82,17 @@ export default function PrivacyPolicy() {
               <h3 className="font-semibold text-gray-800 mt-4 mb-2">4a. Service Providers</h3>
               <p>We use trusted third-party services to operate the platform:</p>
               <ul className="list-disc pl-6 space-y-2 mt-2">
-                <li><strong>Supabase</strong> — Database hosting and authentication (supabase.com)</li>
-                <li><strong>Vercel</strong> — API serverless function hosting (vercel.com)</li>
+                <li><strong>Supabase</strong> — Database hosting, file storage, and authentication (supabase.com)</li>
+                <li><strong>Vercel</strong> — Website hosting and serverless functions (vercel.com)</li>
+                <li><strong>Apple and RevenueCat</strong> — iOS in-app subscriptions and push notifications (apple.com, revenuecat.com)</li>
+                <li><strong>Stripe</strong> — Payment processing on the web (stripe.com)</li>
                 <li><strong>Resend</strong> — Transactional email delivery (resend.com)</li>
-                <li><strong>Intuit/QuickBooks</strong> — Accounting integration (intuit.com)</li>
-                <li><strong>GitHub</strong> — Application hosting (github.com)</li>
+                <li><strong>Twilio</strong> — Text messages, if you enable texting (twilio.com)</li>
+                <li><strong>Intuit/QuickBooks</strong> — Accounting integration, if you connect it (intuit.com)</li>
+                <li><strong>EagleView and Roofr</strong> — Roof measurement reports, if you connect them; the property address is shared to order a report</li>
+                <li><strong>AI providers</strong> (such as Groq, OpenAI, Anthropic, or Google) — When you use optional AI features, the text and job details you submit are sent to the provider to generate a response. They are not used by us to train models</li>
+                <li><strong>Map, geocoding, and weather services</strong> (such as Mapbox, MapTiler, Stadia Maps, Thunderforest, OpenStreetMap, the U.S. Census Bureau, the National Weather Service, NOAA, and OpenWeatherMap) — Property addresses or map locations are sent to show maps, storm history, and weather</li>
+                <li><strong>Financing partners</strong> — If you or your customer start a financing application, the information entered is sent to the lender you choose</li>
               </ul>
               <p className="mt-2">Each provider is bound by their own privacy policy and data processing agreements.</p>
 
@@ -144,7 +154,7 @@ export default function PrivacyPolicy() {
               <ul className="list-disc pl-6 space-y-2 mt-2">
                 <li><strong>Access:</strong> Request a copy of the personal data we hold about you</li>
                 <li><strong>Correction:</strong> Request correction of inaccurate personal data</li>
-                <li><strong>Deletion:</strong> Request deletion of your personal data (subject to legal retention requirements)</li>
+                <li><strong>Deletion:</strong> Request deletion of your personal data (subject to legal retention requirements). You can also delete your account yourself in the mobile app under Settings → Delete Account</li>
                 <li><strong>Portability:</strong> Request an export of your data in a machine-readable format</li>
                 <li><strong>Objection:</strong> Object to certain processing of your personal data</li>
               </ul>
