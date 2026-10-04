@@ -1967,7 +1967,7 @@ class DatabaseService {
     if (this.inDemoMode()) return true;
     try {
       const { error } = await this.raceTimeout(
-        supabase.from('notification_preferences').upsert(prefs),
+        supabase.from('notification_preferences').upsert(prefs, { onConflict: 'company_id,user_id' }),
         10000,
         'saveUserNotificationPreferences'
       );

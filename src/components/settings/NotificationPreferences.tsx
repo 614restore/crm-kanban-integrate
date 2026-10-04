@@ -74,11 +74,15 @@ export function NotificationPreferences() {
     setSaving(true);
     const { error } = await supabase
       .from('notification_preferences')
-      .upsert({
-        company_id: profile.company_id,
-        user_id: user.id,
-        ...prefs,
-      });
+      // One row per person: update it if it exists. Without a conflict target every save added a row.
+      .upsert(
+        {
+          company_id: profile.company_id,
+          user_id: user.id,
+          ...prefs,
+        },
+        { onConflict: 'company_id,user_id' }
+      );
     
     if (error) {
       toast.error('Failed to save preferences');
