@@ -7,6 +7,7 @@ import MobileDrawer from './MobileDrawer';
 import { useCompanyBrand } from '@/lib/useCompanyBrand';
 import { useCRM } from '@/lib/crmStore';
 import { RefreshCw, Menu, ChevronLeft } from 'lucide-react';
+import { IN_APP } from '@/lib/inAppMode';
 
 interface ResponsiveLayoutProps {
   children: React.ReactNode;
@@ -45,6 +46,35 @@ export default function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
     await queryClient.invalidateQueries();
     setIsRefreshing(false);
   };
+
+  // ── Inside the TrussCENTER app ─────────────────────────────────────────────
+  // The app has its own header, tab bar and tools menu; show only the tool,
+  // plus a back button once you have moved within it (e.g. into a contact).
+  if (IN_APP) {
+    const canGoBack = (state.viewHistory ?? []).length > 0;
+    return (
+      <div className="flex flex-col bg-gray-50 dark:bg-gray-900" style={{ height: '100dvh' }}>
+        {canGoBack && (
+          <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex items-center px-2 h-11 flex-shrink-0 z-20">
+            <button
+              onClick={() => dispatch({ type: 'GO_BACK' })}
+              className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-blue-600 dark:text-blue-400 text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              aria-label="Go back"
+            >
+              <ChevronLeft size={20} />
+              Back
+            </button>
+          </header>
+        )}
+        <main
+          className="flex-1 min-h-0 overflow-y-auto"
+          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+        >
+          <div className="h-full flex flex-col">{children}</div>
+        </main>
+      </div>
+    );
+  }
 
   // ── Desktop layout ─────────────────────────────────────────────────────────
   if (!isMobile) {

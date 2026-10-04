@@ -33,6 +33,7 @@ import { useIsMobile } from '@/hooks/useMediaQuery';
 import { Building2, Loader2, Zap, X, Tag, WifiOff, AlertTriangle, Download } from 'lucide-react';
 import { SubscriptionProvider, useSubscription } from '@/contexts/SubscriptionContext';
 import { exportAllData } from '@/lib/exportUtils';
+import { IN_APP, inAppStartView, inAppStartBoard } from '@/lib/inAppMode';
 
 // Lazy load all CRM view components for better code splitting
 const Dashboard = lazyScreen(() => import('./crm/Dashboard'));
@@ -100,6 +101,8 @@ function preloadCachedData(): Record<string, unknown> | null {
 
 // Initial CRM state (completely empty)
 const getInitialView = (): ViewType => {
+  // The TrussCENTER app opening one tool.
+  if (inAppStartView) return inAppStartView;
   try {
     const saved = localStorage.getItem('crm_current_view');
     if (saved) return saved as ViewType;
@@ -688,6 +691,16 @@ function CRMApp() {
   // Users can still log in, view contacts, and export data; write actions are blocked.
   const [isExpiredReadOnly, setIsExpiredReadOnly] = useState(false);
   const [connectionUnstable, setConnectionUnstable] = useState(false);
+  // The TrussCENTER app asked for a board: pick it once the company's boards
+  // are loaded (their ids are generated per company, so match by type).
+  const inAppBoardApplied = useRef(false);
+  useEffect(() => {
+    if (!inAppStartBoard || inAppBoardApplied.current) return;
+    const board = state.boards.find((b) => b.type === inAppStartBoard);
+    if (!board || !state.companyId) return;
+    inAppBoardApplied.current = true;
+    dispatch({ type: 'SELECT_BOARD', payload: board.id });
+  }, [state.boards, state.companyId]);
   useEffect(() => {
     try { localStorage.setItem('crm_current_view', state.currentView); } catch (e) { console.warn('[AppLayout] localStorage write failed (private browsing?):', e); }
   }, [state.currentView]);
@@ -1525,10 +1538,12 @@ useEffect(() => {
       <SubscriptionProvider value={{ isExpiredReadOnly }}>
       <ResponsiveLayout>
         <div className="flex flex-col h-full">
-          {/* Top bar only on desktop */}
-          <div className="hidden md:block">
-            <TopBar />
-          </div>
+          {/* Top bar only on desktop (the TrussCENTER app has its own) */}
+          {!IN_APP && (
+            <div className="hidden md:block">
+              <TopBar />
+            </div>
+          )}
 
           {/* Expired subscription banner (non-dismissable) — read-only mode notice */}
           {isExpiredReadOnly && (
