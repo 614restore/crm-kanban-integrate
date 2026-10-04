@@ -5,7 +5,8 @@ import Sidebar from '@/components/crm/Sidebar';
 import MobileTabBar from './MobileTabBar';
 import MobileDrawer from './MobileDrawer';
 import { useCompanyBrand } from '@/lib/useCompanyBrand';
-import { RefreshCw, Menu } from 'lucide-react';
+import { useCRM } from '@/lib/crmStore';
+import { RefreshCw, Menu, ChevronLeft } from 'lucide-react';
 
 interface ResponsiveLayoutProps {
   children: React.ReactNode;
@@ -14,6 +15,7 @@ interface ResponsiveLayoutProps {
 export default function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
   const isMobile = useIsMobile();
   const queryClient = useQueryClient();
+  const { state, dispatch } = useCRM();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [pullDistance, setPullDistance] = useState(0);
@@ -64,16 +66,28 @@ export default function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
     >
       {/* Mobile top header */}
       <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-4 h-14 flex-shrink-0 z-20">
-        <div className="flex items-center gap-2.5">
-          {companyLogoUrl && !logoFailed ? (
-            <img
-              src={companyLogoUrl}
-              alt="Logo"
-              className="w-8 h-8 rounded-lg object-contain"
-              onError={() => setLogoFailed(true)}
-            />
+        <div className="flex items-center gap-1.5">
+          {(state.viewHistory ?? []).length > 0 ? (
+            <button
+              onClick={() => dispatch({ type: 'GO_BACK' })}
+              className="p-1.5 -ml-1 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              aria-label="Go back"
+            >
+              <ChevronLeft size={22} />
+            </button>
           ) : (
-            <img src="/trussctr-logo-shield.png" alt="TrussCTR" className="w-8 h-8 object-contain" />
+            <>
+              {companyLogoUrl && !logoFailed ? (
+                <img
+                  src={companyLogoUrl}
+                  alt="Logo"
+                  className="w-8 h-8 rounded-lg object-contain"
+                  onError={() => setLogoFailed(true)}
+                />
+              ) : (
+                <img src="/trussctr-logo-shield.png" alt="TrussCTR" className="w-8 h-8 object-contain" />
+              )}
+            </>
           )}
           <span className="text-base font-bold text-gray-900 dark:text-white truncate max-w-[180px]">
             {companyName || 'TrussCTR'}
