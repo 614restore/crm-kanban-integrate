@@ -2,7 +2,7 @@
 // about (related_type / related_id); this maps that to the screen for it.
 import type { Dispatch } from 'react';
 import type { CRMAction } from '@/lib/crmStore';
-import { setPendingContactTab } from '@/lib/nextStepActions';
+import { setPendingContactTab, setPendingChangeOrderId } from '@/lib/nextStepActions';
 import { focusStormSearch } from '@/lib/stormReports';
 
 export interface NotificationTarget {
@@ -68,6 +68,9 @@ export function openNotificationTarget(target: NotificationTarget, dispatch: Dis
     case 'customer':
       if (!relatedId) return false;
       setPendingContactTab(CONTACT_TAB_BY_KIND[kind ?? ''] ?? 'overview');
+      if (kind === 'change_order_signed' && typeof target.data?.change_order_id === 'string') {
+        setPendingChangeOrderId(target.data.change_order_id);
+      }
       dispatch({ type: 'SELECT_CONTACT', payload: relatedId });
       return true;
     case 'appointment':
@@ -95,7 +98,8 @@ export function describeNotificationTarget(target: NotificationTarget): string |
   switch (target.relatedType) {
     case 'contact':
     case 'customer':
-      return target.relatedId ? 'Open contact' : null;
+      if (!target.relatedId) return null;
+      return target.kind === 'change_order_signed' ? 'View change order' : 'Open contact';
     case 'appointment':
       return target.relatedId ? 'Open appointment' : null;
     case 'stale_leads':

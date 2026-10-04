@@ -191,10 +191,36 @@ export default function Dashboard() {
     return items.sort((a, b) => b.time - a.time).slice(0, prefs.maxRows);
   }, [state.appointments, state.contacts, quoteEvents, prefs, profile?.id, state.currentUser?.id]);
 
-  // Get urgent items (pending payments, overdue, etc.)
-  const urgentItems = state.contacts.filter(
-    (c) => c.status === 'pending_payment' || c.status === 'contingency'
-  );
+  // Contact IDs that have at least one signed-but-not-approved change order.
+  const [signedCOContactIds, setSignedCOContactIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!companyId) return;
+    let cancelled = false;
+    const load = async () => {
+      const { data } = await supabase
+        .from('change_orders')
+        .select('contact_id')
+        .eq('company_id', companyId)
+        .eq('status', 'signed');
+      if (cancelled) return;
+      setSignedCOContactIds(new Set((data ?? []).map((r: any) => r.contact_id as string).filter(Boolean)));
+    };
+    void load();
+    const timer = window.setInterval(load, 60000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [companyId]);
+
+  // Get urgent items (pending payments, overdue, signed change orders awaiting approval).
+  const urgentItems = useMemo(() => {
+    const seen = new Set<string>();
+    const items: typeof state.contacts = [];
+    for (const c of state.contacts) {
+      if (c.status === 'pending_payment' || c.status === 'contingency' || signedCOContactIds.has(c.id)) {
+        if (!seen.has(c.id)) { seen.add(c.id); items.push(c); }
+      }
+    }
+    return items;
+  }, [state.contacts, signedCOContactIds]);
 
   // Top performers
   const topPerformers = state.teamMembers
@@ -534,7 +560,9 @@ export default function Dashboard() {
                 >
                   <ScheduleName as="p" contactId={contact.id} className="font-medium">{getContactFullName(contact)}</ScheduleName>
                   <p className="text-sm text-amber-600 mt-1">
-                    {contact.status === 'pending_payment'
+                    {signedCOContactIds.has(contact.id)
+                      ? 'Change order signed — awaiting your approval'
+                      : contact.status === 'pending_payment'
                       ? `Payment pending: ${formatCurrency(contact.finalPaymentAmount || 0)}`
                       : 'Waiting on insurance approval'}
                   </p>

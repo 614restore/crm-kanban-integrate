@@ -1,6 +1,6 @@
 import { PROJECT_TYPE_GROUPS, isPresetProjectType } from '@/lib/projectTypes';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { consumePendingContactTab, getNextStepForStatus, type NextStep } from '@/lib/nextStepActions';
+import { consumePendingContactTab, consumePendingChangeOrderId, getNextStepForStatus, type NextStep } from '@/lib/nextStepActions';
 
 // ── Schedule-data helpers ──────────────────────────────────────────────────
 // The mobile app serialises milestone data into the notes field using the
@@ -148,6 +148,7 @@ import {
   Archive,
   Pencil,
   Receipt,
+  AlertTriangle,
 } from 'lucide-react';
 
 type TabType = 'overview' | 'timeline' | 'documents' | 'financial' | 'projects' | 'jobStatus' | 'survey' | 'insurance';
@@ -322,6 +323,8 @@ export default function ContactDetail() {
   const [contactChangeOrders, setContactChangeOrders] = useState<ChangeOrder[]>([]);
   const [showChangeOrderModal, setShowChangeOrderModal] = useState(false);
   const [viewingChangeOrder, setViewingChangeOrder] = useState<ChangeOrder | null>(null);
+  // IDs of signed change-order banners the staff member has explicitly dismissed this session.
+  const [dismissedSignedCOIds, setDismissedSignedCOIds] = useState<Set<string>>(new Set());
   // Set when a change order is started from a signed quote, so it is linked to it.
   const [changeOrderQuote, setChangeOrderQuote] = useState<{ id: string; quoteNumber: string } | null>(null);
   // Quotes list "⋯" menu (fixed-position so the card layout cannot clip it).
@@ -456,8 +459,18 @@ export default function ContactDetail() {
         .select('*')
         .eq('contact_id', contactId)
         .order('created_at', { ascending: false });
-      setContactChangeOrders((changeOrders as ChangeOrder[]) ?? []);
-      
+      const loadedCOs = (changeOrders as ChangeOrder[]) ?? [];
+      setContactChangeOrders(loadedCOs);
+
+      // If a notification navigated here to view a specific change order, open it.
+      const pendingCOId = consumePendingChangeOrderId();
+      if (pendingCOId) {
+        const target = loadedCOs.find((co) => co.id === pendingCOId);
+        if (target) {
+          setViewingChangeOrder(target);
+          setShowChangeOrderModal(true);
+        }
+      }
     };
 
     loadContactRelatedData();
@@ -1816,6 +1829,44 @@ export default function ContactDetail() {
       <div className="flex-1 overflow-auto p-6">
         <NextAppointmentCard contactId={contact.id} />
         <CountersignBanner contactId={contact.id} />
+
+        {/* Persistent alert for every signed-but-not-yet-approved change order */}
+        {contactChangeOrders
+          .filter((co) => co.status === 'signed' && !dismissedSignedCOIds.has(co.id))
+          .map((co) => (
+            <div
+              key={co.id}
+              className="mb-4 flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4"
+            >
+              <AlertTriangle className="mt-0.5 shrink-0 text-amber-600" size={20} />
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-amber-900">Change Order Signed — Action Required</p>
+                <p className="text-sm text-amber-800 mt-0.5">
+                  <span className="font-medium">{co.change_order_number}</span>
+                  {co.title ? ` — ${co.title}` : ''}
+                  {' '}was signed by the customer
+                  {co.total != null ? ` · ${formatCurrency(co.total)}` : ''}.
+                  Review and approve it to proceed.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => { setViewingChangeOrder(co); setShowChangeOrderModal(true); }}
+                  className="px-3 py-1.5 text-sm font-medium bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors"
+                >
+                  View Change Order
+                </button>
+                <button
+                  onClick={() => setDismissedSignedCOIds((prev) => new Set([...prev, co.id]))}
+                  className="p-1.5 text-amber-500 hover:text-amber-700 rounded-lg hover:bg-amber-100 transition-colors"
+                  title="Dismiss this alert"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+          ))}
+
         {activeTab === 'overview' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Contact Info */}

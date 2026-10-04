@@ -300,3 +300,20 @@ export function consumePendingContactTab(): string | null {
   _pendingContactTab = null;
   return tab;
 }
+
+// ---------------------------------------------------------------------------
+// Lightweight cross-module "pending change order" slot — same pattern as above.
+// notificationNavigation sets it before dispatching SELECT_CONTACT.
+// ContactDetail reads+clears it on mount / contact change to auto-open the modal.
+// ---------------------------------------------------------------------------
+let _pendingChangeOrderId: string | null = null;
+
+export function setPendingChangeOrderId(id: string): void {
+  _pendingChangeOrderId = id;
+}
+
+export function consumePendingChangeOrderId(): string | null {
+  const id = _pendingChangeOrderId;
+  _pendingChangeOrderId = null;
+  return id;
+}

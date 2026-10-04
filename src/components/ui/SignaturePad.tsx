@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { RotateCcw, Check } from 'lucide-react';
+import { RotateCcw } from 'lucide-react';
 
 interface SignaturePadProps {
   onSave: (dataUrl: string) => void;
@@ -65,7 +65,15 @@ export default function SignaturePad({ onSave, onClear, width = 520, height = 18
   };
 
   const stopDraw = () => {
-    isDrawing.current = false;
+    if (isDrawing.current) {
+      isDrawing.current = false;
+      // Auto-capture the signature after every stroke so the caller always
+      // has the latest data — no separate "Accept & Sign" tap required.
+      const canvas = canvasRef.current;
+      if (canvas && hasSignature) {
+        onSave(canvas.toDataURL('image/png'));
+      }
+    }
   };
 
   const handleClear = () => {
@@ -76,12 +84,6 @@ export default function SignaturePad({ onSave, onClear, width = 520, height = 18
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     setHasSignature(false);
     onClear?.();
-  };
-
-  const handleSave = () => {
-    const canvas = canvasRef.current;
-    if (!canvas || !hasSignature) return;
-    onSave(canvas.toDataURL('image/png'));
   };
 
   return (
@@ -112,15 +114,6 @@ export default function SignaturePad({ onSave, onClear, width = 520, height = 18
         >
           <RotateCcw size={14} />
           Clear
-        </button>
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={!hasSignature}
-          className="flex items-center gap-1.5 px-4 py-1.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          <Check size={14} />
-          Accept &amp; Sign
         </button>
       </div>
     </div>
