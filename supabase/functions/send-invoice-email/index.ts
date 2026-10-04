@@ -7,6 +7,10 @@
 //    detail view already sends is_receipt, but its function ignored it.
 //  - Payload text is HTML-escaped before it goes into the email, and header fields
 //    are stripped of line breaks and angle brackets.
+//  - A company that has not set up its own SMTP account sends through the platform email service
+//    (Resend), as quotes, receipts and change orders already do. This function used to give up with
+//    'Email service not configured' for those companies, so no invoice could be emailed. Replies go to
+//    whoever sent it.
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import nodemailer from 'npm:nodemailer@6.10.0';
@@ -165,6 +169,8 @@ serve(async (req) => {
     let fromEmail = 'noreply@quotemgr.app';
     let fromName = headerSafe(payload.from_company) || 'TrussCTR';
     let transporter: any;
+    // Replies go to the person who sent this, not a fixed address.
+    const replyTo = user.email ? headerSafe(user.email) : undefined;
 
     try {
       const { data: company } = await getSupabaseAdmin()
@@ -187,6 +193,33 @@ serve(async (req) => {
       // Fall through to the shared sender
     }
 
+    const toName = headerSafe(payload.to_name);
+    const toEmail = headerSafe(payload.to_email);
+    const subject = `${payload.is_receipt ? 'Receipt' : 'Invoice'} #${headerSafe(payload.invoice_number)} from ${headerSafe(payload.from_company) || 'Your Contractor'}`;
+
+    // No SMTP account of their own: send through the platform email service.
+    const resendKey = Deno.env.get('RESEND_API_KEY');
+    if (!transporter && resendKey) {
+      const resp = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${resendKey}` },
+        body: JSON.stringify({
+          from: `${fromName} <invoices.quotemgr@614restore.com>`,
+          ...(replyTo ? { reply_to: replyTo } : {}),
+          to: [toEmail],
+          subject,
+          html: buildInvoiceHtml(payload),
+        }),
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!resp.ok) {
+        const detail = await resp.text().catch(() => '');
+        console.error('send-invoice-email: Resend error', resp.status, detail);
+        return json({ error: `The email provider rejected the message (${resp.status}).` }, 502);
+      }
+      return json({ success: true });
+    }
+
     if (!transporter) {
       const smtpHost = Deno.env.get('SMTP_HOST');
       const smtpUser = Deno.env.get('SMTP_USER');
@@ -205,12 +238,11 @@ serve(async (req) => {
       fromEmail = Deno.env.get('SMTP_FROM') || smtpUser;
     }
 
-    const toName = headerSafe(payload.to_name);
-    const toEmail = headerSafe(payload.to_email);
     await transporter.sendMail({
       from: `"${fromName}" <${fromEmail}>`,
       to: toName ? `"${toName}" <${toEmail}>` : toEmail,
-      subject: `${payload.is_receipt ? 'Receipt' : 'Invoice'} #${headerSafe(payload.invoice_number)} from ${headerSafe(payload.from_company) || 'Your Contractor'}`,
+      ...(replyTo ? { replyTo } : {}),
+      subject,
       html: buildInvoiceHtml(payload),
     });
 

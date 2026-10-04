@@ -102,3 +102,21 @@ export async function sendEmail(payload: SendEmailPayload, timeoutMs: number = 1
 
   return body;
 }
+
+/**
+ * The reason a Supabase function call failed, in words. supabase-js reports any non-2xx reply as
+ * "Edge Function returned a non-2xx status code", which hides what the function actually said (for
+ * example "Email service not configured"). The reply's own error message is in the response body.
+ */
+export async function describeFunctionError(err: unknown): Promise<string> {
+  const e = err as { message?: string; context?: { json?: () => Promise<{ error?: string } | null> } } | null;
+  try {
+    if (e?.context && typeof e.context.json === 'function') {
+      const body = await e.context.json();
+      if (body?.error) return String(body.error);
+    }
+  } catch {
+    // The body was not JSON: fall back to the generic message.
+  }
+  return e?.message ?? 'Unknown error';
+}

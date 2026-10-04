@@ -4,6 +4,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Plus, Trash2, FileText, Send, Download, Check, Calendar, DollarSign, ChevronDown, Eye, EyeOff } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { describeFunctionError } from '@/lib/emailApi';
 import { toast } from 'sonner';
 import { buildInvoicePDF, loadLogoAsBase64 as loadLogoBase64 } from '@/lib/buildInvoicePDF';
 
@@ -404,7 +405,7 @@ const InvoiceBuilder: React.FC<Props> = ({
                 },
               });
               if (emailErr) {
-                toast.error('Invoice saved but email failed: ' + emailErr.message);
+                toast.error('Invoice saved but email failed: ' + (await describeFunctionError(emailErr)));
               } else {
                 toast.success('Invoice emailed to ' + customerEmail);
               }
