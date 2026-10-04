@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import ScheduleName from './ScheduleName';
 import { supabase } from '@/lib/supabase';
 import { useCRM, usePipelineStats, useFinancialStats, useUpcomingAppointments } from '@/lib/crmStore';
+import { useCompanyFinancials } from '@/lib/useCompanyFinancials';
 import { useAuth } from '@/lib/authContext';
 import {
   formatCurrency,
@@ -65,7 +66,21 @@ export default function Dashboard() {
   const { state, dispatch } = useCRM();
   const { profile } = useAuth();
   const pipelineStats = usePipelineStats();
-  const financialStats = useFinancialStats();
+  const baseFinancialStats = useFinancialStats();
+  // Collected and outstanding come from the database's shared totals (the same ones mobile shows), which
+  // count receipts. The page's own calculation never read the payments table, so a receipt did not show.
+  const shared = useCompanyFinancials(profile?.company_id);
+  const financialStats = shared
+    ? {
+        ...baseFinancialStats,
+        totalCollected: shared.totalCollected,
+        totalRevenue: shared.totalCollected,
+        totalOutstanding: shared.totalOutstanding,
+        paidInvoices: shared.invoicesPaid,
+        outstandingInvoices: shared.invoicesSentBalance,
+        overdueInvoices: shared.invoicesOverdueBalance,
+      }
+    : baseFinancialStats;
   const upcomingAppointments = useUpcomingAppointments(7);
 
   // Calculate real trends by comparing contacts from last 30 days vs previous 30 days
