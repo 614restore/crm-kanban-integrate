@@ -40,6 +40,57 @@ const fmtDate = (iso: string) =>
 const totalPhotos = (counts: Record<string, number>) =>
   Object.values(counts).reduce((a, b) => a + b, 0);
 
+/* ─── Inspection reports ─────────────────────────────────────
+   An inspection report is its own document. It is shared with the homeowner or the insurance adjuster as
+   documentation of the damage, and it may carry the contingency agreement (the company agrees to handle
+   approved damage; the customer agrees to work with the contractor), which has a 3-business-day window for
+   the customer to cancel. It is stored alongside quotes but is not a quote. The wording of each state is
+   the same as the mobile app's Inspections screen. */
+interface ReportRow {
+  id: string;
+  quote_number: string;
+  status: string;
+  contingency_enabled: boolean | null;
+  contingency_signed_at: string | null;
+  contingency_cancel_signed_at: string | null;
+  viewed_at: string | null;
+  created_at: string;
+  customer_id: string | null;
+  customers: { first_name: string; last_name: string; address?: string | null } | null;
+}
+
+type Tone = 'gray' | 'blue' | 'amber' | 'green' | 'red';
+const TONE_CLASS: Record<Tone, string> = {
+  gray: 'bg-gray-100 text-gray-700',
+  blue: 'bg-blue-50 text-blue-700',
+  amber: 'bg-amber-50 text-amber-700',
+  green: 'bg-green-50 text-green-700',
+  red: 'bg-red-50 text-red-700',
+};
+
+function addBusinessDays(from: Date, days: number): Date {
+  const d = new Date(from);
+  let left = days;
+  while (left > 0) {
+    d.setDate(d.getDate() + 1);
+    if (d.getDay() !== 0 && d.getDay() !== 6) left--;
+  }
+  return d;
+}
+
+function reportState(r: ReportRow): { label: string; tone: Tone } {
+  if (r.contingency_cancel_signed_at) return { label: 'Contingency cancelled by customer', tone: 'red' };
+  if (r.contingency_signed_at) {
+    const end = addBusinessDays(new Date(r.contingency_signed_at), 3);
+    return end.getTime() > Date.now()
+      ? { label: `Contingency signed · cancel window ends ${end.toLocaleDateString()}`, tone: 'amber' }
+      : { label: 'Contingency signed', tone: 'green' };
+  }
+  if (r.viewed_at || r.status === 'viewed') return { label: 'Viewed by customer', tone: 'blue' };
+  if (r.status === 'sent') return { label: 'Sent', tone: 'blue' };
+  return { label: 'Draft', tone: 'gray' };
+}
+
 /* ════════════════════════════════════════════════════════════
    InspectionsView — main component
 ════════════════════════════════════════════════════════════ */
@@ -49,6 +100,7 @@ export default function InspectionsView() {
   const { profile } = useAuth();
 
   const [records, setRecords] = useState<InspectionRecord[]>([]);
+  const [reports, setReports] = useState<ReportRow[]>([]);
   const [loadingList, setLoadingList] = useState(true);
   const [search, setSearch] = useState('');
 
@@ -62,14 +114,26 @@ export default function InspectionsView() {
     if (!profile?.company_id) return;
     setLoadingList(true);
     try {
-      const { data } = await supabase
-        .from('inspections')
-        .select('*, contacts(first_name, last_name, address)')
-        .eq('company_id', profile.company_id)
-        .order('created_at', { ascending: false });
+      const [{ data }, { data: reportData }] = await Promise.all([
+        supabase
+          .from('inspections')
+          .select('*, contacts(first_name, last_name, address)')
+          .eq('company_id', profile.company_id)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('quotes')
+          .select(
+            'id, quote_number, status, contingency_enabled, contingency_signed_at, contingency_cancel_signed_at, viewed_at, created_at, customer_id, customers(first_name, last_name, address)'
+          )
+          .eq('company_id', profile.company_id)
+          .eq('project_type', 'inspection_report')
+          .order('created_at', { ascending: false }),
+      ]);
       setRecords((data as InspectionRecord[]) ?? []);
+      setReports((reportData as unknown as ReportRow[]) ?? []);
     } catch {
       setRecords([]);
+      setReports([]);
     } finally {
       setLoadingList(false);
     }
@@ -85,6 +149,13 @@ export default function InspectionsView() {
     return !q || name.includes(q) || addr.includes(q);
   });
 
+  const filteredReports = reports.filter((r) => {
+    const name = `${r.customers?.first_name ?? ''} ${r.customers?.last_name ?? ''}`.toLowerCase();
+    const addr = (r.customers?.address ?? '').toLowerCase();
+    const q = search.toLowerCase();
+    return !q || name.includes(q) || addr.includes(q) || r.quote_number.toLowerCase().includes(q);
+  });
+
   return (
     <div className="h-full flex flex-col">
       {/* ── Header ───────────────────────────────────────── */}
@@ -93,7 +164,9 @@ export default function InspectionsView() {
           <ClipboardList size={22} className="text-blue-600" />
           <div>
             <h1 className="text-xl font-bold text-gray-900">Inspections</h1>
-            <p className="text-xs text-gray-500">{records.length} inspection{records.length !== 1 ? 's' : ''} on file</p>
+            <p className="text-xs text-gray-500">
+              {reports.length} report{reports.length !== 1 ? 's' : ''} · {records.length} checklist{records.length !== 1 ? 's' : ''}
+            </p>
           </div>
         </div>
         <button
@@ -127,7 +200,7 @@ export default function InspectionsView() {
             <div className="flex-1 flex items-center justify-center py-16">
               <Loader2 size={24} className="animate-spin text-blue-500" />
             </div>
-          ) : filtered.length === 0 ? (
+          ) : filtered.length === 0 && filteredReports.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center py-16 text-center px-6">
               <ClipboardList size={40} className="text-gray-300 mb-3" />
               <p className="text-gray-500 font-medium">No inspections yet</p>
@@ -136,11 +209,32 @@ export default function InspectionsView() {
               </p>
             </div>
           ) : (
-            <div className="divide-y divide-gray-100">
-              {filtered.map(rec => (
-                <InspectionListItem key={rec.id} rec={rec} />
-              ))}
-            </div>
+            <>
+              {filteredReports.length > 0 && (
+                <div>
+                  <p className="px-4 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Inspection reports</p>
+                  <div className="divide-y divide-gray-100">
+                    {filteredReports.map((r) => (
+                      <ReportListItem
+                        key={r.id}
+                        report={r}
+                        onOpen={() => r.customer_id && dispatch({ type: 'SELECT_CONTACT', payload: r.customer_id })}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {filtered.length > 0 && (
+                <div>
+                  <p className="px-4 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Checklist inspections</p>
+                  <div className="divide-y divide-gray-100">
+                    {filtered.map(rec => (
+                      <InspectionListItem key={rec.id} rec={rec} />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
 
@@ -188,6 +282,28 @@ export default function InspectionsView() {
         )}
       </div>
     </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════
+   Inspection report list item
+════════════════════════════════════════════════════════════ */
+function ReportListItem({ report, onOpen }: { report: ReportRow; onOpen: () => void }) {
+  const name = report.customers ? `${report.customers.first_name} ${report.customers.last_name}`.trim() : 'Customer';
+  const state = reportState(report);
+  return (
+    <button onClick={onOpen} className="w-full text-left px-4 py-3 hover:bg-white transition-colors">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-gray-900 truncate">{name}</p>
+          {report.customers?.address && <p className="text-xs text-gray-500 truncate">{report.customers.address}</p>}
+          <p className="text-xs text-gray-400 mt-0.5">
+            {report.quote_number} · {new Date(report.created_at).toLocaleDateString()}
+          </p>
+        </div>
+        <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${TONE_CLASS[state.tone]}`}>{state.label}</span>
+      </div>
+    </button>
   );
 }
 
