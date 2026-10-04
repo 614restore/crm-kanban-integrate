@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import ScheduleName from './ScheduleName';
 import { supabase } from '@/lib/supabase';
 import { useCRM, usePipelineStats, useFinancialStats, useUpcomingAppointments } from '@/lib/crmStore';
@@ -7,9 +7,9 @@ import {
   formatCurrency,
   formatDate,
   statusLabels,
-  statusColors,
   getContactFullName,
   type Contact,
+  type Appointment,
 } from '@/lib/crmData';
 import {
   TrendingUp,
@@ -27,8 +27,9 @@ import {
   ChevronRight,
   Target,
   Zap,
-  Eye,
   PenLine,
+  HardHat,
+  Settings2,
 } from 'lucide-react';
 
 interface QuoteActivity {
@@ -41,15 +42,32 @@ interface QuoteActivity {
 }
 
 type ActivityItem =
-  | { kind: 'contact'; time: number; contact: Contact }
+  | { kind: 'appointment'; time: number; appt: Appointment; contact: Contact | undefined }
+  | { kind: 'build'; time: number; contact: Contact }
   | { kind: 'quote'; time: number; ev: QuoteActivity };
 
-const QUOTE_EVENT_TEXT: Record<string, { verb: string; icon: 'eye' | 'sign'; tint: string }> = {
-  viewed: { verb: 'opened', icon: 'eye', tint: 'bg-violet-100 text-violet-600' },
-  report_opened: { verb: 'opened the photo report on', icon: 'eye', tint: 'bg-violet-100 text-violet-600' },
-  signed: { verb: 'signed', icon: 'sign', tint: 'bg-emerald-100 text-emerald-600' },
-  countersigned: { verb: 'completed signing on', icon: 'sign', tint: 'bg-emerald-100 text-emerald-600' },
-};
+const BUILD_STATUSES = new Set(['build_phase', 'in_progress', 'ordering_material']);
+
+interface ActivityPrefs {
+  showAppointments: boolean;
+  showBuilds: boolean;
+  showSigned: boolean;
+  maxRows: 5 | 8 | 10;
+}
+
+const PREFS_KEY = 'dashboard_activity_prefs';
+
+function loadPrefs(): ActivityPrefs {
+  try {
+    const raw = localStorage.getItem(PREFS_KEY);
+    if (raw) return { ...defaultPrefs(), ...JSON.parse(raw) };
+  } catch { /* ignore */ }
+  return defaultPrefs();
+}
+
+function defaultPrefs(): ActivityPrefs {
+  return { showAppointments: true, showBuilds: true, showSigned: true, maxRows: 8 };
+}
 
 const timeAgo = (ms: number): string => {
   const mins = Math.floor((Date.now() - ms) / 60000);
@@ -91,8 +109,26 @@ export default function Dashboard() {
     return { contactGrowth, valueGrowth };
   }, [state.contacts]);
 
-  // Quote activity from customers (opened, photo report opened, signed, countersigned) -- the
-  // same log that raises the salesperson's alerts. Every occurrence is listed, not just the first.
+  const [prefs, setPrefs] = useState<ActivityPrefs>(loadPrefs);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch { /* ignore */ }
+  }, [prefs]);
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
+        setSettingsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [settingsOpen]);
+
+  // Quote activity from customers — signed events only.
   const [quoteEvents, setQuoteEvents] = useState<QuoteActivity[]>([]);
   const companyId = state.companyId;
   useEffect(() => {
@@ -102,7 +138,7 @@ export default function Dashboard() {
       const { data, error } = await (supabase.from('quote_notifications') as any)
         .select('id, quote_id, event_type, actor_name, created_at, quotes:quote_id(quote_number, customer_id)')
         .eq('company_id', companyId)
-        .in('event_type', ['viewed', 'report_opened', 'signed', 'countersigned'])
+        .eq('event_type', 'signed')
         .order('created_at', { ascending: false })
         .limit(10);
       if (cancelled || error) return;
@@ -113,16 +149,37 @@ export default function Dashboard() {
     return () => { cancelled = true; window.clearInterval(timer); };
   }, [companyId]);
 
-  // Recent activity: contacts updated lately, mixed with what customers did on their quotes.
-  const feed: ActivityItem[] = [
-    ...[...state.contacts]
-      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-      .slice(0, 5)
-      .map((contact): ActivityItem => ({ kind: 'contact', time: new Date(contact.updatedAt).getTime(), contact })),
-    ...quoteEvents.map((ev): ActivityItem => ({ kind: 'quote', time: new Date(ev.created_at).getTime(), ev })),
-  ]
-    .sort((a, b) => b.time - a.time)
-    .slice(0, 8);
+  // Recent activity feed — filtered and capped by user prefs.
+  const feed: ActivityItem[] = useMemo(() => {
+    const now = Date.now();
+    const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+    const sevenDays = 7 * 24 * 60 * 60 * 1000;
+    const items: ActivityItem[] = [
+      ...(prefs.showAppointments
+        ? [...state.appointments]
+            .filter(a => now - new Date(a.createdAt).getTime() < thirtyDays)
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+            .slice(0, prefs.maxRows)
+            .map((appt): ActivityItem => ({
+              kind: 'appointment',
+              time: new Date(appt.createdAt).getTime(),
+              appt,
+              contact: state.contacts.find(c => c.id === appt.contactId),
+            }))
+        : []),
+      ...(prefs.showBuilds
+        ? [...state.contacts]
+            .filter(c => BUILD_STATUSES.has(c.status) && now - new Date(c.updatedAt).getTime() < sevenDays)
+            .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+            .slice(0, prefs.maxRows)
+            .map((contact): ActivityItem => ({ kind: 'build', time: new Date(contact.updatedAt).getTime(), contact }))
+        : []),
+      ...(prefs.showSigned
+        ? quoteEvents.map((ev): ActivityItem => ({ kind: 'quote', time: new Date(ev.created_at).getTime(), ev }))
+        : []),
+    ];
+    return items.sort((a, b) => b.time - a.time).slice(0, prefs.maxRows);
+  }, [state.appointments, state.contacts, quoteEvents, prefs]);
 
   // Get urgent items (pending payments, overdue, etc.)
   const urgentItems = state.contacts.filter(
@@ -317,77 +374,113 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Recent Activity */}
         <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 shadow-sm">
-          <div className="p-6 border-b border-gray-100">
-            <h3 className="text-lg font-semibold text-gray-900">Recent Activity</h3>
+          <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Recent Activity</h3>
+            <div className="relative" ref={settingsRef}>
+              <button
+                onClick={() => setSettingsOpen(o => !o)}
+                className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors px-2 py-1 rounded-md hover:bg-gray-50"
+              >
+                <Settings2 size={13} />
+                <span>{prefs.maxRows} rows</span>
+              </button>
+              {settingsOpen && (
+                <div className="absolute right-0 top-8 z-30 w-52 bg-white border border-gray-200 rounded-xl shadow-lg p-3 space-y-3">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Show events</p>
+                  {(
+                    [
+                      { key: 'showAppointments', label: 'Appointments set' },
+                      { key: 'showBuilds',        label: 'Builds scheduled' },
+                      { key: 'showSigned',        label: 'Quote signatures' },
+                    ] as { key: keyof ActivityPrefs; label: string }[]
+                  ).map(({ key, label }) => (
+                    <label key={key} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={prefs[key] as boolean}
+                        onChange={e => setPrefs(p => ({ ...p, [key]: e.target.checked }))}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-3.5 w-3.5"
+                      />
+                      <span className="text-sm text-gray-700">{label}</span>
+                    </label>
+                  ))}
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide pt-1">Rows to show</p>
+                  <div className="flex gap-1.5">
+                    {([5, 8, 10] as const).map(n => (
+                      <button
+                        key={n}
+                        onClick={() => setPrefs(p => ({ ...p, maxRows: n }))}
+                        className={`flex-1 py-1 text-sm rounded-lg font-medium transition-colors ${
+                          prefs.maxRows === n
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-          <div className="divide-y divide-gray-50">
+          <div className="py-1">
+            {feed.length === 0 && (
+              <p className="px-5 py-4 text-sm text-gray-400">No recent activity</p>
+            )}
             {feed.map((item) => {
               if (item.kind === 'quote') {
-                const cfg = QUOTE_EVENT_TEXT[item.ev.event_type] ?? QUOTE_EVENT_TEXT.viewed;
                 const customerId = item.ev.quotes?.customer_id ?? null;
                 const quoteNo = item.ev.quotes?.quote_number ?? 'a quote';
                 return (
                   <div
                     key={`q-${item.ev.id}`}
                     onClick={() => customerId && handleViewContact(customerId)}
-                    className={`p-4 hover:bg-gray-50 transition-colors ${customerId ? 'cursor-pointer' : ''}`}
+                    className={`flex items-center gap-3 px-5 py-2.5 hover:bg-gray-50 transition-colors ${customerId ? 'cursor-pointer' : ''}`}
                   >
-                    <div className="flex items-center gap-4">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${cfg.tint}`}>
-                        {cfg.icon === 'sign' ? <PenLine size={18} /> : <Eye size={18} />}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-medium text-gray-900 truncate">
-                          {item.ev.actor_name || 'A customer'} {cfg.verb} {quoteNo}
-                        </p>
-                        <p className="text-sm text-gray-500">{timeAgo(item.time)}</p>
-                      </div>
-                    </div>
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0" />
+                    <span className="text-sm text-gray-800 truncate flex-1">
+                      <span className="font-medium">{item.ev.actor_name || 'A customer'}</span>
+                      {' signed '}
+                      <span className="text-gray-500">{quoteNo}</span>
+                    </span>
+                    <span className="text-xs text-gray-400 flex-shrink-0 ml-2">{timeAgo(item.time)}</span>
                   </div>
                 );
               }
+              if (item.kind === 'appointment') {
+                const contact = item.contact;
+                const name = contact ? getContactFullName(contact) : 'Unknown';
+                return (
+                  <div
+                    key={`a-${item.appt.id}`}
+                    onClick={() => contact && handleViewContact(contact.id)}
+                    className={`flex items-center gap-3 px-5 py-2.5 hover:bg-gray-50 transition-colors ${contact ? 'cursor-pointer' : ''}`}
+                  >
+                    <span className="w-2 h-2 rounded-full bg-violet-400 flex-shrink-0" />
+                    <span className="text-sm text-gray-800 truncate flex-1">
+                      Appointment set —{' '}
+                      <span className="font-medium">{name}</span>
+                    </span>
+                    <span className="text-xs text-gray-400 flex-shrink-0 ml-2">{timeAgo(item.time)}</span>
+                  </div>
+                );
+              }
+              // kind === 'build'
               const contact = item.contact;
-              const assignee = state.teamMembers.find((tm) => tm.id === contact.assignedTo);
               return (
                 <div
-                  key={contact.id}
+                  key={`b-${contact.id}`}
                   onClick={() => handleViewContact(contact.id)}
-                  className="p-4 hover:bg-gray-50 transition-colors cursor-pointer"
+                  className="flex items-center gap-3 px-5 py-2.5 hover:bg-gray-50 transition-colors cursor-pointer"
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold text-sm">
-                        {contact.firstName[0]}
-                        {contact.lastName[0]}
-                      </div>
-                      <div>
-                        <ScheduleName as="p" contactId={contact.id} className="font-medium">{getContactFullName(contact)}</ScheduleName>
-                        <div className="flex items-center gap-2 text-sm text-gray-500">
-                          <MapPin size={12} />
-                          <span>
-                            {contact.city}, {contact.state}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span
-                        className={`px-2.5 py-1 rounded-full text-xs font-medium ${
-                          statusColors[contact.status]
-                        }`}
-                      >
-                        {statusLabels[contact.status] ?? String(contact.status || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
-                      </span>
-                      {assignee && (
-                        <img
-                          src={assignee.avatar}
-                          alt={assignee.name}
-                          className="w-8 h-8 rounded-full object-cover"
-                          title={assignee.name}
-                        />
-                      )}
-                    </div>
-                  </div>
+                  <span className="w-2 h-2 rounded-full bg-orange-400 flex-shrink-0" />
+                  <span className="text-sm text-gray-800 truncate flex-1">
+                    Build scheduled —{' '}
+                    <span className="font-medium">{getContactFullName(contact)}</span>
+                    <span className="text-gray-400"> · {statusLabels[contact.status] ?? contact.status}</span>
+                  </span>
+                  <span className="text-xs text-gray-400 flex-shrink-0 ml-2">{timeAgo(item.time)}</span>
                 </div>
               );
             })}
