@@ -111,17 +111,23 @@ export function rangeDays(range: DateRange) {
 // ── Inputs ────────────────────────────────────────────────────────────────────
 
 export interface ApptRow {
+  customerId: string | null;
   assignedTo: string | null;
   status: string | null;
   startTime: string | null;
   createdAt: string | null;
 }
 
+/** A quote that has been signed in full and/or had its contingency agreement signed. */
 export interface SignedQuoteRow {
   id: string;
   customerId: string | null;
   createdBy: string | null;
-  signedAt: string;
+  /** When the quote itself was signed (a retail sale, or the full insurance job). */
+  signedAt: string | null;
+  /** When the contingency agreement was signed (an insurance sale). */
+  contingencySignedAt: string | null;
+  /** What the quote is worth once signed. */
   value: number;
 }
 
@@ -130,6 +136,8 @@ export interface CustomerRow {
   assignedTo: string | null;
   status: string | null;
   statusChangedAt: string | null;
+  inspectionCompletedAt: string | null;
+  inspectionCompletedBy: string | null;
 }
 
 export interface PaymentRow {
@@ -154,7 +162,7 @@ export interface SalesMetrics {
   revenueCollected: number;
   /** Deals sold for every appointment ran, or null with no appointments ran. */
   closeRate: number | null;
-  /** Average sold revenue per deal, or null with no deals. */
+  /** Average value of the quotes signed, or null with none signed. */
   avgDeal: number | null;
 }
 
@@ -167,16 +175,26 @@ function inRange(iso: string | null | undefined, range: DateRange) {
   return t >= range.from.getTime() && t < range.to.getTime();
 }
 
+const earliest = (a: string | null, b: string | null) =>
+  !a ? b : !b ? a : new Date(a).getTime() <= new Date(b).getTime() ? a : b;
+
 /**
  * The figures for one range, for one rep (`repId`) or the whole team (null).
  *  - Appointments set: booked during the range (by when they were created).
- *  - Appointments ran: on the calendar during the range and marked completed.
- *  - Sold: customers with a quote signed during the range; sold revenue is
- *    what those quotes are worth.
+ *  - Appointments ran: appointments on the calendar during the range marked
+ *    completed, and inspections completed during the range. A customer counts
+ *    once however many of these they had in the range.
+ *  - Sold: customers whose first sale fell in the range. A sale is a signed
+ *    contingency agreement (insurance) or a signed quote (retail), whichever
+ *    came first, so an insurance job is not counted again when the full quote
+ *    is signed later.
+ *  - Sold revenue: what the quotes signed in full during the range are worth
+ *    (an insurance job adds its value when its quote is signed).
  *  - Lost: customers moved to Lost/Declined during the range.
  *  - Collected: payments received during the range.
- * Deals, losses and payments count for the customer's assigned rep (a signed
- * quote with no assigned rep counts for whoever wrote the quote).
+ * Appointments count for the rep they are assigned to and inspections for
+ * whoever completed them. Sales, losses and payments count for the customer's
+ * assigned rep (a sale with no assigned rep counts for whoever wrote the quote).
  */
 export function computeMetrics(data: SalesData, range: DateRange, repId: string | null): SalesMetrics {
   const repOf = new Map(data.customers.map((c) => [c.id, c.assignedTo]));
@@ -184,13 +202,33 @@ export function computeMetrics(data: SalesData, range: DateRange, repId: string 
 
   const appts = data.appointments.filter((a) => forRep(a.assignedTo));
   const appointmentsSet = appts.filter((a) => inRange(a.createdAt, range)).length;
-  const appointmentsRan = appts.filter((a) => RAN.has((a.status || '').toLowerCase()) && inRange(a.startTime, range)).length;
 
-  const signed = data.signedQuotes.filter(
+  const ran = new Set<string>();
+  appts.forEach((a, i) => {
+    if (RAN.has((a.status || '').toLowerCase()) && inRange(a.startTime, range)) ran.add(a.customerId ?? `appt:${i}`);
+  });
+  for (const c of data.customers) {
+    if (inRange(c.inspectionCompletedAt, range) && forRep(c.inspectionCompletedBy || c.assignedTo)) ran.add(c.id);
+  }
+  const appointmentsRan = ran.size;
+
+  // First sale per customer (or per quote when it has no customer).
+  const firstSale = new Map<string, { at: string; rep: string | null }>();
+  for (const q of data.signedQuotes) {
+    const at = earliest(q.signedAt, q.contingencySignedAt);
+    if (!at) continue;
+    const key = q.customerId || q.id;
+    const seen = firstSale.get(key);
+    if (!seen || new Date(at).getTime() < new Date(seen.at).getTime()) {
+      firstSale.set(key, { at, rep: (q.customerId && repOf.get(q.customerId)) || q.createdBy });
+    }
+  }
+  const sold = [...firstSale.values()].filter((f) => inRange(f.at, range) && forRep(f.rep)).length;
+
+  const signedInFull = data.signedQuotes.filter(
     (q) => inRange(q.signedAt, range) && forRep((q.customerId && repOf.get(q.customerId)) || q.createdBy),
   );
-  const sold = new Set(signed.map((q) => q.customerId || q.id)).size;
-  const revenueSold = signed.reduce((sum, q) => sum + q.value, 0);
+  const revenueSold = signedInFull.reduce((sum, q) => sum + q.value, 0);
 
   const lost = data.customers.filter(
     (c) => LOST.has((c.status || '').toLowerCase()) && inRange(c.statusChangedAt, range) && forRep(c.assignedTo),
@@ -208,7 +246,7 @@ export function computeMetrics(data: SalesData, range: DateRange, repId: string 
     revenueSold,
     revenueCollected,
     closeRate: appointmentsRan > 0 ? sold / appointmentsRan : null,
-    avgDeal: sold > 0 ? revenueSold / sold : null,
+    avgDeal: signedInFull.length > 0 ? revenueSold / signedInFull.length : null,
   };
 }
 
