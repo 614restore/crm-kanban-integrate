@@ -59,6 +59,13 @@ for (let h = 6; h <= 20; h++) {
   }
 }
 
+function formatRescheduleLabel(d: string, t: string): string {
+  const [y, mo, day] = d.split('-').map(Number);
+  const dateObj = new Date(y, mo - 1, day);
+  const datePart = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  return `Rescheduled to ${datePart} at ${formatTimeLabel(t)}`;
+}
+
 function formatTimeLabel(time: string): string {
   const [hours, minutes] = time.split(':');
   const h = parseInt(hours);
@@ -107,6 +114,12 @@ export default function AppointmentModal({
   >([]);
   const [mentionIndex, setMentionIndex] = useState(0);
 
+  // Reschedule picker triggered by typing "reschedule" in notes
+  const [showReschedule, setShowReschedule] = useState(false);
+  const [rescheduleDate, setRescheduleDate] = useState('');
+  const [rescheduleTime, setRescheduleTime] = useState('');
+  const rescheduleRef = useRef<HTMLDivElement>(null);
+
   // Prefill location from contact address
   useEffect(() => {
     if (contactId && !location) {
@@ -144,11 +157,39 @@ export default function AppointmentModal({
         setLocation('');
         setNotes('');
       }
+      setShowReschedule(false);
     }
   }, [isOpen, editingAppointment, selectedDate, preselectedContactId]);
 
+  // Click-outside closes reschedule popover
+  useEffect(() => {
+    if (!showReschedule) return;
+    const handler = (e: MouseEvent) => {
+      if (rescheduleRef.current && !rescheduleRef.current.contains(e.target as Node)) {
+        setShowReschedule(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showReschedule]);
+
+  const applyReschedule = () => {
+    setDate(rescheduleDate);
+    setTime(rescheduleTime);
+    const label = formatRescheduleLabel(rescheduleDate, rescheduleTime);
+    setNotes((n) => n.replace(/\breschedule\b/i, label));
+    setShowReschedule(false);
+  };
+
   const handleNotesChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
+    const hadReschedule = /\breschedule\b/i.test(notes);
+    const hasReschedule = /\breschedule\b/i.test(val);
+    if (!hadReschedule && hasReschedule && !showReschedule) {
+      setRescheduleDate(date);
+      setRescheduleTime(time);
+      setShowReschedule(true);
+    }
     setNotes(val);
 
     const caret = e.target.selectionStart || 0;
@@ -592,7 +633,7 @@ export default function AppointmentModal({
               <FileText size={14} className="inline mr-1" />
               Notes
               <span className="text-xs text-gray-400 ml-2">
-                Type @ to tag team members
+                Type @ to tag · type "reschedule" to update date
               </span>
             </label>
             <textarea
@@ -604,6 +645,63 @@ export default function AppointmentModal({
               placeholder="Add notes... Use @name to tag team members"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none resize-none"
             />
+
+            {/* Reschedule date/time picker */}
+            {showReschedule && (
+              <div
+                ref={rescheduleRef}
+                className="absolute top-full left-0 mt-1 z-50 bg-white border border-blue-200 rounded-xl shadow-lg p-3 w-72"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-semibold text-blue-700 flex items-center gap-1.5">
+                    <Calendar size={12} />
+                    Set new date &amp; time
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowReschedule(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+                <div className="flex gap-2 mb-3">
+                  <input
+                    type="date"
+                    value={rescheduleDate}
+                    onChange={(e) => setRescheduleDate(e.target.value)}
+                    className="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                  />
+                  <select
+                    value={rescheduleTime}
+                    onChange={(e) => setRescheduleTime(e.target.value)}
+                    className="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                  >
+                    {timeSlots.map((t) => (
+                      <option key={t} value={t}>
+                        {formatTimeLabel(t)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={applyReschedule}
+                    className="flex-1 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 font-medium transition-colors"
+                  >
+                    Set
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowReschedule(false)}
+                    className="flex-1 px-3 py-1.5 border border-gray-300 text-gray-600 text-sm rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Skip
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Mention suggestions dropdown */}
             {mentionQuery && mentionSuggestions.length > 0 && (

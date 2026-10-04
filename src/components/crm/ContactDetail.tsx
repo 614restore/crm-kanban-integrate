@@ -23,6 +23,26 @@ function rebuildWithSchedulePrefix(original: string | null | undefined, newPlain
   return `${prefix}\n\n${newPlainNotes.trim()}`;
 }
 // ──────────────────────────────────────────────────────────────────────────
+
+// Reschedule-note helpers (shared between quickNote and timeline note)
+const CD_TIME_SLOTS: string[] = [];
+for (let _h = 6; _h <= 20; _h++) {
+  for (let _m = 0; _m < 60; _m += 15) {
+    CD_TIME_SLOTS.push(`${String(_h).padStart(2, '0')}:${String(_m).padStart(2, '0')}`);
+  }
+}
+function cdFormatTimeLabel(t: string): string {
+  const [h, mm] = t.split(':');
+  const hr = parseInt(h, 10);
+  return `${hr % 12 || 12}:${mm} ${hr >= 12 ? 'PM' : 'AM'}`;
+}
+function cdFormatRescheduleLabel(d: string, t: string): string {
+  const [y, mo, day] = d.split('-').map(Number);
+  const dateObj = new Date(y, mo - 1, day);
+  const datePart = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  return `Rescheduled to ${datePart} at ${cdFormatTimeLabel(t)}`;
+}
+
 import { useCRM, useCurrentContact } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
@@ -317,6 +337,15 @@ export default function ContactDetail() {
   
   const [showRoofrPicker, setShowRoofrPicker] = useState(false);
   const [contactQuotes, setContactQuotes] = useState<QuoteSummary[]>([]);
+
+  // Reschedule-note picker
+  const [rescheduleNoteOpen, setRescheduleNoteOpen] = useState(false);
+  const [rescheduleNoteTarget, setRescheduleNoteTarget] = useState<'new' | 'quick'>('new');
+  const [rescheduleNoteDate, setRescheduleNoteDate] = useState('');
+  const [rescheduleNoteTime, setRescheduleNoteTime] = useState('');
+  const [rescheduleNoteApptId, setRescheduleNoteApptId] = useState<string | null>(null);
+  const rescheduleNoteRef = useRef<HTMLDivElement>(null);
+
   const noteInputRef = useRef<HTMLInputElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
@@ -1481,6 +1510,60 @@ export default function ContactDetail() {
     }
   };
 
+  // Click-outside closes the reschedule-note popover
+  useEffect(() => {
+    if (!rescheduleNoteOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (rescheduleNoteRef.current && !rescheduleNoteRef.current.contains(e.target as Node)) {
+        setRescheduleNoteOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [rescheduleNoteOpen]);
+
+  const openRescheduleNotePicker = (target: 'new' | 'quick') => {
+    const now = new Date();
+    const contactAppts = state.appointments.filter(
+      (a) => a.contactId === contact?.id && a.status === 'scheduled'
+    );
+    const upcoming = contactAppts
+      .filter((a) => new Date(`${a.date}T${a.time}`) > now)
+      .sort((a, b) => new Date(`${a.date}T${a.time}`).getTime() - new Date(`${b.date}T${b.time}`).getTime())[0];
+    const appt = upcoming ?? contactAppts.sort((a, b) => b.date.localeCompare(a.date))[0];
+    setRescheduleNoteDate(appt?.date ?? new Date().toISOString().split('T')[0]);
+    setRescheduleNoteTime(appt?.time ?? '09:00');
+    setRescheduleNoteApptId(appt?.id ?? null);
+    setRescheduleNoteTarget(target);
+    setRescheduleNoteOpen(true);
+  };
+
+  const applyRescheduleNote = async () => {
+    const label = cdFormatRescheduleLabel(rescheduleNoteDate, rescheduleNoteTime);
+    if (rescheduleNoteApptId) {
+      const appt = state.appointments.find((a) => a.id === rescheduleNoteApptId);
+      if (appt) {
+        const updated = await db.updateAppointment(rescheduleNoteApptId, {
+          date: rescheduleNoteDate,
+          time: rescheduleNoteTime,
+          duration: appt.duration,
+        });
+        if (updated) {
+          dispatch({
+            type: 'UPDATE_APPOINTMENT',
+            payload: { ...appt, date: rescheduleNoteDate, time: rescheduleNoteTime },
+          });
+        }
+      }
+    }
+    if (rescheduleNoteTarget === 'new') {
+      setNewNote((n) => n.replace(/\breschedule\b/i, label));
+    } else {
+      setQuickNote((n) => n.replace(/\breschedule\b/i, label));
+    }
+    setRescheduleNoteOpen(false);
+  };
+
   const handleQuickCall = () => {
     if (!contact.phone1) {
       toast.error('No phone number available');
@@ -2281,13 +2364,73 @@ export default function ContactDetail() {
                     <p className="text-gray-700 whitespace-pre-wrap">
                       {stripSchedulePrefix(contact.notes) || 'No notes added yet.'}
                     </p>
-                    <textarea
-                      value={quickNote}
-                      onChange={(e) => setQuickNote(e.target.value)}
-                      rows={4}
-                      placeholder="Add or update internal notes for this customer..."
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none resize-none"
-                    />
+                    <div className="relative">
+                      <textarea
+                        value={quickNote}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (/\breschedule\b/i.test(val) && !/\breschedule\b/i.test(quickNote)) {
+                            openRescheduleNotePicker('quick');
+                          }
+                          setQuickNote(val);
+                        }}
+                        rows={4}
+                        placeholder="Add or update internal notes… type 'reschedule' to update date"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none resize-none"
+                      />
+                      {rescheduleNoteOpen && rescheduleNoteTarget === 'quick' && (
+                        <div
+                          ref={rescheduleNoteRef}
+                          className="absolute top-full left-0 mt-1 z-50 bg-white border border-blue-200 rounded-xl shadow-lg p-3 w-72"
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-semibold text-blue-700 flex items-center gap-1.5">
+                              <Calendar size={12} />
+                              Set new date &amp; time
+                            </span>
+                            <button type="button" onClick={() => setRescheduleNoteOpen(false)} className="text-gray-400 hover:text-gray-600">
+                              <X size={14} />
+                            </button>
+                          </div>
+                          {rescheduleNoteApptId === null && (
+                            <p className="text-xs text-amber-600 mb-2">No scheduled appointment found — date won't update the calendar.</p>
+                          )}
+                          <div className="flex gap-2 mb-3">
+                            <input
+                              type="date"
+                              value={rescheduleNoteDate}
+                              onChange={(e) => setRescheduleNoteDate(e.target.value)}
+                              className="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                            />
+                            <select
+                              value={rescheduleNoteTime}
+                              onChange={(e) => setRescheduleNoteTime(e.target.value)}
+                              className="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                            >
+                              {CD_TIME_SLOTS.map((t) => (
+                                <option key={t} value={t}>{cdFormatTimeLabel(t)}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => { void applyRescheduleNote(); }}
+                              className="flex-1 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 font-medium transition-colors"
+                            >
+                              Set
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setRescheduleNoteOpen(false)}
+                              className="flex-1 px-3 py-1.5 border border-gray-300 text-gray-600 text-sm rounded-lg hover:bg-gray-50 transition-colors"
+                            >
+                              Skip
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                     <div className="flex justify-end">
                       <button
                         onClick={() => { void handleSaveQuickNote(); }}
@@ -2587,9 +2730,13 @@ export default function ContactDetail() {
                     type="text"
                     value={newNote}
                     onChange={(e) => {
-                      setNewNote(e.target.value);
-                      const caret = e.target.selectionStart ?? e.target.value.length;
-                      syncMentionSuggestions(e.target.value, caret);
+                      const val = e.target.value;
+                      if (/\breschedule\b/i.test(val) && !/\breschedule\b/i.test(newNote)) {
+                        openRescheduleNotePicker('new');
+                      }
+                      setNewNote(val);
+                      const caret = e.target.selectionStart ?? val.length;
+                      syncMentionSuggestions(val, caret);
                     }}
                     onClick={(e) => {
                       const target = e.target as HTMLInputElement;
@@ -2614,9 +2761,61 @@ export default function ContactDetail() {
                         void handleAddNote();
                       }
                     }}
-                    placeholder="Add a note… type @ to tag a teammate and notify them"
+                    placeholder="Add a note… type @ to tag · type 'reschedule' to update date"
                     className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                   />
+                  {rescheduleNoteOpen && rescheduleNoteTarget === 'new' && (
+                    <div
+                      ref={rescheduleNoteRef}
+                      className="absolute top-full left-0 mt-1 z-50 bg-white border border-blue-200 rounded-xl shadow-lg p-3 w-72"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-semibold text-blue-700 flex items-center gap-1.5">
+                          <Calendar size={12} />
+                          Set new date &amp; time
+                        </span>
+                        <button type="button" onClick={() => setRescheduleNoteOpen(false)} className="text-gray-400 hover:text-gray-600">
+                          <X size={14} />
+                        </button>
+                      </div>
+                      {rescheduleNoteApptId === null && (
+                        <p className="text-xs text-amber-600 mb-2">No scheduled appointment found — date won't update the calendar.</p>
+                      )}
+                      <div className="flex gap-2 mb-3">
+                        <input
+                          type="date"
+                          value={rescheduleNoteDate}
+                          onChange={(e) => setRescheduleNoteDate(e.target.value)}
+                          className="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                        />
+                        <select
+                          value={rescheduleNoteTime}
+                          onChange={(e) => setRescheduleNoteTime(e.target.value)}
+                          className="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                        >
+                          {CD_TIME_SLOTS.map((t) => (
+                            <option key={t} value={t}>{cdFormatTimeLabel(t)}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => { void applyRescheduleNote(); }}
+                          className="flex-1 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 font-medium transition-colors"
+                        >
+                          Set
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setRescheduleNoteOpen(false)}
+                          className="flex-1 px-3 py-1.5 border border-gray-300 text-gray-600 text-sm rounded-lg hover:bg-gray-50 transition-colors"
+                        >
+                          Skip
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   {mentionSuggestions.length > 0 && (
                     <div className="absolute z-10 mt-2 w-full bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
                       {mentionSuggestions.map((target) => (
