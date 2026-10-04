@@ -4,9 +4,9 @@ import { ArrowLeft } from 'lucide-react';
 
 export default function TermsOfService() {
   const navigate = useNavigate();
-  const effectiveDate = 'March 7, 2026';
+  const effectiveDate = 'October 4, 2026';
   const companyName = 'TrussCTR';
-  const contactEmail = 'legal@614restore.com';
+  const contactEmail = 'executivestack@outlook.com';
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -73,7 +73,7 @@ export default function TermsOfService() {
 
             <section>
               <h2 className="text-xl font-semibold text-gray-900 mb-3">7. Third-Party Integrations</h2>
-              <p>The Service integrates with third-party platforms including but not limited to QuickBooks (Intuit Inc.), Resend (email delivery), and Supabase (database infrastructure). Your use of these integrations is subject to those providers' respective terms of service and privacy policies. We are not responsible for the availability, accuracy, or conduct of third-party services.</p>
+              <p>The Service integrates with third-party platforms including but not limited to QuickBooks (Intuit Inc.), Resend (email delivery), Supabase (database infrastructure), Stripe (payments), Twilio (text messaging), EagleView and Roofr (roof measurements), and AI providers for optional AI features. Your use of these integrations is subject to those providers' respective terms of service and privacy policies. We are not responsible for the availability, accuracy, or conduct of third-party services.</p>
             </section>
 
             <section>
@@ -84,6 +84,7 @@ export default function TermsOfService() {
             <section>
               <h2 className="text-xl font-semibold text-gray-900 mb-3">9. Payment and Billing</h2>
               <p>Access to premium features of the Service may require payment of subscription fees. All fees are stated in U.S. dollars. Subscriptions auto-renew unless cancelled before the renewal date. Refunds are provided at our discretion. We reserve the right to modify pricing with 30 days' notice.</p>
+              <p className="mt-3"><strong>Purchases in the iOS app:</strong> Subscriptions bought in the TrussCENTER iOS app are billed through your Apple ID at confirmation of purchase and renew automatically unless cancelled at least 24 hours before the end of the current period. Manage or cancel them in your Apple ID account settings; refunds for these purchases are handled by Apple. Use of the iOS app is also governed by our <a href="/eula" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">End-User License Agreement</a>.</p>
             </section>
 
             <section>
