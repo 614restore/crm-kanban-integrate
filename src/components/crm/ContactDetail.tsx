@@ -3277,6 +3277,71 @@ export default function ContactDetail() {
 
         {activeTab === 'financial' && (
           <div className="space-y-6">
+            {/* Actions first — always visible without scrolling */}
+            <div className="bg-white rounded-xl border border-gray-200 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Actions</h3>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={openNewQuote}
+                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+                >
+                  <Plus size={18} />
+                  New Quote
+                </button>
+                <button
+                  onClick={openNewInspection}
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-indigo-200 text-indigo-700 rounded-lg hover:bg-indigo-50 transition-colors"
+                  title="Inspection report with contingency agreement and 3-day cancel notice"
+                >
+                  <Shield size={18} />
+                  New Inspection Report
+                </button>
+                {(() => {
+                  const pdfs = (contactDocuments || []).filter(d =>
+                    d.name?.toLowerCase().endsWith('.pdf') || d.url?.toLowerCase().includes('.pdf')
+                  );
+                  if (pdfs.length === 0) return null;
+                  return (
+                    <div className="relative">
+                      <button
+                        onClick={() => setShowRoofrPicker(p => !p)}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        <Zap size={18} />
+                        Quote from PDF
+                      </button>
+                      {showRoofrPicker && (
+                        <div className="absolute left-0 top-full mt-1 z-50 bg-white border border-gray-200 rounded-xl shadow-lg min-w-[220px]">
+                          <p className="text-xs font-medium text-gray-500 px-3 pt-3 pb-1">Choose a Roofr PDF</p>
+                          {pdfs.map(doc => (
+                            <button
+                              key={doc.id}
+                              onClick={() => handleQuoteFromDoc(doc)}
+                              className="w-full flex items-center gap-2 px-3 py-2 hover:bg-blue-50 text-left text-sm text-gray-800 last:rounded-b-xl"
+                            >
+                              <FileText size={14} className="text-blue-500 flex-shrink-0" />
+                              <span className="truncate">{doc.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+                <button
+                  onClick={() => openQuoteAction('invoice')}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <Plus size={18} />
+                  Create Invoice
+                </button>
+                <button onClick={() => openQuoteAction('payment')} className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                  <DollarSign size={18} />
+                  Record Payment
+                </button>
+              </div>
+            </div>
+
             <CustomerPayments contactId={contact.id} projectValue={contact.projectValue} />
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="bg-white rounded-xl border border-gray-200 p-6">
@@ -3342,70 +3407,6 @@ export default function ContactDetail() {
             </div>
 
             <ContactInsuranceSummary contactId={contact.id} />
-
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Actions</h3>
-              <div className="flex flex-wrap gap-3">
-                <button
-                  onClick={openNewQuote}
-                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
-                >
-                  <Plus size={18} />
-                  New Quote
-                </button>
-                <button
-                  onClick={openNewInspection}
-                  className="flex items-center gap-2 px-4 py-2 bg-white border border-indigo-200 text-indigo-700 rounded-lg hover:bg-indigo-50 transition-colors"
-                  title="Inspection report with contingency agreement and 3-day cancel notice"
-                >
-                  <Shield size={18} />
-                  New Inspection Report
-                </button>
-                {(() => {
-                  const pdfs = (contactDocuments || []).filter(d =>
-                    d.name?.toLowerCase().endsWith('.pdf') || d.url?.toLowerCase().includes('.pdf')
-                  );
-                  if (pdfs.length === 0) return null;
-                  return (
-                    <div className="relative">
-                      <button
-                        onClick={() => setShowRoofrPicker(p => !p)}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                      >
-                        <Zap size={18} />
-                        Quote from PDF
-                      </button>
-                      {showRoofrPicker && (
-                        <div className="absolute left-0 top-full mt-1 z-50 bg-white border border-gray-200 rounded-xl shadow-lg min-w-[220px]">
-                          <p className="text-xs font-medium text-gray-500 px-3 pt-3 pb-1">Choose a Roofr PDF</p>
-                          {pdfs.map(doc => (
-                            <button
-                              key={doc.id}
-                              onClick={() => handleQuoteFromDoc(doc)}
-                              className="w-full flex items-center gap-2 px-3 py-2 hover:bg-blue-50 text-left text-sm text-gray-800 last:rounded-b-xl"
-                            >
-                              <FileText size={14} className="text-blue-500 flex-shrink-0" />
-                              <span className="truncate">{doc.name}</span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
-                <button
-                  onClick={() => openQuoteAction('invoice')}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  <Plus size={18} />
-                  Create Invoice
-                </button>
-                <button onClick={() => openQuoteAction('payment')} className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-                  <DollarSign size={18} />
-                  Record Payment
-                </button>
-              </div>
-            </div>
           </div>
         )}
 
