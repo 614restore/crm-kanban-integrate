@@ -5,6 +5,7 @@ import { sendEmail } from '@/lib/emailApi';
 import { fireAutomationEvent } from '@/lib/automationEngine';
 import { exportToExcel, printDataAsPDF } from '@/lib/exportUtils';
 import { useAuth } from '@/lib/authContext';
+import SalesPerformance from './SalesPerformance';
 import { toast } from 'sonner';
 import {
   formatCurrency,
@@ -351,6 +352,9 @@ export default function FinancialDashboard() {
           </button>
         </div>
       </div>
+
+      {/* Appointments, deals and revenue for any period, with goals */}
+      <SalesPerformance />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
