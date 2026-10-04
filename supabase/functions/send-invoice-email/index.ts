@@ -40,6 +40,8 @@ interface SendInvoicePayload {
   line_items?: LineItemPayload[];
   company_id?: string;
   is_receipt?: boolean;
+  /** Optional Stripe / payment-processor URL. When present a "Pay Now" button appears in the email. */
+  payment_link_url?: string;
 }
 
 const json = (body: unknown, status = 200) =>
@@ -116,6 +118,12 @@ const buildInvoiceHtml = (payload: SendInvoicePayload): string => {
         <span style="color:#fff;font-weight:600;font-size:16px;">${payload.is_receipt ? 'Total Paid' : paidSoFar > 0 ? 'Balance Due' : 'Total Amount Due'}</span>
         <span style="color:#fff;font-weight:700;font-size:24px;">${formatCurrency(payload.is_receipt ? payload.invoice_total : Math.max(0, payload.invoice_total - paidSoFar))}</span>
       </div>
+
+      ${payload.payment_link_url && !payload.is_receipt ? `
+      <div style="text-align:center;margin-bottom:24px;">
+        <a href="${escapeHtml(payload.payment_link_url)}" style="display:inline-block;background:#2563eb;color:#fff;font-weight:700;font-size:16px;padding:14px 40px;border-radius:10px;text-decoration:none;letter-spacing:0.01em;">Pay Now</a>
+      </div>
+      ` : ''}
 
       ${payload.payment_instructions ? `
       <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:16px 20px;margin-bottom:24px;">
