@@ -7,6 +7,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Download, Eye, Mail, CheckCircle2, MoreVertical, Trash2, Receipt } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { describeFunctionError } from '@/lib/emailApi';
 import { toast } from 'sonner';
 import { generateInvoicePdf } from '@/lib/invoicePdfGenerator';
 import type { InvoiceCompany as Company } from '@/lib/invoicePdfGenerator';
@@ -281,7 +282,7 @@ const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
         },
       });
 
-      if (error) throw error;
+      if (error) throw new Error(await describeFunctionError(error));
 
       if (invoice.status === 'draft') {
         await supabase.from('invoices').update({ status: 'sent' }).eq('id', invoice.id);
@@ -326,7 +327,7 @@ const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
           company_id: companyId,
         },
       });
-      if (error) throw error;
+      if (error) throw new Error(await describeFunctionError(error));
       toast.success(`Receipt emailed to ${invoice.customer.email}`);
     } catch (err) {
       console.error('[InvoiceDetailView] Receipt email error:', err);

@@ -3,6 +3,7 @@
 // customers without an email.
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { describeFunctionError } from '@/lib/emailApi';
 import { toast } from 'sonner';
 import { generateInvoicePdf } from '@/lib/invoicePdfGenerator';
 import {
@@ -230,7 +231,7 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
         },
       });
 
-      if (error) throw error;
+      if (error) throw new Error(await describeFunctionError(error));
 
       if (invoice.status === 'draft') {
         await supabase.from('invoices').update({ status: 'sent' }).eq('id', invoice.id);
