@@ -134,7 +134,11 @@ export default function SalesAnalytics() {
   const lost = filtered.filter((c) => isLostStatus(c.status));
   const inspections = filtered.filter((c) => c.inspectionCompleted);
   const contingency = filtered.filter((c) => c.status === 'approved' || c.status === 'scheduled');
-  const selfGenerated = filtered.filter((c) => c.leadSource === 'Self-Generated' || c.leadSource === 'Referral');
+  // The lead source is saved as "Self Generated" (no hyphen); the hyphenated spelling is accepted too.
+  // Comparing only with the hyphen counted none of them.
+  const selfGenerated = filtered.filter(
+    (c) => c.leadSource === 'Self Generated' || c.leadSource === 'Self-Generated' || c.leadSource === 'Referral'
+  );
   
   const totalRevenue = completed.reduce((s, c) => s + (c.projectValue || 0), 0);
   const avgDeal = completed.length > 0 ? totalRevenue / completed.length : 0;

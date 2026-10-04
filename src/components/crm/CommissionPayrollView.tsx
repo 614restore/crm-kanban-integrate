@@ -107,7 +107,8 @@ export default function CommissionPayrollView() {
             .select('id, first_name, last_name, email, role, commission_rate_self_gen, commission_rate_company, commission_rate_custom')
             .eq('company_id', companyId)
             .eq('is_active', true)
-            .in('role', ['owner', 'admin', 'manager', 'sales_manager', 'sales_rep', 'sales', 'canvas'])
+            // 'salesperson' is the mobile app's sales role; leaving it out hid those people from payroll.
+            .in('role', ['owner', 'admin', 'manager', 'sales_manager', 'sales_rep', 'sales', 'salesperson', 'canvas'])
         ) as Promise<any>,
         10000,
         'loadCommissionProfiles'
