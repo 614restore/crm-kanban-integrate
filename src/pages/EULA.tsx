@@ -6,7 +6,7 @@ export default function EULA() {
   const navigate = useNavigate();
   const effectiveDate = 'October 4, 2026';
   const companyName = 'TrussCTR';
-  const contactEmail = 'legal@614restore.com';
+  const contactEmail = 'executivestack@outlook.com';
 
   return (
     <div className="min-h-screen bg-gray-50">
