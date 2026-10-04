@@ -262,14 +262,30 @@ const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
     setSendingEmail(true);
     setShowMenu(false);
     try {
-      const lineItems = await fetchLineItems(invoice.id);
+      const [lineItems, { data: recentLinks }] = await Promise.all([
+        fetchLineItems(invoice.id),
+        // Look for an existing Stripe payment link recorded for this customer
+        supabase
+          .from('payments')
+          .select('stripe_payment_link_url')
+          .eq('contact_id', invoice.customer_id ?? '')
+          .eq('payment_method', 'stripe_payment_link')
+          .not('stripe_payment_link_url', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(1),
+      ]);
+
+      const paymentLinkUrl = (recentLinks?.[0] as any)?.stripe_payment_link_url as string | undefined;
+      const balanceDue = getBalanceDue();
+
       const { error } = await supabase.functions.invoke('send-invoice-email', {
         body: {
           to_email: invoice.customer.email,
           to_name: `${invoice.customer.first_name} ${invoice.customer.last_name}`,
           from_company: (company as any).name,
           invoice_number: invoice.invoice_number,
-          invoice_total: invoice.total,
+          invoice_total: effectiveTotal,
+          amount_paid: effectivePaid > 0 ? effectivePaid : undefined,
           due_date: invoice.due_date,
           payment_instructions: invoice.payment_instructions,
           line_items: lineItems.map((item: any) => ({
@@ -279,6 +295,8 @@ const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
             total: item.total,
           })),
           company_id: companyId,
+          // Include Pay Now button only when there is a balance and an existing link
+          payment_link_url: balanceDue > 0 && paymentLinkUrl ? paymentLinkUrl : undefined,
         },
       });
 
@@ -314,7 +332,8 @@ const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
           to_name: `${invoice.customer.first_name} ${invoice.customer.last_name}`,
           from_company: (company as any).name,
           invoice_number: invoice.invoice_number,
-          invoice_total: invoice.total,
+          invoice_total: effectiveTotal,
+          amount_paid: effectivePaid > 0 ? effectivePaid : undefined,
           due_date: invoice.due_date,
           payment_instructions: invoice.payment_instructions,
           is_receipt: true,
