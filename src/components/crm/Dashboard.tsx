@@ -7,9 +7,9 @@ import {
   formatCurrency,
   formatDate,
   statusLabels,
-  statusColors,
   getContactFullName,
   type Contact,
+  type Appointment,
 } from '@/lib/crmData';
 import {
   TrendingUp,
@@ -27,8 +27,8 @@ import {
   ChevronRight,
   Target,
   Zap,
-  Eye,
   PenLine,
+  HardHat,
 } from 'lucide-react';
 
 interface QuoteActivity {
@@ -41,15 +41,11 @@ interface QuoteActivity {
 }
 
 type ActivityItem =
-  | { kind: 'contact'; time: number; contact: Contact }
+  | { kind: 'appointment'; time: number; appt: Appointment; contact: Contact | undefined }
+  | { kind: 'build'; time: number; contact: Contact }
   | { kind: 'quote'; time: number; ev: QuoteActivity };
 
-const QUOTE_EVENT_TEXT: Record<string, { verb: string; icon: 'eye' | 'sign'; tint: string }> = {
-  viewed: { verb: 'opened', icon: 'eye', tint: 'bg-violet-100 text-violet-600' },
-  report_opened: { verb: 'opened the photo report on', icon: 'eye', tint: 'bg-violet-100 text-violet-600' },
-  signed: { verb: 'signed', icon: 'sign', tint: 'bg-emerald-100 text-emerald-600' },
-  countersigned: { verb: 'completed signing on', icon: 'sign', tint: 'bg-emerald-100 text-emerald-600' },
-};
+const BUILD_STATUSES = new Set(['build_phase', 'in_progress', 'ordering_material']);
 
 const timeAgo = (ms: number): string => {
   const mins = Math.floor((Date.now() - ms) / 60000);
@@ -102,7 +98,7 @@ export default function Dashboard() {
       const { data, error } = await (supabase.from('quote_notifications') as any)
         .select('id, quote_id, event_type, actor_name, created_at, quotes:quote_id(quote_number, customer_id)')
         .eq('company_id', companyId)
-        .in('event_type', ['viewed', 'report_opened', 'signed', 'countersigned'])
+        .eq('event_type', 'signed')
         .order('created_at', { ascending: false })
         .limit(10);
       if (cancelled || error) return;
@@ -113,16 +109,31 @@ export default function Dashboard() {
     return () => { cancelled = true; window.clearInterval(timer); };
   }, [companyId]);
 
-  // Recent activity: contacts updated lately, mixed with what customers did on their quotes.
-  const feed: ActivityItem[] = [
-    ...[...state.contacts]
-      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-      .slice(0, 5)
-      .map((contact): ActivityItem => ({ kind: 'contact', time: new Date(contact.updatedAt).getTime(), contact })),
-    ...quoteEvents.map((ev): ActivityItem => ({ kind: 'quote', time: new Date(ev.created_at).getTime(), ev })),
-  ]
-    .sort((a, b) => b.time - a.time)
-    .slice(0, 8);
+  // Recent activity: appointments set, builds scheduled, customer signed a quote.
+  const feed: ActivityItem[] = (() => {
+    const now = Date.now();
+    const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+    const sevenDays = 7 * 24 * 60 * 60 * 1000;
+    const items: ActivityItem[] = [
+      ...[...state.appointments]
+        .filter(a => now - new Date(a.createdAt).getTime() < thirtyDays)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, 5)
+        .map((appt): ActivityItem => ({
+          kind: 'appointment',
+          time: new Date(appt.createdAt).getTime(),
+          appt,
+          contact: state.contacts.find(c => c.id === appt.contactId),
+        })),
+      ...[...state.contacts]
+        .filter(c => BUILD_STATUSES.has(c.status) && now - new Date(c.updatedAt).getTime() < sevenDays)
+        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+        .slice(0, 5)
+        .map((contact): ActivityItem => ({ kind: 'build', time: new Date(contact.updatedAt).getTime(), contact })),
+      ...quoteEvents.map((ev): ActivityItem => ({ kind: 'quote', time: new Date(ev.created_at).getTime(), ev })),
+    ];
+    return items.sort((a, b) => b.time - a.time).slice(0, 8);
+  })();
 
   // Get urgent items (pending payments, overdue, etc.)
   const urgentItems = state.contacts.filter(
@@ -321,9 +332,11 @@ export default function Dashboard() {
             <h3 className="text-lg font-semibold text-gray-900">Recent Activity</h3>
           </div>
           <div className="divide-y divide-gray-50">
+            {feed.length === 0 && (
+              <div className="p-8 text-center text-gray-400 text-sm">No recent activity</div>
+            )}
             {feed.map((item) => {
               if (item.kind === 'quote') {
-                const cfg = QUOTE_EVENT_TEXT[item.ev.event_type] ?? QUOTE_EVENT_TEXT.viewed;
                 const customerId = item.ev.quotes?.customer_id ?? null;
                 const quoteNo = item.ev.quotes?.quote_number ?? 'a quote';
                 return (
@@ -333,12 +346,12 @@ export default function Dashboard() {
                     className={`p-4 hover:bg-gray-50 transition-colors ${customerId ? 'cursor-pointer' : ''}`}
                   >
                     <div className="flex items-center gap-4">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${cfg.tint}`}>
-                        {cfg.icon === 'sign' ? <PenLine size={18} /> : <Eye size={18} />}
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center bg-emerald-100 text-emerald-600">
+                        <PenLine size={18} />
                       </div>
                       <div className="min-w-0">
                         <p className="font-medium text-gray-900 truncate">
-                          {item.ev.actor_name || 'A customer'} {cfg.verb} {quoteNo}
+                          {item.ev.actor_name || 'A customer'} signed {quoteNo}
                         </p>
                         <p className="text-sm text-gray-500">{timeAgo(item.time)}</p>
                       </div>
@@ -346,46 +359,50 @@ export default function Dashboard() {
                   </div>
                 );
               }
+              if (item.kind === 'appointment') {
+                const contact = item.contact;
+                const name = contact ? getContactFullName(contact) : 'Unknown contact';
+                return (
+                  <div
+                    key={`a-${item.appt.id}`}
+                    onClick={() => contact && handleViewContact(contact.id)}
+                    className={`p-4 hover:bg-gray-50 transition-colors ${contact ? 'cursor-pointer' : ''}`}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center bg-purple-100 text-purple-600">
+                        <Calendar size={18} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-medium text-gray-900 truncate">
+                          Appointment set — {name}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          {item.appt.date ? `${item.appt.date}${item.appt.time ? ' at ' + item.appt.time : ''}` : timeAgo(item.time)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+              // kind === 'build'
               const contact = item.contact;
-              const assignee = state.teamMembers.find((tm) => tm.id === contact.assignedTo);
               return (
                 <div
-                  key={contact.id}
+                  key={`b-${contact.id}`}
                   onClick={() => handleViewContact(contact.id)}
                   className="p-4 hover:bg-gray-50 transition-colors cursor-pointer"
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold text-sm">
-                        {contact.firstName[0]}
-                        {contact.lastName[0]}
-                      </div>
-                      <div>
-                        <ScheduleName as="p" contactId={contact.id} className="font-medium">{getContactFullName(contact)}</ScheduleName>
-                        <div className="flex items-center gap-2 text-sm text-gray-500">
-                          <MapPin size={12} />
-                          <span>
-                            {contact.city}, {contact.state}
-                          </span>
-                        </div>
-                      </div>
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center bg-orange-100 text-orange-600">
+                      <HardHat size={18} />
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span
-                        className={`px-2.5 py-1 rounded-full text-xs font-medium ${
-                          statusColors[contact.status]
-                        }`}
-                      >
-                        {statusLabels[contact.status] ?? String(contact.status || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
-                      </span>
-                      {assignee && (
-                        <img
-                          src={assignee.avatar}
-                          alt={assignee.name}
-                          className="w-8 h-8 rounded-full object-cover"
-                          title={assignee.name}
-                        />
-                      )}
+                    <div className="min-w-0">
+                      <p className="font-medium text-gray-900 truncate">
+                        Build scheduled — {getContactFullName(contact)}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        {statusLabels[contact.status] ?? contact.status} · {timeAgo(item.time)}
+                      </p>
                     </div>
                   </div>
                 </div>
