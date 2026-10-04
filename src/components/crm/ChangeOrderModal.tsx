@@ -288,6 +288,34 @@ export default function ChangeOrderModal({
 
   const isEditing = Boolean(changeOrder?.id);
   const isSigned = changeOrder?.status === 'signed';
+  const isApproved = changeOrder?.status === 'approved';
+
+  // A customer-signed change order waits here until someone on the team has
+  // reviewed it. Nothing else ever moved it past 'signed', so the "signed —
+  // action required" banner and the dashboard's Needs Attention entry could
+  // never clear. Guarded on status so a double click, or the mobile app having
+  // approved it first, is harmless.
+  const handleApprove = async () => {
+    if (!changeOrder?.id) return;
+    setSaving(true);
+    try {
+      const { data, error } = await supabase
+        .from('change_orders')
+        .update({ status: 'approved', updated_at: new Date().toISOString() })
+        .eq('id', changeOrder.id)
+        .eq('status', 'signed')
+        .select('id');
+      if (error) throw error;
+      toast[data && data.length > 0 ? 'success' : 'info'](
+        data && data.length > 0 ? 'Change order approved' : 'This change order was already approved',
+      );
+      onSave();
+    } catch (err: any) {
+      toast.error(`Could not approve: ${err?.message ?? 'unknown error'}`);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -317,6 +345,16 @@ export default function ChangeOrderModal({
             <X size={20} />
           </button>
         </div>
+
+        {isApproved && (
+          <div className="flex items-center gap-2 px-6 py-3 bg-blue-50 border-b border-blue-200 text-blue-800 flex-shrink-0">
+            <CheckCircle2 size={18} className="text-blue-600 flex-shrink-0" />
+            <span className="font-medium">Approved ✓</span>
+            {changeOrder.signed_by_name && (
+              <span className="text-sm">signed by {changeOrder.signed_by_name}</span>
+            )}
+          </div>
+        )}
 
         {/* Signed banner */}
         {isSigned && (
@@ -522,6 +560,16 @@ export default function ChangeOrderModal({
             <Save size={18} />
             Save as Draft
           </button>
+          {isSigned && (
+            <button
+              onClick={handleApprove}
+              disabled={saving}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <CheckCircle2 size={18} />
+              {saving ? 'Approving…' : 'Approve Change Order'}
+            </button>
+          )}
           <button
             onClick={handleSendForSignature}
             disabled={saving || isSigned}
