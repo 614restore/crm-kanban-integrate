@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useCRM, useFinancialStats } from '@/lib/crmStore';
-import { useCompanyFinancials } from '@/lib/useCompanyFinancials';
 import { db, DbCompany } from '@/lib/database';
 import { sendEmail } from '@/lib/emailApi';
 import { fireAutomationEvent } from '@/lib/automationEngine';
@@ -43,21 +42,7 @@ export default function FinancialDashboard() {
   // `user` was used below to say who moved the customer but was never defined here, so changing an
   // invoice to Sent or Paid threw an error right after the status had been saved.
   const { profile, user } = useAuth();
-  const baseFinancialStats = useFinancialStats();
-  // Collected and outstanding come from the database's shared totals (the same ones mobile shows), which
-  // count receipts. The page's own calculation never read the payments table, so a receipt did not show.
-  const shared = useCompanyFinancials(profile?.company_id);
-  const financialStats = shared
-    ? {
-        ...baseFinancialStats,
-        totalCollected: shared.totalCollected,
-        totalRevenue: shared.totalCollected,
-        totalOutstanding: shared.totalOutstanding,
-        paidInvoices: shared.invoicesPaid,
-        outstandingInvoices: shared.invoicesSentBalance,
-        overdueInvoices: shared.invoicesOverdueBalance,
-      }
-    : baseFinancialStats;
+  const financialStats = useFinancialStats();
   const [invoiceFilter, setInvoiceFilter] = useState<InvoiceFilter>('all');
   const [financialView, setFinancialView] = useState<FinancialView>('all');
   const [searchQuery, setSearchQuery] = useState('');
