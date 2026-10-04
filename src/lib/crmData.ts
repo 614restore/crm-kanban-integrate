@@ -39,6 +39,8 @@ export type UserRole =
   // Legacy roles for backward compatibility
   | 'manager'
   | 'sales'
+  | 'salesperson' // the mobile app's name for a sales person
+  | 'member' // the mobile app's generic team member
   | 'production'
   | 'billing'
   | 'canvas';
@@ -1612,9 +1614,13 @@ export const roleLabels: Record<UserRole, string> = {
   field_tech: 'Field Tech/Crew',
   office_staff: 'Office Staff',
   subcontractor: 'Subcontractor',
+  canvasser: 'Canvasser',
+  field_contractor: 'Field Contractor',
   // Legacy roles
   manager: 'Manager (Legacy)',
   sales: 'Sales (Legacy)',
+  salesperson: 'Salesperson (Legacy)',
+  member: 'Member (Legacy)',
   production: 'Production (Legacy)',
   billing: 'Billing (Legacy)',
   canvas: 'Canvas (Legacy)',

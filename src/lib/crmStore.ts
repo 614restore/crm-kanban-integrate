@@ -1045,6 +1045,8 @@ const roleHierarchy: Record<UserRole, number> = {
   // Legacy roles (for backward compatibility)
   manager: 8,
   sales: 4,
+  salesperson: 4,
+  member: 3,
   production: 8,
   billing: 5,
   canvas: 3,
