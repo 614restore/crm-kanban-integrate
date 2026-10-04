@@ -333,6 +333,29 @@ export default function ContactDetail() {
   const mentionTargets = useMemo(() => getMentionTargets(state.teamMembers), [state.teamMembers]);
   const effectiveCompanyId = profile?.company_id || state.companyId || null;
   const contactId = contact?.id;
+
+  // Receipts recorded for this customer (from either app). The Deposit and Final Payment cards used to read
+  // only the deposit / final-payment fields typed on the customer, so a recorded payment still showed as
+  // "Pending". They now count the receipts.
+  const [receiptsTotal, setReceiptsTotal] = useState(0);
+  const [receiptsCount, setReceiptsCount] = useState(0);
+  useEffect(() => {
+    if (!contactId) return;
+    let cancelled = false;
+    supabase
+      .from('payments')
+      .select('amount')
+      .eq('customer_id', contactId)
+      .then(({ data }) => {
+        if (cancelled) return;
+        const rows = data ?? [];
+        setReceiptsTotal(rows.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0));
+        setReceiptsCount(rows.length);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [contactId, activeTab]);
   const contactNotes = stripSchedulePrefix(contact?.notes);
 
   useEffect(() => {
@@ -2326,11 +2349,17 @@ export default function ContactDetail() {
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <p className="text-blue-200 text-sm">Deposit</p>
+                      <p className="text-blue-200 text-sm">{receiptsCount > 0 ? 'Received to Date' : 'Deposit'}</p>
                       <p className="text-xl font-semibold">
-                        {contact.depositAmount ? formatCurrency(contact.depositAmount) : '-'}
+                        {receiptsCount > 0
+                          ? formatCurrency(receiptsTotal)
+                          : contact.depositAmount ? formatCurrency(contact.depositAmount) : '-'}
                       </p>
-                      {contact.depositPaid ? (
+                      {receiptsCount > 0 ? (
+                        <span className="inline-flex items-center gap-1 text-green-300 text-xs mt-1">
+                          <CheckCircle size={12} /> {receiptsCount} payment{receiptsCount === 1 ? '' : 's'} received
+                        </span>
+                      ) : contact.depositPaid ? (
                         <span className="inline-flex items-center gap-1 text-green-300 text-xs mt-1">
                           <CheckCircle size={12} /> Paid
                         </span>
@@ -2341,13 +2370,25 @@ export default function ContactDetail() {
                       ) : null}
                     </div>
                     <div>
-                      <p className="text-blue-200 text-sm">Final Payment</p>
+                      <p className="text-blue-200 text-sm">{receiptsCount > 0 && contact.projectValue ? 'Balance Remaining' : 'Final Payment'}</p>
                       <p className="text-xl font-semibold">
-                        {contact.finalPaymentAmount
+                        {receiptsCount > 0 && contact.projectValue
+                          ? formatCurrency(Math.max(0, contact.projectValue - receiptsTotal))
+                          : contact.finalPaymentAmount
                           ? formatCurrency(contact.finalPaymentAmount)
                           : '-'}
                       </p>
-                      {contact.finalPaymentPaid ? (
+                      {receiptsCount > 0 && contact.projectValue ? (
+                        contact.projectValue - receiptsTotal <= 0 ? (
+                          <span className="inline-flex items-center gap-1 text-green-300 text-xs mt-1">
+                            <CheckCircle size={12} /> Paid in full
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-yellow-300 text-xs mt-1">
+                            <AlertCircle size={12} /> Still owed
+                          </span>
+                        )
+                      ) : contact.finalPaymentPaid ? (
                         <span className="inline-flex items-center gap-1 text-green-300 text-xs mt-1">
                           <CheckCircle size={12} /> Paid
                         </span>
@@ -3047,25 +3088,40 @@ export default function ContactDetail() {
                 </p>
               </div>
               <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <p className="text-sm text-gray-500">Deposit</p>
+                <p className="text-sm text-gray-500">{receiptsCount > 0 ? 'Received to Date' : 'Deposit'}</p>
                 <p className="text-2xl font-bold text-gray-900 mt-1">
-                  {contact.depositAmount ? formatCurrency(contact.depositAmount) : '-'}
+                  {receiptsCount > 0
+                    ? formatCurrency(receiptsTotal)
+                    : contact.depositAmount ? formatCurrency(contact.depositAmount) : '-'}
                 </p>
                 <span
                   className={`inline-flex items-center gap-1 text-sm mt-2 ${
-                    contact.depositPaid ? 'text-green-600' : 'text-amber-600'
+                    receiptsCount > 0 || contact.depositPaid ? 'text-green-600' : 'text-amber-600'
                   }`}
                 >
-                  {contact.depositPaid ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
-                  {contact.depositPaid ? `Paid ${formatDate(contact.depositDate!)}` : 'Pending'}
+                  {receiptsCount > 0 || contact.depositPaid ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
+                  {receiptsCount > 0
+                    ? `${receiptsCount} payment${receiptsCount === 1 ? '' : 's'} received`
+                    : contact.depositPaid ? `Paid ${formatDate(contact.depositDate!)}` : 'Pending'}
                 </span>
               </div>
               <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <p className="text-sm text-gray-500">Final Payment</p>
+                <p className="text-sm text-gray-500">{receiptsCount > 0 && contact.projectValue ? 'Balance Remaining' : 'Final Payment'}</p>
                 <p className="text-2xl font-bold text-gray-900 mt-1">
-                  {contact.finalPaymentAmount ? formatCurrency(contact.finalPaymentAmount) : '-'}
+                  {receiptsCount > 0 && contact.projectValue
+                    ? formatCurrency(Math.max(0, contact.projectValue - receiptsTotal))
+                    : contact.finalPaymentAmount ? formatCurrency(contact.finalPaymentAmount) : '-'}
                 </p>
-                {contact.finalPaymentAmount && (
+                {receiptsCount > 0 && contact.projectValue ? (
+                  <span
+                    className={`inline-flex items-center gap-1 text-sm mt-2 ${
+                      contact.projectValue - receiptsTotal <= 0 ? 'text-green-600' : 'text-amber-600'
+                    }`}
+                  >
+                    {contact.projectValue - receiptsTotal <= 0 ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
+                    {contact.projectValue - receiptsTotal <= 0 ? 'Paid in full' : 'Still owed'}
+                  </span>
+                ) : contact.finalPaymentAmount && (
                   <span
                     className={`inline-flex items-center gap-1 text-sm mt-2 ${
                       contact.finalPaymentPaid ? 'text-green-600' : 'text-amber-600'

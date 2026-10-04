@@ -4,6 +4,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Plus, Trash2, FileText, Send, Download, Check, Calendar, DollarSign, ChevronDown, Eye, EyeOff } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { describeFunctionError } from '@/lib/emailApi';
 import { toast } from 'sonner';
 import { buildInvoicePDF, loadLogoAsBase64 as loadLogoBase64 } from '@/lib/buildInvoicePDF';
 
@@ -115,8 +116,33 @@ const InvoiceBuilder: React.FC<Props> = ({
     const [bannerColor, setBannerColor] = useState('#111111');
     const [headerCustomText, setHeaderCustomText] = useState('');
 
+    // Receipts already recorded for this quote (a down payment, say) go straight into Payment History,
+    // so the invoice for the rest shows what was paid and only asks for the balance.
+    const loadReceipts = async () => {
+        const { data } = await supabase
+            .from('payments')
+            .select('id, receipt_number, amount, payment_method, payment_date, created_at')
+            .eq('quote_id', quoteId)
+            .order('created_at', { ascending: true });
+        if (!data || data.length === 0) return;
+        setPaymentRecords(prev => {
+            const have = new Set(prev.map(r => r.id));
+            const fromReceipts: PaymentRecord[] = data
+                .filter(p => !have.has(`receipt-${p.id}`))
+                .map(p => ({
+                    id: `receipt-${p.id}`,
+                    date: String(p.payment_date || p.created_at).split('T')[0],
+                    description: `Receipt ${p.receipt_number}${p.payment_method ? ` (${p.payment_method})` : ''}`,
+                    amount: Number(p.amount) || 0,
+                    type: 'received' as const,
+                }));
+            return [...fromReceipts, ...prev];
+        });
+    };
+
     useEffect(() => {
         loadQuoteLineItems();
+        loadReceipts();
         loadNextInvoiceNumber();
         if (company.logo_url) {
             loadLogoBase64(company.logo_url).then(setLogoData);
@@ -369,6 +395,7 @@ const InvoiceBuilder: React.FC<Props> = ({
                   from_company: company.name,
                   invoice_number: invoice.invoice_number,
                   invoice_total: displayTotal,
+                  amount_paid: receivedSoFar,
                   due_date: invoice.due_date,
                   payment_instructions: invoice.payment_instructions,
                   line_items: [
@@ -378,7 +405,7 @@ const InvoiceBuilder: React.FC<Props> = ({
                 },
               });
               if (emailErr) {
-                toast.error('Invoice saved but email failed: ' + emailErr.message);
+                toast.error('Invoice saved but email failed: ' + (await describeFunctionError(emailErr)));
               } else {
                 toast.success('Invoice emailed to ' + customerEmail);
               }
@@ -397,6 +424,13 @@ const InvoiceBuilder: React.FC<Props> = ({
     const displaySubtotal = invoice.subtotal + _addonsSum;
     const displayTaxAmount = displaySubtotal * (invoice.tax_rate / 100);
     const displayTotal = displaySubtotal + displayTaxAmount;
+
+    // What the customer has already paid: the receipts loaded into Payment History plus anything typed as
+    // Deposit Paid (the larger of the two, so a receipt entered both ways is not subtracted twice).
+    const recordsReceived = paymentRecords
+        .filter(r => r.type === 'received' || r.type === 'credit')
+        .reduce((s, r) => s + r.amount, 0);
+    const receivedSoFar = Math.max(invoice.deposit_paid || 0, recordsReceived);
 
     return (
         <div className="fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-0 sm:p-4">
@@ -795,23 +829,21 @@ const InvoiceBuilder: React.FC<Props> = ({
                                         <span className="text-[#1e3a5f]">{fmt(displayTotal)}</span>
                                     </div>
                                     {invoice.deposit_required > 0 && (
+                                        <div className="flex justify-between text-sm font-semibold text-blue-700 pt-1">
+                                            <span>Down Payment Required</span>
+                                            <span>{fmt(invoice.deposit_required)}</span>
+                                        </div>
+                                    )}
+                                    {receivedSoFar > 0 && (
                                         <>
-                                            <div className="flex justify-between text-sm font-semibold text-blue-700 pt-1">
-                                                <span>Down Payment Required</span>
-                                                <span>{fmt(invoice.deposit_required)}</span>
+                                            <div className="flex justify-between text-sm text-emerald-600">
+                                                <span>Payments Received</span>
+                                                <span>− {fmt(receivedSoFar)}</span>
                                             </div>
-                                            {invoice.deposit_paid > 0 && (
-                                                <>
-                                                    <div className="flex justify-between text-sm text-emerald-600">
-                                                        <span>Deposit Paid</span>
-                                                        <span>− {fmt(invoice.deposit_paid)}</span>
-                                                    </div>
-                                                    <div className="flex justify-between text-sm font-bold text-gray-900 pt-1 border-t border-gray-200">
-                                                        <span>Balance Due</span>
-                                                        <span className="text-[#1e3a5f]">{fmt(displayTotal - invoice.deposit_paid)}</span>
-                                                    </div>
-                                                </>
-                                            )}
+                                            <div className="flex justify-between text-sm font-bold text-gray-900 pt-1 border-t border-gray-200">
+                                                <span>Balance Due</span>
+                                                <span className="text-[#1e3a5f]">{fmt(Math.max(0, displayTotal - receivedSoFar))}</span>
+                                            </div>
                                         </>
                                     )}
                                 </div>
@@ -838,23 +870,21 @@ const InvoiceBuilder: React.FC<Props> = ({
                                         <span className="text-base font-bold text-[#1e3a5f]">{fmt(displayTotal)}</span>
                                     </div>
                                     {invoice.deposit_required > 0 && (
+                                        <div className="flex justify-between items-center pt-1">
+                                            <span className="text-sm font-semibold text-blue-700">Down Payment Required</span>
+                                            <span className="text-sm font-semibold text-blue-700">{fmt(invoice.deposit_required)}</span>
+                                        </div>
+                                    )}
+                                    {receivedSoFar > 0 && (
                                         <>
-                                            <div className="flex justify-between items-center pt-1">
-                                                <span className="text-sm font-semibold text-blue-700">Down Payment Required</span>
-                                                <span className="text-sm font-semibold text-blue-700">{fmt(invoice.deposit_required)}</span>
+                                            <div className="flex justify-between text-sm text-emerald-600">
+                                                <span>Payments Received</span>
+                                                <span>− {fmt(receivedSoFar)}</span>
                                             </div>
-                                            {invoice.deposit_paid > 0 && (
-                                                <>
-                                                    <div className="flex justify-between text-sm text-emerald-600">
-                                                        <span>Deposit Paid</span>
-                                                        <span>− {fmt(invoice.deposit_paid)}</span>
-                                                    </div>
-                                                    <div className="flex justify-between text-sm font-bold text-gray-900 pt-1 border-t border-gray-200">
-                                                        <span>Balance Due</span>
-                                                        <span className="text-[#1e3a5f]">{fmt(displayTotal - invoice.deposit_paid)}</span>
-                                                    </div>
-                                                </>
-                                            )}
+                                            <div className="flex justify-between text-sm font-bold text-gray-900 pt-1 border-t border-gray-200">
+                                                <span>Balance Due</span>
+                                                <span className="text-[#1e3a5f]">{fmt(Math.max(0, displayTotal - receivedSoFar))}</span>
+                                            </div>
                                         </>
                                     )}
                                 </div>
