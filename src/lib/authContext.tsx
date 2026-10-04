@@ -3,6 +3,7 @@ import { supabase, supabaseUrl, isDemoMode, loginClient } from '@/lib/supabase';
 import { setupNewUser } from '@/lib/setupCompany';
 import type { Session, User } from '@supabase/supabase-js';
 import { logAuthState } from '@/lib/authDebug';
+import { IN_APP, notifyApp } from '@/lib/inAppMode';
 
 export interface Profile {
   id: string;
@@ -230,6 +231,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (event === 'SIGNED_OUT') {
+        // Inside the TrussCENTER app: let it hand over a fresh sign-in.
+        if (IN_APP) notifyApp('signed-out');
         setSession(null);
         setUser(null);
         setProfile(null);

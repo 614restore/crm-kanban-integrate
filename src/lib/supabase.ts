@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { IN_APP } from './inAppMode';
 
 // Capture recovery token from query string (PKCE flow) or hash (implicit flow)
 // BEFORE Supabase processes it, so we can show the reset form immediately
@@ -92,6 +93,14 @@ const supabase = createClient(
     },
   }
 );
+
+// Inside the TrussCENTER app the web runs on the app's sign-in, so signing
+// out here must only clear this screen: the default ("global") sign-out would
+// also end the app's own session.
+if (IN_APP) {
+  const signOut = supabase.auth.signOut.bind(supabase.auth);
+  supabase.auth.signOut = (options) => signOut({ ...options, scope: 'local' });
+}
 
 // Session-free client used only for the login call — prevents stale token
 // refresh on the main client from blocking sign-in attempts.
