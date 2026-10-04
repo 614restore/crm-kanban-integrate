@@ -39,53 +39,73 @@ describe('periods', () => {
 });
 
 describe('computeMetrics', () => {
+  const quote = (id: string, customerId: string | null, createdBy: string, signedAt: string | null, contingencySignedAt: string | null, value: number) =>
+    ({ id, customerId, createdBy, signedAt, contingencySignedAt, value });
+  const customer = (id: string, assignedTo: string | null, status: string, extra: Partial<SalesData['customers'][number]> = {}) =>
+    ({ id, assignedTo, status, statusChangedAt: null, inspectionCompletedAt: null, inspectionCompletedBy: null, ...extra });
+
   const data: SalesData = {
     appointments: [
-      { assignedTo: 'rep1', status: 'completed', startTime: at(2025, 10, 14), createdAt: at(2025, 10, 10) },
-      { assignedTo: 'rep1', status: 'scheduled', startTime: at(2025, 10, 20), createdAt: at(2025, 10, 14) },
-      { assignedTo: 'rep2', status: 'completed', startTime: at(2025, 10, 15), createdAt: at(2025, 10, 15) },
+      { customerId: 'c1', assignedTo: 'rep1', status: 'completed', startTime: at(2025, 10, 14), createdAt: at(2025, 10, 10) },
+      { customerId: 'c5', assignedTo: 'rep1', status: 'scheduled', startTime: at(2025, 10, 20), createdAt: at(2025, 10, 14) },
+      { customerId: 'c3', assignedTo: 'rep2', status: 'completed', startTime: at(2025, 10, 15), createdAt: at(2025, 10, 15) },
     ],
     signedQuotes: [
-      { id: 'q1', customerId: 'c1', createdBy: 'rep1', signedAt: at(2025, 10, 14), value: 12000 },
-      // A second signed quote for the same customer is one deal, both values count.
-      { id: 'q2', customerId: 'c1', createdBy: 'rep1', signedAt: at(2025, 10, 15), value: 3000 },
-      // No customer rep: counts for whoever wrote the quote.
-      { id: 'q3', customerId: 'c3', createdBy: 'rep2', signedAt: at(2025, 10, 16), value: 8000 },
-      { id: 'q4', customerId: 'c1', createdBy: 'rep1', signedAt: at(2025, 9, 30), value: 999 },
+      // Retail: the quote signed this week.
+      quote('q1', 'c1', 'rep1', at(2025, 10, 14), null, 12000),
+      // A second signed quote for the same customer: one sale, both values count.
+      quote('q2', 'c1', 'rep1', at(2025, 10, 15), null, 3000),
+      // Insurance: contingency signed this week, full quote not signed yet.
+      quote('q3', 'c3', 'rep2', null, at(2025, 10, 16), 0),
+      // Insurance: contingency signed last month, full quote signed this week.
+      // Its revenue counts this week, but the sale was last month.
+      quote('q4', 'c4', 'rep1', at(2025, 10, 15), at(2025, 9, 20), 20000),
     ],
     customers: [
-      { id: 'c1', assignedTo: 'rep1', status: 'signed', statusChangedAt: at(2025, 10, 14) },
-      { id: 'c2', assignedTo: 'rep2', status: 'lost', statusChangedAt: at(2025, 10, 16) },
-      { id: 'c3', assignedTo: null, status: 'signed', statusChangedAt: at(2025, 10, 16) },
+      customer('c1', 'rep1', 'signed'),
+      customer('c2', 'rep2', 'lost', { statusChangedAt: at(2025, 10, 16) }),
+      // Ran twice this week (appointment + inspection): counts once.
+      customer('c3', null, 'contingency', { inspectionCompletedAt: at(2025, 10, 15), inspectionCompletedBy: 'rep2' }),
+      customer('c4', 'rep1', 'signed'),
+      // Inspection with no appointment: counts for whoever completed it.
+      customer('c6', 'rep1', 'inspection_completed', { inspectionCompletedAt: at(2025, 10, 17), inspectionCompletedBy: 'rep2' }),
     ],
     payments: [
       { customerId: 'c1', amount: 5000, paidAt: at(2025, 10, 15) },
       { customerId: 'c1', amount: 100, paidAt: at(2025, 10, 1) },
     ],
   };
+  const week = rangeForPreset('week', NOW);
 
   it('whole team, this week', () => {
-    const m = computeMetrics(data, rangeForPreset('week', NOW), null);
+    const m = computeMetrics(data, week, null);
     expect(m).toMatchObject({
       appointmentsSet: 2,
-      appointmentsRan: 2,
-      sold: 2,
+      appointmentsRan: 3, // c1 appointment, c3 (appointment + inspection), c6 inspection
+      sold: 2, // c1 retail, c3 contingency (c4 sold last month)
       lost: 1,
-      revenueSold: 23000,
+      revenueSold: 35000,
       revenueCollected: 5000,
     });
-    expect(m.closeRate).toBe(1);
-    expect(m.avgDeal).toBe(11500);
+    expect(m.closeRate).toBeCloseTo(2 / 3);
+    expect(m.avgDeal).toBeCloseTo(35000 / 3);
+  });
+
+  it('a contingency counts as the sale, in the period it was signed', () => {
+    const lastMonth = rangeForPreset('month', new Date(2025, 8, 10));
+    expect(computeMetrics(data, lastMonth, null)).toMatchObject({ sold: 1, revenueSold: 0 });
   });
 
   it('one rep', () => {
-    const m = computeMetrics(data, rangeForPreset('week', NOW), 'rep1');
-    expect(m).toMatchObject({ appointmentsSet: 1, appointmentsRan: 1, sold: 1, lost: 0, revenueSold: 15000, revenueCollected: 5000 });
-    const rep2 = computeMetrics(data, rangeForPreset('week', NOW), 'rep2');
-    expect(rep2).toMatchObject({ sold: 1, revenueSold: 8000, lost: 1, revenueCollected: 0 });
+    expect(computeMetrics(data, week, 'rep1')).toMatchObject({
+      appointmentsSet: 1, appointmentsRan: 1, sold: 1, lost: 0, revenueSold: 35000, revenueCollected: 5000,
+    });
+    expect(computeMetrics(data, week, 'rep2')).toMatchObject({
+      appointmentsRan: 2, sold: 1, revenueSold: 0, lost: 1, revenueCollected: 0,
+    });
   });
 
-  it('no appointments ran means no close rate', () => {
+  it('nothing ran means no conversion rate', () => {
     const m = computeMetrics(data, rangeForPreset('today', new Date(2025, 0, 1)), null);
     expect(m.closeRate).toBeNull();
     expect(m.avgDeal).toBeNull();

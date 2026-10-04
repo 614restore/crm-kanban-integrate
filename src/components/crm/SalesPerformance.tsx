@@ -77,18 +77,19 @@ async function loadSalesData(companyId: string, window: DateRange): Promise<Sale
   const [appts, quotes, customers, payments] = await Promise.all([
     supabase
       .from('appointments')
-      .select('assigned_to, status, start_time, created_at')
+      .select('customer_id, contact_id, assigned_to, status, start_time, created_at')
       .eq('company_id', companyId)
       .or(`and(created_at.gte.${from},created_at.lt.${to}),and(start_time.gte.${from},start_time.lt.${to})`),
     supabase
       .from('quotes')
-      .select('id, customer_id, contact_id, created_by, signed_at, status, selected_tier, good_total, better_total, best_total, include_better, include_best, quote_number, cover_page_title, created_at, is_archived')
+      .select('id, customer_id, contact_id, created_by, signed_at, contingency_signed_at, status, selected_tier, good_total, better_total, best_total, include_better, include_best, quote_number, cover_page_title, created_at, is_archived')
       .eq('company_id', companyId)
-      .gte('signed_at', from)
-      .lt('signed_at', to),
+      // Every sale ever, not just this period's: a customer counts as sold
+      // only in the period of their first sale (contingency or quote).
+      .or('signed_at.not.is.null,contingency_signed_at.not.is.null'),
     supabase
       .from('customers')
-      .select('id, assigned_to, status, status_changed_at')
+      .select('id, assigned_to, status, status_changed_at, inspection_completed_at, inspection_completed_by')
       .eq('company_id', companyId),
     supabase
       .from('payments')
@@ -101,6 +102,7 @@ async function loadSalesData(companyId: string, window: DateRange): Promise<Sale
 
   return {
     appointments: (appts.data ?? []).map((a: any) => ({
+      customerId: a.customer_id ?? a.contact_id ?? null,
       assignedTo: a.assigned_to,
       status: a.status,
       startTime: a.start_time,
@@ -113,14 +115,17 @@ async function loadSalesData(companyId: string, window: DateRange): Promise<Sale
         customerId: q.customer_id ?? q.contact_id ?? null,
         createdBy: q.created_by,
         signedAt: q.signed_at,
-        // It was signed in this period, so it is worth the tier chosen even if its status moved on since.
-        value: quoteValue({ ...toQuoteSummary(q), status: 'signed' }),
+        contingencySignedAt: q.contingency_signed_at,
+        // Once signed it is worth the tier chosen, even if its status moved on since.
+        value: q.signed_at ? quoteValue({ ...toQuoteSummary(q), status: 'signed' }) : 0,
       })),
     customers: (customers.data ?? []).map((c: any) => ({
       id: c.id,
       assignedTo: c.assigned_to,
       status: c.status,
       statusChangedAt: c.status_changed_at,
+      inspectionCompletedAt: c.inspection_completed_at,
+      inspectionCompletedBy: c.inspection_completed_by,
     })),
     payments: (payments.data ?? []).map((p: any) => ({
       customerId: p.customer_id ?? p.contact_id ?? null,
@@ -175,13 +180,13 @@ interface CardSpec {
 const count = (n: number) => String(n);
 const CARDS: CardSpec[] = [
   { key: 'set', label: 'Appointments Set', icon: CalendarPlus, tint: 'bg-indigo-50 text-indigo-600', value: (m) => m.appointmentsSet, format: count, goal: 'appointments_set', hint: 'Appointments booked (assigned and scheduled) in this period' },
-  { key: 'ran', label: 'Appointments Ran', icon: CalendarCheck, tint: 'bg-violet-50 text-violet-600', value: (m) => m.appointmentsRan, format: count, goal: 'appointments_ran', hint: 'Appointments in this period marked completed' },
-  { key: 'sold', label: 'Sold / Closed', icon: Trophy, tint: 'bg-green-50 text-green-600', value: (m) => m.sold, format: count, goal: 'sold', hint: 'Customers who signed a quote in this period' },
+  { key: 'ran', label: 'Appointments Ran', icon: CalendarCheck, tint: 'bg-violet-50 text-violet-600', value: (m) => m.appointmentsRan, format: count, goal: 'appointments_ran', hint: 'Appointments completed and inspections completed in this period (each customer once)' },
+  { key: 'sold', label: 'Sold / Closed', icon: Trophy, tint: 'bg-green-50 text-green-600', value: (m) => m.sold, format: count, goal: 'sold', hint: 'Customers who first signed a contingency agreement (insurance) or a quote (retail) in this period' },
   { key: 'lost', label: 'Lost', icon: XCircle, tint: 'bg-red-50 text-red-600', value: (m) => m.lost, format: count, hint: 'Customers moved to Lost or Declined in this period' },
-  { key: 'revSold', label: 'Sold Revenue', icon: DollarSign, tint: 'bg-emerald-50 text-emerald-600', value: (m) => m.revenueSold, format: (n) => formatCurrency(n), goal: 'revenue_sold', money: true, hint: 'Value of the quotes signed in this period' },
+  { key: 'revSold', label: 'Sold Revenue', icon: DollarSign, tint: 'bg-emerald-50 text-emerald-600', value: (m) => m.revenueSold, format: (n) => formatCurrency(n), goal: 'revenue_sold', money: true, hint: 'Value of the quotes signed in full in this period' },
   { key: 'revCollected', label: 'Collected Revenue', icon: Wallet, tint: 'bg-teal-50 text-teal-600', value: (m) => m.revenueCollected, format: (n) => formatCurrency(n), goal: 'revenue_collected', money: true, hint: 'Payments received in this period' },
-  { key: 'close', label: 'Close Rate', icon: Percent, tint: 'bg-amber-50 text-amber-600', value: (m) => (m.closeRate === null ? null : m.closeRate * 100), format: (n) => `${Math.round(n)}%`, hint: 'Deals sold for every appointment ran' },
-  { key: 'avg', label: 'Average Deal', icon: Receipt, tint: 'bg-sky-50 text-sky-600', value: (m) => m.avgDeal, format: (n) => formatCurrency(n), money: true, hint: 'Sold revenue per deal' },
+  { key: 'close', label: 'Conversion Rate', icon: Percent, tint: 'bg-amber-50 text-amber-600', value: (m) => (m.closeRate === null ? null : m.closeRate * 100), format: (n) => `${Math.round(n)}%`, hint: 'Sold ÷ appointments ran (completed appointments and inspections)' },
+  { key: 'avg', label: 'Average Deal', icon: Receipt, tint: 'bg-sky-50 text-sky-600', value: (m) => m.avgDeal, format: (n) => formatCurrency(n), money: true, hint: 'Average value of the quotes signed in this period' },
 ];
 
 export default function SalesPerformance() {
@@ -351,6 +356,16 @@ export default function SalesPerformance() {
         })}
       </div>
 
+      <details className="text-sm text-gray-600">
+        <summary className="cursor-pointer select-none text-gray-500 hover:text-gray-700">How these are counted</summary>
+        <ul className="mt-2 space-y-1 list-disc pl-5">
+          {CARDS.map((card) => (
+            <li key={card.key}><span className="font-medium text-gray-700">{card.label}:</span> {card.hint}.</li>
+          ))}
+          <li>Appointments count for the rep assigned, inspections for whoever completed them, and sales, losses and payments for the customer's assigned rep.</li>
+        </ul>
+      </details>
+
       {repId === null && repRows.length > 0 && (
         <div>
           <h4 className="text-sm font-semibold text-gray-700 mb-2">By Rep</h4>
@@ -363,7 +378,7 @@ export default function SalesPerformance() {
                   <th className="py-2 px-2 font-medium text-right">Ran</th>
                   <th className="py-2 px-2 font-medium text-right">Sold</th>
                   <th className="py-2 px-2 font-medium text-right">Lost</th>
-                  <th className="py-2 px-2 font-medium text-right">Close</th>
+                  <th className="py-2 px-2 font-medium text-right">Conv.</th>
                   <th className="py-2 px-2 font-medium text-right">Sold $</th>
                   <th className="py-2 pl-2 pr-4 sm:pr-0 font-medium text-right">Collected $</th>
                 </tr>
