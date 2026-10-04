@@ -44,7 +44,8 @@ interface QuoteActivity {
 type ActivityItem =
   | { kind: 'appointment'; time: number; appt: Appointment; contact: Contact | undefined }
   | { kind: 'build'; time: number; contact: Contact }
-  | { kind: 'quote'; time: number; ev: QuoteActivity };
+  | { kind: 'quote'; time: number; ev: QuoteActivity }
+  | { kind: 'assignment'; time: number; contact: Contact };
 
 const BUILD_STATUSES = new Set(['build_phase', 'in_progress', 'ordering_material']);
 
@@ -52,6 +53,7 @@ interface ActivityPrefs {
   showAppointments: boolean;
   showBuilds: boolean;
   showSigned: boolean;
+  showAssignments: boolean;
   maxRows: 5 | 8 | 10;
 }
 
@@ -66,7 +68,7 @@ function loadPrefs(): ActivityPrefs {
 }
 
 function defaultPrefs(): ActivityPrefs {
-  return { showAppointments: true, showBuilds: true, showSigned: true, maxRows: 8 };
+  return { showAppointments: true, showBuilds: true, showSigned: true, showAssignments: true, maxRows: 8 };
 }
 
 const timeAgo = (ms: number): string => {
@@ -154,6 +156,7 @@ export default function Dashboard() {
     const now = Date.now();
     const thirtyDays = 30 * 24 * 60 * 60 * 1000;
     const sevenDays = 7 * 24 * 60 * 60 * 1000;
+    const currentUserId = profile?.id ?? state.currentUser?.id;
     const items: ActivityItem[] = [
       ...(prefs.showAppointments
         ? [...state.appointments]
@@ -177,9 +180,16 @@ export default function Dashboard() {
       ...(prefs.showSigned
         ? quoteEvents.map((ev): ActivityItem => ({ kind: 'quote', time: new Date(ev.created_at).getTime(), ev }))
         : []),
+      ...(prefs.showAssignments && currentUserId
+        ? [...state.contacts]
+            .filter(c => c.assignedTo === currentUserId && now - new Date(c.createdAt).getTime() < sevenDays)
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+            .slice(0, prefs.maxRows)
+            .map((contact): ActivityItem => ({ kind: 'assignment', time: new Date(contact.createdAt).getTime(), contact }))
+        : []),
     ];
     return items.sort((a, b) => b.time - a.time).slice(0, prefs.maxRows);
-  }, [state.appointments, state.contacts, quoteEvents, prefs]);
+  }, [state.appointments, state.contacts, quoteEvents, prefs, profile?.id, state.currentUser?.id]);
 
   // Get urgent items (pending payments, overdue, etc.)
   const urgentItems = state.contacts.filter(
@@ -392,6 +402,7 @@ export default function Dashboard() {
                       { key: 'showAppointments', label: 'Appointments set' },
                       { key: 'showBuilds',        label: 'Builds scheduled' },
                       { key: 'showSigned',        label: 'Quote signatures' },
+                      { key: 'showAssignments',   label: 'New assignments' },
                     ] as { key: keyof ActivityPrefs; label: string }[]
                   ).map(({ key, label }) => (
                     <label key={key} className="flex items-center gap-2 cursor-pointer">
@@ -461,6 +472,23 @@ export default function Dashboard() {
                     <span className="text-sm text-gray-800 truncate flex-1">
                       Appointment set —{' '}
                       <span className="font-medium">{name}</span>
+                    </span>
+                    <span className="text-xs text-gray-400 flex-shrink-0 ml-2">{timeAgo(item.time)}</span>
+                  </div>
+                );
+              }
+              if (item.kind === 'assignment') {
+                const contact = item.contact;
+                return (
+                  <div
+                    key={`as-${contact.id}`}
+                    onClick={() => handleViewContact(contact.id)}
+                    className="flex items-center gap-3 px-5 py-2.5 hover:bg-gray-50 transition-colors cursor-pointer"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-blue-400 flex-shrink-0" />
+                    <span className="text-sm text-gray-800 truncate flex-1">
+                      New customer assigned —{' '}
+                      <span className="font-medium">{getContactFullName(contact)}</span>
                     </span>
                     <span className="text-xs text-gray-400 flex-shrink-0 ml-2">{timeAgo(item.time)}</span>
                   </div>
