@@ -14,6 +14,10 @@
 -- database, so it holds whichever app is used and whatever the app shows. A salesperson cannot mark their
 -- own commission paid.
 --
+-- COMMISSION RUNS ON THE FIRST PAYMENT. A job whose customer has had no payment collected is "pending down
+-- payment" and cannot be checked off as paid. A payment is a receipt for the customer (the payments table) or a
+-- deposit recorded on the customer. Taking a job back to Owed is always allowed.
+--
 -- Safe to run more than once. Adds columns, an index, a function and a trigger; it changes no existing
 -- row, so every job starts out unpaid.
 
@@ -64,6 +68,14 @@ begin
     if v_role is null or not public.can_mark_commission_paid(v_role) then
       raise exception 'Only an owner, admin, manager or financial user can mark commission paid.';
     end if;
+  end if;
+
+  -- No first payment collected yet: the job is pending its down payment and cannot be paid.
+  if new.commission_paid_at is not null
+     and (tg_op = 'INSERT' or old.commission_paid_at is null)
+     and not coalesce(new.deposit_paid, false)
+     and not exists (select 1 from public.payments p where p.customer_id = new.id and coalesce(p.amount, 0) > 0) then
+    raise exception 'Commission cannot be paid until the first payment is collected (pending down payment).';
   end if;
 
   -- The database records who checked it off, so the apps do not have to send it.
