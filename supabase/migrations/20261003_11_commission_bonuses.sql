@@ -3,8 +3,11 @@
 -- COMMISSION BONUSES (contests and one-off adjustments).
 --
 -- Teams run contests that earn extra commission. A bonus is a line on one job (a customer):
---   flat     an extra dollar amount ("$250 for the weekend blitz")
---   percent  extra percentage points of the project total ("+1% on every sale in June")
+--   flat            an extra dollar amount ("$250 for the weekend blitz")
+--   percent         extra percentage points of the project total ("+1% on every sale in June")
+--   percent_profit  extra percentage points of the job's profit ("+5% of profit this quarter"); job profit is the
+--                   project total minus the job costs entered for it (never below zero, estimated until the costs
+--                   are marked complete)
 -- Each has a reason. The bonuses on a job are added to its commission under either method (percent of total or
 -- profit split). A negative value takes commission off (a correction). The commission never goes below $0.
 --
@@ -21,12 +24,15 @@ create table if not exists public.commission_adjustments (
   id           uuid primary key default gen_random_uuid(),
   company_id   uuid not null references public.companies(id) on delete cascade,
   customer_id  uuid not null references public.customers(id) on delete cascade,
-  kind         text not null check (kind in ('flat', 'percent')),
+  kind         text not null,
   value        numeric not null check (value between -1000000000 and 1000000000),
   reason       text,
   created_by   uuid references public.team_members(id) on delete set null,
   created_at   timestamptz not null default now()
 );
+alter table public.commission_adjustments drop constraint if exists commission_adjustments_kind_check;
+alter table public.commission_adjustments add constraint commission_adjustments_kind_check
+  check (kind in ('flat', 'percent', 'percent_profit'));
 create index if not exists commission_adjustments_customer_idx on public.commission_adjustments (customer_id);
 create index if not exists commission_adjustments_company_idx on public.commission_adjustments (company_id);
 
@@ -59,7 +65,7 @@ begin
     select tm.id into new.created_by from public.team_members tm
     where tm.user_id = auth.uid() and tm.company_id = v_company and tm.is_active limit 1;
   end if;
-  if new.kind = 'percent' and new.value not between -100 and 100 then
+  if new.kind in ('percent', 'percent_profit') and new.value not between -100 and 100 then
     raise exception 'A percentage bonus must be between -100 and 100.';
   end if;
   return new;
@@ -173,7 +179,10 @@ begin
              then greatest(coalesce(c.project_value, 0) - coalesce(c.project_value, 0) * y.overhead / 100 - y.costs, 0) * y.split / 100
              else coalesce(c.project_value, 0) * y.rate / 100 end, 2) as base,
       round(coalesce((
-        select sum(case when a.kind = 'percent' then coalesce(c.project_value, 0) * a.value / 100 else a.value end)
+        select sum(case a.kind
+                     when 'percent' then coalesce(c.project_value, 0) * a.value / 100
+                     when 'percent_profit' then greatest(coalesce(c.project_value, 0) - y.costs, 0) * a.value / 100
+                     else a.value end)
         from public.commission_adjustments a where a.customer_id = c.id), 0), 2) as bonus
     from (
       select

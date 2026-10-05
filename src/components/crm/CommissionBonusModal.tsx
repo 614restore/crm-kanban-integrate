@@ -16,6 +16,8 @@ export interface BonusJob {
   id: string;
   name: string;
   projectValue: number;
+  /** Job costs entered so far, so a % of job profit can be previewed. */
+  costsTotal: number;
 }
 
 interface Props {
@@ -27,14 +29,14 @@ interface Props {
 
 interface Line {
   id: string;
-  kind: 'flat' | 'percent';
+  kind: 'flat' | 'percent' | 'percent_profit';
   value: number;
   reason: string | null;
 }
 
 export default function CommissionBonusModal({ who, jobs, onClose, onSaved }: Props) {
   const single = jobs.length === 1 ? jobs[0] : null;
-  const [kind, setKind] = useState<'percent' | 'flat'>('percent');
+  const [kind, setKind] = useState<'percent' | 'percent_profit' | 'flat'>('percent');
   const [value, setValue] = useState('');
   const [reason, setReason] = useState('');
   const [lines, setLines] = useState<Line[]>([]);
@@ -56,11 +58,13 @@ export default function CommissionBonusModal({ who, jobs, onClose, onSaved }: Pr
 
   const n = Number(value);
   const valid = value.trim() !== '' && Number.isFinite(n) && n !== 0 && (kind === 'flat' || Math.abs(n) <= 100);
-  const perJob = (pv: number) => (kind === 'percent' ? (pv * n) / 100 : n);
+  const amountFor = (k: string, v: number, j: BonusJob) =>
+    k === 'percent' ? (j.projectValue * v) / 100 : k === 'percent_profit' ? (Math.max(j.projectValue - j.costsTotal, 0) * v) / 100 : v;
+  const perJob = (j: BonusJob) => amountFor(kind, n, j);
 
   const add = async () => {
     if (!valid) {
-      toast.error(kind === 'percent' ? 'Enter a percentage between -100 and 100.' : 'Enter a dollar amount.');
+      toast.error(kind === 'flat' ? 'Enter a dollar amount.' : 'Enter a percentage between -100 and 100.');
       return;
     }
     setBusy(true);
@@ -106,10 +110,12 @@ export default function CommissionBonusModal({ who, jobs, onClose, onSaved }: Pr
                 <div key={l.id} className="flex items-center justify-between px-3 py-2 text-sm">
                   <div>
                     <p className="font-medium text-gray-800">
-                      {l.kind === 'percent' ? `${l.value > 0 ? '+' : ''}${l.value}% of project total` : `${l.value > 0 ? '+' : ''}${formatCurrency(Number(l.value))}`}
-                      <span className="ml-2 text-gray-500">
-                        = {formatCurrency(l.kind === 'percent' ? (single.projectValue * Number(l.value)) / 100 : Number(l.value))}
-                      </span>
+                      {l.kind === 'percent'
+                        ? `${l.value > 0 ? '+' : ''}${l.value}% of project total`
+                        : l.kind === 'percent_profit'
+                        ? `${l.value > 0 ? '+' : ''}${l.value}% of job profit`
+                        : `${l.value > 0 ? '+' : ''}${formatCurrency(Number(l.value))}`}
+                      <span className="ml-2 text-gray-500">= {formatCurrency(amountFor(l.kind, Number(l.value), single))}</span>
                     </p>
                     {l.reason && <p className="text-xs text-gray-500">{l.reason}</p>}
                   </div>
@@ -129,6 +135,12 @@ export default function CommissionBonusModal({ who, jobs, onClose, onSaved }: Pr
               Extra % of project total
             </button>
             <button
+              onClick={() => setKind('percent_profit')}
+              className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${kind === 'percent_profit' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600'}`}
+            >
+              Extra % of job profit
+            </button>
+            <button
               onClick={() => setKind('flat')}
               className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${kind === 'flat' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600'}`}
             >
@@ -139,17 +151,20 @@ export default function CommissionBonusModal({ who, jobs, onClose, onSaved }: Pr
             value={value}
             onChange={(e) => setValue(e.target.value)}
             inputMode="decimal"
-            placeholder={kind === 'percent' ? 'Extra percent, e.g. 1' : 'Dollar amount, e.g. 250'}
+            placeholder={kind === 'flat' ? 'Dollar amount, e.g. 250' : 'Extra percent, e.g. 1'}
             className={`${input} w-full`}
           />
           <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (e.g. June contest)" className={`${input} w-full`} />
           {valid && (
             <p className="text-xs text-gray-500">
               {single
-                ? `Adds ${formatCurrency(perJob(single.projectValue))} to this job's commission.`
-                : `Adds to each of ${jobs.length} jobs, ${formatCurrency(jobs.reduce((s, j) => s + perJob(j.projectValue), 0))} in total.`}{' '}
+                ? `Adds ${formatCurrency(perJob(single))} to this job's commission.`
+                : `Adds to each of ${jobs.length} jobs, ${formatCurrency(jobs.reduce((s, j) => s + perJob(j), 0))} in total.`}{' '}
               A negative number takes commission off.
             </p>
+          )}
+          {kind === 'percent_profit' && (
+            <p className="text-xs text-gray-400">Job profit is the project total minus the job costs entered for it. It is an estimate until the costs are marked complete.</p>
           )}
           <p className="text-xs text-gray-400">Bonuses lock once the job&apos;s commission is marked paid. Take it back to Owed to change them.</p>
         </div>

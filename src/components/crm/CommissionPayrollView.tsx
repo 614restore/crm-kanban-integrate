@@ -585,7 +585,7 @@ export default function CommissionPayrollView() {
             <ul className="space-y-2 text-sm text-gray-700 list-disc pl-5">
               <li>Commission starts once the <strong>first payment is collected</strong>. A sold job with no payment yet waits under <strong>Pending down payment</strong>, and moves to <strong>Owed</strong> when the down payment is received.</li>
               <li>Your company pays commission either as a <strong>percent of the project total</strong>, or as a <strong>profit split</strong> (for example 10 / 50 / 50: 10% to the company off the top, then the profit after job costs is split 50 / 50). The method can differ by salesperson. Owners and admins set it under Commission settings.</li>
-              <li><strong>Contest bonuses:</strong> use <strong>+ Bonus</strong> on a job, or <strong>Add bonus to all</strong> on a salesperson, to add extra percentage points of the project total or a flat amount (with a reason). Bonuses add to the commission under either method and lock once the job is marked paid.</li>
+              <li><strong>Contest bonuses:</strong> use <strong>+ Bonus</strong> on a job, or <strong>Add bonus to all</strong> on a salesperson, to add extra percentage points of the project total or of the job's profit, or a flat amount (with a reason). Bonuses add to the commission under either method and lock once the job is marked paid.</li>
               <li>On a profit split, a job also waits under <strong>Pending costs</strong> until a manager or project manager has entered the job costs on the customer and marked them complete.</li>
               <li>A job on the Owed list stays there until someone checks it off as paid. It does not drop off when its stage changes, when the job closes, or when the date moves on.</li>
               <li>Only an <strong>owner, admin, manager or financial (office) user</strong> can check a job off as paid, or take it back.</li>
@@ -706,7 +706,7 @@ export default function CommissionPayrollView() {
                           onClick={() =>
                             setBonusFor({
                               who: salesman.name,
-                              jobs: salesman.jobs.map((j) => ({ id: j.contactId, name: j.contactName, projectValue: j.projectValue })),
+                              jobs: salesman.jobs.map((j) => ({ id: j.contactId, name: j.contactName, projectValue: j.projectValue, costsTotal: j.costsTotal })),
                             })
                           }
                           className="px-3 py-1 rounded-lg border border-purple-300 text-sm font-medium text-purple-700 hover:bg-purple-100"
@@ -763,7 +763,7 @@ export default function CommissionPayrollView() {
                                 )}
                                 {canMarkPaid && !job.paidAt && (
                                   <button
-                                    onClick={() => setBonusFor({ who: salesman.name, jobs: [{ id: job.contactId, name: job.contactName, projectValue: job.projectValue }] })}
+                                    onClick={() => setBonusFor({ who: salesman.name, jobs: [{ id: job.contactId, name: job.contactName, projectValue: job.projectValue, costsTotal: job.costsTotal }] })}
                                     className="mt-0.5 text-[10px] font-medium text-purple-600 hover:underline"
                                   >
                                     + Bonus
