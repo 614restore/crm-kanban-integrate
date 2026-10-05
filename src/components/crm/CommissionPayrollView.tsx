@@ -24,6 +24,7 @@ import {
 import { toast } from 'sonner';
 import CommissionSettingsModal from './CommissionSettingsModal';
 import CommissionBonusModal, { BonusJob } from './CommissionBonusModal';
+import { toLocalDateString } from '@/lib/dates';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -121,8 +122,8 @@ export default function CommissionPayrollView() {
 
   // Date range: default to current month
   const today = new Date();
-  const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
-  const todayStr = today.toISOString().split('T')[0];
+  const firstOfMonth = toLocalDateString(new Date(today.getFullYear(), today.getMonth(), 1));
+  const todayStr = toLocalDateString(today);
 
   const [dateFrom, setDateFrom] = useState(firstOfMonth);
   const [dateTo, setDateTo] = useState(todayStr);

@@ -24,6 +24,7 @@ import {
   UserPlus,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { toLocalDateString } from '@/lib/dates';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -93,7 +94,7 @@ function getWeekDates(anchorDate: Date): Date[] {
 }
 
 function toISO(date: Date): string {
-  return date.toISOString().split('T')[0];
+  return toLocalDateString(date);
 }
 
 function formatHeaderDate(date: Date): string {

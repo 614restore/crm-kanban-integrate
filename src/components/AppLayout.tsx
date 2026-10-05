@@ -34,6 +34,7 @@ import { Building2, Loader2, Zap, X, Tag, WifiOff, AlertTriangle, Download } fro
 import { SubscriptionProvider, useSubscription } from '@/contexts/SubscriptionContext';
 import { exportAllData } from '@/lib/exportUtils';
 import { IN_APP, inAppStartView, inAppStartBoard } from '@/lib/inAppMode';
+import { toLocalDateString } from '@/lib/dates';
 
 // Lazy load all CRM view components for better code splitting
 const Dashboard = lazyScreen(() => import('./crm/Dashboard'));
@@ -368,7 +369,9 @@ function dbAppointmentToAppAppointment(dbAppointment: any, contacts: Contact[]):
     const start = new Date(dbAppointment.start_time);
     const end = dbAppointment.end_time ? new Date(dbAppointment.end_time) : null;
 
-    date = start.toISOString().split('T')[0];
+    // The local day, to match the local time below it: toISOString() would file
+    // an evening appointment under the next day.
+    date = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
     time = `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`;
 
     if (!duration) {
@@ -385,7 +388,7 @@ function dbAppointmentToAppAppointment(dbAppointment: any, contacts: Contact[]):
     contactName: contact ? `${contact.firstName} ${contact.lastName}` : 'Unknown',
     title: dbAppointment.title,
     type: dbAppointment.type,
-    date: date || new Date().toISOString().split('T')[0],
+    date: date || toLocalDateString(),
     time: time || '09:00',
     duration: duration || 60,
     assignedTo: dbAppointment.assigned_to || '',

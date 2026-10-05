@@ -12,6 +12,7 @@ import {
   extractMentionHandles,
 } from '@/lib/mentions';
 import { toast } from 'sonner';
+import { toLocalDateString } from '@/lib/dates';
 import {
   X,
   Calendar,
@@ -90,8 +91,8 @@ export default function AppointmentModal({
   );
 
   const defaultDate = selectedDate
-    ? selectedDate.toISOString().split('T')[0]
-    : new Date().toISOString().split('T')[0];
+    ? toLocalDateString(selectedDate)
+    : toLocalDateString();
 
   const [title, setTitle] = useState(editingAppointment?.title || '');
   const [type, setType] = useState(editingAppointment?.type || 'inspection');
@@ -149,7 +150,7 @@ export default function AppointmentModal({
       } else {
         setTitle('');
         setType('inspection');
-        setDate(selectedDate ? selectedDate.toISOString().split('T')[0] : defaultDate);
+        setDate(selectedDate ? toLocalDateString(selectedDate) : defaultDate);
         setTime('09:00');
         setDuration(60);
         setContactId(preselectedContactId || '');

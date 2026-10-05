@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { DollarSign, Calendar, CreditCard, Plus, X, Check } from 'lucide-react';
 import { toast } from 'sonner';
+import { toLocalDateString } from '@/lib/dates';
 
 export interface InvoicePayment {
   id: string;
@@ -38,7 +39,7 @@ export default function PaymentHistory({
   const [showAddPayment, setShowAddPayment] = useState(false);
   const [amount, setAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<InvoicePayment['paymentMethod']>('cash');
-  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
+  const [paymentDate, setPaymentDate] = useState(toLocalDateString());
   const [referenceNumber, setReferenceNumber] = useState('');
   const [notes, setNotes] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -72,7 +73,7 @@ export default function PaymentHistory({
       // Reset form
       setAmount('');
       setPaymentMethod('cash');
-      setPaymentDate(new Date().toISOString().split('T')[0]);
+      setPaymentDate(toLocalDateString());
       setReferenceNumber('');
       setNotes('');
       setShowAddPayment(false);
