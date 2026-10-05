@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/authContext';
 import { formatCurrency } from '@/lib/crmData';
-import { compressImage } from '@/lib/imageUtils';
+import { compressForUpload } from '@/lib/imageUtils';
 
 /**
  * Upload the carrier's insurance scope of work, let the AI read it, then review the figures and apply
@@ -137,7 +137,7 @@ export default function InsuranceScopePanel({ contactId, companyId, currentProje
       // A photo of the scope paperwork goes through the same size cap as other
       // photos, but at a larger size than a damage photo: it is dense small
       // print that has to stay readable for the scope reader. PDFs are left alone.
-      const toUpload = isPdf ? file : await compressImage(file, { maxSide: 2000, targetBytes: 700_000 });
+      const toUpload = isPdf ? file : await compressForUpload(file, { maxSide: 2000, targetBytes: 700_000 });
       const baseName = toUpload.type === 'image/jpeg' && !isPdf
         ? file.name.replace(/\.[^.]+$/, '') + '.jpg'
         : file.name;

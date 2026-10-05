@@ -7,7 +7,7 @@ import {
 import { useCRM, useActiveContact } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { supabase } from '@/lib/supabase';
-import { compressImage, COMPRESS_PRESETS } from '@/lib/imageUtils';
+import { compressForUpload, COMPRESS_PRESETS } from '@/lib/imageUtils';
 
 /* ─── Types ──────────────────────────────────────────────── */
 type Elevation = 'North' | 'South' | 'East' | 'West' | 'Garage' | 'Detached';
@@ -423,7 +423,7 @@ function NewInspectionPanel({ preselectedContact, companyId, userId, onDone, onC
       // A phone photo straight off the camera is 4-12 MB and a whole inspection
       // is dozens of them. Scale to the same size every other quote photo uses:
       // still plenty to read damage and annotate, a few hundred KB each.
-      const upload = await compressImage(file, COMPRESS_PRESETS.quotePhoto);
+      const upload = await compressForUpload(file, COMPRESS_PRESETS.quotePhoto);
       const ext = upload.type === 'image/jpeg'
         ? 'jpg'
         : (upload.name.split('.').pop() || 'jpg').toLowerCase().replace(/heic|heif/, 'jpg');

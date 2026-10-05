@@ -1146,6 +1146,18 @@ export default function ContactDetail() {
     setShowChangeOrderModal(true);
   };
 
+  // Click-outside closes the reschedule-note popover
+  useEffect(() => {
+    if (!rescheduleNoteOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (rescheduleNoteRef.current && !rescheduleNoteRef.current.contains(e.target as Node)) {
+        setRescheduleNoteOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [rescheduleNoteOpen]);
+
   if (!contact) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -1522,18 +1534,6 @@ export default function ContactDetail() {
       setIsSavingQuickNote(false);
     }
   };
-
-  // Click-outside closes the reschedule-note popover
-  useEffect(() => {
-    if (!rescheduleNoteOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (rescheduleNoteRef.current && !rescheduleNoteRef.current.contains(e.target as Node)) {
-        setRescheduleNoteOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [rescheduleNoteOpen]);
 
   const openRescheduleNotePicker = (target: 'new' | 'quick') => {
     const now = new Date();
