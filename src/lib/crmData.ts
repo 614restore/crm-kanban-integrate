@@ -285,6 +285,8 @@ export interface Appointment {
   location: string;
   notes?: string;
   status: 'scheduled' | 'completed' | 'cancelled' | 'rescheduled';
+  /** When the appointment was booked (not when it takes place). */
+  createdAt?: string;
 }
 
 export interface Invoice {

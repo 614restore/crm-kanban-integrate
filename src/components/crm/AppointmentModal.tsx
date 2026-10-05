@@ -370,6 +370,7 @@ export default function AppointmentModal({
           location: location || '',
           notes: notes.trim() || undefined,
           status: 'scheduled',
+          createdAt: created.created_at ?? new Date().toISOString(),
         };
 
         dispatch({ type: 'ADD_APPOINTMENT', payload: newAppointment });
