@@ -372,6 +372,24 @@ const buildFullSignedDocumentPdf = (
     doc.setFontSize(8); doc.text(`Signed by: ${fullQuote.contingency_signed_by ?? custName}`, margin, y);
     y += 14;
 
+    // The contractor's countersignature sits beside the agreement it countersigns, not only on the
+    // authorization page at the end, so the signed contingency shows both signatures.
+    if (fullQuote.contractor_signature_data || fullQuote.contractor_signed_at) {
+      y = ensureSpace(80);
+      y += 4;
+      if (fullQuote.contractor_signature_data) addSigImage(fullQuote.contractor_signature_data, margin, y);
+      doc.setDrawColor(150, 150, 150);
+      doc.line(margin, y + 48, margin + 220, y + 48);
+      doc.line(margin + 250, y + 48, margin + 430, y + 48);
+      doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(80, 80, 80);
+      doc.text('Contractor Signature', margin, y + 58);
+      doc.text('Date', margin + 250, y + 58);
+      if (fullQuote.contractor_signed_at) doc.text(new Date(fullQuote.contractor_signed_at).toLocaleDateString(), margin + 252, y + 48);
+      y += 68;
+      doc.text(`Signed by: ${fullQuote.contractor_signed_by ?? companyName} (${companyName})`, margin, y);
+      y += 14;
+    }
+
     drawCancelNotice(
       fullQuote.contingency_cancel_signature_data,
       fullQuote.contingency_signed_at,

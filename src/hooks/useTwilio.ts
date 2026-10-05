@@ -53,7 +53,7 @@ export function useTwilio(): UseTwilioReturn {
           .select('credentials, is_active')
           .eq('company_id', companyId)
           .eq('integration_type', 'twilio')
-          .single();
+          .maybeSingle();
 
         if (!cancelled) {
           if (

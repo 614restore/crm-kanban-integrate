@@ -30,6 +30,47 @@ type AlertPayload = {
   resend?: boolean;
 };
 
+// Keeps the executed copy where people can open it: a file in the public signed-quotes bucket, the
+// quote's signed_pdf_url, and the customer's Documents entry (which until now only linked to the
+// customer-facing signing page, so the signed agreement could not be opened as a document).
+async function storeExecutedDocument(admin: any, quote: any, base64: string) {
+  const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+  const path = `${quote.id}/${Date.now()}_executed.pdf`;
+  const { error: upErr } = await admin.storage
+    .from('signed-quotes')
+    .upload(path, bytes, { contentType: 'application/pdf', upsert: true });
+  if (upErr) throw upErr;
+  const { data: pub } = admin.storage.from('signed-quotes').getPublicUrl(path);
+  const url: string = pub.publicUrl;
+  await admin.from('quotes').update({ signed_pdf_url: url }).eq('id', quote.id);
+
+  const customerId = quote.customer_id;
+  if (!customerId) return;
+  const label = quote.contingency_enabled ? 'Signed Contingency Agreement' : 'Signed Agreement';
+  const name = `${label} – ${quote.quote_number ?? ''}`;
+  const { data: existing } = await admin
+    .from('documents')
+    .select('id')
+    .eq('contact_id', customerId)
+    .eq('type', 'signed')
+    .eq('name', name)
+    .limit(1)
+    .maybeSingle();
+  if (existing) {
+    await admin.from('documents').update({ url, size: bytes.length }).eq('id', existing.id);
+  } else {
+    await admin.from('documents').insert({
+      company_id: quote.company_id,
+      contact_id: customerId,
+      customer_id: customerId,
+      name,
+      type: 'signed',
+      url,
+      size: bytes.length,
+    });
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -116,8 +157,15 @@ serve(async (req) => {
       event_type === 'signed' &&
       !!(quote as any).contractor_signed_at &&
       !(quote as any).countersigned_copy_sent_at;
+    // The customer's own browser reports 'countersigned' the moment the customer signs, before anyone on
+    // the team has. That is not an executed agreement: it used to email the homeowner a "fully executed"
+    // message with no contractor signature on it, and stamp the copy as sent, so the real executed copy
+    // was then skipped as a duplicate when the salesperson countersigned. Until the contractor has
+    // actually signed, treat it as the customer's signature and nothing more.
+    const prematureCountersign =
+      event_type === 'countersigned' && !(quote as any).contractor_signed_at;
     const effectiveEvent: 'viewed' | 'signed' | 'countersigned' =
-      autoExecuted ? 'countersigned' : event_type;
+      autoExecuted ? 'countersigned' : prematureCountersign ? 'signed' : event_type;
     const subject = effectiveEvent === 'countersigned'
       ? `Fully executed: Quote ${quote.quote_number}`
       : effectiveEvent === 'signed'
@@ -194,7 +242,7 @@ serve(async (req) => {
     // quote signed — this function only handles email. Inserting one here
     // too would create a duplicate row in quote_notifications for every sign.
 
-    if (event_type === 'signed') {
+    if (event_type === 'signed' || prematureCountersign) {
       // The signing RPC may already have logged this signature; don't log it twice.
       const since = new Date(Date.now() - 2 * 60 * 1000).toISOString();
       const { data: already } = await admin
@@ -218,7 +266,7 @@ serve(async (req) => {
     }
 
     // countersigned: notify contractor and send completed copy to customer
-    if (event_type === 'countersigned') {
+    if (event_type === 'countersigned' && !prematureCountersign) {
       // Only for an explicit countersign call — sign_quote_customer already
       // logs its own notification when it applies the signature itself.
       await admin.from('quote_notifications').insert({
@@ -227,6 +275,15 @@ serve(async (req) => {
         event_type: 'countersigned',
         message: `Quote ${quote.quote_number} is fully executed — completed copy sent to ${customerName}.`,
       });
+    }
+
+    // Keep the executed copy openable from the customer's Documents and the quote.
+    if (effectiveEvent === 'countersigned' && attachmentBase64 && (quote as any).contractor_signed_at) {
+      try {
+        await storeExecutedDocument(admin, quote, attachmentBase64);
+      } catch (storeErr) {
+        console.warn('Could not store the executed document:', storeErr);
+      }
     }
 
     if (!resendKey || toEmails.length === 0) {
@@ -247,15 +304,16 @@ serve(async (req) => {
             ${(quote.customer as any)?.assigned_member?.full_name ? `<p style="margin:0 0 12px;color:#374151;font-size:13px">Assigned to: <strong>${(quote.customer as any).assigned_member.full_name}</strong></p>` : ''}
             <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0">
             <p style="margin:0;font-size:12px;color:#9ca3af">${quote.company?.name || 'Your Company'} · Quote ${quote.quote_number}</p>
-          ` : event_type === 'countersigned' ? `
+          ` : effectiveEvent === 'countersigned' ? `
             <p style="margin:0 0 12px;font-size:16px">✅ <strong>Quote ${quote.quote_number} is fully executed.</strong></p>
             <p style="margin:0 0 12px;color:#374151">Both parties have signed. A completed copy has been sent to <strong>${customerName}</strong>.</p>
             <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0">
             <p style="margin:0;font-size:12px;color:#9ca3af">${quote.company?.name || 'Your Company'} · Quote ${quote.quote_number}</p>
           ` : `
-            <p style="margin:0 0 12px"><strong>${customerName}</strong> has ${event_type === 'signed' ? 'signed' : 'completed'} quote <strong>${quote.quote_number}</strong>.</p>
-            ${event_type === 'signed' && quote.signed_at ? `<p style="margin:0 0 8px;color:#374151">Signed at: ${new Date(quote.signed_at).toLocaleString()}</p>` : ''}
-            ${event_type === 'signed' && quote.signed_by ? `<p style="margin:0 0 8px;color:#374151">Signed by: ${quote.signed_by}</p>` : ''}
+            <p style="margin:0 0 12px"><strong>${customerName}</strong> has ${effectiveEvent === 'signed' ? 'signed' : 'completed'} quote <strong>${quote.quote_number}</strong>.</p>
+            ${effectiveEvent === 'signed' && !(quote as any).contractor_signed_at ? `<p style="margin:0 0 12px;color:#92400e"><strong>Your countersignature is needed.</strong> Add it in the app and the fully executed copy goes to the homeowner.</p>` : ''}
+            ${effectiveEvent === 'signed' && quote.signed_at ? `<p style="margin:0 0 8px;color:#374151">Signed at: ${new Date(quote.signed_at).toLocaleString()}</p>` : ''}
+            ${effectiveEvent === 'signed' && quote.signed_by ? `<p style="margin:0 0 8px;color:#374151">Signed by: ${quote.signed_by}</p>` : ''}
             ${fundingLabel ? `<p style="margin:0 0 8px;color:#374151">Funding preference: ${fundingLabel}</p>` : ''}
             <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0">
             <p style="margin:0;font-size:12px;color:#9ca3af">${quote.company?.name || 'Your Company'} · Quote ${quote.quote_number}</p>
@@ -298,7 +356,11 @@ serve(async (req) => {
     // explicitly asks to re-send. Every countersign path calls this function,
     // and on-site signing both auto-sends and leaves a "Send to Customer"
     // button on screen, so without this the homeowner gets two copies.
-    const alreadySent = !!(quote as any).countersigned_copy_sent_at;
+    // A "sent" stamp that predates the contractor's signature came from the old premature event, not from an
+    // executed copy, so it must not block the real one.
+    const sentAtMs = (quote as any).countersigned_copy_sent_at ? Date.parse((quote as any).countersigned_copy_sent_at) : NaN;
+    const contractorAtMs = (quote as any).contractor_signed_at ? Date.parse((quote as any).contractor_signed_at) : NaN;
+    const alreadySent = Number.isFinite(sentAtMs) && Number.isFinite(contractorAtMs) && sentAtMs >= contractorAtMs;
     const suppressDuplicate = effectiveEvent === 'countersigned' && alreadySent && !resend;
     if (suppressDuplicate) {
       console.log(`Executed copy already sent for quote ${quote.id} — skipping duplicate.`);
@@ -360,7 +422,7 @@ serve(async (req) => {
               <p style="margin:0 0 16px">Hello ${quote.customer.first_name || 'there'},</p>
               ${isFullyExecuted
                 ? `<p style="margin:0 0 12px">Your agreement with <strong>${companyName}</strong> is now <strong>fully executed</strong> — both parties have signed.${attachmentBase64 ? ' Your completed copy is attached for your records.' : ''}</p>`
-                : `<p style="margin:0 0 12px">Thank you for signing your proposal with <strong>${companyName}</strong>.${attachmentBase64 ? ' Your signed copy is attached for your records.' : ''}</p>`
+                : `<p style="margin:0 0 12px">Thank you for signing your proposal with <strong>${companyName}</strong>.${attachmentBase64 ? ' Your signed copy is attached for your records.' : ''}</p>${!(quote as any).contractor_signed_at ? '<p style="margin:0 0 12px">We will add our countersignature shortly and email you the fully executed copy.</p>' : ''}`
               }
               ${signer_signature_data ? `
               <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:16px 0">

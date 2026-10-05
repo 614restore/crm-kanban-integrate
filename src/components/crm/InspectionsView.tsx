@@ -52,6 +52,8 @@ interface ReportRow {
   status: string;
   contingency_enabled: boolean | null;
   contingency_signed_at: string | null;
+  /** The customer actually cancelled: they signed the separate cancel notice. */
+  standalone_cancel_signed_at: string | null;
   contingency_cancel_signed_at: string | null;
   viewed_at: string | null;
   created_at: string;
@@ -79,7 +81,9 @@ function addBusinessDays(from: Date, days: number): Date {
 }
 
 function reportState(r: ReportRow): { label: string; tone: Tone } {
-  if (r.contingency_cancel_signed_at) return { label: 'Contingency cancelled by customer', tone: 'red' };
+  // contingency_cancel_signed_at is only the customer's signature acknowledging the 3-day notice, written
+  // when they sign the agreement. A real cancellation is the separate cancel notice being signed.
+  if (r.standalone_cancel_signed_at) return { label: 'Contingency cancelled by customer', tone: 'red' };
   if (r.contingency_signed_at) {
     const end = addBusinessDays(new Date(r.contingency_signed_at), 3);
     return end.getTime() > Date.now()
@@ -123,7 +127,7 @@ export default function InspectionsView() {
         supabase
           .from('quotes')
           .select(
-            'id, quote_number, status, contingency_enabled, contingency_signed_at, contingency_cancel_signed_at, viewed_at, created_at, customer_id, customers(first_name, last_name, address)'
+            'id, quote_number, status, contingency_enabled, contingency_signed_at, contingency_cancel_signed_at, standalone_cancel_signed_at, viewed_at, created_at, customer_id, customers(first_name, last_name, address)'
           )
           .eq('company_id', profile.company_id)
           .eq('project_type', 'inspection_report')

@@ -489,6 +489,8 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
   // within 700ms of each other; without a lock the second save's DELETE runs while
   // the first save's INSERT is still in-flight → duplicate line items in the DB).
   const silentSaveInProgress = useRef(false);
+  // Why the last silent save failed, so a failed preview can say so instead of a generic message.
+  const lastSaveError = useRef<string | null>(null);
   const [showEmailCompose, setShowEmailCompose] = useState(false);
   const [emailSubject, setEmailSubject] = useState('');
   const [emailMessage, setEmailMessage] = useState('');
@@ -3739,9 +3741,14 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
     if (previewingUnsaved) return;
     setPreviewingUnsaved(true);
     try {
+      // An autosave may already be running; wait for it rather than treating "busy" as "failed".
+      for (let i = 0; i < 40 && silentSaveInProgress.current; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+      lastSaveError.current = null;
       // Save silently to get a real quoteId, then open the full QuotePreview
       // which supports both Professional and Classic views.
-      const savedId = await handleSave(false, true);
+      const savedId = await handleSave(false, true, true);
       if (savedId) {
         onPreview(savedId, currentStep);
       } else if (quoteId) {
@@ -3749,7 +3756,10 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
         toast.warning('Could not save latest changes. Showing last saved version.');
         onPreview(quoteId, currentStep);
       } else {
-        toast.error('Unable to save quote before previewing. Please try again.');
+        toast.error(
+          `Couldn't open the preview because the quote could not be saved${lastSaveError.current ? ` (${lastSaveError.current})` : ''}. Save the quote, then try again.`,
+          { duration: 8000 },
+        );
       }
     } catch (error: any) {
       toast.error(error?.message || 'Unable to generate preview right now.');
@@ -3786,13 +3796,14 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
     }
   };
 
-  const handleSave = async (andSend = false, silent = false): Promise<string | null> => {
+  const handleSave = async (andSend = false, silent = false, force = false): Promise<string | null> => {
     // Prevent concurrent silent saves: the perTierLoadSaveDone (800ms) and autosave
     // (1500ms) both fire on every per-tier quote load.  Without this guard the second
     // save's DELETE runs while the first save's INSERT is in-flight, producing
     // duplicate line items in the database.
     if (silent && silentSaveInProgress.current) return null;
-    if (silent && !quoteId && !userEdited.current) return null;
+    // An autosave of an untouched new quote is pointless, but an explicit preview always saves.
+    if (silent && !quoteId && !userEdited.current && !force) return null;
     if (silent) {
       silentSaveInProgress.current = true;
       setAutoSaveStatus('saving');
@@ -4282,6 +4293,7 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
       if (silent) {
         setAutoSaveStatus('idle');
         console.error('[QuoteBuilder] silent save failed:', err?.message, err);
+        lastSaveError.current = err?.message ?? 'unknown error';
         const msg: string = err?.message ?? '';
         const isServerError = msg.includes('Failed to save') || msg.includes('JWT') ||
           msg.includes('401') || msg.includes('403') || msg.includes('token');

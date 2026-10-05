@@ -590,6 +590,13 @@ export default function QuotesView() {
     dispatch({ type: 'SET_PENDING_QUOTE_ACTION', payload: null });
     if (request.quoteId) {
       const q = quotes.find((row) => row.id === request.quoteId);
+      // The list leaves out inspection reports, but a signed report (contingency agreement) still needs its
+      // countersign and preview, and both only need the id.
+      if (!q && (request.action === 'countersign' || request.action === 'preview')) {
+        if (request.action === 'countersign') setCountersignOnOpen(true);
+        openPreview(request.quoteId);
+        return;
+      }
       if (!q) { toast.error('That quote could not be found.'); return; }
       if (request.action === 'invoice') openInvoice(q);
       else if (request.action === 'payment') openReceipts(q);

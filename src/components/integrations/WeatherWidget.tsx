@@ -88,7 +88,7 @@ async function fetchCredentials(companyId: string): Promise<string | null> {
     .eq('company_id', companyId)
     .eq('integration_type', 'openweather')
     .eq('is_active', true)
-    .single();
+    .maybeSingle();
 
   if (error && error.code !== 'PGRST116') throw error;
   return (data?.credentials?.apiKey as string) ?? null;
