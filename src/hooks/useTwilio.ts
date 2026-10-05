@@ -1,6 +1,8 @@
 // useTwilio — hook for sending SMS via Twilio credentials stored in company_integrations.
 //
-// Loads accountSid, authToken, and fromNumber from Supabase (integration_type = 'twilio').
+// Loads accountSid, authToken, and fromNumber from Supabase (integration_id = 'twilio', enabled).
+// Settings saves a row keyed by integration_id with an enabled flag; this used to search integration_type /
+// is_active, which are never filled in, so saved Twilio credentials were never found.
 // Exposes sendSMS(to, message) which calls the Twilio Messages API directly using
 // btoa() for auth (browser-safe; avoids Node's Buffer).
 // On success, logs an 'sms' record to the communications table.
@@ -50,14 +52,14 @@ export function useTwilio(): UseTwilioReturn {
       try {
         const { data } = await supabase
           .from('company_integrations')
-          .select('credentials, is_active')
+          .select('credentials, enabled')
           .eq('company_id', companyId)
-          .eq('integration_type', 'twilio')
+          .eq('integration_id', 'twilio')
           .single();
 
         if (!cancelled) {
           if (
-            data?.is_active &&
+            data?.enabled &&
             data.credentials?.accountSid &&
             data.credentials?.authToken &&
             data.credentials?.fromNumber
