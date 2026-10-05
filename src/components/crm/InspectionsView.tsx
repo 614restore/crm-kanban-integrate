@@ -7,6 +7,7 @@ import {
 import { useCRM, useActiveContact } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { supabase } from '@/lib/supabase';
+import { compressForUpload, COMPRESS_PRESETS } from '@/lib/imageUtils';
 
 /* ─── Types ──────────────────────────────────────────────── */
 type Elevation = 'North' | 'South' | 'East' | 'West' | 'Garage' | 'Detached';
@@ -419,12 +420,18 @@ function NewInspectionPanel({ preselectedContact, companyId, userId, onDone, onC
     e.target.value = '';
     setUploadingElev(activeElev);
     try {
-      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/heic|heif/, 'jpg');
+      // A phone photo straight off the camera is 4-12 MB and a whole inspection
+      // is dozens of them. Scale to the same size every other quote photo uses:
+      // still plenty to read damage and annotate, a few hundred KB each.
+      const upload = await compressForUpload(file, COMPRESS_PRESETS.quotePhoto);
+      const ext = upload.type === 'image/jpeg'
+        ? 'jpg'
+        : (upload.name.split('.').pop() || 'jpg').toLowerCase().replace(/heic|heif/, 'jpg');
       // The shared backend has no 'documents' bucket; company files live in 'company-files'.
       const path = `${companyId}/${selectedContact.id}/inspection_${activeElev}_${Date.now()}.${ext}`;
       const { error: upErr } = await supabase.storage
         .from('company-files')
-        .upload(path, file, { upsert: false });
+        .upload(path, upload, { upsert: false, contentType: upload.type || undefined });
       if (upErr) throw upErr;
 
       const { data: { publicUrl } } = supabase.storage.from('company-files').getPublicUrl(path);
@@ -436,7 +443,7 @@ function NewInspectionPanel({ preselectedContact, companyId, userId, onDone, onC
         name: `Inspection – ${activeElev} Elevation`,
         type: 'photo',
         url: publicUrl,
-        size: file.size,
+        size: upload.size,
       } as any);
       if (docErr) throw docErr;
 
