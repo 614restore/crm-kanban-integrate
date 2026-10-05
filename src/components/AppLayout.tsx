@@ -392,6 +392,7 @@ function dbAppointmentToAppAppointment(dbAppointment: any, contacts: Contact[]):
     location: dbAppointment.location || '',
     notes: dbAppointment.notes,
     status: dbAppointment.status,
+    createdAt: dbAppointment.created_at ?? undefined,
   };
 }
 
