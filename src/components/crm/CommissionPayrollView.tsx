@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import CommissionSettingsModal from './CommissionSettingsModal';
+import CommissionBonusModal, { BonusJob } from './CommissionBonusModal';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -61,6 +62,8 @@ interface CommissionJob {
   method: string;
   costsTotal: number;
   costsConfirmed: boolean;
+  /** Contest and one-off bonuses on this job, already included in commissionEarned. */
+  bonus: number;
 }
 
 /**
@@ -135,6 +138,8 @@ export default function CommissionPayrollView() {
   const [companySettings, setCompanySettings] = useState({ method: 'percent_total', overhead: 10, split: 50 });
   const [people, setPeople] = useState<any[]>([]);
   const [showSettings, setShowSettings] = useState(false);
+  // Open bonus dialog: one job, or all of a salesperson's listed jobs.
+  const [bonusFor, setBonusFor] = useState<{ who: string; jobs: BonusJob[] } | null>(null);
   const [marking, setMarking] = useState(false);
   const [showNotice, setShowNotice] = useState(() => {
     try {
@@ -234,6 +239,7 @@ export default function CommissionPayrollView() {
               method: r.method,
               costsTotal: Number(r.costs_total ?? 0),
               costsConfirmed: !!r.costs_confirmed,
+              bonus: Number(r.bonus ?? 0),
             };
           });
 
@@ -541,6 +547,18 @@ export default function CommissionPayrollView() {
         </div>
       </div>
 
+      {bonusFor && (
+        <CommissionBonusModal
+          who={bonusFor.who}
+          jobs={bonusFor.jobs}
+          onClose={() => setBonusFor(null)}
+          onSaved={() => {
+            setBonusFor(null);
+            loadData();
+          }}
+        />
+      )}
+
       {showSettings && companyId && (
         <CommissionSettingsModal
           companyId={companyId}
@@ -567,6 +585,7 @@ export default function CommissionPayrollView() {
             <ul className="space-y-2 text-sm text-gray-700 list-disc pl-5">
               <li>Commission starts once the <strong>first payment is collected</strong>. A sold job with no payment yet waits under <strong>Pending down payment</strong>, and moves to <strong>Owed</strong> when the down payment is received.</li>
               <li>Your company pays commission either as a <strong>percent of the project total</strong>, or as a <strong>profit split</strong> (for example 10 / 50 / 50: 10% to the company off the top, then the profit after job costs is split 50 / 50). The method can differ by salesperson. Owners and admins set it under Commission settings.</li>
+              <li><strong>Contest bonuses:</strong> use <strong>+ Bonus</strong> on a job, or <strong>Add bonus to all</strong> on a salesperson, to add extra percentage points of the project total or a flat amount (with a reason). Bonuses add to the commission under either method and lock once the job is marked paid.</li>
               <li>On a profit split, a job also waits under <strong>Pending costs</strong> until a manager or project manager has entered the job costs on the customer and marked them complete.</li>
               <li>A job on the Owed list stays there until someone checks it off as paid. It does not drop off when its stage changes, when the job closes, or when the date moves on.</li>
               <li>Only an <strong>owner, admin, manager or financial (office) user</strong> can check a job off as paid, or take it back.</li>
@@ -680,6 +699,22 @@ export default function CommissionPayrollView() {
                         </button>
                       </div>
                     )}
+                    {view !== 'paid' && canMarkPaid && salesman.jobs.length > 0 && (
+                      <div className="flex items-center justify-between px-5 py-2 bg-purple-50 border-b border-gray-100">
+                        <span className="text-xs text-purple-800">Running a contest? Give all {salesman.jobs.length} of these jobs the same bonus.</span>
+                        <button
+                          onClick={() =>
+                            setBonusFor({
+                              who: salesman.name,
+                              jobs: salesman.jobs.map((j) => ({ id: j.contactId, name: j.contactName, projectValue: j.projectValue })),
+                            })
+                          }
+                          className="px-3 py-1 rounded-lg border border-purple-300 text-sm font-medium text-purple-700 hover:bg-purple-100"
+                        >
+                          Add bonus to all
+                        </button>
+                      </div>
+                    )}
                     {salesman.jobs.length === 0 ? (
                       <p className="text-sm text-gray-400 px-5 py-4 text-center">
                         No commissionable jobs in this period.
@@ -720,6 +755,19 @@ export default function CommissionPayrollView() {
                                   <div className="text-[10px] font-normal text-gray-400">
                                     after {formatCurrency(job.costsTotal)} costs{job.costsConfirmed ? '' : ' (estimated)'}
                                   </div>
+                                )}
+                                {job.bonus !== 0 && (
+                                  <div className="text-[10px] font-normal text-purple-600">
+                                    includes {job.bonus > 0 ? '+' : '-'}{formatCurrency(Math.abs(job.bonus))} bonus
+                                  </div>
+                                )}
+                                {canMarkPaid && !job.paidAt && (
+                                  <button
+                                    onClick={() => setBonusFor({ who: salesman.name, jobs: [{ id: job.contactId, name: job.contactName, projectValue: job.projectValue }] })}
+                                    className="mt-0.5 text-[10px] font-medium text-purple-600 hover:underline"
+                                  >
+                                    + Bonus
+                                  </button>
                                 )}
                               </td>
                               <td className="px-4 py-3 text-right text-gray-400 text-xs">{job.closedAt.split('T')[0]}</td>
