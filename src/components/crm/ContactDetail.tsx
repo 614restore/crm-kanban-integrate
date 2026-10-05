@@ -56,6 +56,7 @@ import ContactTemplateModal from './ContactTemplateModal';
 import ChangeOrderModal, { ChangeOrder } from './ChangeOrderModal';
 import InsuranceScopePanel from './InsuranceScopePanel';
 import CustomerPayments from './CustomerPayments';
+import JobCostsPanel from './JobCostsPanel';
 import HailTracePanel from './HailTracePanel';
 import CustomerClaimHeader from './CustomerClaimHeader';
 import CountersignBanner from './CountersignBanner';
@@ -3394,6 +3395,7 @@ export default function ContactDetail() {
             </div>
 
             <CustomerPayments contactId={contact.id} projectValue={contact.projectValue} />
+            <JobCostsPanel contactId={contact.id} />
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="bg-white rounded-xl border border-gray-200 p-6">
                 <p className="text-sm text-gray-500">Project Value</p>

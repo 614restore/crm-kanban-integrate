@@ -19,8 +19,10 @@ import {
   Info,
   CheckCircle,
   RotateCcw,
+  Settings,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import CommissionSettingsModal from './CommissionSettingsModal';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -35,6 +37,10 @@ interface SalesmanCommission {
   commission_rate_company: number;
   /** custom/override % — when > 0 it overrides both */
   commission_rate_custom: number;
+  /** 'percent_total' or 'profit_split' (this person's own setting, else the company's). */
+  method: string;
+  overheadPct: number;
+  splitPct: number;
   jobs: CommissionJob[];
   totalRevenue: number;
   totalCommission: number;
@@ -52,7 +58,20 @@ interface CommissionJob {
   address?: string;
   /** When the commission was checked off as paid, or null while it is still owed. */
   paidAt?: string | null;
+  method: string;
+  costsTotal: number;
+  costsConfirmed: boolean;
 }
+
+/**
+ * Which list a job belongs on. The server works out the amounts (commission_payroll_jobs), so web and mobile agree.
+ *   paid     checked off as paid
+ *   pending  no payment collected yet (pending down payment)
+ *   costs    profit split, paid in, but the job costs are not marked complete yet (pending costs)
+ *   owed     everything else
+ */
+const bucketOf = (r: any): 'paid' | 'pending' | 'costs' | 'owed' =>
+  r.commission_paid_at ? 'paid' : !r.has_payment ? 'pending' : r.method === 'profit_split' && !r.costs_confirmed ? 'costs' : 'owed';
 
 // Statuses that count as "sold / commissionable": every stage from signed onward. A job stays on payroll
 // until its commission is checked off as paid, whatever stage it has reached (the list used to leave out
@@ -108,10 +127,14 @@ export default function CommissionPayrollView() {
   const [expandedSalesman, setExpandedSalesman] = useState<string | null>(null);
   const [salesmen, setSalesmen] = useState<SalesmanCommission[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  // 'owed'    = sold jobs whose first payment has been collected and whose commission is not yet paid
+  // 'owed'    = first payment collected (and, on a profit split, job costs complete), commission not yet paid
   // 'pending' = sold jobs still waiting on the first payment (not payable yet)
+  // 'costs'   = profit-split jobs paid in but still waiting for the job costs to be marked complete
   // 'paid'    = jobs checked off as paid, by the date they were paid
-  const [view, setView] = useState<'owed' | 'pending' | 'paid'>('owed');
+  const [view, setView] = useState<'owed' | 'pending' | 'costs' | 'paid'>('owed');
+  const [companySettings, setCompanySettings] = useState({ method: 'percent_total', overhead: 10, split: 50 });
+  const [people, setPeople] = useState<any[]>([]);
+  const [showSettings, setShowSettings] = useState(false);
   const [marking, setMarking] = useState(false);
   const [showNotice, setShowNotice] = useState(() => {
     try {
@@ -128,18 +151,20 @@ export default function CommissionPayrollView() {
   // Only owners, admins, managers can view this page
   const canView = ['owner', 'admin', 'manager', 'sales_manager', 'office_staff'].includes(userRole);
   const canMarkPaid = CAN_MARK_PAID_ROLES.includes(userRole);
+  // Only an owner or admin can change the commission method and rates (the database enforces it too).
+  const canEditSettings = ['owner', 'admin'].includes(userRole);
 
   const loadData = useCallback(async () => {
     if (!companyId) return;
     setIsLoading(true);
 
     try {
-      // Load profiles with commission_rate for sales roles
-      const { data: profiles, error: profilesError } = await withTimeout(
+      // Salespeople (team_members: customers.assigned_to holds the team member id).
+      const { data: team, error: teamError } = await withTimeout(
         Promise.resolve(
           supabase
-            .from('profiles')
-            .select('id, first_name, last_name, email, role, commission_rate_self_gen, commission_rate_company, commission_rate_custom')
+            .from('team_members')
+            .select('id, first_name, last_name, full_name, email, role, commission_rate_self_gen, commission_rate_company, commission_rate_custom, commission_method, commission_overhead_pct, commission_split_sales_pct')
             .eq('company_id', companyId)
             .eq('is_active', true)
             // 'salesperson' is the mobile app's sales role; leaving it out hid those people from payroll.
@@ -148,92 +173,84 @@ export default function CommissionPayrollView() {
         10000,
         'loadCommissionProfiles'
       ) as { data: any[] | null; error: any };
-      if (profilesError) throw profilesError;
+      if (teamError) throw teamError;
 
-      // Owed: every sold job whose commission has not been checked off, whatever the date. Paid: jobs
-      // checked off as paid within the dates.
-      let jobsQuery = supabase
-        .from('customers')
-        .select('id, first_name, last_name, status, project_value, assigned_to, updated_at, address, city, state, lead_source, deposit_paid, commission_paid_at, commission_paid_amount, commission_paid_rate')
-        .eq('company_id', companyId);
-      jobsQuery = view !== 'paid'
-        ? jobsQuery.in('status', COMMISSIONABLE_STATUSES).is('commission_paid_at', null)
-        : jobsQuery
-            .not('commission_paid_at', 'is', null)
-            .gte('commission_paid_at', `${dateFrom}T00:00:00.000Z`)
-            .lte('commission_paid_at', `${dateTo}T23:59:59.999Z`);
-      const { data: contacts, error: contactsError } = await withTimeout(
-        Promise.resolve(jobsQuery) as Promise<any>,
-        10000,
-        'loadCommissionContacts'
+      const { data: co } = await supabase
+        .from('companies')
+        .select('commission_method, commission_overhead_pct, commission_split_sales_pct')
+        .eq('id', companyId)
+        .maybeSingle();
+      const companyDefault = {
+        method: (co as any)?.commission_method ?? 'percent_total',
+        overhead: Number((co as any)?.commission_overhead_pct ?? 10),
+        split: Number((co as any)?.commission_split_sales_pct ?? 50),
+      };
+      setCompanySettings(companyDefault);
+      setPeople(team ?? []);
+
+      // The server works out each job's commission and which list it is on, the same for web and mobile.
+      const { data: rows, error: rowsError } = await withTimeout(
+        Promise.resolve(supabase.rpc('commission_payroll_jobs', { p_company_id: companyId })) as Promise<any>,
+        15000,
+        'loadCommissionJobs'
       ) as { data: any[] | null; error: any };
-      if (contactsError) throw contactsError;
+      if (rowsError) throw rowsError;
 
-      // Commission is payable once the FIRST payment has been collected. Until then a sold job is pending its
-      // down payment. A payment counts when a receipt has been recorded for the customer (from either app), or
-      // a deposit was recorded the older way on the customer.
-      const collected = new Set<string>();
-      if (view !== 'paid') {
-        const ids = (contacts ?? []).map((c: any) => c.id);
-        if (ids.length > 0) {
-          const { data: pays } = await supabase.from('payments').select('customer_id, amount').in('customer_id', ids);
-          for (const pay of pays ?? []) if (Number((pay as any).amount) > 0) collected.add((pay as any).customer_id);
+      const from = Date.parse(`${dateFrom}T00:00:00.000Z`);
+      const to = Date.parse(`${dateTo}T23:59:59.999Z`);
+      const wanted = (rows ?? []).filter((r: any) => {
+        if (view === 'paid') {
+          const at = r.commission_paid_at ? Date.parse(r.commission_paid_at) : NaN;
+          return at >= from && at <= to;
         }
-        for (const c of contacts ?? []) if ((c as any).deposit_paid) collected.add((c as any).id);
-      }
-      const shownContacts =
-        view === 'owed'
-          ? (contacts ?? []).filter((c: any) => collected.has(c.id))
-          : view === 'pending'
-          ? (contacts ?? []).filter((c: any) => !collected.has(c.id))
-          : contacts ?? [];
+        return bucketOf(r) === view;
+      });
 
       // Build per-salesman commission data
-      const result: SalesmanCommission[] = (profiles ?? []).map((p) => {
+      const result: SalesmanCommission[] = (team ?? []).map((p) => {
         const self_gen_rate = Number(p.commission_rate_self_gen ?? 0);
         const company_rate  = Number(p.commission_rate_company  ?? 0);
         const custom_rate   = Number(p.commission_rate_custom   ?? 0);
+        const method = p.commission_method ?? companyDefault.method;
+        const overheadPct = Number(p.commission_overhead_pct ?? companyDefault.overhead);
+        const splitPct = Number(p.commission_split_sales_pct ?? companyDefault.split);
 
-        const assignedContacts = shownContacts.filter(
-          (c) => c.assigned_to === p.id && (c.project_value ?? 0) > 0
-        );
-        const jobs: CommissionJob[] = assignedContacts.map((c) => {
-          const value = Number(c.project_value ?? 0);
-          const leadSource = c.lead_source ?? '';
-          // Custom overrides everything when set; otherwise self-gen vs company
-          const rateUsed = custom_rate > 0
-            ? custom_rate
-            : leadSource === 'Self Generated'
-              ? self_gen_rate
-              : company_rate;
-          // Once paid, show what was actually paid (the amount and rate at that moment), not a recalculation.
-          const paid = !!c.commission_paid_at;
-          const shownRate = paid && c.commission_paid_rate != null ? Number(c.commission_paid_rate) : rateUsed;
-          return {
-            contactId: c.id,
-            contactName: `${c.first_name ?? ''} ${c.last_name ?? ''}`.trim(),
-            status: c.status,
-            leadSource,
-            projectValue: value,
-            rateUsed: shownRate,
-            commissionEarned: paid && c.commission_paid_amount != null ? Number(c.commission_paid_amount) : value * (rateUsed / 100),
-            closedAt: c.updated_at,
-            address: [c.address, c.city, c.state].filter(Boolean).join(', '),
-            paidAt: c.commission_paid_at ?? null,
-          };
-        });
+        const jobs: CommissionJob[] = wanted
+          .filter((r: any) => r.assigned_to === p.id)
+          .map((r: any) => {
+            // Once paid, show what was actually paid (the amount and rate at that moment), not a recalculation.
+            const paid = !!r.commission_paid_at;
+            return {
+              contactId: r.customer_id,
+              contactName: `${r.first_name ?? ''} ${r.last_name ?? ''}`.trim(),
+              status: r.status,
+              leadSource: r.lead_source ?? '',
+              projectValue: Number(r.project_value ?? 0),
+              rateUsed: paid && r.commission_paid_rate != null ? Number(r.commission_paid_rate) : Number(r.rate_used ?? 0),
+              commissionEarned: paid && r.commission_paid_amount != null ? Number(r.commission_paid_amount) : Number(r.amount ?? 0),
+              closedAt: r.updated_at,
+              address: [r.address, r.city, r.state].filter(Boolean).join(', '),
+              paidAt: r.commission_paid_at ?? null,
+              method: r.method,
+              costsTotal: Number(r.costs_total ?? 0),
+              costsConfirmed: !!r.costs_confirmed,
+            };
+          });
 
         const totalRevenue = jobs.reduce((sum, j) => sum + j.projectValue, 0);
         const totalCommission = jobs.reduce((sum, j) => sum + j.commissionEarned, 0);
 
         return {
           id: p.id,
-          name: `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() || p.email,
+          name: `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() || p.full_name || p.email,
           email: p.email,
           role: p.role ?? 'sales',
           commission_rate_self_gen: self_gen_rate,
           commission_rate_company:  company_rate,
           commission_rate_custom:   custom_rate,
+          method,
+          overheadPct,
+          splitPct,
           jobs,
           totalRevenue,
           totalCommission,
@@ -243,6 +260,7 @@ export default function CommissionPayrollView() {
       // Only show salesmen who have jobs OR have a commission rate set
       const filtered = result.filter((s) =>
         s.jobs.length > 0 ||
+        s.method === 'profit_split' ||
         s.commission_rate_self_gen > 0 ||
         s.commission_rate_company > 0 ||
         s.commission_rate_custom > 0
@@ -341,7 +359,7 @@ export default function CommissionPayrollView() {
         rows.push('  Contact,Lead Source,Status,Address,Rate Used (%),Project Value,Commission Earned,Date,Commission');
         for (const j of s.jobs) {
           rows.push(
-            `  "${j.contactName}","${j.leadSource || 'Unknown'}","${STATUS_LABELS[j.status] ?? j.status}","${j.address ?? ''}",${j.rateUsed},${j.projectValue.toFixed(2)},${j.commissionEarned.toFixed(2)},"${j.closedAt.split('T')[0]}","${j.paidAt ? 'Paid ' + j.paidAt.split('T')[0] : view === 'pending' ? 'Pending down payment' : 'Owed'}"`
+            `  "${j.contactName}","${j.leadSource || 'Unknown'}","${STATUS_LABELS[j.status] ?? j.status}","${j.address ?? ''}",${j.rateUsed},${j.projectValue.toFixed(2)},${j.commissionEarned.toFixed(2)},"${j.closedAt.split('T')[0]}","${j.paidAt ? 'Paid ' + j.paidAt.split('T')[0] : view === 'pending' ? 'Pending down payment' : view === 'costs' ? 'Pending costs' : 'Owed'}"`
           );
         }
       }
@@ -382,6 +400,15 @@ export default function CommissionPayrollView() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+          {canEditSettings && (
+            <button
+              onClick={() => setShowSettings(true)}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+            >
+              <Settings size={16} />
+              Commission settings
+            </button>
+          )}
           <button
             onClick={() => setShowNotice(true)}
             className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
@@ -402,7 +429,7 @@ export default function CommissionPayrollView() {
 
         {/* Owed vs Paid */}
         <div className="mt-4 inline-flex rounded-lg bg-gray-100 p-1">
-          {(['owed', 'pending', 'paid'] as const).map((v) => (
+          {(['owed', 'pending', 'costs', 'paid'] as const).map((v) => (
             <button
               key={v}
               onClick={() => setView(v)}
@@ -410,7 +437,7 @@ export default function CommissionPayrollView() {
                 view === v ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              {v === 'owed' ? 'Owed' : v === 'pending' ? 'Pending down payment' : 'Paid'}
+              {v === 'owed' ? 'Owed' : v === 'pending' ? 'Pending down payment' : v === 'costs' ? 'Pending costs' : 'Paid'}
             </button>
           ))}
         </div>
@@ -423,8 +450,8 @@ export default function CommissionPayrollView() {
           <span>
             <strong>Commission runs once the first payment is collected, and stays on payroll until it is checked off as paid.</strong>{' '}
             {canMarkPaid
-              ? 'Jobs with no payment yet wait under Pending down payment. After you have paid a commission, check the job off here.'
-              : 'Jobs with no payment yet wait under Pending down payment. Only an owner, admin, manager or financial user can check jobs off as paid.'}
+              ? 'Jobs with no payment yet wait under Pending down payment, and profit-split jobs also wait under Pending costs until the job costs are marked complete. After you have paid a commission, check the job off here.'
+              : 'Jobs with no payment yet wait under Pending down payment, and profit-split jobs also wait for their job costs. Only an owner, admin, manager or financial user can check jobs off as paid.'}
           </span>
         </div>
       </div>
@@ -437,6 +464,9 @@ export default function CommissionPayrollView() {
           )}
           {view === 'pending' && (
             <p className="text-sm text-gray-500">Sold jobs with no payment collected yet. They move to Owed when the down payment is received.</p>
+          )}
+          {view === 'costs' && (
+            <p className="text-sm text-gray-500">Profit-split jobs that have a payment but whose job costs are not marked complete. A manager or project manager enters the material and subcontractor costs on the customer, then marks costs complete.</p>
           )}
           {view === 'paid' && (<>
           <div className="flex items-center gap-2">
@@ -505,11 +535,24 @@ export default function CommissionPayrollView() {
             <DollarSign size={20} className="text-yellow-600" />
           </div>
           <div>
-            <p className="text-xs text-gray-500 font-medium">{view === 'owed' ? 'Total Commissions Owed' : view === 'pending' ? 'Commission Pending Down Payment' : 'Total Commissions Paid'}</p>
+            <p className="text-xs text-gray-500 font-medium">{view === 'owed' ? 'Total Commissions Owed' : view === 'pending' ? 'Commission Pending Down Payment' : view === 'costs' ? 'Commission Pending Costs (estimated)' : 'Total Commissions Paid'}</p>
             <p className="text-2xl font-bold text-gray-900">{formatCurrency(grandTotalCommission)}</p>
           </div>
         </div>
       </div>
+
+      {showSettings && companyId && (
+        <CommissionSettingsModal
+          companyId={companyId}
+          company={companySettings}
+          people={people}
+          onClose={() => setShowSettings(false)}
+          onSaved={() => {
+            setShowSettings(false);
+            loadData();
+          }}
+        />
+      )}
 
       {/* How payroll works (shown on first open, and from the button in the header) */}
       {showNotice && (
@@ -523,6 +566,8 @@ export default function CommissionPayrollView() {
             </div>
             <ul className="space-y-2 text-sm text-gray-700 list-disc pl-5">
               <li>Commission starts once the <strong>first payment is collected</strong>. A sold job with no payment yet waits under <strong>Pending down payment</strong>, and moves to <strong>Owed</strong> when the down payment is received.</li>
+              <li>Your company pays commission either as a <strong>percent of the project total</strong>, or as a <strong>profit split</strong> (for example 10 / 50 / 50: 10% to the company off the top, then the profit after job costs is split 50 / 50). The method can differ by salesperson. Owners and admins set it under Commission settings.</li>
+              <li>On a profit split, a job also waits under <strong>Pending costs</strong> until a manager or project manager has entered the job costs on the customer and marked them complete.</li>
               <li>A job on the Owed list stays there until someone checks it off as paid. It does not drop off when its stage changes, when the job closes, or when the date moves on.</li>
               <li>Only an <strong>owner, admin, manager or financial (office) user</strong> can check a job off as paid, or take it back.</li>
               <li>Check a job off only <strong>after the commission has actually been paid</strong>. The amount and rate are saved at that moment, so a later change to the Project Value does not rewrite what was paid.</li>
@@ -550,12 +595,14 @@ export default function CommissionPayrollView() {
         ) : filteredSalesmen.length === 0 ? (
           <div className="text-center py-16 text-gray-400">
             <DollarSign size={48} className="mx-auto mb-3 opacity-30" />
-            <p className="font-medium">{view === 'owed' ? 'No commission is owed right now' : view === 'pending' ? 'No sold job is waiting on a down payment' : 'No commission was paid in this period'}</p>
+            <p className="font-medium">{view === 'owed' ? 'No commission is owed right now' : view === 'pending' ? 'No sold job is waiting on a down payment' : view === 'costs' ? 'No job is waiting on its costs' : 'No commission was paid in this period'}</p>
             <p className="text-sm mt-1">
               {view === 'owed'
                 ? 'A sold job appears here once its first payment is collected, and stays until it is checked off as paid. Make sure salespeople have a commission rate set in Team settings.'
                 : view === 'pending'
                 ? 'Sold jobs with no payment recorded yet appear here.'
+                : view === 'costs'
+                ? 'Profit-split jobs appear here until their job costs are marked complete.'
                 : 'Adjust the paid-on dates.'}
             </p>
           </div>
@@ -585,7 +632,9 @@ export default function CommissionPayrollView() {
                       <div className="flex items-center gap-1 justify-end">
                         <Percent size={13} className="text-gray-400" />
                         <span className="font-semibold text-gray-900">
-                          {salesman.commission_rate_custom > 0
+                          {salesman.method === 'profit_split'
+                            ? `Profit split ${salesman.overheadPct} / ${salesman.splitPct} / ${Math.round((100 - salesman.splitPct) * 100) / 100}`
+                            : salesman.commission_rate_custom > 0
                             ? `Custom: ${salesman.commission_rate_custom}%`
                             : `SG: ${salesman.commission_rate_self_gen}% / Co: ${salesman.commission_rate_company}%`}
                         </span>
@@ -647,7 +696,7 @@ export default function CommissionPayrollView() {
                             <th className="text-right px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Rate Used</th>
                             <th className="text-right px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Commission Earned</th>
                             <th className="text-right px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Date</th>
-                            <th className="text-right px-5 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">{view === 'owed' ? 'Paid?' : view === 'pending' ? 'Status' : 'Paid on'}</th>
+                            <th className="text-right px-5 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">{view === 'owed' ? 'Paid?' : view === 'pending' || view === 'costs' ? 'Status' : 'Paid on'}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -664,12 +713,21 @@ export default function CommissionPayrollView() {
                                 </span>
                               </td>
                               <td className="px-4 py-3 text-right text-gray-800">{formatCurrency(job.projectValue)}</td>
-                              <td className="px-4 py-3 text-right text-gray-500 text-xs">{job.rateUsed}%</td>
-                              <td className="px-4 py-3 text-right font-semibold text-green-700">{formatCurrency(job.commissionEarned)}</td>
+                              <td className="px-4 py-3 text-right text-gray-500 text-xs">{job.method === 'profit_split' ? `${job.rateUsed}% of profit` : `${job.rateUsed}%`}</td>
+                              <td className="px-4 py-3 text-right font-semibold text-green-700">
+                                {formatCurrency(job.commissionEarned)}
+                                {job.method === 'profit_split' && !job.paidAt && (
+                                  <div className="text-[10px] font-normal text-gray-400">
+                                    after {formatCurrency(job.costsTotal)} costs{job.costsConfirmed ? '' : ' (estimated)'}
+                                  </div>
+                                )}
+                              </td>
                               <td className="px-4 py-3 text-right text-gray-400 text-xs">{job.closedAt.split('T')[0]}</td>
                               <td className="px-5 py-3 text-right text-xs">
                                 {view === 'pending' ? (
                                   <span className="text-amber-600">Waiting on first payment</span>
+                                ) : view === 'costs' ? (
+                                  <span className="text-amber-600">Waiting on job costs</span>
                                 ) : view === 'owed' ? (
                                   canMarkPaid ? (
                                     <button
