@@ -1,4 +1,6 @@
 // CRM Data Types and Mock Data
+import { parseLocalDate } from './dates';
+
 
 export type CustomerStatus =
   | 'prospect'
@@ -1638,8 +1640,11 @@ export function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
+/** A date to display, read as the user's own calendar day. See lib/dates.ts. */
+export const parseDisplayDate = parseLocalDate;
+
 export function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString('en-US', {
+  return parseDisplayDate(dateString).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -1647,7 +1652,7 @@ export function formatDate(dateString: string): string {
 }
 
 export function formatDateTime(dateString: string): string {
-  return new Date(dateString).toLocaleString('en-US', {
+  return parseDisplayDate(dateString).toLocaleString('en-US', {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',

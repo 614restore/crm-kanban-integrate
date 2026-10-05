@@ -63,6 +63,7 @@ import CountersignBanner from './CountersignBanner';
 import ScheduleName from './ScheduleName';
 import NextAppointmentCard from './NextAppointmentCard';
 import { formatLossDate } from '@/lib/claimStorm';
+import { toLocalDateString } from '@/lib/dates';
 import { openLiveRadar } from '@/lib/stormNavigation';
 import WeatherWidget from '@/components/integrations/WeatherWidget';
 import EagleViewPanel from './EagleViewPanel';
@@ -1545,7 +1546,7 @@ export default function ContactDetail() {
       .filter((a) => new Date(`${a.date}T${a.time}`) > now)
       .sort((a, b) => new Date(`${a.date}T${a.time}`).getTime() - new Date(`${b.date}T${b.time}`).getTime())[0];
     const appt = upcoming ?? contactAppts.sort((a, b) => b.date.localeCompare(a.date))[0];
-    setRescheduleNoteDate(appt?.date ?? new Date().toISOString().split('T')[0]);
+    setRescheduleNoteDate(appt?.date ?? toLocalDateString());
     setRescheduleNoteTime(appt?.time ?? '09:00');
     setRescheduleNoteApptId(appt?.id ?? null);
     setRescheduleNoteTarget(target);

@@ -32,6 +32,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/authContext';
 import { db, DbExpense } from '@/lib/database';
+import { toLocalDateString } from '@/lib/dates';
 
 interface Expense {
   id: string;
@@ -615,7 +616,7 @@ const AddExpenseModal: React.FC<{
     amount: '',
     description: '',
     category: '',
-    date: new Date().toISOString().split('T')[0],
+    date: toLocalDateString(),
     vendor: '',
     location: '',
     paymentMethod: 'cash' as const,
@@ -679,7 +680,7 @@ const AddExpenseModal: React.FC<{
         amount: '',
         description: '',
         category: '',
-        date: new Date().toISOString().split('T')[0],
+        date: toLocalDateString(),
         vendor: '',
         location: '',
         paymentMethod: 'cash',

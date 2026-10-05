@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { ArrowLeft, Save, CheckCircle2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { toLocalDateString } from '@/lib/dates';
 
 interface DocumentField {
   key: string;
@@ -40,7 +41,7 @@ export const UnifiedDocumentBuilder: React.FC<UnifiedDocumentBuilderProps> = ({
     const initial: Record<string, string> = {};
     
     // Auto-populate dates and IDs
-    const today = new Date().toISOString().split('T')[0];
+    const today = toLocalDateString();
     const timestamp = Date.now();
     const hash = Math.random().toString(36).substring(2, 15).toUpperCase();
     
