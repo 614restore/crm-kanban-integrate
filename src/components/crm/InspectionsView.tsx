@@ -7,6 +7,7 @@ import {
 import { useCRM, useActiveContact } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { supabase } from '@/lib/supabase';
+import { compressForUpload, COMPRESS_PRESETS } from '@/lib/imageUtils';
 
 /* ─── Types ──────────────────────────────────────────────── */
 type Elevation = 'North' | 'South' | 'East' | 'West' | 'Garage' | 'Detached';
@@ -52,8 +53,6 @@ interface ReportRow {
   status: string;
   contingency_enabled: boolean | null;
   contingency_signed_at: string | null;
-  /** The customer actually cancelled: they signed the separate cancel notice. */
-  standalone_cancel_signed_at: string | null;
   contingency_cancel_signed_at: string | null;
   viewed_at: string | null;
   created_at: string;
@@ -81,9 +80,7 @@ function addBusinessDays(from: Date, days: number): Date {
 }
 
 function reportState(r: ReportRow): { label: string; tone: Tone } {
-  // contingency_cancel_signed_at is only the customer's signature acknowledging the 3-day notice, written
-  // when they sign the agreement. A real cancellation is the separate cancel notice being signed.
-  if (r.standalone_cancel_signed_at) return { label: 'Contingency cancelled by customer', tone: 'red' };
+  if (r.contingency_cancel_signed_at) return { label: 'Contingency cancelled by customer', tone: 'red' };
   if (r.contingency_signed_at) {
     const end = addBusinessDays(new Date(r.contingency_signed_at), 3);
     return end.getTime() > Date.now()
@@ -127,7 +124,7 @@ export default function InspectionsView() {
         supabase
           .from('quotes')
           .select(
-            'id, quote_number, status, contingency_enabled, contingency_signed_at, contingency_cancel_signed_at, standalone_cancel_signed_at, viewed_at, created_at, customer_id, customers(first_name, last_name, address)'
+            'id, quote_number, status, contingency_enabled, contingency_signed_at, contingency_cancel_signed_at, viewed_at, created_at, customer_id, customers(first_name, last_name, address)'
           )
           .eq('company_id', profile.company_id)
           .eq('project_type', 'inspection_report')
@@ -423,12 +420,18 @@ function NewInspectionPanel({ preselectedContact, companyId, userId, onDone, onC
     e.target.value = '';
     setUploadingElev(activeElev);
     try {
-      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/heic|heif/, 'jpg');
+      // A phone photo straight off the camera is 4-12 MB and a whole inspection
+      // is dozens of them. Scale to the same size every other quote photo uses:
+      // still plenty to read damage and annotate, a few hundred KB each.
+      const upload = await compressForUpload(file, COMPRESS_PRESETS.quotePhoto);
+      const ext = upload.type === 'image/jpeg'
+        ? 'jpg'
+        : (upload.name.split('.').pop() || 'jpg').toLowerCase().replace(/heic|heif/, 'jpg');
       // The shared backend has no 'documents' bucket; company files live in 'company-files'.
       const path = `${companyId}/${selectedContact.id}/inspection_${activeElev}_${Date.now()}.${ext}`;
       const { error: upErr } = await supabase.storage
         .from('company-files')
-        .upload(path, file, { upsert: false });
+        .upload(path, upload, { upsert: false, contentType: upload.type || undefined });
       if (upErr) throw upErr;
 
       const { data: { publicUrl } } = supabase.storage.from('company-files').getPublicUrl(path);
@@ -440,7 +443,7 @@ function NewInspectionPanel({ preselectedContact, companyId, userId, onDone, onC
         name: `Inspection – ${activeElev} Elevation`,
         type: 'photo',
         url: publicUrl,
-        size: file.size,
+        size: upload.size,
       } as any);
       if (docErr) throw docErr;
 
