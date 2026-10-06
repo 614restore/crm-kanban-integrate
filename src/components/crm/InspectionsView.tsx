@@ -80,7 +80,10 @@ function addBusinessDays(from: Date, days: number): Date {
 }
 
 function reportState(r: ReportRow): { label: string; tone: Tone } {
-  if (r.contingency_cancel_signed_at) return { label: 'Contingency cancelled by customer', tone: 'red' };
+  // There is deliberately no "cancelled" state. contingency_cancel_signed_at is NOT a cancellation: it is
+  // when the customer signed the Notice of Right to Cancel that is part of signing the contingency, so it
+  // is set at the same instant as contingency_signed_at on every signed contingency. Nothing in the data
+  // records a customer actually cancelling; they simply have the 3-business-day window to do so.
   if (r.contingency_signed_at) {
     const end = addBusinessDays(new Date(r.contingency_signed_at), 3);
     return end.getTime() > Date.now()
