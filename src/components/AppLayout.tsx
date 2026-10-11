@@ -159,7 +159,7 @@ function buildFallbackAvatar(firstName?: string, lastName?: string, email?: stri
 // Views accessible in read-only (expired subscription) mode
 const EXPIRED_ALLOWED_VIEWS = new Set<ViewType>([
   'contacts', 'pipeline', 'contact-detail',
-  'documents', 'financial', 'invoices', 'estimates', 'quotes', 'reports', 'settings',
+  'calendar', 'documents', 'financial', 'invoices', 'estimates', 'quotes', 'reports', 'settings',
 ]);
 
 function ViewRouter() {
