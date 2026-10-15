@@ -14,6 +14,8 @@ import InvoiceBuilder from './InvoiceBuilder';
 import QuoteBuilder from '@/components/QuoteBuilder';
 import ChangeOrderModal from './ChangeOrderModal';
 import QuotePreview from '@/components/QuotePreview';
+import DocumentsWizard from '@/components/DocumentsWizard';
+import DocumentsPanel from '@/components/DocumentsPanel';
 import type { Company, TeamMember } from '@/data/quoteData';
 import { quoteUrl } from '@/lib/appUrl';
 import { quoteProjectTemplates, TemplateLineItem } from '@/data/quoteTemplates';
@@ -21,7 +23,7 @@ import {
   FileText, Plus, Search, Trash2, X, Save, User, Send, Link2, Eye, ChevronDown,
   Home, Wrench, Hammer, Sun, Droplets, Layers, Grid3x3,
   Scroll, Tablet, PackageOpen, Box, ClipboardList, DollarSign, Archive, ArchiveRestore, Shield,
-  MoreVertical, Copy, Pencil, Receipt,
+  MoreVertical, Copy, Pencil, Receipt, FolderOpen,
 } from 'lucide-react';
 
 // ── QuoteMGR-parity quote builder for web ─────────────────────────────────
@@ -182,6 +184,11 @@ export default function QuotesView() {
   const [builderPrefill, setBuilderPrefill] = useState<PendingQuote | null>(null);
   const [workOrderQuote, setWorkOrderQuote] = useState<QuoteRow | null>(null);
   const [workOrderCompany, setWorkOrderCompany] = useState<{ name: string; phone?: string; email?: string; license_number?: string } | null>(null);
+  // Documents hub (as QuoteMGR's dashboard): pick a customer, pick a job, act on its documents.
+  // Completion certificates are sent and tracked from here.
+  const [docsHub, setDocsHub] = useState<{ quotes: any[]; company: any; initial: any | null } | null>(null);
+  const [docsLoading, setDocsLoading] = useState(false);
+  const [certPanel, setCertPanel] = useState<{ quote: any; company: any } | null>(null);
   const [receiptQuote, setReceiptQuote] = useState<any | null>(null);
   const [receiptCompany, setReceiptCompany] = useState<{ name: string; default_deposit_percent?: number | null; receipt_cc_emails?: string[] | null } | null>(null);
   const [invoiceQuote, setInvoiceQuote] = useState<any | null>(null);
@@ -545,6 +552,37 @@ export default function QuotesView() {
     return { full, company };
   };
 
+  // The hub lists every job, so load only the columns it shows. The signature images are
+  // large and the hub re-reads the full quote once a job is picked.
+  const openDocuments = async (initial?: QuoteRow) => {
+    if (!companyId || docsLoading) return;
+    setDocsLoading(true);
+    try {
+      const [{ data, error }, company] = await Promise.all([
+        supabase
+          .from('quotes')
+          .select(`id, quote_number, status, project_type, created_at, updated_at, sent_at, signed_at,
+            contingency_enabled, contingency_signed_at, contractor_signed_at, share_token,
+            completion_certificate_enabled, completion_certificate_sent_at, certificate_customer_signed_at,
+            standalone_cancel_share_enabled, standalone_cancel_signed_at, standalone_cancel_signed_by,
+            customer_id, customer:customers(id, first_name, last_name, email, phone, address, city, state, zip)`)
+          .eq('company_id', companyId)
+          .eq('is_archived', false)
+          .order('updated_at', { ascending: false }),
+        db.getCompany(companyId).catch(() => null) as Promise<any>,
+      ]);
+      if (error) throw error;
+      if (!company) { toast.error('Could not load your company details.'); return; }
+      const rows = (data ?? []) as any[];
+      const initialRow = initial ? rows.find((r) => r.id === initial.id) ?? null : null;
+      setDocsHub({ quotes: rows, company, initial: initialRow });
+    } catch (err: any) {
+      toast.error(`Could not open documents: ${err?.message ?? 'unknown error'}`);
+    } finally {
+      setDocsLoading(false);
+    }
+  };
+
   // As in QuoteMGR, any quote can take payments.
   const openReceipts = async (q: QuoteRow) => {
     const loaded = await loadFullQuote(q);
@@ -693,6 +731,14 @@ export default function QuotesView() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => openDocuments()}
+            disabled={docsLoading}
+            className="flex items-center gap-2 bg-white border border-gray-200 text-[#1e3a5f] hover:bg-gray-50 px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-60"
+            title="Signed agreements and completion certificates, by customer"
+          >
+            <FolderOpen size={18} /> {docsLoading ? 'Opening…' : 'Documents'}
+          </button>
           <button
             onClick={openNewInspection}
             className="flex items-center gap-2 bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50 px-4 py-2 rounded-lg font-medium transition-colors"
@@ -862,6 +908,7 @@ export default function QuotesView() {
           >
             <button role="menuitem" className={item} onClick={run(() => openEdit(q.id))}><Pencil size={15} className="text-gray-400" /> Edit</button>
             <button role="menuitem" className={item} onClick={run(() => openPreview(q.id))}><FileText size={15} className="text-gray-400" /> Preview</button>
+            <button role="menuitem" className={item} onClick={run(() => openDocuments(q))}><FolderOpen size={15} className="text-gray-400" /> Documents &amp; certificate</button>
             {q.share_token && (
               <button role="menuitem" className={item} onClick={run(() => window.open(shareUrl(q.share_token!), '_blank', 'noopener,noreferrer'))}><Eye size={15} className="text-gray-400" /> View customer page</button>
             )}
@@ -890,6 +937,37 @@ export default function QuotesView() {
           </div>
         );
       })()}
+
+      {docsHub && (
+        <DocumentsWizard
+          quotes={docsHub.quotes}
+          company={docsHub.company}
+          currentUserId={profile?.id}
+          currentUserRole={profile?.role}
+          initialQuote={docsHub.initial ?? undefined}
+          onClose={() => setDocsHub(null)}
+          onOpenCertPanel={(quote) => {
+            setCertPanel({ quote, company: docsHub.company });
+            setDocsHub(null);
+          }}
+          onOpenWorkOrderPanel={(quote) => {
+            setDocsHub(null);
+            void openWorkOrder(quote);
+          }}
+        />
+      )}
+
+      {certPanel && (
+        <DocumentsPanel
+          quote={certPanel.quote}
+          company={certPanel.company}
+          onClose={() => setCertPanel(null)}
+          onCertSent={() => {
+            setCertPanel(null);
+            loadQuotes();
+          }}
+        />
+      )}
 
       {workOrderQuote && workOrderCompany && companyId && (() => {
         const customerId = workOrderQuote.customer_id || workOrderQuote.contact_id;
