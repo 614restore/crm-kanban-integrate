@@ -55,6 +55,10 @@ interface ChangeOrderModalProps {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+// Statuses a change order can still be re-saved or re-sent from. Signed and approved are final.
+const EDITABLE_STATUSES: ChangeOrder['status'][] = ['draft', 'sent', 'rejected'];
+const LOCKED_MESSAGE = 'This change order has already been signed, so it can no longer be changed or re-sent.';
+
 function generateToken(): string {
   const arr = new Uint8Array(24);
   crypto.getRandomValues(arr);
@@ -198,11 +202,14 @@ export default function ChangeOrderModal({
     setSaving(true);
     try {
       if (changeOrder?.id) {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('change_orders')
           .update(buildPayload('draft'))
-          .eq('id', changeOrder.id);
+          .eq('id', changeOrder.id)
+          .in('status', EDITABLE_STATUSES)
+          .select('id');
         if (error) throw error;
+        if (!data?.length) throw new Error(LOCKED_MESSAGE);
       } else {
         const number = await generateChangeOrderNumber(companyId);
         const { error } = await supabase
@@ -232,11 +239,14 @@ export default function ChangeOrderModal({
       const link = `${window.location.origin}/sign-change-order/${token}`;
 
       if (changeOrder?.id) {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('change_orders')
           .update(buildPayload('sent', token, sentAt))
-          .eq('id', changeOrder.id);
+          .eq('id', changeOrder.id)
+          .in('status', EDITABLE_STATUSES)
+          .select('id');
         if (error) throw error;
+        if (!data?.length) throw new Error(LOCKED_MESSAGE);
       } else {
         const number = await generateChangeOrderNumber(companyId);
         const { error } = await supabase
@@ -288,6 +298,36 @@ export default function ChangeOrderModal({
 
   const isEditing = Boolean(changeOrder?.id);
   const isSigned = changeOrder?.status === 'signed';
+  const isApproved = changeOrder?.status === 'approved';
+  // Once the customer has signed, the amounts are what they agreed to: no re-saving or re-sending.
+  const isLocked = isSigned || isApproved;
+
+  // A customer-signed change order waits here until someone on the team has
+  // reviewed it. Nothing else ever moved it past 'signed', so the "signed —
+  // action required" banner and the dashboard's Needs Attention entry could
+  // never clear. Guarded on status so a double click, or the mobile app having
+  // approved it first, is harmless.
+  const handleApprove = async () => {
+    if (!changeOrder?.id) return;
+    setSaving(true);
+    try {
+      const { data, error } = await supabase
+        .from('change_orders')
+        .update({ status: 'approved', updated_at: new Date().toISOString() })
+        .eq('id', changeOrder.id)
+        .eq('status', 'signed')
+        .select('id');
+      if (error) throw error;
+      toast[data && data.length > 0 ? 'success' : 'info'](
+        data && data.length > 0 ? 'Change order approved' : 'This change order was already approved',
+      );
+      onSave();
+    } catch (err: any) {
+      toast.error(`Could not approve: ${err?.message ?? 'unknown error'}`);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -317,6 +357,16 @@ export default function ChangeOrderModal({
             <X size={20} />
           </button>
         </div>
+
+        {isApproved && (
+          <div className="flex items-center gap-2 px-6 py-3 bg-blue-50 border-b border-blue-200 text-blue-800 flex-shrink-0">
+            <CheckCircle2 size={18} className="text-blue-600 flex-shrink-0" />
+            <span className="font-medium">Approved ✓</span>
+            {changeOrder.signed_by_name && (
+              <span className="text-sm">signed by {changeOrder.signed_by_name}</span>
+            )}
+          </div>
+        )}
 
         {/* Signed banner */}
         {isSigned && (
@@ -516,15 +566,25 @@ export default function ChangeOrderModal({
           </button>
           <button
             onClick={handleSaveDraft}
-            disabled={saving || isSigned}
+            disabled={saving || isLocked}
             className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Save size={18} />
             Save as Draft
           </button>
+          {isSigned && (
+            <button
+              onClick={handleApprove}
+              disabled={saving}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <CheckCircle2 size={18} />
+              {saving ? 'Approving…' : 'Approve Change Order'}
+            </button>
+          )}
           <button
             onClick={handleSendForSignature}
-            disabled={saving || isSigned}
+            disabled={saving || isLocked}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Send size={18} />

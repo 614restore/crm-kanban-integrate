@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
+import { toLocalDateString } from '@/lib/dates';
 import {
   FileText, Plus, Eye, Trash2, Search, Star, Lock,
   ChevronDown, ChevronUp, X, Printer, Send, PenLine,
@@ -86,7 +87,7 @@ const ACTIVE_TEMPLATES: DocumentTemplate[] = [
       { id: 'scopeOfWork', name: 'scopeOfWork', type: 'textarea', label: 'Scope of Work', required: true, section: 'scope', placeholder: 'Describe the work to be performed...' },
       { id: 'rcvAmount', name: 'rcvAmount', type: 'currency', label: 'RCV Amount (if known)', required: false, section: 'payment' },
       { id: 'deductible', name: 'deductible', type: 'currency', label: 'Insurance Deductible', required: false, section: 'payment' },
-      { id: 'signatureDate', name: 'signatureDate', type: 'date', label: 'Signature Date', required: true, section: 'legal', defaultValue: new Date().toISOString().split('T')[0] },
+      { id: 'signatureDate', name: 'signatureDate', type: 'date', label: 'Signature Date', required: true, section: 'legal', defaultValue: toLocalDateString() },
     ]
   },
   {
@@ -106,7 +107,7 @@ const ACTIVE_TEMPLATES: DocumentTemplate[] = [
       { id: 'completionDate', name: 'completionDate', type: 'date', label: 'Estimated Completion', required: false, section: 'project' },
       { id: 'depositPercent', name: 'depositPercent', type: 'number', label: 'Deposit Required (%)', required: false, section: 'payment', defaultValue: '30', placeholder: 'e.g. 30' },
       { id: 'paymentTerms', name: 'paymentTerms', type: 'textarea', label: 'Payment Terms', required: false, section: 'payment', defaultValue: 'Balance due upon completion of work.' },
-      { id: 'signatureDate', name: 'signatureDate', type: 'date', label: 'Signature Date', required: true, section: 'legal', defaultValue: new Date().toISOString().split('T')[0] },
+      { id: 'signatureDate', name: 'signatureDate', type: 'date', label: 'Signature Date', required: true, section: 'legal', defaultValue: toLocalDateString() },
     ]
   },
   {
@@ -119,10 +120,10 @@ const ACTIVE_TEMPLATES: DocumentTemplate[] = [
     fields: [
       { id: 'customerName', name: 'customerName', type: 'text', label: 'Customer Full Name', required: true, section: 'customer' },
       { id: 'customerAddress', name: 'customerAddress', type: 'address', label: 'Property Address', required: true, section: 'customer' },
-      { id: 'saleDate', name: 'saleDate', type: 'date', label: 'Date of Transaction', required: true, section: 'project', defaultValue: new Date().toISOString().split('T')[0] },
+      { id: 'saleDate', name: 'saleDate', type: 'date', label: 'Date of Transaction', required: true, section: 'project', defaultValue: toLocalDateString() },
       { id: 'cancelDeadline', name: 'cancelDeadline', type: 'date', label: 'Cancellation Deadline (3 business days)', required: true, section: 'project' },
       { id: 'contractAmount', name: 'contractAmount', type: 'currency', label: 'Contract Amount', required: true, section: 'payment' },
-      { id: 'signatureDate', name: 'signatureDate', type: 'date', label: 'Customer Signature Date', required: true, section: 'legal', defaultValue: new Date().toISOString().split('T')[0] },
+      { id: 'signatureDate', name: 'signatureDate', type: 'date', label: 'Customer Signature Date', required: true, section: 'legal', defaultValue: toLocalDateString() },
     ]
   },
   {
@@ -136,11 +137,11 @@ const ACTIVE_TEMPLATES: DocumentTemplate[] = [
       { id: 'customerName', name: 'customerName', type: 'text', label: 'Customer Full Name', required: true, section: 'customer' },
       { id: 'customerAddress', name: 'customerAddress', type: 'address', label: 'Property Address', required: true, section: 'customer' },
       { id: 'projectDescription', name: 'projectDescription', type: 'textarea', label: 'Work Completed', required: true, section: 'scope', placeholder: 'Describe the completed work...' },
-      { id: 'completionDate', name: 'completionDate', type: 'date', label: 'Date of Completion', required: true, section: 'project', defaultValue: new Date().toISOString().split('T')[0] },
+      { id: 'completionDate', name: 'completionDate', type: 'date', label: 'Date of Completion', required: true, section: 'project', defaultValue: toLocalDateString() },
       { id: 'finalAmount', name: 'finalAmount', type: 'currency', label: 'Final Contract Amount', required: true, section: 'payment' },
       { id: 'warrantyPeriod', name: 'warrantyPeriod', type: 'text', label: 'Warranty Period', required: false, section: 'legal', placeholder: 'e.g. 5 years on labor' },
       { id: 'customerNotes', name: 'customerNotes', type: 'textarea', label: 'Customer Comments (optional)', required: false, section: 'other', placeholder: 'Any notes from the customer...' },
-      { id: 'signatureDate', name: 'signatureDate', type: 'date', label: 'Signature Date', required: true, section: 'legal', defaultValue: new Date().toISOString().split('T')[0] },
+      { id: 'signatureDate', name: 'signatureDate', type: 'date', label: 'Signature Date', required: true, section: 'legal', defaultValue: toLocalDateString() },
     ]
   },
   {
@@ -160,7 +161,7 @@ const ACTIVE_TEMPLATES: DocumentTemplate[] = [
       { id: 'changeAmount', name: 'changeAmount', type: 'currency', label: 'Change Order Amount', required: true, section: 'payment' },
       { id: 'newTotal', name: 'newTotal', type: 'currency', label: 'New Contract Total', required: true, section: 'payment' },
       { id: 'revisedCompletionDate', name: 'revisedCompletionDate', type: 'date', label: 'Revised Completion Date', required: false, section: 'project' },
-      { id: 'signatureDate', name: 'signatureDate', type: 'date', label: 'Authorization Date', required: true, section: 'legal', defaultValue: new Date().toISOString().split('T')[0] },
+      { id: 'signatureDate', name: 'signatureDate', type: 'date', label: 'Authorization Date', required: true, section: 'legal', defaultValue: toLocalDateString() },
     ]
   }
 ];

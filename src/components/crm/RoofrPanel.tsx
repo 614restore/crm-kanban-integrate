@@ -152,8 +152,8 @@ export default function RoofrPanel({
           .from('company_integrations')
           .select('credentials')
           .eq('company_id', companyId)
-          .eq('integration_type', 'roofr')
-          .eq('is_active', true)
+          .eq('integration_id', 'roofr')
+          .eq('enabled', true)
           .maybeSingle();
 
         if (dbError && dbError.code !== 'PGRST116') {

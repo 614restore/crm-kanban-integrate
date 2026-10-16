@@ -193,7 +193,13 @@ const CertificateSigningView: React.FC<CertificateSigningViewProps> = ({
     // Mark certificate as viewed for anonymous (customer) visitors
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session?.user && shareToken) {
-        supabase.rpc('mark_certificate_viewed', { share_token: shareToken }).catch(console.error);
+        // A Supabase builder only sends its request when it is awaited or .then()'d, and
+        // it has no .catch(): the old chained .catch(console.error) threw before the
+        // request was ever sent, so a customer opening the certificate was never
+        // recorded as having viewed it.
+        void supabase
+          .rpc('mark_certificate_viewed', { share_token: shareToken })
+          .then(({ error }) => { if (error) console.error('mark_certificate_viewed failed:', error.message); });
       }
     });
   }, [quoteId]);
@@ -201,31 +207,45 @@ const CertificateSigningView: React.FC<CertificateSigningViewProps> = ({
   const loadQuote = async () => {
     setLoading(true);
     try {
-      const [{ data: q, error }, { data: photoRows }] = await Promise.all([
-        supabase
-          .from('quotes')
-          .select(`
-            id, quote_number, status, signed_at, signed_by,
-            contractor_signature_data, contractor_signed_by, contractor_signed_at,
-            certificate_customer_signature_data, certificate_customer_signed_at,
-            completion_certificate_enabled,
-            project_description, cover_page_title,
-            customer:customers(first_name, last_name, email, state)
-          `)
-          .eq('id', quoteId)
-          .single(),
-        supabase
-          .from('quote_photos')
-          .select('id, photo_url, caption, sort_order')
-          .eq('quote_id', quoteId)
-          .order('sort_order'),
+      // Token-scoped RPCs, as in QuoteMGR. A customer opening this link is signed out and
+      // has no row-level access to the quotes or quote_photos tables, so reading them
+      // directly returned nothing and every certificate link showed "Certificate Not
+      // Available". The RPCs return only the row matching this share token.
+      const [{ data: rows, error }, { data: photoRows }] = await Promise.all([
+        supabase.rpc('get_quote_for_customer', { share_token: shareToken }),
+        supabase.rpc('get_quote_photos_for_customer', { share_token: shareToken }),
       ]);
       if (error) throw error;
-      if (q) {
+      const row: any = Array.isArray(rows) ? rows[0] : null;
+      if (row) {
+        const q = {
+          id: row.id,
+          quote_number: row.quote_number,
+          status: row.status,
+          signed_at: row.signed_at,
+          signed_by: row.signed_by,
+          contractor_signature_data: row.contractor_signature_data,
+          contractor_signed_by: row.contractor_signed_by,
+          contractor_signed_at: row.contractor_signed_at,
+          certificate_customer_signature_data: row.certificate_customer_signature_data,
+          certificate_customer_signed_at: row.certificate_customer_signed_at,
+          completion_certificate_enabled: row.completion_certificate_enabled,
+          completion_certificate_sent_at: row.completion_certificate_sent_at,
+          project_description: row.project_description,
+          cover_page_title: row.cover_page_title,
+          customer: {
+            first_name: row.customer_first_name,
+            last_name: row.customer_last_name,
+            email: row.customer_email,
+            state: row.customer_state,
+          },
+        };
         setQuote(q);
         if (q.certificate_customer_signed_at) setSigned(true);
       }
-      setPhotos(photoRows || []);
+      setPhotos(
+        ((photoRows as any[]) || []).slice().sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)),
+      );
     } catch {
       toast.error('Failed to load certificate');
     } finally {

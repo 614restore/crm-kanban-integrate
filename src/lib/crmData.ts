@@ -1,4 +1,6 @@
 // CRM Data Types and Mock Data
+import { parseLocalDate } from './dates';
+
 
 export type CustomerStatus =
   | 'prospect'
@@ -285,6 +287,8 @@ export interface Appointment {
   location: string;
   notes?: string;
   status: 'scheduled' | 'completed' | 'cancelled' | 'rescheduled';
+  /** When the appointment was booked (not when it takes place). */
+  createdAt?: string;
 }
 
 export interface Invoice {
@@ -1636,8 +1640,11 @@ export function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
+/** A date to display, read as the user's own calendar day. See lib/dates.ts. */
+export const parseDisplayDate = parseLocalDate;
+
 export function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString('en-US', {
+  return parseDisplayDate(dateString).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -1645,7 +1652,7 @@ export function formatDate(dateString: string): string {
 }
 
 export function formatDateTime(dateString: string): string {
-  return new Date(dateString).toLocaleString('en-US', {
+  return parseDisplayDate(dateString).toLocaleString('en-US', {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',

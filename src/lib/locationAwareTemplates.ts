@@ -5,6 +5,7 @@
 
 import { DocumentTemplate, DocumentField, LineItemDefault } from './contractorTemplates';
 import { getStateLegalRequirements, generateStateLegalClauses, getContractorLicenseDisplay } from './stateLegalRequirements';
+import { toLocalDateString } from './dates';
 
 interface LocationAwareTemplateOptions {
   companyState?: string;
@@ -229,7 +230,7 @@ export function getLocationAwareContractorTemplates(): DocumentTemplate[] {
       ],
       fields: [
         { key: 'CUSTOMER_NAME', label: 'Customer Name', type: 'text', required: true },
-        { key: 'CONTRACT_DATE', label: 'Contract Date', type: 'date', required: true, defaultValue: new Date().toISOString().split('T')[0] },
+        { key: 'CONTRACT_DATE', label: 'Contract Date', type: 'date', required: true, defaultValue: toLocalDateString() },
         { key: 'START_DATE', label: 'Project Start Date', type: 'date', required: true },
         { key: 'ESTIMATED_COMPLETION', label: 'Estimated Completion', type: 'date', required: true },
         { key: 'WORK_DESCRIPTION', label: 'Work Description', type: 'textarea', required: true, placeholder: 'Describe the work to be performed...' },
@@ -347,7 +348,7 @@ export function getLocationAwareContractorTemplates(): DocumentTemplate[] {
       fields: [
         { key: 'WORK_ORDER_NUMBER', label: 'Work Order #', type: 'text', required: true, defaultValue: () => `WO-${Date.now()}` },
         { key: 'CUSTOMER_NAME', label: 'Customer Name', type: 'text', required: true },
-        { key: 'WORK_ORDER_DATE', label: 'Work Order Date', type: 'date', required: true, defaultValue: new Date().toISOString().split('T')[0] },
+        { key: 'WORK_ORDER_DATE', label: 'Work Order Date', type: 'date', required: true, defaultValue: toLocalDateString() },
         { key: 'SCHEDULED_DATE', label: 'Scheduled Date', type: 'date', required: true },
         { key: 'ASSIGNED_TECH', label: 'Assigned Technician', type: 'text', required: true },
         { key: 'PRIORITY_LEVEL', label: 'Priority Level', type: 'text', defaultValue: 'Normal' },

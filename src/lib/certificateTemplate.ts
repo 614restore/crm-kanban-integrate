@@ -1,5 +1,7 @@
 // Professional Certificate of Completion Template
 // Matches the style from the provided screenshots
+import { toLocalDateString } from './dates';
+
 
 export const getCertificateOfCompletionTemplate = () => {
   return {
@@ -377,8 +379,8 @@ export const getCertificateOfCompletionTemplate = () => {
     favorite: true,
     isDefault: true,
     tags: ['completion', 'certificate', 'legal', 'professional'],
-    createdAt: new Date().toISOString().split('T')[0],
-    lastModified: new Date().toISOString().split('T')[0],
+    createdAt: toLocalDateString(),
+    lastModified: toLocalDateString(),
     usageCount: 0,
     fileType: 'html' as const
   };

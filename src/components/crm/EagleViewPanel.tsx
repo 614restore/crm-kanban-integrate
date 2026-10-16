@@ -115,8 +115,8 @@ export default function EagleViewPanel({
           .from('company_integrations')
           .select('credentials')
           .eq('company_id', companyId)
-          .eq('integration_type', 'eagleview')
-          .eq('is_active', true)
+          .eq('integration_id', 'eagleview')
+          .eq('enabled', true)
           .maybeSingle();
 
         if (dbError && dbError.code !== 'PGRST116') {

@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/authContext';
 import { formatCurrency } from '@/lib/crmData';
+import { compressForUpload } from '@/lib/imageUtils';
 
 /**
  * Upload the carrier's insurance scope of work, let the AI read it, then review the figures and apply
@@ -133,10 +134,17 @@ export default function InsuranceScopePanel({ contactId, companyId, currentProje
     }
     setWorking('Uploading…');
     try {
-      const safeName = file.name.replace(/[^A-Za-z0-9._-]+/g, '_');
+      // A photo of the scope paperwork goes through the same size cap as other
+      // photos, but at a larger size than a damage photo: it is dense small
+      // print that has to stay readable for the scope reader. PDFs are left alone.
+      const toUpload = isPdf ? file : await compressForUpload(file, { maxSide: 2000, targetBytes: 700_000 });
+      const baseName = toUpload.type === 'image/jpeg' && !isPdf
+        ? file.name.replace(/\.[^.]+$/, '') + '.jpg'
+        : file.name;
+      const safeName = baseName.replace(/[^A-Za-z0-9._-]+/g, '_');
       const path = `${contactId}/insurance-scope/${Date.now()}-${safeName}`;
-      const mime = file.type || (isPdf ? 'application/pdf' : 'image/jpeg');
-      const { error: upErr } = await supabase.storage.from('documents').upload(path, file, { contentType: mime, upsert: false });
+      const mime = toUpload.type || (isPdf ? 'application/pdf' : 'image/jpeg');
+      const { error: upErr } = await supabase.storage.from('documents').upload(path, toUpload, { contentType: mime, upsert: false });
       if (upErr) throw upErr;
 
       const { data: row, error: insErr } = await supabase
@@ -147,7 +155,7 @@ export default function InsuranceScopePanel({ contactId, companyId, currentProje
           file_path: path,
           file_name: file.name,
           file_type: mime,
-          file_size: file.size,
+          file_size: toUpload.size,
           uploaded_by: profile?.id ?? null,
           uploaded_by_name: [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || profile?.email || null,
         })

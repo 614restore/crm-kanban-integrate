@@ -159,13 +159,14 @@ export default function Dashboard() {
     const currentUserId = profile?.id ?? state.currentUser?.id;
     const items: ActivityItem[] = [
       ...(prefs.showAppointments
-        ? [...state.appointments]
-            .filter(a => now - new Date(a.createdAt).getTime() < thirtyDays)
-            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        ? state.appointments
+            .map(appt => ({ appt, booked: appt.createdAt ? new Date(appt.createdAt).getTime() : NaN }))
+            .filter(({ booked }) => Number.isFinite(booked) && now - booked < thirtyDays)
+            .sort((a, b) => b.booked - a.booked)
             .slice(0, prefs.maxRows)
-            .map((appt): ActivityItem => ({
+            .map(({ appt, booked }): ActivityItem => ({
               kind: 'appointment',
-              time: new Date(appt.createdAt).getTime(),
+              time: booked,
               appt,
               contact: state.contacts.find(c => c.id === appt.contactId),
             }))
