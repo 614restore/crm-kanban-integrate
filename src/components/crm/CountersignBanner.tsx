@@ -22,8 +22,6 @@ export default function CountersignBanner({ contactId }: { contactId: string }) 
       .eq('status', 'signed')
       .eq('is_archived', false)
       .is('contractor_signed_at', null)
-      // Inspection reports are not quotes; the customer's agreement on one is handled with the report.
-      .or('project_type.is.null,project_type.neq.inspection_report')
       .order('created_at', { ascending: false });
     if (!error) setWaiting((data ?? []) as WaitingQuote[]);
   }, [contactId]);
