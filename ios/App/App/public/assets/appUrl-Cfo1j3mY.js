@@ -1,0 +1,1 @@
+function n(){return window.location.origin}function t(t){const e="/"?.replace(/\/$/,"")??"";return`${n()}${e}?token=${t}`}function e(t){const e="/"?.replace(/\/$/,"")??"";return`${n()}${e}?token=${t}&cert=1`}function c(t){const e="/"?.replace(/\/$/,"")??"";return`${n()}${e}?token=${t}&cancel_notice=1`}export{c as a,e as c,t as q};
