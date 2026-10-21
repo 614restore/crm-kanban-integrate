@@ -1,6 +1,7 @@
 // Copied from QuoteMGR src/components/SignatureCanvas.tsx (read-only reference).
 import React, { useRef, useState, useEffect } from 'react';
 import { Pen, Type, RotateCcw, Check, Shield } from 'lucide-react';
+import { addInk, hasEnoughInk, type InkPoint } from '@/lib/signatureInk';
 
 interface SignatureCanvasProps {
   onSign: (signatureData: string, signerName: string) => void;
@@ -26,7 +27,12 @@ const SignatureCanvas: React.FC<SignatureCanvasProps> = ({
   const [mode, setMode] = useState<'draw' | 'type'>('draw');
   const [typedName, setTypedName] = useState(initialName);
   const [signerName, setSignerName] = useState(initialName);
+  // hasDrawn turns on only once enough line has been drawn, never on touch-down alone.
   const [hasDrawn, setHasDrawn] = useState(false);
+  // The pad was touched but not enough was drawn: show a hint rather than leaving the button off silently.
+  const [tooLittleInk, setTooLittleInk] = useState(false);
+  const inkRef = useRef(0);
+  const lastPosRef = useRef<InkPoint | null>(null);
   const [agreed, setAgreed] = useState(false);
 
   useEffect(() => {
@@ -70,8 +76,8 @@ const SignatureCanvas: React.FC<SignatureCanvasProps> = ({
     const pos = getPosition(e);
     ctx.beginPath();
     ctx.moveTo(pos.x, pos.y);
+    lastPosRef.current = pos;
     setIsDrawing(true);
-    setHasDrawn(true);
   };
 
   const draw = (e: React.MouseEvent | React.TouchEvent) => {
@@ -84,10 +90,19 @@ const SignatureCanvas: React.FC<SignatureCanvasProps> = ({
     const pos = getPosition(e);
     ctx.lineTo(pos.x, pos.y);
     ctx.stroke();
+    if (lastPosRef.current) inkRef.current = addInk(inkRef.current, lastPosRef.current, pos);
+    lastPosRef.current = pos;
+    if (hasEnoughInk(inkRef.current)) {
+      setHasDrawn(true);
+      setTooLittleInk(false);
+    }
   };
 
   const stopDrawing = () => {
+    if (!isDrawing) return;
     setIsDrawing(false);
+    lastPosRef.current = null;
+    if (!hasEnoughInk(inkRef.current)) setTooLittleInk(true);
   };
 
   const clearCanvas = () => {
@@ -95,7 +110,10 @@ const SignatureCanvas: React.FC<SignatureCanvasProps> = ({
     const ctx = canvas?.getContext('2d');
     if (!ctx || !canvas) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    inkRef.current = 0;
+    lastPosRef.current = null;
     setHasDrawn(false);
+    setTooLittleInk(false);
   };
 
   const handleSubmit = () => {
@@ -105,7 +123,7 @@ const SignatureCanvas: React.FC<SignatureCanvasProps> = ({
     
     if (mode === 'draw') {
       const canvas = canvasRef.current;
-      if (!canvas) return;
+      if (!canvas || !hasEnoughInk(inkRef.current)) return;
       signatureData = canvas.toDataURL('image/png');
     } else {
       // Create typed signature on canvas
@@ -196,9 +214,14 @@ const SignatureCanvas: React.FC<SignatureCanvasProps> = ({
           >
             <RotateCcw className="w-4 h-4 text-gray-500" />
           </button>
-          {!hasDrawn && (
+          {!hasDrawn && !tooLittleInk && (
             <p className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none">
               Sign here
+            </p>
+          )}
+          {tooLittleInk && (
+            <p role="status" className="mt-2 text-sm text-amber-700">
+              Please draw your full signature in the box.
             </p>
           )}
         </div>
