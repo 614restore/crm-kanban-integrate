@@ -293,6 +293,10 @@ export interface DbDocument {
   viewed_at?: string;
   sent_by?: string;
   contact_email?: string;
+  // Uploaded quotes (see 20261021_00_uploaded_quote_totals.sql)
+  quote_total?: number | null;
+  quote_signed?: boolean;
+  counts_toward_total?: boolean;
 }
 
 export interface DbKanbanBoard {

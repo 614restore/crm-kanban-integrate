@@ -273,6 +273,58 @@ const QUOTE_STATUS_COLORS: Record<string, string> = {
 };
 
 
+// The three fields that turn an uploaded file into a quote with a total. Shared by the upload dialog and the
+// "Quote details" dialog on an existing document.
+function QuoteDetailFields({
+  total, signed, counts, onChange,
+}: {
+  total: string;
+  signed: boolean;
+  counts: boolean;
+  onChange: (next: { total?: string; signed?: boolean; counts?: boolean }) => void;
+}) {
+  return (
+    <div className="space-y-3 rounded-lg border border-blue-100 bg-blue-50/50 p-3">
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Quote total</label>
+        <div className="relative">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">$</span>
+          <input
+            type="number"
+            inputMode="decimal"
+            min="0"
+            step="0.01"
+            value={total}
+            onChange={(e) => onChange({ total: e.target.value })}
+            className="w-full border border-gray-300 rounded-lg pl-7 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="0.00"
+          />
+        </div>
+      </div>
+      <label className="flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
+        <input type="checkbox" checked={signed} onChange={(e) => onChange({ signed: e.target.checked })} className="mt-0.5" />
+        <span><span className="font-medium">Signed quote</span> <span className="text-gray-500">— the customer has signed this quote</span></span>
+      </label>
+      <label className="flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
+        <input type="checkbox" checked={counts} onChange={(e) => onChange({ counts: e.target.checked })} className="mt-0.5" />
+        <span>
+          <span className="font-medium">Include in the customer's total</span>
+          <span className="block text-xs text-gray-500">
+            Adds this amount to Project Value, which feeds pipeline totals, reports and commissions.
+            {counts && !signed ? ' It will only count once the quote is marked signed.' : ''}
+          </span>
+        </span>
+      </label>
+    </div>
+  );
+}
+
+const parseQuoteTotal = (raw: string): number | null => {
+  if (raw.trim() === '') return null;
+  const n = parseFloat(raw);
+  return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : null;
+};
+
 export default function ContactDetail() {
   const { state, dispatch } = useCRM();
   const { profile } = useAuth();
@@ -360,6 +412,15 @@ export default function ContactDetail() {
   const [pendingUploadName, setPendingUploadName] = useState('');
   const [pendingUploadCategory, setPendingUploadCategory] = useState<'contract' | 'estimate' | 'invoice' | 'photo' | 'insurance' | 'other' | 'measurement:roof' | 'measurement:walls' | 'measurement:premium'>('other');
   const [showUploadNameDialog, setShowUploadNameDialog] = useState(false);
+  // Quote details for an uploaded quote (category 'estimate'), and the dialog for editing them afterwards
+  const [pendingQuoteTotal, setPendingQuoteTotal] = useState('');
+  const [pendingQuoteSigned, setPendingQuoteSigned] = useState(false);
+  const [pendingCountsTowardTotal, setPendingCountsTowardTotal] = useState(false);
+  const [quoteEditDoc, setQuoteEditDoc] = useState<Document | null>(null);
+  const [quoteEditTotal, setQuoteEditTotal] = useState('');
+  const [quoteEditSigned, setQuoteEditSigned] = useState(false);
+  const [quoteEditCounts, setQuoteEditCounts] = useState(false);
+  const [savingQuoteEdit, setSavingQuoteEdit] = useState(false);
 
   // Avatar state
   const [contactAvatarUrl, setContactAvatarUrl] = useState<string | null>(null);
@@ -508,6 +569,9 @@ export default function ContactDetail() {
             size: doc.size || 'Unknown',
             htmlContent: doc.html_content || undefined,
             category: (doc.category as 'roof' | 'walls' | 'premium' | 'general' | null) ?? null,
+            quoteTotal: doc.quote_total != null ? Number(doc.quote_total) : null,
+            quoteSigned: doc.quote_signed === true,
+            countsTowardTotal: doc.counts_toward_total === true,
           };
         })
       );
@@ -613,7 +677,7 @@ export default function ContactDetail() {
   const inferCategory = (file: File): 'contract' | 'estimate' | 'invoice' | 'photo' | 'insurance' | 'other' => {
     const fileName = file.name.toLowerCase();
     if (fileName.includes('contract')) return 'contract';
-    if (fileName.includes('estimate')) return 'estimate';
+    if (fileName.includes('estimate') || fileName.includes('quote')) return 'estimate';
     if (fileName.includes('invoice')) return 'invoice';
     if (file.type.startsWith('image/')) return 'photo';
     if (fileName.includes('insurance')) return 'insurance';
@@ -667,6 +731,8 @@ export default function ContactDetail() {
         ? (pendingUploadCategory.split(':')[1] as 'roof' | 'walls' | 'premium')
         : undefined;
 
+      const quoteTotalValue = docType === 'estimate' ? parseQuoteTotal(pendingQuoteTotal) : null;
+      const isQuoteWithDetails = docType === 'estimate';
       const created = await db.createDocument({
         company_id: effectiveCompanyId,
         contact_id: contactId,
@@ -675,6 +741,13 @@ export default function ContactDetail() {
         url: storedUrl,
         size: formatFileSize(fileToUpload.size),
         uploaded_by: profile?.id,
+        ...(isQuoteWithDetails
+          ? {
+              quote_total: quoteTotalValue,
+              quote_signed: pendingQuoteSigned,
+              counts_toward_total: pendingCountsTowardTotal && quoteTotalValue != null,
+            }
+          : {}),
       });
 
       if (!created) {
@@ -702,10 +775,14 @@ export default function ContactDetail() {
         uploadedBy: created.uploaded_by || 'Team member',
         size: created.size || formatFileSize(fileToUpload.size),
         category: measurementCategory ?? null,
+        quoteTotal: created.quote_total != null ? Number(created.quote_total) : null,
+        quoteSigned: created.quote_signed === true,
+        countsTowardTotal: created.counts_toward_total === true,
       };
 
       setContactDocuments((prev) => [newDoc, ...prev]);
       toast.success(`${created.name} uploaded successfully!`);
+      if (newDoc.quoteSigned && newDoc.countsTowardTotal) await refreshProjectValue();
     } catch (error) {
       console.error('[ContactDetail] Document upload error:', error);
       toast.error('Failed to upload file: ' + (error instanceof Error ? error.message : 'Unknown error'));
@@ -714,7 +791,52 @@ export default function ContactDetail() {
       setPendingUploadFile(null);
       setPendingUploadName('');
       setPendingUploadCategory('other');
+      setPendingQuoteTotal('');
+      setPendingQuoteSigned(false);
+      setPendingCountsTowardTotal(false);
       if (documentInputRef.current) documentInputRef.current.value = '';
+    }
+  };
+
+  // The database adds a signed, counted uploaded quote to Project Value. Read the new figure back so the
+  // screen shows it without a reload.
+  const refreshProjectValue = async () => {
+    if (!contact || !contactId) return;
+    const { data } = await supabase.from('customers').select('project_value').eq('id', contactId).maybeSingle();
+    if (data && data.project_value != null && Number(data.project_value) !== contact.projectValue) {
+      dispatch({ type: 'UPDATE_CONTACT', payload: { ...contact, projectValue: Number(data.project_value), updatedAt: new Date().toISOString() } });
+    }
+  };
+
+  const openQuoteEdit = (doc: Document) => {
+    setQuoteEditDoc(doc);
+    setQuoteEditTotal(doc.quoteTotal != null ? String(doc.quoteTotal) : '');
+    setQuoteEditSigned(doc.quoteSigned === true);
+    setQuoteEditCounts(doc.countsTowardTotal === true);
+  };
+
+  const handleSaveQuoteEdit = async () => {
+    if (!quoteEditDoc) return;
+    const total = parseQuoteTotal(quoteEditTotal);
+    setSavingQuoteEdit(true);
+    try {
+      const counts = quoteEditCounts && total != null;
+      const { error } = await supabase
+        .from('documents')
+        .update({ quote_total: total, quote_signed: quoteEditSigned, counts_toward_total: counts })
+        .eq('id', quoteEditDoc.id);
+      if (error) throw error;
+      setContactDocuments((prev) => prev.map((d) => (
+        d.id === quoteEditDoc.id ? { ...d, quoteTotal: total, quoteSigned: quoteEditSigned, countsTowardTotal: counts } : d
+      )));
+      await refreshProjectValue();
+      toast.success('Quote details saved');
+      setQuoteEditDoc(null);
+    } catch (err) {
+      console.error('[ContactDetail] Could not save quote details:', err);
+      toast.error('Could not save quote details: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    } finally {
+      setSavingQuoteEdit(false);
     }
   };
 
@@ -723,6 +845,9 @@ export default function ContactDetail() {
     setPendingUploadFile(null);
     setPendingUploadName('');
     setPendingUploadCategory('other');
+    setPendingQuoteTotal('');
+    setPendingQuoteSigned(false);
+    setPendingCountsTowardTotal(false);
     if (documentInputRef.current) documentInputRef.current.value = '';
   };
 
@@ -3202,9 +3327,25 @@ export default function ContactDetail() {
                       <p className="text-sm text-gray-500">
                         {doc.size} • Uploaded {formatDate(doc.uploadedAt)} by {doc.uploadedBy}
                       </p>
+                      {doc.type === 'estimate' && (
+                        <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
+                          <span className="font-semibold text-gray-800">{doc.quoteTotal != null ? formatCurrency(doc.quoteTotal) : 'No total'}</span>
+                          <span className={`rounded-full px-2 py-0.5 font-medium ${doc.quoteSigned ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                            {doc.quoteSigned ? 'Signed' : 'Not signed'}
+                          </span>
+                          {doc.countsTowardTotal && (
+                            <span className={`rounded-full px-2 py-0.5 font-medium ${doc.quoteSigned ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
+                              {doc.quoteSigned ? 'In project total' : 'Counts once signed'}
+                            </span>
+                          )}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    {doc.type === 'estimate' && (
+                      <button onClick={() => openQuoteEdit(doc)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="Quote total, signed, and project total"><Pencil size={18} className="text-gray-500" /></button>
+                    )}
                     <button onClick={() => handleViewDoc(doc)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="View"><Eye size={18} className="text-gray-500" /></button>
                     <button onClick={() => handleDownloadDoc(doc)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="Download"><Download size={18} className="text-gray-500" /></button>
                     {(doc.name?.toLowerCase().endsWith('.pdf') || doc.url?.toLowerCase().includes('.pdf')) && (
@@ -5063,13 +5204,25 @@ export default function ContactDetail() {
                   <optgroup label="Documents">
                     <option value="insurance">Insurance Documents</option>
                     <option value="contract">Contracts</option>
-                    <option value="estimate">Estimates</option>
+                    <option value="estimate">Estimates / Quotes</option>
                     <option value="invoice">Invoices</option>
                     <option value="photo">Photos</option>
                     <option value="other">Other</option>
                   </optgroup>
                 </select>
               </div>
+              {pendingUploadCategory === 'estimate' && (
+                <QuoteDetailFields
+                  total={pendingQuoteTotal}
+                  signed={pendingQuoteSigned}
+                  counts={pendingCountsTowardTotal}
+                  onChange={(n) => {
+                    if (n.total !== undefined) setPendingQuoteTotal(n.total);
+                    if (n.signed !== undefined) setPendingQuoteSigned(n.signed);
+                    if (n.counts !== undefined) setPendingCountsTowardTotal(n.counts);
+                  }}
+                />
+              )}
             </div>
             <div className="flex justify-end gap-3 mt-6">
               <button
@@ -5080,10 +5233,41 @@ export default function ContactDetail() {
               </button>
               <button
                 onClick={handleConfirmUpload}
-                disabled={!pendingUploadName.trim()}
+                disabled={!pendingUploadName.trim() || (pendingUploadCategory === 'estimate' && pendingCountsTowardTotal && parseQuoteTotal(pendingQuoteTotal) == null)}
+                title={pendingUploadCategory === 'estimate' && pendingCountsTowardTotal && parseQuoteTotal(pendingQuoteTotal) == null ? 'Enter the quote total to include it in the total' : undefined}
                 className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Upload
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quote details dialog (amount, signed, counts toward total) for an uploaded quote */}
+      {quoteEditDoc && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-1">Quote details</h2>
+            <p className="text-sm text-gray-500 mb-4 truncate">{quoteEditDoc.name}</p>
+            <QuoteDetailFields
+              total={quoteEditTotal}
+              signed={quoteEditSigned}
+              counts={quoteEditCounts}
+              onChange={(n) => {
+                if (n.total !== undefined) setQuoteEditTotal(n.total);
+                if (n.signed !== undefined) setQuoteEditSigned(n.signed);
+                if (n.counts !== undefined) setQuoteEditCounts(n.counts);
+              }}
+            />
+            <div className="flex justify-end gap-3 mt-6">
+              <button onClick={() => setQuoteEditDoc(null)} className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Cancel</button>
+              <button
+                onClick={handleSaveQuoteEdit}
+                disabled={savingQuoteEdit || (quoteEditCounts && parseQuoteTotal(quoteEditTotal) == null)}
+                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {savingQuoteEdit ? 'Saving…' : 'Save'}
               </button>
             </div>
           </div>
