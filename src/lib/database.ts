@@ -658,7 +658,12 @@ class DatabaseService {
   }
 
   // Company operations
-  async getCompany(companyId: string): Promise<DbCompany | null> {
+  /**
+   * `fresh` skips the 24-hour browser copy and reads the database (the result
+   * still refreshes the copy). Use it for anything that must be current, like
+   * the subscription status.
+   */
+  async getCompany(companyId: string, options?: { fresh?: boolean }): Promise<DbCompany | null> {
     if (this.inDemoMode()) {
       try {
         const stored = localStorage.getItem(`demo_company_${companyId}`);
@@ -670,7 +675,7 @@ class DatabaseService {
     }
 
     const cached = this.getCachedCompany(companyId);
-    if (cached) return cached;
+    if (cached && !options?.fresh) return cached;
 
     try {
       const { data, error } = await this.raceTimeout(
@@ -698,7 +703,8 @@ class DatabaseService {
       console.warn('[Database] RPC unavailable/timed-out');
     }
 
-    return null;
+    // A fresh read that failed (e.g. offline) still has the saved copy to fall back on.
+    return cached;
   }
 
   async createCompany(company: Partial<DbCompany>): Promise<DbCompany | null> {

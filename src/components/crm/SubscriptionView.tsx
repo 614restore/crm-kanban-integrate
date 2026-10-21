@@ -112,7 +112,7 @@ export default function SubscriptionView() {
   useEffect(() => {
     const companyId = profile?.company_id || state.companyId;
     if (!companyId) return;
-    db.getCompany(companyId).then((c) => { if (c) setCompany(c); });
+    db.getCompany(companyId, { fresh: true }).then((c) => { if (c) setCompany(c); });
   }, [profile?.company_id, state.companyId]);
 
   useEffect(() => {
