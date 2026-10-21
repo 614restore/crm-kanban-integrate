@@ -2,6 +2,12 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Pen, Type, RotateCcw, Check, Shield } from 'lucide-react';
 
+// A signature has to be more than a tap. A stray touch on the pad used to count as "signed" the moment
+// it landed, so a customer who brushed the pad and pressed Sign Document locked in a couple of dots as
+// their agreement signature, then signed properly on the next screen. The pad now counts how much ink
+// was actually drawn (in CSS pixels along the stroke) and only treats it as a signature past this.
+const MIN_SIGNATURE_INK_PX = 60;
+
 interface SignatureCanvasProps {
   onSign: (signatureData: string, signerName: string) => void;
   signerName?: string;
@@ -27,21 +33,34 @@ const SignatureCanvas: React.FC<SignatureCanvasProps> = ({
   const [typedName, setTypedName] = useState(initialName);
   const [signerName, setSignerName] = useState(initialName);
   const [hasDrawn, setHasDrawn] = useState(false);
+  const [tooLittleInk, setTooLittleInk] = useState(false);
+  const inkRef = useRef(0);
+  const lastPosRef = useRef<{ x: number; y: number } | null>(null);
   const [agreed, setAgreed] = useState(false);
 
-  useEffect(() => {
+  // Sizes the drawing surface to what is on screen right now. It runs at mount and again at the first touch
+  // of a fresh pad: a pad mounted while its container was still collapsed or animating in was left with a
+  // sliver of a canvas, which clipped everything the customer drew and kept only a few dots.
+  const syncCanvasSize = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const w = canvas.offsetWidth * 2;
+    const h = canvas.offsetHeight * 2;
+    if (w === 0 || h === 0) return;
+    if (canvas.width === w && canvas.height === h) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    
-    canvas.width = canvas.offsetWidth * 2;
-    canvas.height = canvas.offsetHeight * 2;
+    canvas.width = w;
+    canvas.height = h;
     ctx.scale(2, 2);
     ctx.strokeStyle = '#1e3a5f';
     ctx.lineWidth = 2.5;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
+  };
+
+  useEffect(() => {
+    syncCanvasSize();
   }, []);
 
   const getPosition = (e: React.MouseEvent | React.TouchEvent) => {
@@ -63,6 +82,7 @@ const SignatureCanvas: React.FC<SignatureCanvasProps> = ({
 
   const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
+    if (inkRef.current === 0) syncCanvasSize();
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
     if (!ctx) return;
@@ -70,8 +90,9 @@ const SignatureCanvas: React.FC<SignatureCanvasProps> = ({
     const pos = getPosition(e);
     ctx.beginPath();
     ctx.moveTo(pos.x, pos.y);
+    lastPosRef.current = pos;
     setIsDrawing(true);
-    setHasDrawn(true);
+    setTooLittleInk(false);
   };
 
   const draw = (e: React.MouseEvent | React.TouchEvent) => {
@@ -84,9 +105,17 @@ const SignatureCanvas: React.FC<SignatureCanvasProps> = ({
     const pos = getPosition(e);
     ctx.lineTo(pos.x, pos.y);
     ctx.stroke();
+    const last = lastPosRef.current;
+    if (last) inkRef.current += Math.hypot(pos.x - last.x, pos.y - last.y);
+    lastPosRef.current = pos;
+    if (inkRef.current >= MIN_SIGNATURE_INK_PX) setHasDrawn(true);
   };
 
   const stopDrawing = () => {
+    if (isDrawing && inkRef.current < MIN_SIGNATURE_INK_PX) {
+      setTooLittleInk(true);
+    }
+    lastPosRef.current = null;
     setIsDrawing(false);
   };
 
@@ -95,7 +124,10 @@ const SignatureCanvas: React.FC<SignatureCanvasProps> = ({
     const ctx = canvas?.getContext('2d');
     if (!ctx || !canvas) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    inkRef.current = 0;
+    lastPosRef.current = null;
     setHasDrawn(false);
+    setTooLittleInk(false);
   };
 
   const handleSubmit = () => {
@@ -105,7 +137,7 @@ const SignatureCanvas: React.FC<SignatureCanvasProps> = ({
     
     if (mode === 'draw') {
       const canvas = canvasRef.current;
-      if (!canvas) return;
+      if (!canvas || !hasDrawn) return;
       signatureData = canvas.toDataURL('image/png');
     } else {
       // Create typed signature on canvas
@@ -196,9 +228,14 @@ const SignatureCanvas: React.FC<SignatureCanvasProps> = ({
           >
             <RotateCcw className="w-4 h-4 text-gray-500" />
           </button>
-          {!hasDrawn && (
+          {!hasDrawn && !tooLittleInk && (
             <p className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none">
               Sign here
+            </p>
+          )}
+          {tooLittleInk && !hasDrawn && (
+            <p role="alert" className="absolute top-2 left-3 right-12 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-1">
+              That looks like a tap, not a signature. Please sign your full name.
             </p>
           )}
         </div>
