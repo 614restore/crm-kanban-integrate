@@ -150,6 +150,7 @@ import {
   Archive,
   Pencil,
   Receipt,
+  FileCheck,
   AlertTriangle,
 } from 'lucide-react';
 
@@ -275,7 +276,7 @@ const QUOTE_STATUS_COLORS: Record<string, string> = {
 
 export default function ContactDetail() {
   const { state, dispatch } = useCRM();
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const contact = useCurrentContact();
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [docSubTab, setDocSubTab] = useState<'all' | 'measurements' | 'photos' | 'docs' | 'legal'>('all');
@@ -332,6 +333,12 @@ export default function ContactDetail() {
   // Quotes list "⋯" menu (fixed-position so the card layout cannot clip it).
   const [quoteMenu, setQuoteMenu] = useState<{ quote: QuoteSummary; top: number; right: number; up: boolean } | null>(null);
   const [quotesVersion, setQuotesVersion] = useState(0);
+  // Adding a quote the customer already signed (on paper, or in another system) by its total.
+  const [showSignedQuote, setShowSignedQuote] = useState(false);
+  const [signedQuoteAmount, setSignedQuoteAmount] = useState('');
+  const [signedQuoteDate, setSignedQuoteDate] = useState('');
+  const [signedQuoteLabel, setSignedQuoteLabel] = useState('');
+  const [savingSignedQuote, setSavingSignedQuote] = useState(false);
   // Edit form: "Custom…" chosen for project type (shows a text box).
   const [projectTypeCustom, setProjectTypeCustom] = useState(false);
   const [quoteExtras, setQuoteExtras] = useState<Record<string, { shareToken: string | null; projectType: string | null }>>({});
@@ -1045,6 +1052,60 @@ export default function ContactDetail() {
       window.removeEventListener('keydown', onKey);
     };
   }, [quoteMenu]);
+
+  const closeSignedQuote = () => {
+    setShowSignedQuote(false);
+    setSignedQuoteAmount('');
+    setSignedQuoteDate('');
+    setSignedQuoteLabel('');
+  };
+
+  // Records a quote the customer already signed, worth the total entered. It is a normal signed quote
+  // (the Good tier is the one that was signed), so pipeline totals, Project Value and commission follow it
+  // the same way as a quote signed through the app: the database sets Project Value from signed quotes.
+  const saveSignedQuote = async () => {
+    if (!contact || savingSignedQuote) return;
+    const amount = parseFloat(signedQuoteAmount.replace(/[$,\s]/g, ''));
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error('Enter the total of the signed contract.');
+      return;
+    }
+    const companyId = profile?.company_id;
+    if (!companyId) {
+      toast.error('No company context. Please refresh and sign in again.');
+      return;
+    }
+    // A date picked in the input is a calendar day; noon keeps it on that day in every timezone.
+    const signedAt = signedQuoteDate ? new Date(`${signedQuoteDate}T12:00:00`).toISOString() : new Date().toISOString();
+    setSavingSignedQuote(true);
+    try {
+      const { error } = await supabase.from('quotes').insert({
+        company_id: companyId,
+        created_by: user?.id ?? null,
+        customer_id: contact.id,
+        quote_number: `QT-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`,
+        status: 'signed',
+        cover_page_title: signedQuoteLabel.trim() || 'Signed contract',
+        good_total: amount,
+        better_total: 0,
+        best_total: 0,
+        include_better: false,
+        include_best: false,
+        selected_tier: 'good',
+        signed_at: signedAt,
+        signed_by: getContactFullName(contact),
+      });
+      if (error) throw error;
+      toast.success(`Signed quote added: ${formatCurrency(amount)}`);
+      closeSignedQuote();
+      setQuotesVersion((v) => v + 1);
+    } catch (err) {
+      console.error('[ContactDetail] Failed to add signed quote:', err);
+      toast.error(`Could not add the signed quote: ${err instanceof Error ? err.message : 'unknown error'}`);
+    } finally {
+      setSavingSignedQuote(false);
+    }
+  };
 
   const openNewQuote = () => {
     if (!contact) return;
@@ -3349,6 +3410,14 @@ export default function ContactDetail() {
                   <Shield size={18} />
                   New Inspection Report
                 </button>
+                <button
+                  onClick={() => setShowSignedQuote(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-emerald-200 text-emerald-700 rounded-lg hover:bg-emerald-50 transition-colors"
+                  title="Record a quote the customer already signed, by its total"
+                >
+                  <FileCheck size={18} />
+                  Add Signed Quote
+                </button>
                 {(() => {
                   const pdfs = (contactDocuments || []).filter(d =>
                     d.name?.toLowerCase().endsWith('.pdf') || d.url?.toLowerCase().includes('.pdf')
@@ -3361,11 +3430,11 @@ export default function ContactDetail() {
                         className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                       >
                         <Zap size={18} />
-                        Quote from PDF
+                        Quote from Roofr report
                       </button>
                       {showRoofrPicker && (
                         <div className="absolute left-0 top-full mt-1 z-50 bg-white border border-gray-200 rounded-xl shadow-lg min-w-[220px]">
-                          <p className="text-xs font-medium text-gray-500 px-3 pt-3 pb-1">Choose a Roofr PDF</p>
+                          <p className="text-xs font-medium text-gray-500 px-3 pt-3 pb-1">Choose a Roofr report</p>
                           {pdfs.map(doc => (
                             <button
                               key={doc.id}
@@ -4086,6 +4155,74 @@ export default function ContactDetail() {
                   </div>
                 ))}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Signed Quote Modal */}
+      {showSignedQuote && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Add Signed Quote</h3>
+              <button onClick={closeSignedQuote} className="p-2 hover:bg-gray-100 rounded-lg" aria-label="Close">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-gray-600">
+                For a contract {getContactFullName(contact)} already signed. The total becomes the job's Project Value.
+              </p>
+              <div>
+                <label htmlFor="signed-quote-amount" className="block text-sm font-medium text-gray-700 mb-1">Total signed contract amount</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                  <input
+                    id="signed-quote-amount"
+                    type="text"
+                    inputMode="decimal"
+                    autoFocus
+                    value={signedQuoteAmount}
+                    onChange={(e) => setSignedQuoteAmount(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
+                  />
+                </div>
+              </div>
+              <div>
+                <label htmlFor="signed-quote-date" className="block text-sm font-medium text-gray-700 mb-1">Date signed (optional, defaults to today)</label>
+                <input
+                  id="signed-quote-date"
+                  type="date"
+                  value={signedQuoteDate}
+                  onChange={(e) => setSignedQuoteDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
+                />
+              </div>
+              <div>
+                <label htmlFor="signed-quote-label" className="block text-sm font-medium text-gray-700 mb-1">Label (optional)</label>
+                <input
+                  id="signed-quote-label"
+                  type="text"
+                  value={signedQuoteLabel}
+                  onChange={(e) => setSignedQuoteLabel(e.target.value)}
+                  placeholder="Signed contract"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 p-6 pt-0">
+              <button onClick={closeSignedQuote} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
+                Cancel
+              </button>
+              <button
+                onClick={saveSignedQuote}
+                disabled={savingSignedQuote}
+                className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {savingSignedQuote ? 'Saving…' : 'Add signed quote'}
+              </button>
             </div>
           </div>
         </div>
