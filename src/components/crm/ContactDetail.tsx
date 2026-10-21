@@ -383,6 +383,8 @@ export default function ContactDetail() {
   // "Pending". They now count the receipts.
   const [receiptsTotal, setReceiptsTotal] = useState(0);
   const [receiptsCount, setReceiptsCount] = useState(0);
+  // Bumped when a payment is deleted on the Financial tab, so the Deposit / Final Payment cards reload.
+  const [paymentsVersion, setPaymentsVersion] = useState(0);
   useEffect(() => {
     if (!contactId) return;
     let cancelled = false;
@@ -399,7 +401,7 @@ export default function ContactDetail() {
     return () => {
       cancelled = true;
     };
-  }, [contactId, activeTab]);
+  }, [contactId, activeTab, paymentsVersion]);
   const contactNotes = stripSchedulePrefix(contact?.notes);
 
   useEffect(() => {
@@ -3517,7 +3519,13 @@ export default function ContactDetail() {
               </div>
             </div>
 
-            <CustomerPayments contactId={contact.id} projectValue={contact.projectValue} />
+            <CustomerPayments
+              contactId={contact.id}
+              projectValue={contact.projectValue}
+              customerEmail={contact.email}
+              customerName={getContactFullName(contact)}
+              onPaymentsChanged={() => setPaymentsVersion((v) => v + 1)}
+            />
             <JobCostsPanel contactId={contact.id} />
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="bg-white rounded-xl border border-gray-200 p-6">
