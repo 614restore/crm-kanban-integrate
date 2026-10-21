@@ -510,7 +510,7 @@ function TrialBanner({ companyId }: { companyId: string | null }) {
 
   useEffect(() => {
     if (!companyId) return;
-    db.getCompany(companyId).then((c) => { if (c) setCompany(c); });
+    db.getCompany(companyId, { fresh: true }).then((c) => { if (c) setCompany(c); });
   }, [companyId]);
 
   if (dismissed || !company) return null;
@@ -1436,7 +1436,9 @@ useEffect(() => {
   // Subscription check — sets read-only mode when trial has expired or subscription is inactive.
   useEffect(() => {
     if (!profile?.company_id) return;
-    db.getCompany(profile.company_id).then((company) => {
+    // Fresh from the database: a plan change must show on the next load, not after the
+    // browser's 24-hour copy of the company runs out.
+    db.getCompany(profile.company_id, { fresh: true }).then((company) => {
       if (!company) return;
       const trialExpired =
         company.subscription_status === 'trialing' &&

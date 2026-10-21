@@ -289,10 +289,38 @@ export default function QuotesView() {
     }
   };
 
+  // Names for quotes whose customer isn't in the loaded contact list (still loading,
+  // or a saved copy from another company), looked up directly so they never show "Unknown".
+  const [fetchedNames, setFetchedNames] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const known = new Set(state.contacts.map((c) => c.id));
+    const missing = [...new Set(quotes.map((q) => q.contact_id || q.customer_id).filter((id): id is string => !!id))]
+      .filter((id) => !known.has(id) && !(id in fetchedNames));
+    if (!missing.length) return;
+    let cancelled = false;
+    supabase
+      .from('contacts')
+      .select('id, first_name, last_name')
+      .in('id', missing)
+      .then(({ data }) => {
+        if (cancelled || !data) return;
+        setFetchedNames((prev) => {
+          // Ids not found (e.g. a deleted customer) are remembered as '' so they aren't asked for again.
+          const next = { ...prev, ...Object.fromEntries(missing.map((id) => [id, ''])) };
+          for (const row of data as { id: string; first_name: string | null; last_name: string | null }[]) {
+            next[row.id] = `${row.first_name ?? ''} ${row.last_name ?? ''}`.trim();
+          }
+          return next;
+        });
+      });
+    return () => { cancelled = true; };
+  }, [quotes, state.contacts]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const contactName = (id: string | null) => {
     if (!id) return 'No customer';
     const c = state.contacts.find((c) => c.id === id);
-    return c ? `${c.firstName} ${c.lastName}`.trim() : 'Unknown';
+    if (c) return `${c.firstName} ${c.lastName}`.trim();
+    return fetchedNames[id] || 'Unknown';
   };
 
   // Same link format as QuoteMGR and the backend's quote emails: /?token=<share_token>.
