@@ -40,6 +40,10 @@ export default async function handler(req, res) {
 
   const { action, ...payload } = req.body || {};
   const stripe = new Stripe(stripeKey, { apiVersion: '2023-10-16' });
+  const admin = () => createClient(
+    process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
 
   // ── CHECKOUT ───────────────────────────────────────────────────────────────
   if (action === 'checkout') {
@@ -52,23 +56,55 @@ export default async function handler(req, res) {
     const resolvedPlanId = priceToPlnMap.get(priceId);
     if (!resolvedPlanId) return res.status(400).json({ error: 'Invalid price ID.' });
 
+    // The signed-in user's company: the session is tied to it (client_reference_id,
+    // read by the webhook) and its free trial decides when the first charge happens.
+    let company = null;
+    if (user?.id) {
+      const supabase = admin();
+      const { data: profileData } = await supabase
+        .from('profiles').select('company_id').eq('id', user.id).single();
+      if (profileData?.company_id) {
+        const { data } = await supabase
+          .from('companies')
+          .select('id, subscription_status, trial_ends_at, stripe_customer_id')
+          .eq('id', profileData.company_id)
+          .single();
+        company = data ?? null;
+      }
+    }
+
+    // The card is saved now and first charged when the company's 7-day trial
+    // ends (trial_ends_at), so the trial is the same however soon the card is
+    // added. Stripe needs a trial end at least 48 hours away; with less left, or
+    // no trial (already paid, cancelled or expired), the plan is charged now.
+    const MIN_TRIAL_MS = 48 * 60 * 60 * 1000;
+    const trialEndMs = company?.subscription_status === 'trialing' && company.trial_ends_at
+      ? new Date(company.trial_ends_at).getTime()
+      : 0;
+    const trialEnd = trialEndMs - Date.now() >= MIN_TRIAL_MS ? Math.floor(trialEndMs / 1000) : null;
+
     try {
       const session = await stripe.checkout.sessions.create({
         mode: 'subscription',
         payment_method_types: ['card'],
         line_items: [{ price: priceId, quantity: 1 }],
-        ...(user?.email ? { customer_email: user.email } : {}),
+        ...(company?.stripe_customer_id
+          ? { customer: company.stripe_customer_id }
+          : user?.email ? { customer_email: user.email } : {}),
+        ...(company?.id ? { client_reference_id: company.id } : {}),
         metadata: { planId: resolvedPlanId, priceId },
         subscription_data: {
-          trial_period_days: 14,
-          metadata: { planId: resolvedPlanId, priceId },
+          ...(trialEnd ? { trial_end: trialEnd } : {}),
+          metadata: { planId: resolvedPlanId, priceId, ...(company?.id ? { companyId: company.id } : {}) },
         },
+        // Always save a card, even though nothing is charged during the trial.
+        payment_method_collection: 'always',
         ...(couponId
           ? { discounts: [{ coupon: couponId }] }
           : { allow_promotion_codes: true }),
         phone_number_collection: { enabled: true },
         tax_id_collection: { enabled: true },
-        success_url: `${appUrl}/?checkout=success&plan=${resolvedPlanId}`,
+        success_url: `${appUrl}/?checkout=success&plan=${resolvedPlanId}${trialEnd ? '&trial=1' : ''}`,
         cancel_url:  `${appUrl}/?checkout=cancelled`,
       });
       return res.status(200).json({ url: session.url });
@@ -83,10 +119,7 @@ export default async function handler(req, res) {
     const user = await requireAuth(req, res);
     if (!user) return;
 
-    const supabase = createClient(
-      process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
+    const supabase = admin();
 
     const { data: profileData } = await supabase
       .from('profiles').select('company_id').eq('id', user.id).single();
@@ -106,7 +139,8 @@ export default async function handler(req, res) {
     try {
       const session = await stripe.billingPortal.sessions.create({
         customer: customerId,
-        return_url: `${appUrl}/settings?tab=billing`,
+        // The app has no /settings page; it opens on the home screen.
+        return_url: `${appUrl}/`,
       });
       return res.status(200).json({ url: session.url });
     } catch (err) {

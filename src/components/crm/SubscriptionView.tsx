@@ -14,19 +14,11 @@ import {
   Tag,
 } from 'lucide-react';
 
-// Price IDs come from Vite env vars (set in Vercel dashboard for live, .env.local for dev)
-const PRICE_IDS: Record<string, string> = {
-  starter:    import.meta.env.VITE_STRIPE_STARTER_MONTHLY  || '',
-  pro:        import.meta.env.VITE_STRIPE_PRO_MONTHLY      || '',
-  business:   import.meta.env.VITE_STRIPE_BUSINESS_MONTHLY || '',
-  enterprise: import.meta.env.VITE_STRIPE_ENTERPRISE_MONTHLY || '',
-};
-
-// Vercel API base (empty on GitHub Pages static hosting — falls back to billing portal)
-const API_BASE: string = import.meta.env.VITE_EMAIL_API_BASE_URL || '';
+import { PRICE_IDS, startCheckout, openBillingPortal } from '@/lib/billing';
+import { TRIAL_INFO_PATH, hasCardOnTrial } from '@/lib/trial';
 const STRIPE_BILLING_PORTAL_URL: string = import.meta.env.VITE_STRIPE_BILLING_PORTAL_URL || '';
 
-const PLANS = [
+export const PLANS = [
   {
     key: 'starter' as const,
     name: 'Starter',
@@ -144,25 +136,17 @@ export default function SubscriptionView() {
   const handleManageBilling = useCallback(async () => {
     setCheckoutError(null);
 
-    if (API_BASE && session?.access_token) {
+    if (session?.access_token && company?.stripe_customer_id) {
       setPortalLoading(true);
       try {
-        const res = await fetch(`${API_BASE}/api/stripe-portal`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to open billing portal');
-        window.location.href = data.url;
+        await openBillingPortal(session.access_token);
         return;
       } catch (err) {
         setCheckoutError(err instanceof Error ? err.message : 'Could not open billing portal. Please try again.');
       } finally {
         setPortalLoading(false);
       }
+      return;
     }
 
     if (STRIPE_BILLING_PORTAL_URL) {
@@ -170,36 +154,25 @@ export default function SubscriptionView() {
       return;
     }
 
-    setCheckoutError('Billing portal is not configured. Set VITE_STRIPE_BILLING_PORTAL_URL or connect the app to the Stripe portal API.');
-  }, [openExternalBillingUrl, session?.access_token]);
+    setCheckoutError('There is no card on file yet. Choose a plan below to add one.');
+  }, [openExternalBillingUrl, session?.access_token, company?.stripe_customer_id]);
 
   const handleCheckout = useCallback(async (planKey: string) => {
     setCheckoutError(null);
-    const priceId = PRICE_IDS[planKey];
-
-    // If we have an API base and a priceId, create a fresh Stripe session
-    if (API_BASE && priceId) {
-      setLoadingPlan(planKey);
-      try {
-        const res = await fetch(`${API_BASE}/api/stripe`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'checkout', priceId, planId: planKey }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to start checkout');
-        window.location.href = data.url;
-      } catch (err) {
-        setCheckoutError(err instanceof Error ? err.message : 'Checkout failed. Please try again.');
-      } finally {
-        setLoadingPlan(null);
-      }
+    if (!PRICE_IDS[planKey]) {
+      // Not sold online (e.g. Enterprise): the billing portal or a message instead.
+      await handleManageBilling();
       return;
     }
-
-    // Fallback: send user to the Stripe billing portal to subscribe
-    await handleManageBilling();
-  }, [handleManageBilling]);
+    setLoadingPlan(planKey);
+    try {
+      await startCheckout(planKey, session?.access_token);
+    } catch (err) {
+      setCheckoutError(err instanceof Error ? err.message : 'Checkout failed. Please try again.');
+    } finally {
+      setLoadingPlan(null);
+    }
+  }, [handleManageBilling, session?.access_token]);
 
   const highlightColors: Record<string, string> = {
     blue: 'border-blue-200 bg-blue-50',
@@ -233,6 +206,16 @@ export default function SubscriptionView() {
                 </span>
               )}
             </div>
+            {hasCardOnTrial(company) && company?.trial_ends_at && (
+              <p className="mt-2 text-sm text-gray-600">
+                Your card on file will be charged for the {plan.charAt(0).toUpperCase() + plan.slice(1)} plan on{' '}
+                <strong>{new Date(company.trial_ends_at).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}</strong>{' '}
+                unless you cancel before then (Manage Billing → Cancel subscription).
+              </p>
+            )}
+            <a href={TRIAL_INFO_PATH} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-sm text-blue-600 hover:underline">
+              How the free trial works
+            </a>
           </div>
           <button
             onClick={() => void handleManageBilling()}

@@ -141,13 +141,28 @@ export default async function handler(req, res) {
         }
 
         if (companyId) {
+          // A card saved at sign-up starts a subscription that is still in its
+          // free trial ('trialing', first charge at trial_end); record that rather
+          // than 'active' so the app shows the trial and when the charge happens.
+          let status = 'active';
+          let trialEndsAt = null;
+          if (subscriptionId) {
+            try {
+              const sub = await stripe.subscriptions.retrieve(subscriptionId);
+              status = sub.status || 'active';
+              if (sub.trial_end) trialEndsAt = new Date(sub.trial_end * 1000).toISOString();
+            } catch (err) {
+              console.warn('checkout.session.completed: could not read subscription', subscriptionId, err.message);
+            }
+          }
           const { error } = await supabase
             .from('companies')
             .update({
-              subscription_status: 'active',
+              subscription_status: status,
               subscription_plan: planId,
               stripe_customer_id: customerId,
               stripe_subscription_id: subscriptionId,
+              ...(trialEndsAt ? { trial_ends_at: trialEndsAt } : {}),
               updated_at: new Date().toISOString(),
             })
             .eq('id', companyId);
@@ -178,6 +193,8 @@ export default async function handler(req, res) {
             .update({
               subscription_status: sub.status,
               subscription_plan: planId,
+              stripe_subscription_id: sub.id,
+              ...(sub.trial_end ? { trial_ends_at: new Date(sub.trial_end * 1000).toISOString() } : {}),
               updated_at: new Date().toISOString(),
             })
             .eq('id', companyId);
@@ -222,6 +239,9 @@ export default async function handler(req, res) {
 
       case 'invoice.payment_succeeded': {
         const invoice = event.data.object;
+        // Starting a free trial produces a $0 invoice; the company is still
+        // trialing (customer.subscription.updated reports when it turns active).
+        if (!invoice.amount_paid) break;
         if (invoice.customer) {
           const companyId = await getCompanyByStripeCustomer(supabase, invoice.customer);
           if (companyId) {

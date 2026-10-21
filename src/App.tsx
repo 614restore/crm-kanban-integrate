@@ -14,6 +14,8 @@ import UpdatePassword from "./pages/UpdatePassword";
 import TermsOfService from "./pages/TermsOfService";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import EULA from "./pages/EULA";
+import FreeTrial from "./pages/FreeTrial";
+import Support from "./pages/Support";
 import SignDocument from "./pages/SignDocument";
 import SignEstimate from "./pages/SignEstimate";
 import SignChangeOrder from "./pages/SignChangeOrder";
@@ -152,6 +154,8 @@ const App = () => {
               <Route path="/terms" element={<TermsOfService />} />
               <Route path="/privacy" element={<PrivacyPolicy />} />
               <Route path="/eula" element={<EULA />} />
+              <Route path="/trial" element={<FreeTrial />} />
+              <Route path="/support" element={<Support />} />
               <Route path="/sign" element={<SignDocument />} />
               <Route path="/sign-estimate/:token" element={<SignEstimate />} />
               <Route path="/sign-estimate" element={<SignEstimate />} />
