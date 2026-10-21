@@ -4,7 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 
 export default function PrivacyPolicy() {
   const navigate = useNavigate();
-  const effectiveDate = 'October 4, 2026';
+  const effectiveDate = 'October 21, 2026';
   const companyName = 'TrussCTR';
   const contactEmail = 'executivestack@outlook.com';
 

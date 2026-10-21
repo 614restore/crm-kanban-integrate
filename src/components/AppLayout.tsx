@@ -34,6 +34,8 @@ import { Building2, Loader2, Zap, X, Tag, WifiOff, AlertTriangle, Download } fro
 import { SubscriptionProvider, useSubscription } from '@/contexts/SubscriptionContext';
 import { exportAllData } from '@/lib/exportUtils';
 import { IN_APP, inAppStartView, inAppStartBoard } from '@/lib/inAppMode';
+import { needsCardForTrial, hasCardOnTrial, TRIAL_INFO_PATH } from '@/lib/trial';
+import StartTrialGate from './crm/StartTrialGate';
 import { toLocalDateString } from '@/lib/dates';
 
 // Lazy load all CRM view components for better code splitting
@@ -497,9 +499,10 @@ function dbWorkOrderToAppWorkOrder(wo: any, contacts: Contact[], projects: any[]
   };
 }
 
-// Trial banner shown when subscription_status is 'trialing'
-// Days 1-7: shows 50% off launch offer with promo code
-// Days 1-3 of trial (>11 days left on 14-day trial): emphasise urgency
+// Trial banner shown when subscription_status is 'trialing' (7-day trial).
+// With a card on file: when the card will be charged. Without one (companies
+// from before cards were taken at sign-up): the 50% off launch offer, then a
+// countdown for the last 3 days.
 const LAUNCH_PROMO_CODE = 'LAUNCH50';
 const BILLING_SETTINGS_VIEW = 'billing';
 
@@ -521,10 +524,30 @@ function TrialBanner({ companyId }: { companyId: string | null }) {
   const daysLeft = Math.ceil((trialEndMs - Date.now()) / (1000 * 60 * 60 * 24));
   if (daysLeft <= 0) return null;
 
-  // Show discount offer during first 7 days of trial (trial days 1-7 = >7 days left on 14-day trial)
-  const showDiscount = daysLeft > 7;
-  // Show urgency warning last 7 days
-  const showUrgency = daysLeft <= 7;
+  if (hasCardOnTrial(company)) {
+    const chargeDate = new Date(company.trial_ends_at).toLocaleDateString(undefined, { month: 'long', day: 'numeric' });
+    const planName = company.subscription_plan ? company.subscription_plan.charAt(0).toUpperCase() + company.subscription_plan.slice(1) : 'your';
+    return (
+      <div className="flex items-center justify-between gap-3 bg-blue-50 border-b border-blue-200 px-4 py-2 text-sm text-blue-900">
+        <span>
+          <strong>Free trial: {daysLeft} day{daysLeft !== 1 ? 's' : ''} left.</strong>{' '}
+          Your card will be charged for the {planName} plan on {chargeDate}. Cancel anytime before then in Settings → Subscription Plan.{' '}
+          <a href={TRIAL_INFO_PATH} target="_blank" rel="noopener noreferrer" className="underline">How the trial works</a>
+        </span>
+        <button
+          onClick={() => setDismissed(true)}
+          className="flex-shrink-0 p-1 rounded hover:bg-blue-100 transition-colors"
+          aria-label="Dismiss"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    );
+  }
+
+  // Launch offer for the first part of the trial, then a countdown for the last 3 days.
+  const showDiscount = daysLeft > 3;
+  const showUrgency = daysLeft <= 3;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(LAUNCH_PROMO_CODE).then(() => {
@@ -694,6 +717,8 @@ function CRMApp() {
   // Read-only mode — true when trial is expired, subscription canceled, or past-due.
   // Users can still log in, view contacts, and export data; write actions are blocked.
   const [isExpiredReadOnly, setIsExpiredReadOnly] = useState(false);
+  // The company's billing record, for the card step new companies go through.
+  const [billingCompany, setBillingCompany] = useState<DbCompany | null>(null);
   const [connectionUnstable, setConnectionUnstable] = useState(false);
   // The TrussCENTER app asked for a board: pick it once the company's boards
   // are loaded (their ids are generated per company, so match by type).
@@ -1440,8 +1465,12 @@ useEffect(() => {
     // browser's 24-hour copy of the company runs out.
     db.getCompany(profile.company_id, { fresh: true }).then((company) => {
       if (!company) return;
+      setBillingCompany(company);
+      // With a card on file Stripe decides when the trial ends (it charges the
+      // card and reports back), so a past date alone doesn't lock the app.
       const trialExpired =
         company.subscription_status === 'trialing' &&
+        !company.stripe_subscription_id &&
         !!company.trial_ends_at &&
         new Date(company.trial_ends_at) < new Date();
       const readOnly =
@@ -1528,6 +1557,12 @@ useEffect(() => {
   // 1. CRM data is still being fetched (isLoading, not yet initialized), OR
   // 2. Auth finished but profile.company_id hasn't arrived yet (prevents blank-contacts flash).
   //    The 12s auth timeout in authContext is the outer safety net.
+  // New companies save a card before using the web app. Not inside the
+  // TrussCENTER app: purchases there go through the App Store.
+  if (!IN_APP && billingCompany && needsCardForTrial(billingCompany)) {
+    return <StartTrialGate company={billingCompany} onReady={setBillingCompany} />;
+  }
+
   if ((state.isLoading && !state.isInitialized) || (!profile?.company_id && !state.isInitialized)) {
     return <LoadingScreen />;
   }

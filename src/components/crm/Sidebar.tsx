@@ -362,7 +362,7 @@ export default function Sidebar() {
           <span className="text-slate-600 text-xs">·</span>
           <a href="/eula" target="_blank" rel="noopener noreferrer" className="text-xs text-slate-500 hover:text-slate-300 transition-colors">EULA</a>
           <span className="text-slate-600 text-xs">·</span>
-          <a href="mailto:614restorellc@gmail.com?subject=TrussCTR%20Support" className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Support</a>
+          <a href="/support" target="_blank" rel="noopener noreferrer" className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Support</a>
         </div>
       )}
 

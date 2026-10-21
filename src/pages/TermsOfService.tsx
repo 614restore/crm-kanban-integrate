@@ -4,7 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 
 export default function TermsOfService() {
   const navigate = useNavigate();
-  const effectiveDate = 'October 4, 2026';
+  const effectiveDate = 'October 21, 2026';
   const companyName = 'TrussCTR';
   const contactEmail = 'executivestack@outlook.com';
 
@@ -84,6 +84,7 @@ export default function TermsOfService() {
             <section>
               <h2 className="text-xl font-semibold text-gray-900 mb-3">9. Payment and Billing</h2>
               <p>Access to premium features of the Service may require payment of subscription fees. All fees are stated in U.S. dollars. Subscriptions auto-renew unless cancelled before the renewal date. Refunds are provided at our discretion. We reserve the right to modify pricing with 30 days' notice.</p>
+              <p className="mt-3"><strong>Free trial:</strong> New web accounts get a 7-day (168-hour) free trial of the plan chosen at sign-up, starting when the account is created. A payment card is required to start the trial and is saved by our payment processor, Stripe, but not charged during the trial. Unless you cancel before the trial ends (Settings → Subscription Plan → Manage Billing), your card is charged automatically for the chosen plan when the trial ends, and monthly after that until you cancel. See <a href="/trial" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">how the free trial works</a>.</p>
               <p className="mt-3"><strong>Purchases in the iOS app:</strong> Subscriptions bought in the TrussCENTER iOS app are billed through your Apple ID at confirmation of purchase and renew automatically unless cancelled at least 24 hours before the end of the current period. Manage or cancel them in your Apple ID account settings; refunds for these purchases are handled by Apple. Use of the iOS app is also governed by our <a href="/eula" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">End-User License Agreement</a>.</p>
             </section>
 

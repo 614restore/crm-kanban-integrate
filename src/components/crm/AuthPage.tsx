@@ -307,14 +307,20 @@ export default function AuthPage() {
                 {mode === 'login'
                   ? 'Sign in to access your CRM'
                   : mode === 'signup'
-                  ? 'Start your 14-day free trial'
+                  ? 'Start your 7-day free trial'
                   : 'Enter your email to receive a reset link'}
               </p>
               {mode === 'signup' && (
                 <div className="mt-3 inline-flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-medium px-3 py-1.5 rounded-full">
                   <span>🎉</span>
-                  <span>Subscribe within your trial — get <strong>50% off your first 3 months</strong></span>
+                  <span>Use code <strong>LAUNCH50</strong> when you add your card — <strong>50% off your first 3 months</strong></span>
                 </div>
+              )}
+              {mode === 'signup' && (
+                <p className="mt-2 text-xs text-gray-500">
+                  Card required · No charge for 7 days · Cancel anytime ·{' '}
+                  <a href="/trial" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">How the free trial works</a>
+                </p>
               )}
             </div>
 
@@ -594,6 +600,8 @@ export default function AuthPage() {
             <a href="/eula" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300">EULA</a>
             {' and '}
             <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300">Privacy Policy</a>
+            {' · '}
+            <a href="/support" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300">Support</a>
           </p>
         </div>
       </div>

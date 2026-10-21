@@ -4,7 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 
 export default function EULA() {
   const navigate = useNavigate();
-  const effectiveDate = 'October 4, 2026';
+  const effectiveDate = 'October 21, 2026';
   const companyName = 'TrussCTR';
   const contactEmail = 'executivestack@outlook.com';
 
@@ -92,6 +92,7 @@ export default function EULA() {
               <ul className="list-disc pl-6 space-y-2 mt-2">
                 <li>You authorize Licensor to charge your payment method on a recurring basis (monthly or annual, as selected)</li>
                 <li>Subscriptions automatically renew unless cancelled at least 24 hours before the renewal date</li>
+                <li>New web accounts start with a 7-day free trial; a card is required at sign-up and is charged automatically for the chosen plan when the trial ends unless you cancel before then</li>
                 <li>Fees are non-refundable except as required by applicable law or as expressly stated in our refund policy</li>
                 <li>Licensor reserves the right to change subscription pricing with 30 days' advance notice</li>
                 <li>Failure to pay may result in suspension or termination of your access</li>

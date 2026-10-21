@@ -39,7 +39,9 @@ const CheckoutHandler: React.FC = () => {
       heading.textContent = `Welcome to TrussCTR${planName ? ` ${planName}` : ''}!`;
       const sub = document.createElement('p');
       sub.style.cssText = 'font-size:12px;margin:2px 0 0;opacity:0.9';
-      sub.textContent = 'Your subscription is active. You have a 14-day free trial. No charge until the trial ends.';
+      sub.textContent = new URLSearchParams(window.location.search).get('trial') === '1'
+        ? "Your card is saved and your 7-day free trial has started. You won't be charged until the trial ends."
+        : 'Your subscription is active.';
       textWrap.appendChild(heading);
       textWrap.appendChild(sub);
 
