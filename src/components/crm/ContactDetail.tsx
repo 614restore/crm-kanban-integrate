@@ -339,6 +339,8 @@ export default function ContactDetail() {
   const [signedQuoteDate, setSignedQuoteDate] = useState('');
   const [signedQuoteLabel, setSignedQuoteLabel] = useState('');
   const [savingSignedQuote, setSavingSignedQuote] = useState(false);
+  // The signed contract itself (PDF or photo), saved to the customer's Documents as a Contract.
+  const [signedQuoteFile, setSignedQuoteFile] = useState<File | null>(null);
   // Edit form: "Custom…" chosen for project type (shows a text box).
   const [projectTypeCustom, setProjectTypeCustom] = useState(false);
   const [quoteExtras, setQuoteExtras] = useState<Record<string, { shareToken: string | null; projectType: string | null }>>({});
@@ -1058,6 +1060,7 @@ export default function ContactDetail() {
     setSignedQuoteAmount('');
     setSignedQuoteDate('');
     setSignedQuoteLabel('');
+    setSignedQuoteFile(null);
   };
 
   // Records a quote the customer already signed, worth the total entered. It is a normal signed quote
@@ -1075,6 +1078,15 @@ export default function ContactDetail() {
       toast.error('No company context. Please refresh and sign in again.');
       return;
     }
+    if (signedQuoteFile) {
+      const fileError = validateDocumentFile(signedQuoteFile, 15);
+      if (fileError) {
+        toast.error(fileError);
+        return;
+      }
+    }
+    const label = signedQuoteLabel.trim() || 'Signed contract';
+    const quoteNumber = `QT-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`;
     // A date picked in the input is a calendar day; noon keeps it on that day in every timezone.
     const signedAt = signedQuoteDate ? new Date(`${signedQuoteDate}T12:00:00`).toISOString() : new Date().toISOString();
     setSavingSignedQuote(true);
@@ -1083,9 +1095,9 @@ export default function ContactDetail() {
         company_id: companyId,
         created_by: user?.id ?? null,
         customer_id: contact.id,
-        quote_number: `QT-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`,
+        quote_number: quoteNumber,
         status: 'signed',
-        cover_page_title: signedQuoteLabel.trim() || 'Signed contract',
+        cover_page_title: label,
         good_total: amount,
         better_total: 0,
         best_total: 0,
@@ -1096,9 +1108,50 @@ export default function ContactDetail() {
         signed_by: getContactFullName(contact),
       });
       if (error) throw error;
-      toast.success(`Signed quote added: ${formatCurrency(amount)}`);
-      closeSignedQuote();
       setQuotesVersion((v) => v + 1);
+
+      // The quote is saved; the document is uploaded after it so a failed upload never loses the quote.
+      if (signedQuoteFile) {
+        try {
+          const fileToUpload = signedQuoteFile.type.startsWith('image/')
+            ? await compressImage(signedQuoteFile, { maxSide: 1600, quality: 0.85, targetBytes: 1_000_000 })
+            : signedQuoteFile;
+          const fileExt = fileToUpload.name.split('.').pop() || 'bin';
+          const storedName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
+          const uploadResult = await secureUpload('documents', contact.id, fileToUpload, storedName, fileToUpload.type);
+          const created = await db.createDocument({
+            company_id: companyId,
+            contact_id: contact.id,
+            name: `${label} - ${quoteNumber}`,
+            type: 'contract',
+            url: buildStoredDocumentUrl(uploadResult.publicUrl, 'documents', uploadResult.path),
+            size: formatFileSize(fileToUpload.size),
+            uploaded_by: profile?.id,
+          });
+          if (!created) throw new Error('the document record was not saved');
+          setContactDocuments((prev) => [{
+            id: created.id,
+            contactId: created.contact_id || '',
+            name: created.name,
+            type: 'contract',
+            url: created.url,
+            uploadedAt: created.created_at,
+            uploadedBy: created.uploaded_by || 'Team member',
+            size: created.size || formatFileSize(fileToUpload.size),
+            category: null,
+          }, ...prev]);
+        } catch (uploadErr) {
+          console.error('[ContactDetail] Signed quote saved, document upload failed:', uploadErr);
+          toast.error(`Signed quote saved, but the document did not upload (${uploadErr instanceof Error ? uploadErr.message : 'unknown error'}). Add it from the Documents tab.`, { duration: 8000 });
+          closeSignedQuote();
+          return;
+        }
+      }
+
+      toast.success(signedQuoteFile
+        ? `Signed quote added: ${formatCurrency(amount)}, document saved to Documents`
+        : `Signed quote added: ${formatCurrency(amount)}`);
+      closeSignedQuote();
     } catch (err) {
       console.error('[ContactDetail] Failed to add signed quote:', err);
       toast.error(`Could not add the signed quote: ${err instanceof Error ? err.message : 'unknown error'}`);
@@ -4210,6 +4263,17 @@ export default function ContactDetail() {
                   placeholder="Signed contract"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
                 />
+              </div>
+              <div>
+                <label htmlFor="signed-quote-file" className="block text-sm font-medium text-gray-700 mb-1">Signed document (optional)</label>
+                <input
+                  id="signed-quote-file"
+                  type="file"
+                  accept=".pdf,image/jpeg,image/png"
+                  onChange={(e) => setSignedQuoteFile(e.target.files?.[0] ?? null)}
+                  className="block w-full text-sm text-gray-700 file:mr-3 file:px-3 file:py-2 file:rounded-lg file:border-0 file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"
+                />
+                <p className="text-xs text-gray-500 mt-1">PDF, JPG or PNG, up to 15 MB. Saved to Documents as a Contract.</p>
               </div>
             </div>
             <div className="flex gap-3 p-6 pt-0">
