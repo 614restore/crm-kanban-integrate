@@ -137,10 +137,13 @@ export default function Dashboard() {
     if (!companyId) return;
     let cancelled = false;
     const load = async () => {
+      // Only events for quotes that still show in the app: an archived quote (e.g. one whose customer was
+      // deleted) is hidden everywhere else, so its signature shouldn't appear here either.
       const { data, error } = await (supabase.from('quote_notifications') as any)
-        .select('id, quote_id, event_type, actor_name, created_at, quotes:quote_id(quote_number, customer_id)')
+        .select('id, quote_id, event_type, actor_name, created_at, quotes:quote_id!inner(quote_number, customer_id, is_archived)')
         .eq('company_id', companyId)
         .eq('event_type', 'signed')
+        .eq('quotes.is_archived', false)
         .order('created_at', { ascending: false })
         .limit(10);
       if (cancelled || error) return;
