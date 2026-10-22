@@ -647,8 +647,9 @@ export default function PipelineBoard() {
         dispatch({ type: 'SET_VIEW', payload: 'quotes' });
         break;
       case 'inspection':
-        dispatch({ type: 'SET_VIEW', payload: 'inspections' });
-        dispatch({ type: 'SELECT_CONTACT', payload: contact.id });
+        // The same inspection report screen as New Inspection Report on the customer's page.
+        dispatch({ type: 'SET_PENDING_QUOTE', payload: { contactId: contact.id, inspection: true } });
+        dispatch({ type: 'SET_VIEW', payload: 'quotes' });
         break;
       case 'quote-payment':
         dispatch({ type: 'SET_PENDING_QUOTE_ACTION', payload: { contactId: contact.id, action: 'payment' } });

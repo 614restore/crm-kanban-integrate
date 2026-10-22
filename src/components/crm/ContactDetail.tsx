@@ -1500,11 +1500,16 @@ export default function ContactDetail() {
       case 'calendar':
         handleScheduleAppointment();
         break;
-      case 'inspection':
-        // Selecting the contact again here switched straight back to their page; the customer is carried
-        // to the inspections screen as the one being worked on.
-        dispatch({ type: 'SET_VIEW', payload: 'inspections' });
+      case 'inspection': {
+        // The same inspection report (QuoteMGR's contingency / inspection screen) as New Inspection Report.
+        // If this customer already has one, open it rather than starting a second.
+        const latestInspection = contactQuotes
+          .filter((q) => quoteExtras[q.id]?.projectType === 'inspection_report')
+          .reduce<QuoteSummary | null>((latest, q) => (!latest || q.createdAt > latest.createdAt ? q : latest), null);
+        if (latestInspection) openQuote(latestInspection.id);
+        else openNewInspection();
         break;
+      }
       case 'quotes':
         if (latestQuote) openQuote(latestQuote.id);
         else openNewQuote();
