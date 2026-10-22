@@ -150,4 +150,4 @@ For deployment issues:
 2. Verify environment variables
 3. Clear browser cache
 4. Check build logs
-5. Contact: 614restorellc@gmail.com
+5. Contact: devmgr.app@gmail.com

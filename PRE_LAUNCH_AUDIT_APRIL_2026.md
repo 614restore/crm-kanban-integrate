@@ -980,7 +980,7 @@ npx cap open ios
 - API response times (< 500ms target)
 
 #### Support Channels
-- [ ] Create support email (support@trusscrm.com)
+- [ ] Create support email (devmgr.app@gmail.com)
 - [ ] Set up helpdesk (Zendesk/Intercom/FreshDesk)
 - [ ] Create video tutorials (Loom/YouTube)
 - [ ] Build knowledge base (Notion/GitBook)

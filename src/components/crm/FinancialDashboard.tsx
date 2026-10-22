@@ -214,7 +214,7 @@ export default function FinancialDashboard() {
             contactName: invoice.contactName,
             contactEmail: contact.email,
             userId: user?.id || 'system',
-            userEmail: user?.email || 'system@trussctr.com',
+            userEmail: user?.email || 'devmgr.app@gmail.com',
             companyId: profile.company_id,
             source: 'payment_processing',
             reason: `Invoice ${newStatus}: ${invoice.invoiceNumber}`,
