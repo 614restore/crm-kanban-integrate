@@ -279,7 +279,7 @@ nvm use 20
 - **Full Documentation**: See [README.md](README.md)
 - **Deployment Guide**: See [DEPLOYMENT.md](DEPLOYMENT.md)
 - **Issues**: Open a GitHub issue
-- **Email**: 614restorellc@gmail.com
+- **Email**: devmgr.app@gmail.com
 
 ---
 

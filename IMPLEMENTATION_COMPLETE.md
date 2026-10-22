@@ -221,7 +221,7 @@
 ## 📞 SUPPORT
 
 ### If You Need Help
-- **Email**: 614restorellc@gmail.com
+- **Email**: devmgr.app@gmail.com
 - **Documentation**: See files listed above
 - **Vercel Dashboard**: https://vercel.com/dashboard
 - **GitHub Repo**: https://github.com/614restore/crm-kanban-integrate

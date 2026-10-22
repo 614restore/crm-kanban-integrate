@@ -143,7 +143,7 @@ Our new CRM is now live! Here's what you need to know:
 - Video Tutorials: [Coming soon]
 
 💬 SUPPORT:
-- Email: 614restorellc@gmail.com
+- Email: devmgr.app@gmail.com
 - Phone: (614) 808-8899
 
 Let's transform how we work!
@@ -257,7 +257,7 @@ WHERE table_name = 'work_orders';
 ## 📞 Emergency Contacts
 
 **Technical Issues:**
-- Email: 614restorellc@gmail.com
+- Email: devmgr.app@gmail.com
 - Phone: (614) 808-8899
 
 **Supabase Support:**
@@ -394,7 +394,7 @@ echo "TrussCTR CRM is LIVE!"
 
 **Good luck! You've built something amazing.** 🚀
 
-**Questions?** Call (614) 808-8899 or email 614restorellc@gmail.com
+**Questions?** Call (614) 808-8899 or email devmgr.app@gmail.com
 
 ---
 

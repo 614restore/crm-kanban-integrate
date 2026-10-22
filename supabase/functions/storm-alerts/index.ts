@@ -548,7 +548,8 @@ async function sendEmail(to: string, companyName: string, sections: Array<{ titl
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${RESEND_API_KEY}` },
-    body: JSON.stringify({ from: FROM_EMAIL, to: [to], subject, html }),
+    // Replies go to support; the From address must stay on the verified sending domain.
+    body: JSON.stringify({ from: FROM_EMAIL, reply_to: 'devmgr.app@gmail.com', to: [to], subject, html }),
   });
   if (!res.ok) console.error('[storm-alerts] email failed', res.status, await res.text());
   return res.ok;

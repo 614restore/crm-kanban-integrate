@@ -194,7 +194,7 @@ export default function InvoiceModal() {
           contactName: newInvoice.contactName,
           contactEmail: invoiceContact.email,
           userId: user?.id || 'system',
-          userEmail: user?.email || 'system@trussctr.com',
+          userEmail: user?.email || 'devmgr.app@gmail.com',
           companyId: effectiveCompanyId,
           source: 'invoice_creation',
           reason: `Invoice created: ${newInvoice.invoiceNumber}`,

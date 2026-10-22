@@ -390,7 +390,7 @@ Configure in **Settings → AI Assistant**. New configurations require admin app
 
 ## 9. Support
 
-- **Email:** support@614restore.com
+- **Email:** devmgr.app@gmail.com
 - **In-App:** Settings → Contact Support
 - **Terms of Service:** https://614restore.github.io/crm-kanban-integrate/terms
 - **Privacy Policy:** https://614restore.github.io/crm-kanban-integrate/privacy
