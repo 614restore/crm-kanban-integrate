@@ -10,7 +10,7 @@ export type NextStepActionType =
   | 'financial-tab'   // Open contact → financial tab
   | 'job-status-tab'  // Open contact → jobStatus tab
   | 'invoice'         // Open invoice modal for the contact
-  | 'inspection'      // Open the inspections view for the contact
+  | 'inspection'      // Open the contact's inspection report (the New Inspection Report screen)
   | 'quote-payment';  // Open the contact's quote to record a payment
 
 export interface NextStep {
