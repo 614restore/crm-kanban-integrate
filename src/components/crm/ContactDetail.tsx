@@ -1495,21 +1495,24 @@ export default function ContactDetail() {
     inspectionCompleted: !!(contact.inspectionCompleted ?? (contact as any).inspection_completed),
   });
 
+  // The inspection report (QuoteMGR's contingency / inspection screen), the same as New Inspection Report.
+  // If this customer already has one, open it rather than starting a second.
+  const openInspectionReport = () => {
+    const latestInspection = contactQuotes
+      .filter((q) => quoteExtras[q.id]?.projectType === 'inspection_report')
+      .reduce<QuoteSummary | null>((latest, q) => (!latest || q.createdAt > latest.createdAt ? q : latest), null);
+    if (latestInspection) openQuote(latestInspection.id);
+    else openNewInspection();
+  };
+
   const runNextStep = (step: NextStep) => {
     switch (step.action) {
       case 'calendar':
         handleScheduleAppointment();
         break;
-      case 'inspection': {
-        // The same inspection report (QuoteMGR's contingency / inspection screen) as New Inspection Report.
-        // If this customer already has one, open it rather than starting a second.
-        const latestInspection = contactQuotes
-          .filter((q) => quoteExtras[q.id]?.projectType === 'inspection_report')
-          .reduce<QuoteSummary | null>((latest, q) => (!latest || q.createdAt > latest.createdAt ? q : latest), null);
-        if (latestInspection) openQuote(latestInspection.id);
-        else openNewInspection();
+      case 'inspection':
+        openInspectionReport();
         break;
-      }
       case 'quotes':
         if (latestQuote) openQuote(latestQuote.id);
         else openNewQuote();
@@ -2868,10 +2871,7 @@ export default function ContactDetail() {
                     <span className="font-medium text-gray-700">Schedule Appointment</span>
                   </button>
                   <button
-                    onClick={() => {
-                      dispatch({ type: 'SET_VIEW', payload: 'inspections' });
-                      dispatch({ type: 'SELECT_CONTACT', payload: contact.id });
-                    }}
+                    onClick={openInspectionReport}
                     className="w-full flex items-center gap-3 px-4 py-3 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors text-left"
                   >
                     <Camera size={18} className="text-blue-600" />

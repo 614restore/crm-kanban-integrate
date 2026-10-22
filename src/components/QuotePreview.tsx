@@ -1136,6 +1136,8 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
   const isMultiScopePreview = quoteOptions.length > 0 && someItemsLinkedToOptions;
   const isInspectionReport = quote?.project_type === 'inspection_report';
   const showTierSignButton = !isInspectionReport && !quote?.contingency_enabled;
+  // The sticky bar's signed state: the signed message with Done (customer) or the contractor's signature.
+  const signedBarShown = isSigned && (!isCustomerView || !quote?.completion_certificate_enabled || !!quote?.certificate_customer_signed_at);
   const visibleQuoteOptions = isMultiScopePreview && (quote.include_better === false && quote.include_best === false)
     ? quoteOptions.slice(0, 1)
     : quoteOptions;
@@ -2134,8 +2136,8 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
         )}
 
         {/* Sticky sign bar */}
-        <div className="bg-white border-t border-gray-200 px-4 py-3 flex items-center justify-center gap-3 shadow-lg relative">
-          {isSigned && (!isCustomerView || !quote?.completion_certificate_enabled || quote?.certificate_customer_signed_at) ? (
+        <div className="bg-white border-t border-gray-200 px-4 py-3 flex flex-wrap items-center justify-center gap-3 shadow-lg relative">
+          {signedBarShown ? (
             <div className="flex items-center justify-between w-full gap-3 flex-wrap">
               <div className="flex items-center gap-2 text-green-700 font-semibold">
                 <CheckCircle className="w-5 h-5" />
@@ -2144,12 +2146,22 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
                   : isInspectionReport ? 'Agreement Signed — Thank you!' : 'Quote Accepted & Signed — Thank you!'}</span>
               </div>
               {isCustomerView ? (
-                <button
-                  onClick={() => { try { window.close(); } catch { window.scrollTo({ top: 0, behavior: 'smooth' }); } }}
-                  className="flex items-center gap-2 px-5 py-2 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition-colors shadow-sm"
-                >
-                  <CheckCircle className="w-4 h-4" /> Done
-                </button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {quoteHtml && (
+                    <button
+                      onClick={handleDownloadLive}
+                      className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-gray-600 border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors"
+                    >
+                      <Printer className="w-3.5 h-3.5" /> Print / Save PDF
+                    </button>
+                  )}
+                  <button
+                    onClick={() => { try { window.close(); } catch { window.scrollTo({ top: 0, behavior: 'smooth' }); } }}
+                    className="flex items-center gap-2 px-5 py-2 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition-colors shadow-sm"
+                  >
+                    <CheckCircle className="w-4 h-4" /> Done
+                  </button>
+                </div>
               ) : (
                 quote.contractor_signature_data && !contractorSigBroken ? (
                   <div className="flex items-center gap-2">
@@ -2239,10 +2251,12 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
               <span>Certificate Signed — Thank you!</span>
             </div>
           ) : null}
-          {quoteHtml && (
+          {quoteHtml && !(signedBarShown && isCustomerView) && (
+            // Pinned to the right on wider screens; on a phone it sits in the bar's flow so it never covers
+            // the signed message or the buttons beside it.
             <button
               onClick={handleDownloadLive}
-              className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              className="sm:absolute sm:right-4 sm:top-1/2 sm:-translate-y-1/2 flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
             >
               <Printer className="w-3.5 h-3.5" /> Print / Save PDF
             </button>

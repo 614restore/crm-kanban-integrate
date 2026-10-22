@@ -271,7 +271,7 @@ export const generateQuoteHTML = ({
       ${company.logo_url ? `<img src="${escapeHtml(company.logo_url)}" class="hero-logo" alt="${escapeHtml(company.name)}">` : ''}
       <div>
         <div class="hero-company">${escapeHtml(company.name)}</div>
-        <div class="hero-subtitle">${escapeHtml(quote.project_type)} project proposal</div>
+        <div class="hero-subtitle">${escapeHtml(heroSubtitle(quote.project_type))}</div>
       </div>
     </div>
     <div class="hero-title">${escapeHtml(truncateForCover(
@@ -2819,6 +2819,14 @@ export const generateQuoteHTML = ({
       </body>
     </html>
   `;
+};
+
+/** The cover's small line under the company name, from the quote's project type (stored as e.g. "inspection_report"). */
+const heroSubtitle = (projectType: string | null | undefined): string => {
+  const type = (projectType || '').trim();
+  if (!type) return 'Project proposal';
+  if (type === 'inspection_report') return 'Inspection report';
+  return `${type.replace(/_/g, ' ')} project proposal`;
 };
 
 const renderUpgradeTable = (
