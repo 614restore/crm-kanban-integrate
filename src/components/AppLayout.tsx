@@ -736,6 +736,9 @@ function CRMApp() {
   const realtimeFailedRef = useRef(false);
   const realtimeChannelRef = useRef<any>(null);
   const isReloadingRef = useRef(false);
+  // Each loadData call takes a number; only the latest one may write its result, so a slow, older load
+  // (e.g. the first load overlapping a focus refresh) can never replace newer data with an older list.
+  const loadSeqRef = useRef(0);
   const queuedReloadRef = useRef(false);
   const lastHiddenAtRef = useRef<number>(0);
   // Always-current snapshot of state for use inside realtime handler closures.
@@ -761,6 +764,7 @@ function CRMApp() {
     }
 
     dispatch({ type: 'SET_COMPANY_ID', payload: profile.company_id });
+    const loadSeq = ++loadSeqRef.current;
 
     // Serve cached data immediately so the UI isn't blank while fresh data loads.
     // On the first-ever load (no cache) we show the loading screen as before.
@@ -795,7 +799,8 @@ function CRMApp() {
         dbSuppliers,
         dbMaterialOrders,
       ] = await Promise.all([
-        withFetchTimeout(db.getContacts(profile.company_id), [], 3000),
+        // null = the read failed or timed out (handled below), unlike [] which means no contacts.
+        withFetchTimeout(db.getAllContacts(profile.company_id), null, 8000),
         withFetchTimeout(db.getCommunications(profile.company_id), [], 8000),
         withFetchTimeout(db.getAppointments(profile.company_id), [], 3000),
         withFetchTimeout(db.getInvoices(profile.company_id), [], 8000),
@@ -815,7 +820,13 @@ function CRMApp() {
       // last minute — this fetch may have started before that delete
       // committed, and dispatching it below would silently resurrect a row
       // the user just removed (see recentlyDeleted.ts).
-      const contacts = filterRecentlyDeleted('contact', dbContacts.map(dbContactToAppContact));
+      // If the contacts read failed or timed out, keep the contacts already on screen (or the saved copy)
+      // rather than replacing them with an empty list while everything else loads.
+      const keptContacts: Contact[] = stateRef.current.contacts?.length
+        ? stateRef.current.contacts
+        : (((cached as any)?.contacts as Contact[] | undefined) ?? []);
+      if (dbContacts === null) console.warn('[loadData] Contacts read failed or timed out; keeping the contacts already loaded.');
+      const contacts = filterRecentlyDeleted('contact', dbContacts ? dbContacts.map(dbContactToAppContact) : keptContacts);
 
       // Attach communications to contacts
       const communicationsByContact = (dbCommunications || []).reduce((acc, comm) => {
@@ -1067,7 +1078,8 @@ function CRMApp() {
       // Guard: if we already served from cache and got back zero entities, it
       // means all Supabase queries timed-out. Don't overwrite good cached data
       // with empty results, and don't corrupt the cache for the next refresh.
-      const totalEntities = freshPayload.contacts.length + freshPayload.appointments.length +
+      // Kept contacts (from a failed read) are not fresh data, so they don't count here.
+      const totalEntities = (dbContacts ? freshPayload.contacts.length : 0) + freshPayload.appointments.length +
         freshPayload.invoices.length + freshPayload.teamMembers.length +
         freshPayload.quotes.length + freshPayload.workOrders.length;
       // Never let a refresh (foreground OR background/silent) replace real data
@@ -1083,6 +1095,8 @@ function CRMApp() {
         console.warn('[loadData] Fresh fetch returned empty — keeping existing data to avoid data loss.');
         return;
       }
+      // A newer load started while this one was running: let that one decide what is shown.
+      if (loadSeq !== loadSeqRef.current) return;
 
       dispatch({ type: 'INITIALIZE_DATA', payload: freshPayload });
 

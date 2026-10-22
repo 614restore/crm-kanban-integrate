@@ -1,6 +1,7 @@
 // Database service layer for CRM data persistence
 import { supabase, isDemoMode } from './supabase';
 import { markDeleted } from './recentlyDeleted';
+import { fetchAllPages } from './fetchAllPages';
 import { toLocalDateString } from '@/lib/dates';
 
 // ── Company ID safety assertion ───────────────────────────────────────────────
@@ -801,14 +802,31 @@ class DatabaseService {
 
   // Contact operations
   async getContacts(companyId: string): Promise<DbContact[]> {
-    assertCompanyId(companyId, 'getContacts');
+    return (await this.getAllContacts(companyId)) ?? [];
+  }
+
+  /**
+   * Every active contact, read in pages ordered by last name then id. A single request stops at 1000 rows,
+   * and ordering by last name alone let contacts with the same last name swap places between requests,
+   * so one could drop out of a load. Returns null when the read fails, so callers can keep what they have
+   * instead of treating it as "no contacts".
+   */
+  async getAllContacts(companyId: string): Promise<DbContact[] | null> {
+    assertCompanyId(companyId, 'getAllContacts');
     if (this.inDemoMode()) return [];
-    const { data, error } = await supabase
-      .from('contacts').select('*').eq('company_id', companyId)
-      .or('is_archived.eq.false,is_archived.is.null')
-      .order('last_name', { ascending: true });
-    if (error) { console.error('Error fetching contacts:', error); return []; }
-    return data || [];
+    const rows = await fetchAllPages<DbContact>((from, to) =>
+      supabase
+        .from('contacts').select('*').eq('company_id', companyId)
+        .or('is_archived.eq.false,is_archived.is.null')
+        .order('last_name', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to)
+        .then(({ data, error }) => {
+          if (error) console.error('Error fetching contacts:', error);
+          return { data: data as DbContact[] | null, error };
+        }),
+    );
+    return rows;
   }
 
   async getContact(contactId: string): Promise<DbContact | null> {
