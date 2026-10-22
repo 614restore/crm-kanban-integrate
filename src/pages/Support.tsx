@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Mail } from 'lucide-react';
 import { TRIAL_DAYS } from '@/lib/trial';
 
-const SUPPORT_EMAIL = 'executivestack@outlook.com';
+const SUPPORT_EMAIL = 'devmgr.app@gmail.com';
 
 /**
  * Public help page: the App Store "Support URL" for TrussCENTER and the place
