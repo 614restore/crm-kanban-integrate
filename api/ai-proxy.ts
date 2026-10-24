@@ -73,9 +73,11 @@ async function resolveAIConfig(token: string): Promise<AIConfiguration | null> {
     .eq('user_id', user.id)
     .maybeSingle();
 
-  if (userConfig) return userConfig as AIConfiguration;
+  // A personal key with its own photo provider is used as it is.
+  if (userConfig?.vision_provider) return userConfig as AIConfiguration;
 
-  // 2. Fall back to the company-wide config
+  // 2. The company-wide config: the fallback, and where photo analysis comes from
+  //    when the personal key has none (e.g. a personal Groq key, which cannot read photos).
   const { data: member } = await admin
     .from('team_members')
     .select('company_id')
@@ -84,15 +86,25 @@ async function resolveAIConfig(token: string): Promise<AIConfiguration | null> {
     .limit(1)
     .maybeSingle();
 
-  if (!member?.company_id) return null;
+  const { data: companyConfig } = member?.company_id
+    ? await admin
+        .from('ai_configurations')
+        .select('provider, api_key, model, enabled, vision_provider, vision_api_key, vision_model')
+        .eq('company_id', member.company_id)
+        .maybeSingle()
+    : { data: null };
 
-  const { data: companyConfig } = await admin
-    .from('ai_configurations')
-    .select('provider, api_key, model, enabled, vision_provider, vision_api_key, vision_model')
-    .eq('company_id', member.company_id)
-    .maybeSingle();
+  if (!userConfig) return companyConfig as AIConfiguration | null;
 
-  return companyConfig as AIConfiguration | null;
+  const teamVision = companyConfig?.enabled && companyConfig.vision_provider && companyConfig.vision_api_key
+    ? companyConfig
+    : null;
+  return {
+    ...(userConfig as AIConfiguration),
+    vision_provider: teamVision?.vision_provider ?? null,
+    vision_api_key: teamVision?.vision_api_key ?? null,
+    vision_model: teamVision?.vision_model ?? null,
+  };
 }
 
 export default async function handler(req: Request): Promise<Response> {
