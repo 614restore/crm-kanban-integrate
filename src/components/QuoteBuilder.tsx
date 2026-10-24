@@ -489,6 +489,14 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
   // within 700ms of each other; without a lock the second save's DELETE runs while
   // the first save's INSERT is still in-flight → duplicate line items in the DB).
   const silentSaveInProgress = useRef(false);
+  // An autosave that arrives while another is running is queued, not dropped:
+  // otherwise changes made during a slow save (photo uploads) were never saved.
+  const resaveQueued = useRef(false);
+  const [resaveTick, setResaveTick] = useState(0);
+  // Edits scheduled for autosave vs. edits a finished save has covered.
+  const editVersion = useRef(0);
+  const savedVersion = useRef(0);
+  const photoUploading = useRef(false);
   // Why the last silent save failed, so a failed preview can say so instead of a generic message.
   const lastSaveError = useRef<string | null>(null);
   const [showEmailCompose, setShowEmailCompose] = useState(false);
@@ -962,6 +970,7 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
   useEffect(() => {
     if (isInitialLoad.current || loading || saving || existingStatus === 'signed') return;
 
+    editVersion.current += 1;
     const delay = !quoteId ? 800 : 1500; // slightly faster for the very first save
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     autoSaveTimer.current = setTimeout(() => {
@@ -984,12 +993,14 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
     quoteStyle, usePerTierItems,
     quoteId, // include so the guard re-evaluates once the first save sets quoteId
     contingencyEnabled, // prevent stale-closure race: toggling this must cancel the old timer
+    resaveTick, // a save that was queued behind a running one
   ]);
 
   // Warn before leaving the page with unsaved changes
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
-      if (autoSaveStatus === 'saving' || (photos.length > 0 && !quoteId)) {
+      const unsaved = editVersion.current !== savedVersion.current;
+      if (autoSaveStatus === 'saving' || unsaved || photoUploading.current || (photos.length > 0 && !quoteId)) {
         e.preventDefault();
         e.returnValue = '';
       }
@@ -3801,9 +3812,16 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
     // (1500ms) both fire on every per-tier quote load.  Without this guard the second
     // save's DELETE runs while the first save's INSERT is in-flight, producing
     // duplicate line items in the database.
-    if (silent && silentSaveInProgress.current) return null;
+    if (silent && silentSaveInProgress.current) {
+      resaveQueued.current = true;
+      return null;
+    }
     // An autosave of an untouched new quote is pointless, but an explicit preview always saves.
-    if (silent && !quoteId && !userEdited.current && !force) return null;
+    if (silent && !quoteId && !userEdited.current && !force) {
+      savedVersion.current = editVersion.current;
+      return null;
+    }
+    const versionAtStart = editVersion.current;
     if (silent) {
       silentSaveInProgress.current = true;
       setAutoSaveStatus('saving');
@@ -4288,18 +4306,18 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
         setAutoSaveStatus('saved');
         setTimeout(() => setAutoSaveStatus(prev => prev === 'saved' ? 'idle' : prev), 2000);
       }
+      savedVersion.current = Math.max(savedVersion.current, versionAtStart);
       return savedQuoteId ?? null;
     } catch (err: any) {
       if (silent) {
         setAutoSaveStatus('idle');
         console.error('[QuoteBuilder] silent save failed:', err?.message, err);
         lastSaveError.current = err?.message ?? 'unknown error';
-        const msg: string = err?.message ?? '';
-        const isServerError = msg.includes('Failed to save') || msg.includes('JWT') ||
-          msg.includes('401') || msg.includes('403') || msg.includes('token');
-        if (isServerError) {
-          toast.error('Auto-save failed — changes may not be saved. Try saving manually or reload the page.');
-        }
+        // Always say so: a quiet failure is how photos went missing after a refresh.
+        toast.error(
+          `Auto-save failed — your latest changes are not saved${err?.message ? ` (${err.message})` : ''}. Click Save, or keep this page open and try again.`,
+          { id: 'quote-autosave-failed', duration: 10000 },
+        );
       } else {
         toast.error(err.message || 'Failed to save quote');
       }
@@ -4309,6 +4327,10 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
         silentSaveInProgress.current = false;
       } else {
         setSaving(false);
+      }
+      if (resaveQueued.current) {
+        resaveQueued.current = false;
+        setResaveTick((t) => t + 1);
       }
     }
   };
@@ -8212,12 +8234,22 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
           <div className="space-y-4">
             <h2 className="text-lg font-semibold text-gray-900">Photo Documentation</h2>
             <p className="text-sm text-gray-500">Upload inspection photos with damage descriptions and notes for the customer.</p>
+            {existingStatus === 'signed' && (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+                This report has been signed and is locked, so photos added here will not be saved.
+              </div>
+            )}
             <PhotoUploader
               photos={photos}
-              onChange={setPhotos}
+              onChange={(next) => {
+                // Adding or editing photos is real work, so it counts as an edit even on a brand-new report.
+                userEdited.current = true;
+                setPhotos(next);
+              }}
               quoteId={quoteId || undefined}
               onAnalyzePhoto={handleAnalyzePhoto}
               analyzingPhotoIndex={aiAnalyzingPhoto}
+              onUploadingChange={(uploading) => { photoUploading.current = uploading; }}
             />
           </div>
         )}
