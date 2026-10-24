@@ -201,6 +201,8 @@ interface PhotoUploaderProps {
   quoteId?: string;
   onAnalyzePhoto?: (index: number) => void;
   analyzingPhotoIndex?: number | null;
+  /** Told when uploads start and finish, so the page can warn before it is closed mid-upload. */
+  onUploadingChange?: (uploading: boolean) => void;
 }
 
 const PhotoUploader: React.FC<PhotoUploaderProps> = ({
@@ -210,8 +212,13 @@ const PhotoUploader: React.FC<PhotoUploaderProps> = ({
   quoteId,
   onAnalyzePhoto,
   analyzingPhotoIndex = null,
+  onUploadingChange,
 }) => {
   const resolvedId = estimateId || quoteId || '';
+  // Uploads take seconds; read the list as it is when they finish, not as it was
+  // when they started, or photos added or edited in the meantime are dropped.
+  const photosRef = useRef(photos);
+  photosRef.current = photos;
 
   const [uploading, setUploading] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -230,6 +237,7 @@ const PhotoUploader: React.FC<PhotoUploaderProps> = ({
   const handleUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
     setUploading(true);
+    onUploadingChange?.(true);
 
     const newPhotos: EstimatePhoto[] = [];
 
@@ -260,7 +268,7 @@ const PhotoUploader: React.FC<PhotoUploaderProps> = ({
             damage_type: '',
             location: '',
             notes: '',
-            sort_order: photos.length + i,
+            sort_order: photosRef.current.length + i,
           });
         } catch (err: any) {
           // A photo this browser cannot show says why; anything else is an upload failure.
@@ -269,11 +277,12 @@ const PhotoUploader: React.FC<PhotoUploaderProps> = ({
       }
 
       if (newPhotos.length > 0) {
-        onChange([...photos, ...newPhotos]);
+        onChange([...photosRef.current, ...newPhotos]);
         toast.success(`${newPhotos.length} photo(s) uploaded`);
       }
     } finally {
       setUploading(false);
+      onUploadingChange?.(false);
       // Reset the file input so the same file(s) can be selected again
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
@@ -311,7 +320,7 @@ const PhotoUploader: React.FC<PhotoUploaderProps> = ({
       });
       if (error) throw error;
       const { data } = supabase.storage.from('quote-photos').getPublicUrl(fileName);
-      updatePhoto(cropPhoto.index, 'photo_url', data.publicUrl);
+      onChange(photosRef.current.map((p, i) => i === cropPhoto.index ? { ...p, photo_url: data.publicUrl } : p));
       toast.success('Photo cropped and saved');
     } catch {
       toast.error('Failed to save cropped photo');

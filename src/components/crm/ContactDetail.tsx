@@ -1264,6 +1264,22 @@ export default function ContactDetail() {
     setShowChangeOrderModal(true);
   };
 
+  // Warn before a refresh or close throws away edits that only save on a button.
+  const hasUnsavedEdits =
+    (isEditing && !!editedContact && !!contact &&
+      JSON.stringify(editedContact) !== JSON.stringify({ ...contact, firstName: contact.firstName || '', lastName: contact.lastName || '' })) ||
+    newNote.trim() !== '' ||
+    quickNote.trim() !== '';
+  useEffect(() => {
+    if (!hasUnsavedEdits) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [hasUnsavedEdits]);
+
   // Click-outside closes the reschedule-note popover
   useEffect(() => {
     if (!rescheduleNoteOpen) return;
