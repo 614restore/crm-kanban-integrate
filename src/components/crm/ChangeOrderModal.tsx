@@ -59,6 +59,9 @@ interface ChangeOrderModalProps {
 const EDITABLE_STATUSES: ChangeOrder['status'][] = ['draft', 'sent', 'rejected'];
 const LOCKED_MESSAGE = 'This change order has already been signed, so it can no longer be changed or re-sent.';
 
+const escapeHtml = (s: string) =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
 function generateToken(): string {
   const arr = new Uint8Array(24);
   crypto.getRandomValues(arr);
@@ -278,6 +281,35 @@ export default function ChangeOrderModal({
       onSave();
     } catch (err: any) {
       toast.error(err.message ?? 'Failed to send change order');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Sends the customer a link to their signed copy. Read-only: the status is not touched.
+  const handleEmailSignedCopy = async () => {
+    if (!changeOrder?.sign_token || !contactEmail) return;
+    setSaving(true);
+    try {
+      const link = `${window.location.origin}/sign-change-order/${changeOrder.sign_token}`;
+      const label = changeOrder.change_order_number ? `Change Order ${changeOrder.change_order_number}` : 'Change Order';
+      await sendEmail({
+        to: contactEmail,
+        subject: `Your Signed ${label}: ${changeOrder.title || ''}`.trim(),
+        html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px">
+            <h2 style="color:#1f2937">Your Signed ${escapeHtml(label)}</h2>
+            <p style="color:#6b7280">Hi ${escapeHtml(contactName || 'there')},</p>
+            <p style="color:#374151">Here is your signed copy of <strong>${escapeHtml(changeOrder.title || label)}</strong>. You can view, print or save it as a PDF at any time.</p>
+            <div style="margin:32px 0;text-align:center">
+              <a href="${link}" style="background:#16a34a;color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:600;display:inline-block">View Signed Change Order</a>
+            </div>
+            <p style="color:#6b7280;font-size:13px">If the button doesn't work, copy and paste this link into your browser:</p>
+            <p style="color:#6b7280;font-size:12px;word-break:break-all">${link}</p>
+          </div>`,
+      });
+      toast.success(`Signed copy emailed to ${contactEmail}`);
+    } catch (err: any) {
+      toast.error(`Could not email the signed copy: ${err?.message ?? 'unknown error'}`);
     } finally {
       setSaving(false);
     }
@@ -572,6 +604,17 @@ export default function ChangeOrderModal({
             <Save size={18} />
             Save as Draft
           </button>
+          {isLocked && changeOrder?.sign_token && (
+            <button
+              onClick={handleEmailSignedCopy}
+              disabled={saving || !contactEmail}
+              title={contactEmail ? `Email the signed copy to ${contactEmail}` : 'Add an email address to this customer first'}
+              className="flex items-center gap-2 px-4 py-2 border border-green-600 text-green-700 rounded-lg hover:bg-green-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Send size={18} />
+              Email Signed Copy
+            </button>
+          )}
           {isSigned && (
             <button
               onClick={handleApprove}
