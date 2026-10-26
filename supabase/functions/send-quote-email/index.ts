@@ -139,6 +139,9 @@ serve(async (req) => {
     // Reject everything else so the function can't be abused for spam.
     const admin = getSupabaseAdmin();
     let authorized = false;
+    // The signed-in staff member sending this, so replies come back to them and not to
+    // the platform address the mail is delivered from.
+    let senderUserEmail: string | undefined;
 
     const authHeader = req.headers.get('authorization') || '';
     const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
@@ -150,11 +153,14 @@ serve(async (req) => {
         // Confirm caller is an active team member
         const { data: member } = await admin
           .from('team_members')
-          .select('id')
+          .select('id, email')
           .eq('user_id', user.id)
           .eq('is_active', true)
           .maybeSingle();
-        if (member) authorized = true;
+        if (member) {
+          authorized = true;
+          senderUserEmail = normalizeEmail((member as { email?: string | null }).email) || normalizeEmail(user.email) || undefined;
+        }
       }
     }
 
@@ -166,6 +172,7 @@ serve(async (req) => {
     // not repeated and callers never need to pass these flags themselves.
     let resolvedProjectType: string | null = null;
     let resolvedContingencyEnabled = false;
+    let resolvedQuoteId: string | null = null;
 
     if (payloadShareToken && admin) {
       const { data: quote } = await admin
@@ -176,7 +183,8 @@ serve(async (req) => {
       if (quote) {
         // Customer-facing path: a valid share_token authorises the send.
         authorized = true;
-        const q = quote as { project_type?: string | null; contingency_enabled?: boolean | null };
+        const q = quote as { id?: string; project_type?: string | null; contingency_enabled?: boolean | null };
+        resolvedQuoteId = q.id ?? null;
         resolvedProjectType = q.project_type ?? null;
         resolvedContingencyEnabled = q.contingency_enabled === true;
       }
@@ -202,11 +210,24 @@ serve(async (req) => {
     const requestedFromEmail =
       normalizeEmail(body.from_email) ||
       normalizeEmail(companyMailSettings?.quote_sender_email);
+    // Replies go to whoever is signed in and sending. Only when there is no signed-in
+    // sender (a customer-facing send authorised by a share link) does it fall back to
+    // what the caller asked for, then the company's reply-to, then its sender address.
     const replyToEmail =
+      senderUserEmail ||
       body.reply_to_email?.trim() ||
       companyMailSettings?.quote_reply_to_email?.trim() ||
       requestedFromEmail ||
       undefined;
+    // When a reply domain is configured (INBOUND_REPLY_DOMAIN), a staff send sets the
+    // Reply-To header to this quote's own reply address, so the customer's answer is
+    // filed in their Notes by receive-email-reply, which also forwards a copy to the rep.
+    // The footer and the rep's copy still show the rep's real email.
+    const inboundDomain = (Deno.env.get('INBOUND_REPLY_DOMAIN') || '').trim().toLowerCase();
+    const replyToHeader =
+      inboundDomain && senderUserEmail && resolvedQuoteId
+        ? `reply+${resolvedQuoteId}@${inboundDomain}`
+        : replyToEmail;
     const bccEmail =
       body.bcc_email?.trim() ||
       replyToEmail ||
@@ -265,12 +286,22 @@ serve(async (req) => {
       ? body.email_message.trim().split(/\n+/).map(line => `<p style="margin:0 0 10px">${line}</p>`).join('')
       : null;
 
+    // The app's default message already opens with "Hi <first name>,". Only add the
+    // template's own "Hello <name>," when the message does not greet the customer
+    // itself, so they are not greeted twice.
+    const messageHasGreeting = /^\s*(hi|hello|hey|dear|good\s+(morning|afternoon|evening))\b/i.test(body.email_message ?? '');
+
     const companyName = body.from_company || fallbackFromName;
 
-    // Internal copy sent to the contractor — does NOT include the share token link
-    // so that clicking it cannot accidentally flip the quote status to "viewed".
+    // Internal copy sent to the contractor. Its only customer link is the
+    // preview=1 one below, so clicking it cannot flip the quote to "viewed".
     const customerDisplayName = body.bcc_customer_name || body.to_name || body.to_email;
     const dashboardLink = body.dashboard_url || 'https://trussctr.614restore.com';
+    // The customer's own page, with preview=1 so opening it never marks the
+    // quote as viewed: lets the sender see exactly what the customer got
+    // (report, contingency, signing) without signing in.
+    const withPreview = (url: string) => url + (url.includes('?') ? '&preview=1' : '?preview=1');
+    const senderPreviewLink = ccPreviewUrl || (body.certificate_url ? withPreview(body.certificate_url) : null);
     const formattedTotal = body.quote_total != null
       ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(body.quote_total)
       : null;
@@ -323,13 +354,16 @@ serve(async (req) => {
               </table>
 
               <div style="margin:24px 0;text-align:center">
-                <a href="${dashboardLink}" style="background:#1e3a5f;color:white;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:600;font-size:14px;display:inline-block">
+                ${senderPreviewLink ? `<a href="${senderPreviewLink}" style="background:#ff6b35;color:white;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:600;font-size:14px;display:inline-block;margin:0 6px 10px">
+                  Preview what your customer sees →
+                </a>` : ''}
+                <a href="${dashboardLink}" style="background:#1e3a5f;color:white;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:600;font-size:14px;display:inline-block;margin:0 6px 10px">
                   View in Dashboard →
                 </a>
               </div>
 
               <p style="margin:0 0 4px;font-size:12px;color:#9ca3af;text-align:center">
-                This is your internal copy. The link above goes to your dashboard — it will not mark the quote as viewed by the customer.
+                This is your internal copy. ${senderPreviewLink ? 'Preview opens the customer\'s page without signing in; ' : ''}neither link marks the quote as viewed by the customer. View in Dashboard needs your TrussCTR login.
               </p>
               <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0">
               <p style="margin:0;font-size:12px;color:#6b7280">${companyName} | Quote #${body.quote_number || ''}</p>
@@ -388,7 +422,7 @@ serve(async (req) => {
           <tr>
             <td class="email-body" style="background:#ffffff;padding:32px 36px;border-left:1px solid #e5e7eb;border-right:1px solid #e5e7eb">
 
-              <p style="margin:0 0 20px;font-size:15px;color:#374151">Hello ${body.to_name || 'there'},</p>
+              ${messageHasGreeting ? '' : `<p style="margin:0 0 20px;font-size:15px;color:#374151">Hello ${body.to_name || 'there'},</p>`}
 
               ${customMessageHtml
                 ? `<div style="margin:0 0 20px;font-size:15px;color:#374151">${customMessageHtml}</div>`
@@ -504,7 +538,7 @@ serve(async (req) => {
         provider === 'gmail' || provider === 'outlook'
           ? smtpUsername
           : requestedFromEmail || smtpUsername;
-      const effectiveReplyTo = replyToEmail || requestedFromEmail || smtpUsername || undefined;
+      const effectiveReplyTo = replyToHeader || requestedFromEmail || smtpUsername || undefined;
       const transporter = nodemailer.createTransport({
         host: companyMailSettings.smtp_host,
         port: companyMailSettings.smtp_port,
@@ -556,8 +590,8 @@ serve(async (req) => {
           }
         }
 
-        // Send separate internal BCC without the token link so opening it
-        // cannot accidentally flip the quote status to "viewed".
+        // Send a separate internal copy whose customer link is preview-only, so
+        // opening it cannot accidentally flip the quote status to "viewed".
         if (bccEmail) {
           await transporter.sendMail({
             from: buildFromHeader(senderName, smtpFromEmail),
@@ -624,7 +658,7 @@ serve(async (req) => {
       body: JSON.stringify({
         from: fromHeader,
         to: [body.to_email],
-        reply_to: replyToEmail,
+        reply_to: replyToHeader,
         subject,
         html,
         text: plainText,
@@ -667,7 +701,7 @@ serve(async (req) => {
           body: JSON.stringify({
             from: fromHeader,
             to: [ccAddr],
-            reply_to: replyToEmail,
+            reply_to: replyToHeader,
             subject: `[CC] ${subject}`,
             html: ccHtml,
             ...(resendAttachments ? { attachments: resendAttachments } : {}),
@@ -676,10 +710,10 @@ serve(async (req) => {
       }
     }
 
-    // Send a separate internal confirmation copy to the sender WITHOUT the
-    // customer token link.  Keeping BCC on the customer email would cause the
+    // Send a separate internal confirmation copy to the sender whose customer
+    // link is preview-only. Keeping BCC on the customer email would cause the
     // sender to accidentally flip the quote to "viewed" whenever they click the
-    // preview link in their inbox.
+    // link in their inbox.
     if (bccEmail) {
       await fetch('https://api.resend.com/emails', {
         method: 'POST',
