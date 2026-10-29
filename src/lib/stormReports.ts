@@ -250,16 +250,32 @@ async function fetchGroundReports(
   const iso = (d: Date) => d.toISOString().slice(0, 16) + 'Z';
   let complete = true;
 
-  const pages = await mapLimit(monthWindows(months), 3, async ([start, end]) => {
+  // Each month is one request. A slow or failed month is retried once with a time limit,
+  // so a single hung request can't hold the whole search (it took 30s+) or drop a month.
+  const fetchMonth = async (start: Date, end: Date): Promise<any[]> => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 12000);
     try {
       const res = await fetch(
         `https://mesonet.agron.iastate.edu/geojson/lsr.geojson?sts=${iso(start)}&ets=${iso(end)}&states=${states}`,
+        { signal: controller.signal },
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return ((await res.json())?.features ?? []) as any[];
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+  const pages = await mapLimit(monthWindows(months), 4, async ([start, end]) => {
+    try {
+      return await fetchMonth(start, end);
     } catch {
-      complete = false;
-      return [];
+      try {
+        return await fetchMonth(start, end);
+      } catch {
+        complete = false;
+        return [];
+      }
     }
   });
 

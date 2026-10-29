@@ -3,6 +3,7 @@ import ScheduleName from './ScheduleName';
 import { supabase } from '@/lib/supabase';
 import { useCRM, usePipelineStats, useFinancialStats, useUpcomingAppointments } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
+import { appointmentStart } from '@/lib/appointmentUrgency';
 import {
   formatCurrency,
   formatDate,
@@ -86,7 +87,21 @@ export default function Dashboard() {
   const { profile } = useAuth();
   const pipelineStats = usePipelineStats();
   const financialStats = useFinancialStats();
-  const upcomingAppointments = useUpcomingAppointments(7);
+  const weekOfAppointments = useUpcomingAppointments(7);
+  // An appointment whose start time has passed but is still "scheduled" was missed: it is
+  // not upcoming, it needs someone to complete, cancel or reschedule it.
+  const nowMs = Date.now();
+  const upcomingAppointments = weekOfAppointments.filter((apt) => (appointmentStart(apt)?.getTime() ?? Infinity) >= nowMs);
+  const missedAppointments = useMemo(() => {
+    const twoWeeksMs = 14 * 24 * 3600e3;
+    return state.appointments
+      .filter((apt) => {
+        if (apt.status !== 'scheduled') return false;
+        const start = appointmentStart(apt)?.getTime();
+        return start != null && start < Date.now() && Date.now() - start < twoWeeksMs;
+      })
+      .sort((a, b) => (appointmentStart(b)?.getTime() ?? 0) - (appointmentStart(a)?.getTime() ?? 0));
+  }, [state.appointments]);
 
   // Calculate real trends by comparing contacts from last 30 days vs previous 30 days
   const trends = useMemo(() => {
@@ -363,6 +378,9 @@ export default function Dashboard() {
                     </div>
                   );
                 })}
+              {Object.keys(pipelineStats.byStatus).filter((st) => !['completed', 'lost'].includes(st)).length === 0 && (
+                <p className="text-sm text-gray-500 text-center py-6">No open jobs in the pipeline yet. Add a contact to get started.</p>
+              )}
             </div>
           </div>
         </div>
@@ -422,7 +440,7 @@ export default function Dashboard() {
                 className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors px-2 py-1 rounded-md hover:bg-gray-50"
               >
                 <Settings2 size={13} />
-                <span>{prefs.maxRows} rows</span>
+                <span>Show up to {prefs.maxRows}</span>
               </button>
               {settingsOpen && (
                 <div className="absolute right-0 top-8 z-30 w-52 bg-white border border-gray-200 rounded-xl shadow-lg p-3 space-y-3">
@@ -572,7 +590,19 @@ export default function Dashboard() {
                   </p>
                 </div>
               ))}
-              {urgentItems.length === 0 && (
+              {missedAppointments.slice(0, 3).map((apt) => (
+                <div
+                  key={`missed-${apt.id}`}
+                  onClick={() => apt.contactId ? handleViewContact(apt.contactId) : dispatch({ type: 'SET_VIEW', payload: 'calendar' })}
+                  className="p-4 hover:bg-gray-50 transition-colors cursor-pointer"
+                >
+                  <p className="font-medium text-gray-900">{apt.contactName || apt.title}</p>
+                  <p className="text-sm text-red-600 mt-1">
+                    Missed appointment: {apt.title} ({appointmentStart(apt)?.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}) — complete, cancel or reschedule it
+                  </p>
+                </div>
+              ))}
+              {urgentItems.length === 0 && missedAppointments.length === 0 && (
                 <div className="p-6 text-center text-gray-500">
                   <CheckCircle size={24} className="mx-auto mb-2 text-green-500" />
                   <p className="text-sm">All caught up!</p>
@@ -590,6 +620,9 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="divide-y divide-gray-50">
+              {topPerformers.length === 0 && (
+                <p className="p-6 text-sm text-gray-500 text-center">No team results to rank yet.</p>
+              )}
               {topPerformers.map((member, index) => (
                 <div key={member.id} className="p-4 flex items-center gap-3">
                   <div className="relative">

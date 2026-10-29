@@ -2368,7 +2368,7 @@ export default function SettingsView() {
                 Delete Account
               </h4>
               <p className="text-sm text-red-700">
-                Permanent delete requires a backend function (`delete_my_account`) with elevated Supabase permissions.
+                Permanently deletes your account. This cannot be undone.
               </p>
               <div>
                 <label className="block text-sm font-medium text-red-800 mb-1">

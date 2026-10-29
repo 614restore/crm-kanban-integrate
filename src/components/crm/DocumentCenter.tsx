@@ -33,6 +33,8 @@ interface DocumentItem {
   name: string;
   type: string;
   category: DocCategory;
+  /** Badge text when it differs from the folder, e.g. "signed" for a signed contract. */
+  badge?: string;
   url?: string;
   size: string;
   uploadedAt: string;
@@ -99,20 +101,29 @@ export default function DocumentCenter() {
 
       const docs = await db.getDocuments(state.companyId);
       const mapped: DocumentItem[] = await Promise.all(docs.map(async (doc) => {
-        const linkedContact = contactsRef.current.find((contact) => contact.id === doc.contact_id);
-        const type = (doc.type || 'other') as DocCategory;
+        const linkedId = doc.contact_id || (doc as any).customer_id || undefined;
+        const linkedContact = contactsRef.current.find((contact) => contact.id === linkedId);
+        // Signed agreements are saved with type "signed"; file them under Contracts, and anything
+        // else without a folder under Other, so every file is counted in exactly one folder.
+        const rawType = String(doc.type || 'other');
+        const type: DocCategory = rawType === 'signed'
+          ? 'contract'
+          : (['contract', 'estimate', 'invoice', 'photo', 'insurance', 'other'] as string[]).includes(rawType)
+            ? (rawType as DocCategory)
+            : 'other';
         
         const docItem: DocumentItem = {
           id: doc.id,
           name: doc.name,
           type,
           category: type,
+          badge: rawType === 'signed' ? 'signed' : undefined,
           url: undefined, // Will be set by getCachedSignedUrl
           size: doc.size || 'Unknown',
           uploadedAt: doc.created_at,
           uploadedBy: doc.uploaded_by || 'Team member',
           contactName: linkedContact ? getContactFullName(linkedContact) : undefined,
-          contactId: doc.contact_id || undefined,
+          contactId: linkedId,
         };
         
         // Get cached signed URL
@@ -578,7 +589,7 @@ export default function DocumentCenter() {
                             doc.category
                           )}`}
                         >
-                          {doc.category}
+                          {doc.badge ?? doc.category}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-gray-600">{doc.size}</td>
@@ -660,7 +671,7 @@ export default function DocumentCenter() {
                         doc.category
                       )}`}
                     >
-                      {doc.category}
+                      {doc.badge ?? doc.category}
                     </span>
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button

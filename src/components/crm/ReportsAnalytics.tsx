@@ -1,7 +1,8 @@
 // Reports & Analytics Dashboard for Contractors
 // Comprehensive business intelligence and performance metrics
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
 import {
   BarChart,
   Bar,
@@ -86,6 +87,15 @@ interface TeamPerformance {
   efficiency: number;
 }
 
+/** Shown instead of a blank chart when there is nothing to plot yet. */
+function EmptyChart({ message }: { message: string }) {
+  return (
+    <div className="h-[300px] flex items-center justify-center text-sm text-gray-500 text-center px-6 border border-dashed rounded-lg">
+      {message}
+    </div>
+  );
+}
+
 const ReportsAnalytics: React.FC = () => {
   const [selectedPeriod, setSelectedPeriod] = useState('12months');
   const [selectedMetric, setSelectedMetric] = useState('revenue');
@@ -96,6 +106,21 @@ const ReportsAnalytics: React.FC = () => {
   const { toast } = useToast();
   const { state } = useCRM();
   const financialStats = useFinancialStats();
+
+  // Receipts (payments recorded on quotes, from either app) are revenue too. Without them
+  // this page said $0 while the Dashboard and Financial Overview showed what was collected.
+  const [receipts, setReceipts] = useState<Array<{ amount: number; created_at: string; customer_id: string | null }>>([]);
+  useEffect(() => {
+    if (!state.companyId) return;
+    let cancelled = false;
+    supabase.from('payments')
+      .select('amount, created_at, customer_id')
+      .eq('company_id', state.companyId)
+      .then(({ data, error }) => {
+        if (!cancelled && !error) setReceipts(((data as any[]) || []).map((p) => ({ ...p, amount: Number(p.amount) || 0 })));
+      });
+    return () => { cancelled = true; };
+  }, [state.companyId, state.invoices.length]);
 
   // Build revenue data from real invoices grouped by month
   const revenueData: RevenueData[] = useMemo(() => {
@@ -114,19 +139,32 @@ const ReportsAnalytics: React.FC = () => {
     }
     const cutoff = new Date(now.getFullYear(), now.getMonth() - (monthCount - 1), 1);
 
+    const monthKey = (d: Date) => d.toLocaleString('default', { month: 'short', year: selectedPeriod === 'ytd' || monthCount <= 3 ? undefined : '2-digit' });
+    // Receipts first; a paid invoice only adds revenue when no receipt covers that customer
+    // (the same rule as the shared company_financial_summary the Dashboard uses).
+    const customersWithReceipts = new Set(receipts.map((r) => r.customer_id).filter(Boolean) as string[]);
+    receipts.forEach((r) => {
+      const d = new Date(r.created_at);
+      if (isNaN(d.getTime()) || d < cutoff) return;
+      const key = monthKey(d);
+      if (months[key]) {
+        months[key].revenue += r.amount;
+        if (r.customer_id) months[key].projects.add(r.customer_id);
+      }
+    });
     // Sum invoices by month
     state.invoices.forEach((inv) => {
-      const d = new Date(inv.createdAt || inv.dueDate || '');
+      const d = new Date(inv.paidAt || inv.createdAt || inv.dueDate || '');
       if (isNaN(d.getTime()) || d < cutoff) return;
-      const key = d.toLocaleString('default', { month: 'short', year: selectedPeriod === 'ytd' || monthCount <= 3 ? undefined : '2-digit' });
+      const key = monthKey(d);
       if (months[key]) {
-        if (inv.status === 'paid') months[key].revenue += inv.amount;
-        if (inv.contactId) months[key].projects.add(inv.contactId);
+        if (inv.status === 'paid' && !customersWithReceipts.has(inv.contactId)) months[key].revenue += Number(inv.amount) || 0;
+        if (inv.contactId && inv.status !== 'cancelled') months[key].projects.add(inv.contactId);
       }
     });
     // Sum deposits & final payments from contacts by completed month
     state.contacts.forEach((c) => {
-      if (c.status === 'completed' && c.finalPaymentPaid && c.finalPaymentAmount) {
+      if (c.status === 'completed' && c.finalPaymentPaid && c.finalPaymentAmount && !customersWithReceipts.has(c.id)) {
         const d = new Date(c.updatedAt);
         if (isNaN(d.getTime()) || d < cutoff) return;
         const key = d.toLocaleString('default', { month: 'short', year: selectedPeriod === 'ytd' || monthCount <= 3 ? undefined : '2-digit' });
@@ -144,7 +182,7 @@ const ReportsAnalytics: React.FC = () => {
         projects: data.projects.size,
       };
     });
-  }, [state.invoices, state.contacts, selectedPeriod]);
+  }, [state.invoices, state.contacts, selectedPeriod, receipts]);
 
   // Build project data from real projects or contacts in project stages
   const projectData: ProjectData[] = useMemo(() => {
@@ -591,7 +629,7 @@ const ReportsAnalytics: React.FC = () => {
                     <p className="text-2xl font-bold text-green-600">${item.revenue.toLocaleString()}</p>
                     <p className="text-sm text-gray-600">{item.projects} projects</p>
                     <p className="text-sm text-gray-600">
-                      {Math.round((item.profit / item.revenue) * 100)}% margin
+                      {item.revenue > 0 ? `${Math.round((item.profit / item.revenue) * 100)}% margin` : 'No revenue yet'}
                     </p>
                   </div>
                 ))}
@@ -608,7 +646,8 @@ const ReportsAnalytics: React.FC = () => {
                 <CardTitle>Project Status Distribution</CardTitle>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
+                {projectData.length > 0 ? (
+<ResponsiveContainer width="100%" height={300}>
                   <PieChart>
                     <Pie
                       data={[
@@ -632,6 +671,7 @@ const ReportsAnalytics: React.FC = () => {
                     <Tooltip />
                   </PieChart>
                 </ResponsiveContainer>
+                ) : <EmptyChart message="No projects yet. Jobs show here once a contact reaches Contingency or later." />}
               </CardContent>
             </Card>
 
@@ -640,7 +680,8 @@ const ReportsAnalytics: React.FC = () => {
                 <CardTitle>Project Profitability</CardTitle>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
+                {projectData.length > 0 ? (
+<ResponsiveContainer width="100%" height={300}>
                   <BarChart data={projectData.slice(0, 6)}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis 
@@ -657,6 +698,7 @@ const ReportsAnalytics: React.FC = () => {
                     <Bar dataKey="profit" fill={colors.secondary} name="Profit" />
                   </BarChart>
                 </ResponsiveContainer>
+                ) : <EmptyChart message="No projects yet." />}
               </CardContent>
             </Card>
           </div>
@@ -792,7 +834,8 @@ const ReportsAnalytics: React.FC = () => {
                 <CardTitle>Team Revenue Contribution</CardTitle>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
+                {teamPerformance.some((t) => t.revenue > 0) ? (
+<ResponsiveContainer width="100%" height={300}>
                   <BarChart data={teamPerformance}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="member" />
@@ -801,6 +844,7 @@ const ReportsAnalytics: React.FC = () => {
                     <Bar dataKey="revenue" fill={colors.primary} />
                   </BarChart>
                 </ResponsiveContainer>
+                ) : <EmptyChart message="No closed revenue by team member yet." />}
               </CardContent>
             </Card>
 
@@ -809,7 +853,8 @@ const ReportsAnalytics: React.FC = () => {
                 <CardTitle>Team Efficiency vs Customer Rating</CardTitle>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
+                {teamPerformance.length > 0 ? (
+<ResponsiveContainer width="100%" height={300}>
                   <AreaChart data={teamPerformance}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="member" />
@@ -833,6 +878,7 @@ const ReportsAnalytics: React.FC = () => {
                     />
                   </AreaChart>
                 </ResponsiveContainer>
+                ) : <EmptyChart message="No active team members to compare yet." />}
               </CardContent>
             </Card>
           </div>

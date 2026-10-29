@@ -42,6 +42,15 @@ const suggestedPrompts = [
   },
 ];
 
+/** Replies use **bold**; show it as bold text instead of raw asterisks. Plain text otherwise (no HTML injection). */
+function renderBold(text: string): React.ReactNode[] {
+  return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
+    part.startsWith('**') && part.endsWith('**') && part.length > 4
+      ? <strong key={i}>{part.slice(2, -2)}</strong>
+      : <React.Fragment key={i}>{part}</React.Fragment>,
+  );
+}
+
 export default function AIAssistant() {
   const { state } = useCRM();
   const pipelineStats = usePipelineStats();
@@ -76,6 +85,20 @@ export default function AIAssistant() {
     const inProgressCount = state.contacts.filter((c) => ['in_progress', 'build_phase', 'signed'].includes(c.status)).length;
     const completedCount = state.contacts.filter((c) => c.status === 'completed').length;
     const convRate = pipelineStats.conversionRate;
+
+    // Direct "how many …" questions get the number first, not general tips.
+    if (/how many|number of|count of|total (number|count)/.test(q)) {
+      const now = new Date();
+      const upcoming = state.appointments.filter((a) => a.status === 'scheduled' && new Date(`${a.date}T${a.time || '00:00'}`) >= now).length;
+      const openQuotes = state.quotes.filter((qt) => ['sent', 'viewed'].includes(qt.status)).length;
+      const signedQuotes = state.quotes.filter((qt) => qt.status === 'signed').length;
+      if (q.includes('appointment')) return `You have **${upcoming}** upcoming appointment${upcoming === 1 ? '' : 's'} (${state.appointments.length} on the calendar in total).`;
+      if (q.includes('quote') || q.includes('estimate')) return `You have **${state.quotes.length}** quote${state.quotes.length === 1 ? '' : 's'}: ${signedQuotes} signed and ${openQuotes} sent and waiting on the customer.`;
+      if (q.includes('team') || q.includes('member') || q.includes('user')) return `You have **${teamSize}** team member${teamSize === 1 ? '' : 's'}.`;
+      if (q.includes('lead') || q.includes('prospect')) return `You have **${prospectCount}** prospect${prospectCount === 1 ? '' : 's'}/lead${prospectCount === 1 ? '' : 's'} out of ${contactCount} contact${contactCount === 1 ? '' : 's'}.`;
+      if (q.includes('job') || q.includes('project')) return `You have **${inProgressCount}** job${inProgressCount === 1 ? '' : 's'} in progress and ${completedCount} completed.`;
+      if (q.includes('contact') || q.includes('customer') || q.includes('client')) return `You have **${contactCount}** contact${contactCount === 1 ? '' : 's'}: ${prospectCount} prospects/leads, ${inProgressCount} in progress and ${completedCount} completed.`;
+    }
 
     // Conversion rate / pipeline
     if (q.includes('conversion') || q.includes('convert') || (q.includes('improve') && q.includes('rate'))) {
@@ -237,7 +260,7 @@ export default function AIAssistant() {
                   : 'bg-white border border-gray-200 text-gray-700'
               }`}
             >
-              <p className="whitespace-pre-wrap">{message.content}</p>
+              <p className="whitespace-pre-wrap">{renderBold(message.content)}</p>
               <p
                 className={`text-xs mt-2 ${
                   message.role === 'user' ? 'text-blue-200' : 'text-gray-400'

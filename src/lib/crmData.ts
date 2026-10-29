@@ -1640,6 +1640,18 @@ export function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
+/** Dollars that keep their cents when there are any: $1,050 but $1,042.20 (never $1,042.2). */
+export function formatCurrencyExact(amount: number | null | undefined): string {
+  const v = Number(amount) || 0;
+  const hasCents = Math.round(v * 100) % 100 !== 0;
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: hasCents ? 2 : 0,
+    maximumFractionDigits: hasCents ? 2 : 0,
+  }).format(v);
+}
+
 /** A date to display, read as the user's own calendar day. See lib/dates.ts. */
 export const parseDisplayDate = parseLocalDate;
 

@@ -279,6 +279,12 @@ export default function ContactDetail() {
   const { profile, user } = useAuth();
   const contact = useCurrentContact();
   const [activeTab, setActiveTab] = useState<TabType>('overview');
+  // Switching tabs starts the new tab at the top instead of wherever the last one was scrolled.
+  const firstTabRender = useRef(true);
+  useEffect(() => {
+    if (firstTabRender.current) { firstTabRender.current = false; return; }
+    document.querySelector('main')?.scrollTo({ top: 0 });
+  }, [activeTab]);
   const [docSubTab, setDocSubTab] = useState<'all' | 'measurements' | 'photos' | 'docs' | 'legal'>('all');
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -1500,6 +1506,44 @@ export default function ContactDetail() {
     setIsEditing(false);
     setEditedContact(null);
   };
+
+  // The timeline used to show only typed notes and messages. These entries come from the
+  // contact's own records (created, appointments, quotes, last stage change), so nothing
+  // extra is written to the database and they can never drift from what happened.
+  const systemEvents: Communication[] = (() => {
+    const base = { contactId: contact.id, type: 'note' as const, direction: 'outbound' as const, userId: '', userName: 'System' };
+    const events: Communication[] = [];
+    if (contact.createdAt) {
+      events.push({ ...base, id: `sys-created-${contact.id}`, content: 'Contact created', timestamp: contact.createdAt });
+    }
+    if (contact.statusChangedAt) {
+      const label = (statusLabels as Record<string, string>)[contact.status] || contact.status;
+      events.push({ ...base, id: `sys-status-${contact.id}`, content: `Moved to ${label}`, timestamp: contact.statusChangedAt });
+    }
+    state.appointments
+      .filter((a) => a.contactId === contact.id)
+      .forEach((a) => {
+        const when = new Date(`${a.date}T${a.time || '00:00'}`);
+        const whenText = isNaN(when.getTime()) ? a.date : when.toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+        const stateText = a.status === 'completed' ? 'completed' : a.status === 'cancelled' ? 'cancelled' : 'scheduled';
+        events.push({
+          ...base,
+          id: `sys-appt-${a.id}`,
+          subject: a.title,
+          content: `Appointment ${stateText} for ${whenText}${a.location ? ` at ${a.location}` : ''}`,
+          timestamp: a.createdAt || `${a.date}T${a.time || '00:00'}`,
+        });
+      });
+    contactQuotes.forEach((q) => {
+      events.push({
+        ...base,
+        id: `sys-quote-${q.id}`,
+        content: `Quote ${q.quoteNumber} ${q.status === 'draft' ? 'created' : q.status}`,
+        timestamp: q.createdAt,
+      });
+    });
+    return events;
+  })();
 
   // Pipeline Progress's Next step button: what to do to move this contact along.
   const latestQuote = contactQuotes.reduce<QuoteSummary | null>(
@@ -3034,7 +3078,7 @@ export default function ContactDetail() {
               </div>
 
               <div className="space-y-4">
-                {[...(contact.communications || []), ...teamNotes]
+                {[...(contact.communications || []), ...teamNotes, ...systemEvents]
                   .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
                   .map((comm) => (
                     <div key={comm.id} className="flex gap-4 p-4 bg-gray-50 rounded-lg">
@@ -3077,7 +3121,7 @@ export default function ContactDetail() {
                       </div>
                     </div>
                   ))}
-                {(contact.communications?.length ?? 0) + teamNotes.length === 0 && (
+                {(contact.communications?.length ?? 0) + teamNotes.length + systemEvents.length === 0 && (
                   <div className="text-center py-8 text-gray-500">
                     <Clock size={32} className="mx-auto mb-2 opacity-50" />
                     <p>No activity yet</p>

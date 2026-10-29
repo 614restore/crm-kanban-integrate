@@ -28,6 +28,15 @@ export default function TopBar() {
   const { profile } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  // Escape closes the Filters and notification pop-ups, like other menus in the app.
+  useEffect(() => {
+    if (!showFilters && !showNotifications) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { setShowFilters(false); setShowNotifications(false); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showFilters, showNotifications]);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleRefresh = () => {
@@ -85,7 +94,24 @@ export default function TopBar() {
     'ai-assistant': 'AI Assistant',
     'crew-schedule': 'Crew Schedule',
     equipment: 'Equipment & Assets',
+    quotes: 'Quotes',
+    invoices: 'Invoices',
+    'storm-search': 'Storm Search',
+    inspections: 'Inspections',
+    'commission-payroll': 'Commission Payroll',
+    'sales-analytics': 'Sales Analytics',
+    pricing: 'Pricing',
   };
+  // The three boards share the pipeline screen; name the one that is open.
+  const boardTitles: Record<string, string> = {
+    sales: 'Sales Board',
+    production: 'Project Board',
+    billing: 'Financial Board',
+  };
+  const openBoard = state.boards.find((b) => b.id === state.selectedBoardId) ?? state.boards[0];
+  const pageTitle = state.currentView === 'pipeline'
+    ? boardTitles[openBoard?.type ?? 'sales'] ?? openBoard?.name ?? 'Sales Pipeline'
+    : viewTitles[state.currentView] || 'Dashboard';
 
   return (
     <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 sticky top-0 z-30">
@@ -102,7 +128,7 @@ export default function TopBar() {
           </button>
         )}
         <h1 className="text-xl font-semibold text-gray-900">
-          {viewTitles[state.currentView] || 'Dashboard'}
+          {pageTitle}
         </h1>
       </div>
 
@@ -112,9 +138,14 @@ export default function TopBar() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
           <input
             type="text"
-            placeholder="Search contacts, jobs, documents..."
+            placeholder="Search contacts by name, email, phone or address..."
             value={state.searchQuery}
-            onChange={(e) => dispatch({ type: 'SET_SEARCH', payload: e.target.value })}
+            onChange={(e) => {
+              dispatch({ type: 'SET_SEARCH', payload: e.target.value });
+              // The search filters the contact list; typing anywhere else used to do nothing,
+              // so open the list with the results.
+              if (e.target.value && state.currentView !== 'contacts') dispatch({ type: 'SET_VIEW', payload: 'contacts' });
+            }}
             className="w-full pl-10 pr-4 py-2 bg-gray-100 border border-transparent rounded-lg focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all outline-none"
           />
           {state.searchQuery && (

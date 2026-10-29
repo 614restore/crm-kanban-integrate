@@ -1,5 +1,6 @@
 // Copied from QuoteMGR src/components/QuoteBuilder.tsx (read-only reference).
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { formatCurrencyExact } from '@/lib/crmData';
 import {
   ArrowLeft, ArrowRight, Save, Send, Eye, User, MapPin, FileText,
   Package, Camera, Settings, Check, ChevronRight, Building2,
@@ -4346,7 +4347,7 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
         best:   lineItems.filter(i => i.quote_option_id === sortedOptsForDisplay[2]?.id).reduce((s, i) => s + (i.quantity ?? 0) * (i.good_price ?? 0), 0),
       }
     : totals;
-  const formatCurrency = (val: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(val);
+  const formatCurrency = (val: number) => formatCurrencyExact(val);
 
   // For multi_scope quotes, show scope tabs even before the first autosave creates real
   // quoteOptions.  Preview entries use the same 'preview-scope-N' IDs that the
@@ -4388,7 +4389,7 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
           <ArrowLeft className="w-5 h-5 text-gray-600" />
         </button>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-gray-900">{inspectionOnly ? 'Inspection Report' : editQuoteId ? 'Edit Quote' : 'New Quote'}</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{inspectionOnly ? 'Inspection Report' : (editQuoteId || quoteId) ? 'Edit Quote' : 'New Quote'}</h1>
           <p className="text-gray-500 text-sm">Build a professional proposal for your customer</p>
         </div>
         <div className="flex items-center gap-2">
@@ -8653,7 +8654,9 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
               </div>
             </div>}
 
-            {/* Quote Style Toggle */}
+            {/* Quote Style Toggle — quotes already get this choice at the top of Review & Send; showing it
+                twice looked like a bug, so this copy is only for inspection reports. */}
+            {inspectionOnly && (
             <div className="bg-white border border-gray-200 rounded-xl p-4">
               <h3 className="text-sm font-semibold text-gray-700 mb-1">Quote Style</h3>
               <p className="text-xs text-gray-400 mb-3">Choose how the quote looks when sent to your customer. Your preference is saved.</p>
@@ -8706,6 +8709,7 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
                 </button>
               </div>
             </div>
+            )}
 
             {/* Customer Summary */}
             <div className="bg-gray-50 rounded-xl p-4">

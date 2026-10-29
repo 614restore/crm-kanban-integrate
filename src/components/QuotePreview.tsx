@@ -1,5 +1,6 @@
 // Copied from QuoteMGR src/components/QuotePreview.tsx (read-only reference).
 import React, { useEffect, useState, useMemo, useRef } from 'react';
+import { formatCurrencyExact } from '@/lib/crmData';
 import {
   ArrowLeft, Download, Send, Mail, Printer, CheckCircle, Clock, Eye,
   Building2, Phone, Globe, MapPin, Shield, FileText, Camera, AlertCircle, X, Loader2,
@@ -1056,7 +1057,7 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
     }
   };
 
-  const formatCurrency = (val: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(val);
+  const formatCurrency = (val: number) => formatCurrencyExact(val);
 
   // Classic view alias — triggers two-step signing flow
   const handleSign = (sigData: string) => handleAgreementSign(sigData);
@@ -2147,14 +2148,6 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
               </div>
               {isCustomerView ? (
                 <div className="flex items-center gap-2 flex-wrap">
-                  {quoteHtml && (
-                    <button
-                      onClick={handleDownloadLive}
-                      className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-gray-600 border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors"
-                    >
-                      <Printer className="w-3.5 h-3.5" /> Print / Save PDF
-                    </button>
-                  )}
                   <button
                     onClick={() => { try { window.close(); } catch { window.scrollTo({ top: 0, behavior: 'smooth' }); } }}
                     className="flex items-center gap-2 px-5 py-2 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition-colors shadow-sm"
@@ -2251,7 +2244,8 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
               <span>Certificate Signed — Thank you!</span>
             </div>
           ) : null}
-          {quoteHtml && !(signedBarShown && isCustomerView) && (
+          {/* Customers already have Print / Save PDF in the bar at the top; one button is enough. */}
+          {quoteHtml && !isCustomerView && (
             // Pinned to the right on wider screens; on a phone it sits in the bar's flow so it never covers
             // the signed message or the buttons beside it.
             <button
@@ -2362,7 +2356,7 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
           const resolvedGood   = quote.use_manual_totals && quote.manual_good_total   != null ? quote.manual_good_total   : (quote.good_total   || calcGood);
           const resolvedBetter = quote.use_manual_totals && quote.manual_better_total != null ? quote.manual_better_total : (quote.better_total || calcBetter);
           const resolvedBest   = quote.use_manual_totals && quote.manual_best_total   != null ? quote.manual_best_total   : (quote.best_total   || calcBest);
-          const fmt = (v: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(v ?? 0);
+          const fmt = (v: number) => formatCurrencyExact(v ?? 0);
           const tiers = [
             { key: 'good' as const, name: goodName, total: resolvedGood, badge: null as string | null, desc: quote.tier_desc_good || 'Essential coverage at the best value.' },
             ...(inclBetter ? [{ key: 'better' as const, name: betterName, total: resolvedBetter, badge: 'Most Popular', desc: quote.tier_desc_better || 'Enhanced protection with added peace of mind.' }] : []),
@@ -2482,7 +2476,7 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
           const tier = (selectedTier && selectedTier !== 'all' ? selectedTier : 'good') as string;
           // The single tier the customer selected
           const selectedTierKeys: string[] = [tier];
-          const fmt = (v: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(v ?? 0);
+          const fmt = (v: number) => formatCurrencyExact(v ?? 0);
           const toggleUpgrade = (upg: any) => setCustomerSelectedUpgrades(prev => {
             const key = upg.name || upg.id;
             const exists = prev.some(u => (u.name || u.id) === key);
@@ -2696,7 +2690,7 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
               </div>
               {/* Order summary — tier breakdown + grand total */}
               {(() => {
-                const fmtCur = (v: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(v ?? 0);
+                const fmtCur = (v: number) => formatCurrencyExact(v ?? 0);
                 // Always use a single tier — treat legacy 'all' as 'good' fallback
                 const selTier = (!selectedTier || selectedTier === 'all') ? 'good' : selectedTier.split(',')[0];
                 const selKeys: string[] = [selTier];

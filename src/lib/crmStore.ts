@@ -51,6 +51,9 @@ export interface PendingQuoteAction {
   quoteId?: string;
 }
 
+/** Fired when a sidebar link for the screen already open is clicked again (detail: the view id). */
+export const NAV_RESELECT_EVENT = 'trussctr:nav-reselect';
+
 export type ViewType =
   | 'dashboard'
   | 'pipeline'
