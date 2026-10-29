@@ -293,6 +293,8 @@ export interface Appointment {
 
 export interface Invoice {
   id: string;
+  /** The number people see (INV-0001); id is the internal UUID. */
+  invoiceNumber?: string;
   contactId: string;
   contactName: string;
   jobId: string;
