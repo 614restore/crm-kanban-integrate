@@ -2148,6 +2148,16 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
               </div>
               {isCustomerView ? (
                 <div className="flex items-center gap-2 flex-wrap">
+                  {/* Kept beside Done: the top bar's Print / Save PDF scrolls away, and a customer who just
+                      signed on a phone is at the bottom of a long page. */}
+                  {quoteHtml && (
+                    <button
+                      onClick={handleDownloadLive}
+                      className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-gray-600 border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors"
+                    >
+                      <Printer className="w-3.5 h-3.5" /> Print / Save PDF
+                    </button>
+                  )}
                   <button
                     onClick={() => { try { window.close(); } catch { window.scrollTo({ top: 0, behavior: 'smooth' }); } }}
                     className="flex items-center gap-2 px-5 py-2 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition-colors shadow-sm"
@@ -2244,7 +2254,8 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
               <span>Certificate Signed — Thank you!</span>
             </div>
           ) : null}
-          {/* Customers already have Print / Save PDF in the bar at the top; one button is enough. */}
+          {/* Not for customers: before signing they have Print / Save PDF in the top bar, and once signed it
+              sits beside Done above. */}
           {quoteHtml && !isCustomerView && (
             // Pinned to the right on wider screens; on a phone it sits in the bar's flow so it never covers
             // the signed message or the buttons beside it.
