@@ -838,7 +838,7 @@ TrussCTR is fully responsive and works on mobile devices.
 - **In-App Help**: Click "?" icon for contextual help
 - **Knowledge Base**: Searchable help articles
 - **Video Tutorials**: Step-by-step video guides
-- **Email Support**: support@trussctr.com
+- **Email Support**: devmgr.app@gmail.com
 - **Live Chat**: Available during business hours
 - **Phone Support**: (614) 555-0100
 

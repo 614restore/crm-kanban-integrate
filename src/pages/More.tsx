@@ -194,7 +194,7 @@ export default function More() {
               To upgrade or manage billing, visit{' '}
               <span className="text-accent font-bold">trussctr.com</span>
               {' '}or contact{' '}
-              <span className="text-accent font-bold">support@trussctr.com</span>
+              <span className="text-accent font-bold">devmgr.app@gmail.com</span>
             </p>
           </div>
         </div>

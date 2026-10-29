@@ -154,7 +154,7 @@ export default async function handler(req, res) {
 // Flow: zip → lat/lon (zippopotam.us) → NOAA /points → forecast zone + county
 //       → NOAA /alerts/active?zone=… → filter storm-damage events
 const NOAA_HEADERS = {
-  'User-Agent': 'TrussCTR-CRM/1.0 (support@trussctr.com)',
+  'User-Agent': 'TrussCTR-CRM/1.0 (devmgr.app@gmail.com)',
   Accept: 'application/geo+json',
 };
 

@@ -215,7 +215,7 @@ npm run build
 5. **Troubleshooting** - Common issues and solutions
 
 ### Support Channels
-- **Email:** 614restorellc@gmail.com
+- **Email:** devmgr.app@gmail.com
 - **Phone:** (614) 808-8899
 - **GitHub Issues:** For bug reports
 - **In-App Banners:** For feature requests
@@ -342,7 +342,7 @@ npm run build
 ## 📞 Launch Support
 
 **Questions Before Launch?**
-- Email: 614restorellc@gmail.com
+- Email: devmgr.app@gmail.com
 - Phone: (614) 808-8899
 
 **Need Help During Launch?**

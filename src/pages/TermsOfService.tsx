@@ -6,7 +6,7 @@ export default function TermsOfService() {
   const navigate = useNavigate();
   const effectiveDate = 'October 21, 2026';
   const companyName = 'TrussCTR';
-  const contactEmail = 'executivestack@outlook.com';
+  const contactEmail = 'devmgr.app@gmail.com';
 
   return (
     <div className="min-h-screen bg-gray-50">

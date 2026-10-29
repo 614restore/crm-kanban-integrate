@@ -52,6 +52,8 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         from: 'TrussCTR CRM <scopemgr@614restore.com>',
+        // Replies go to support; the From address must stay on the verified sending domain.
+        reply_to: 'devmgr.app@gmail.com',
         to: [email],
         subject: 'You\'ve been invited to join TrussCTR CRM',
         html: `

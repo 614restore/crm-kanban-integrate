@@ -4,7 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 import { TRIAL_DAYS } from '@/lib/trial';
 
 const HOURS = TRIAL_DAYS * 24;
-const SUPPORT_EMAIL = 'executivestack@outlook.com';
+const SUPPORT_EMAIL = 'devmgr.app@gmail.com';
 
 const FAQS: { q: string; a: React.ReactNode }[] = [
   {

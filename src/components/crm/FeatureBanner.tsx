@@ -27,7 +27,7 @@ export function FeatureBanner({
   const config = complexityConfig[complexity];
 
   const handleContact = () => {
-    const email = '614restorellc@gmail.com';
+    const email = 'devmgr.app@gmail.com';
     const subject = encodeURIComponent(emailSubject);
     const body = encodeURIComponent(
       `Hi,\n\nI'm interested in the "${title}" feature.\n\n` +
@@ -68,10 +68,10 @@ export function FeatureBanner({
               Request This Feature
             </button>
             <a
-              href="mailto:614restorellc@gmail.com"
+              href="mailto:devmgr.app@gmail.com"
               className="text-sm text-blue-600 hover:text-blue-700 font-medium"
             >
-              614restorellc@gmail.com
+              devmgr.app@gmail.com
             </a>
           </div>
         </div>
@@ -198,10 +198,10 @@ export function SMSIntegrationBanner({ className }: { className?: string }) {
               Call (614) 808-8899
             </a>
             <a
-              href="mailto:614restorellc@gmail.com?subject=SMS%20Integration%20Options"
+              href="mailto:devmgr.app@gmail.com?subject=SMS%20Integration%20Options"
               className="text-sm text-green-600 hover:text-green-700 font-medium"
             >
-              614restorellc@gmail.com
+              devmgr.app@gmail.com
             </a>
           </div>
         </div>
@@ -236,10 +236,10 @@ export function VoiceCallsBanner({ className }: { className?: string }) {
               Call (614) 808-8899
             </a>
             <a
-              href="mailto:614restorellc@gmail.com?subject=Voice%20Calls%20Integration%20Options"
+              href="mailto:devmgr.app@gmail.com?subject=Voice%20Calls%20Integration%20Options"
               className="text-sm text-purple-600 hover:text-purple-700 font-medium"
             >
-              614restorellc@gmail.com
+              devmgr.app@gmail.com
             </a>
           </div>
         </div>

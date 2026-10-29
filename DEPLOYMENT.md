@@ -257,7 +257,7 @@ If you encounter issues not covered here:
 1. Check GitHub Issues
 2. Review Supabase docs: https://supabase.com/docs
 3. Check Vite docs: https://vitejs.dev
-4. Contact: 614restorellc@gmail.com
+4. Contact: devmgr.app@gmail.com
 
 ---
 

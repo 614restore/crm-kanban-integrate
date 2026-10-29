@@ -554,7 +554,7 @@ A: "Retail" is a status value. "Retail Pipeline" is a board designed for cash jo
 ## Support
 
 For additional help:
-- Email: 614restorellc@gmail.com
+- Email: devmgr.app@gmail.com
 - Documentation: See README.md
 - Video Tutorials: Coming soon
 

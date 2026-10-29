@@ -711,7 +711,7 @@ Work Orders section (page 8) needs to mention:
 ## 📞 Support & Contact
 
 **For Launch Questions:**
-- Email: 614restorellc@gmail.com
+- Email: devmgr.app@gmail.com
 - Phone: (614) 808-8899
 
 **For Feature Requests:**
@@ -720,7 +720,7 @@ Work Orders section (page 8) needs to mention:
 
 **For Technical Support:**
 - GitHub Issues
-- Email: 614restorellc@gmail.com
+- Email: devmgr.app@gmail.com
 
 ---
 
