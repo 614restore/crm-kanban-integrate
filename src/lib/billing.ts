@@ -9,11 +9,30 @@ export const PRICE_IDS: Record<string, string> = {
   enterprise: import.meta.env.VITE_STRIPE_ENTERPRISE_MONTHLY || '',
 };
 
-// Vercel API base; empty means the same site the app is served from.
+// Vercel API base used by builds that are not served from the Vercel project itself (the native app, GitHub
+// Pages, local dev). Empty means the same site the app is served from.
 export const API_BASE: string = import.meta.env.VITE_EMAIL_API_BASE_URL || '';
 
+/**
+ * Where /api/stripe lives for this build. A deployed web build (production, a preview, or the custom domain
+ * trussctr.614restore.com) serves /api from its own origin, and the Content-Security-Policy in vercel.json only
+ * allows same-origin calls, so it must never be sent to a configured base on another domain: the browser blocks
+ * it before it leaves and the button just says "Failed to fetch". (VITE_EMAIL_API_BASE_URL points at the
+ * crm-kanban-integrate.vercel.app host, which is exactly that.) This is the same rule emailApi.ts follows.
+ */
+function apiBase(): string {
+  if (typeof window !== 'undefined') {
+    const { protocol, hostname } = window.location;
+    if ((protocol === 'https:' || protocol === 'http:') && hostname !== 'localhost'
+        && hostname !== '127.0.0.1' && !hostname.endsWith('.github.io')) {
+      return '';
+    }
+  }
+  return API_BASE.replace(/\/$/, '');
+}
+
 async function post(body: Record<string, unknown>, accessToken?: string | null): Promise<string> {
-  const res = await fetch(`${API_BASE}/api/stripe`, {
+  const res = await fetch(`${apiBase()}/api/stripe`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
