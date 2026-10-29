@@ -3750,6 +3750,13 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
 
   const handlePreviewWithoutSaving = async () => {
     if (previewingUnsaved) return;
+    // A signed quote is frozen and has nothing to save: just show it. Saving rebuilds the totals and line
+    // items from what the editor holds, which for a quote that was transferred in or is still loading can be
+    // empty, and that zeroed a signed contract's total.
+    if (quoteId && existingStatus === 'signed') {
+      onPreview(quoteId, currentStep);
+      return;
+    }
     setPreviewingUnsaved(true);
     try {
       // An autosave may already be running; wait for it rather than treating "busy" as "failed".
@@ -3822,6 +3829,24 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
       return null;
     }
     const versionAtStart = editVersion.current;
+    // Never write over a quote the editor has not finished loading: its lists are empty, so saving would
+    // replace the real totals and line items with nothing.
+    if (quoteId && loading) {
+      if (!silent) toast.error('The quote is still loading. Try again in a moment.');
+      return null;
+    }
+    // A signed quote's pricing is frozen. Background saves leave it alone, and an explicit save with no line
+    // items (other than an inspection report, which has none) is refused instead of zeroing the total.
+    if (quoteId && existingStatus === 'signed') {
+      if (silent) {
+        savedVersion.current = editVersion.current;
+        return quoteId;
+      }
+      if (lineItems.length === 0 && projectType !== 'inspection_report') {
+        toast.error('This quote is signed and the editor has no line items loaded, so nothing was saved. Reload the page and try again.');
+        return null;
+      }
+    }
     if (silent) {
       silentSaveInProgress.current = true;
       setAutoSaveStatus('saving');
