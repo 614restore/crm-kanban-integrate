@@ -8,10 +8,13 @@ import { sendEmail } from '@/lib/emailApi';
 import { toast } from 'sonner';
 import { X, Plus, Trash2, Save, Send, DollarSign } from 'lucide-react';
 import { toLocalDateString } from '@/lib/dates';
+import { useInvoiceTax, effectiveTaxRate } from '@/lib/invoiceTax';
 
 export default function InvoiceModal() {
   const { state, dispatch } = useCRM();
   const { profile } = useAuth();
+  // Sales tax only when the company turned it on in Settings (was a fixed 8.25%).
+  const taxRate = effectiveTaxRate(useInvoiceTax(profile?.company_id || state.companyId));
   const prefill = state.invoiceModalPrefill;
   const [selectedContactId, setSelectedContactId] = useState(prefill?.contactId || getActiveContactId(state) || '');
   const [dueDate, setDueDate] = useState(() => toLocalDateString());
@@ -72,7 +75,7 @@ export default function InvoiceModal() {
   };
 
   const subtotal = items.reduce((sum, item) => sum + item.total, 0);
-  const tax = subtotal * 0.0825; // 8.25% tax
+  const tax = Math.round(subtotal * taxRate) / 100;
   const total = subtotal + tax;
 
   const handleSave = async (status: 'draft' | 'sent') => {
@@ -167,7 +170,7 @@ export default function InvoiceModal() {
             </table>
             <table style="width:100%;max-width:300px;margin-left:auto">
               <tr><td style="padding:4px 8px">Subtotal</td><td style="padding:4px 8px;text-align:right">${formatCurrency(subtotal)}</td></tr>
-              <tr><td style="padding:4px 8px">Tax (8.25%)</td><td style="padding:4px 8px;text-align:right">${formatCurrency(tax)}</td></tr>
+${taxRate > 0 ? `<tr><td style="padding:4px 8px">Tax (${taxRate}%)</td><td style="padding:4px 8px;text-align:right">${formatCurrency(tax)}</td></tr>` : ''}
               <tr style="font-weight:700;font-size:16px"><td style="padding:8px">Total Due</td><td style="padding:8px;text-align:right">${formatCurrency(total)}</td></tr>
             </table>
             ${notes ? `<p style="margin-top:16px;color:#64748b">${notes}</p>` : ''}
@@ -386,10 +389,12 @@ export default function InvoiceModal() {
                   <span>Subtotal</span>
                   <span>{formatCurrency(subtotal)}</span>
                 </div>
-                <div className="flex justify-between text-gray-600">
-                  <span>Tax (8.25%)</span>
-                  <span>{formatCurrency(tax)}</span>
-                </div>
+                {taxRate > 0 && (
+                  <div className="flex justify-between text-gray-600">
+                    <span>Tax ({taxRate}%)</span>
+                    <span>{formatCurrency(tax)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-lg font-bold text-gray-900 pt-2 border-t border-gray-200">
                   <span>Total</span>
                   <span>{formatCurrency(total)}</span>

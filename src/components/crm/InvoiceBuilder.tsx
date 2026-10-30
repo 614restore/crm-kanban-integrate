@@ -9,6 +9,7 @@ import { describeFunctionError } from '@/lib/emailApi';
 import { toast } from 'sonner';
 import { buildInvoicePDF, loadLogoAsBase64 as loadLogoBase64 } from '@/lib/buildInvoicePDF';
 import { toLocalDateString } from '@/lib/dates';
+import { useInvoiceTax, effectiveTaxRate } from '@/lib/invoiceTax';
 
 interface InvoiceLineItem {
     id: string;
@@ -213,6 +214,17 @@ const InvoiceBuilder: React.FC<Props> = ({
         const total = subtotal + tax_amount;
         setInvoice(inv => ({ ...inv, subtotal, tax_amount, total }));
     };
+
+    // Start with the company's sales tax from Settings when it's turned on; it can still be changed per invoice.
+    const companyTaxRate = effectiveTaxRate(useInvoiceTax(companyId));
+    const taxPrefilledRef = React.useRef(false);
+    useEffect(() => {
+        if (taxPrefilledRef.current || companyTaxRate <= 0) return;
+        taxPrefilledRef.current = true;
+        setInvoice(i => (i.tax_rate === 0 ? { ...i, tax_rate: companyTaxRate } : i));
+        recalcTotals(lineItems, companyTaxRate);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [companyTaxRate]);
 
     const updateLineItem = (index: number, field: keyof InvoiceLineItem, value: string | number) => {
         const updated = [...lineItems];

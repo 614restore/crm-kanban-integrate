@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import InvoiceTaxSettings from '@/components/settings/InvoiceTaxSettings';
 import { useCRM, canManageLeadSources } from '@/lib/crmStore';
 import StormAlertSettings from '@/components/settings/StormAlertSettings';
 import { useAuth } from '@/lib/authContext';
@@ -2048,6 +2049,7 @@ export default function SettingsView() {
                 )}
               </div>
             )}
+            <InvoiceTaxSettings companyId={effectiveCompanyId} />
           </div>
         )}
 
