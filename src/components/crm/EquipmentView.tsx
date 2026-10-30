@@ -607,7 +607,7 @@ export default function EquipmentView() {
               </div>
 
               {/* Category + Status */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
                   <select
@@ -637,7 +637,7 @@ export default function EquipmentView() {
               </div>
 
               {/* Make / Model / Year */}
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Make</label>
                   <input
@@ -686,7 +686,7 @@ export default function EquipmentView() {
 
               {/* Vehicle-only fields */}
               {formData.category === 'vehicle' && (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">License Plate</label>
                     <input
@@ -711,7 +711,7 @@ export default function EquipmentView() {
               )}
 
               {/* Purchase info */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Purchase Date</label>
                   <input
@@ -736,7 +736,7 @@ export default function EquipmentView() {
               </div>
 
               {/* Maintenance dates */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Last Maintenance</label>
                   <input

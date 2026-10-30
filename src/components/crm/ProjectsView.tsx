@@ -457,7 +457,7 @@ export default function ProjectsView() {
   return (
     <div className="p-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center">
             <FolderKanban size={20} className="text-white" />
@@ -467,7 +467,7 @@ export default function ProjectsView() {
             <p className="text-sm text-gray-500">Manage customer projects and track progress</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={handleExport}
             className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
@@ -486,7 +486,7 @@ export default function ProjectsView() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div className="bg-white rounded-lg border border-gray-200 p-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-500">Active Projects</span>
@@ -612,7 +612,7 @@ export default function ProjectsView() {
               </div>
 
               {/* Project Details Grid */}
-              <div className="grid grid-cols-4 gap-4 pt-4 border-t border-gray-100">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-gray-100">
                 <div>
                   <p className="text-xs text-gray-500 mb-1">Start Date</p>
                   <p className="text-sm font-medium text-gray-900">{formatDate(project.startDate)}</p>
@@ -724,7 +724,7 @@ export default function ProjectsView() {
             {/* Modal Body - Scrollable */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
               {/* Basic Info */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Project Number *
@@ -928,7 +928,7 @@ export default function ProjectsView() {
               {/* Address */}
               <div>
                 <h3 className="text-sm font-semibold text-gray-900 mb-3">Project Location</h3>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Street Address
@@ -979,7 +979,7 @@ export default function ProjectsView() {
               </div>
 
               {/* Tags and Notes */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Tags (comma-separated)

@@ -99,6 +99,8 @@ const DocumentTemplates: React.FC = () => {
   // ── Folder state ────────────────────────────────────────────────────────
   // 'all' = show everything; 'cat:CATEGORY_ID' = system folder; custom string = user folder
   const [selectedFolder, setSelectedFolder] = useState<string>('all');
+  // Phones: the folder list opens from a button above the templates instead of squeezing them.
+  const [showFoldersMobile, setShowFoldersMobile] = useState(false);
   const [customFolders, setCustomFolders] = useState<string[]>([]);
   // templateFolderMap: templateId → custom folder name
   const [templateFolderMap, setTemplateFolderMap] = useState<Record<string, string>>({});
@@ -3201,12 +3203,12 @@ const DocumentTemplates: React.FC = () => {
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="container mx-auto p-4 sm:p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <FileText className="w-6 h-6" />
-          <h1 className="text-3xl font-bold">Document Templates</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold">Document Templates</h1>
         </div>
         <div className="flex items-center gap-3">
           {/* Document Scanner */}
@@ -3249,11 +3251,27 @@ const DocumentTemplates: React.FC = () => {
         </div>
       )}
 
-      {/* Main layout: folder sidebar + templates */}
-      <div className="flex gap-6 items-start">
+      {/* Main layout: folder sidebar + templates (stacked on a phone) */}
+      <div className="flex flex-col md:flex-row gap-4 md:gap-6 items-stretch md:items-start">
+
+        <button
+          type="button"
+          onClick={() => setShowFoldersMobile(v => !v)}
+          className="md:hidden flex items-center justify-between w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700"
+        >
+          <span className="flex items-center gap-2"><FolderOpen className="w-4 h-4" /> Folders</span>
+          <span className="text-gray-400">{showFoldersMobile ? 'Hide' : 'Show'}</span>
+        </button>
 
         {/* ── Folder Sidebar ─────────────────────────────────────────── */}
-        <div className="w-52 flex-shrink-0 space-y-1">
+        <div
+          className={`${showFoldersMobile ? 'block' : 'hidden'} md:block w-full md:w-52 flex-shrink-0 space-y-1`}
+          onClick={(e) => {
+            // Picking a folder on a phone closes the list so the templates show.
+            const btn = (e.target as HTMLElement).closest('button');
+            if (btn && !btn.querySelector('svg.lucide-folder-plus') && !btn.textContent?.includes('New Folder')) setShowFoldersMobile(false);
+          }}
+        >
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider px-2 mb-2">Folders</p>
 
           {/* All Templates */}
