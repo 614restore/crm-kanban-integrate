@@ -850,7 +850,11 @@ export default function PipelineBoard() {
                 </div>
               )}
             </div>
-            <div className="text-sm text-gray-500">{state.contacts.length} contacts in pipeline</div>
+            {(() => {
+              // Count the contacts this board actually shows, not every contact in the company.
+              const onBoard = new Set((currentBoard?.columns ?? []).flatMap((col) => getColumnContacts(col).map((c) => c.id))).size;
+              return <div className="text-sm text-gray-500">{onBoard} {onBoard === 1 ? 'contact' : 'contacts'} on this board</div>;
+            })()}
           </div>
 
           <div className="flex items-center gap-2">

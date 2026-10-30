@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import ScheduleName from './ScheduleName';
-import { useCRM, getActiveContactId } from '@/lib/crmStore';
+import { useCRM, getActiveContactId, NAV_RESELECT_EVENT } from '@/lib/crmStore';
 import type { PendingQuote, QuoteDraftItem } from '@/lib/crmStore';
 import { toQuoteSummary } from '@/lib/crmData';
 import { useAuth } from '@/lib/authContext';
@@ -171,7 +171,9 @@ export default function QuotesView() {
   const toggleActionMenu = (q: QuoteRow, button: HTMLElement) => {
     if (actionMenu?.quote.id === q.id) { setActionMenu(null); return; }
     const rect = button.getBoundingClientRect();
-    const up = window.innerHeight - rect.bottom < 380;
+    // Open upward only when there is more room above than below; the menu scrolls if neither side fits.
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const up = spaceBelow < 380 && rect.top > spaceBelow;
     setActionMenu({
       quote: q,
       top: up ? rect.top - 4 : rect.bottom + 4,
@@ -533,6 +535,19 @@ export default function QuotesView() {
   /** Set when the builder was opened from a contact, so closing returns there. */
   const [returnContactId, setReturnContactId] = useState<string | null>(null);
 
+  // Clicking Quotes in the sidebar while a quote or preview is open goes back to the list.
+  useEffect(() => {
+    const onReselect = (e: Event) => {
+      if ((e as CustomEvent).detail !== 'quotes') return;
+      if (showBuilder && !previewQuoteId && !window.confirm('Leave this quote? Changes since your last save will be lost.')) return;
+      setPreviewQuoteId(null); setShowBuilder(false); setEditingQuoteId(null); setBuilderPrefill(null);
+      setPreviewReturnStep(null); setReturnContactId(null); loadQuotes();
+    };
+    window.addEventListener(NAV_RESELECT_EVENT, onReselect);
+    return () => window.removeEventListener(NAV_RESELECT_EVENT, onReselect);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showBuilder, previewQuoteId]);
+
   const closeBuilder = () => {
     setShowBuilder(false); setEditingQuoteId(null); setBuilderPrefill(null); setPreviewReturnStep(null); loadQuotes();
     // Opened from a contact (its Next step button, or a quote on its page):
@@ -742,7 +757,9 @@ export default function QuotesView() {
         prefilledCustomerId={builderPrefill?.contactId ?? null}
         initialStep={previewReturnStep ?? 0}
         inspectionOnly={builderInspection}
-        onSave={(id) => setEditingQuoteId(id)}
+        // The builder keeps track of the id it saved under itself. Changing
+        // editQuoteId here remounted it (blank screen, back to step 1) on every Save Draft.
+        onSave={() => {}}
         onSent={closeBuilder}
         onPreview={(id, step) => { setEditingQuoteId(id); setPreviewReturnStep(step); setPreviewQuoteId(id); }}
         onBack={closeBuilder}
@@ -935,9 +952,10 @@ export default function QuotesView() {
           <div
             role="menu"
             onMouseDown={(e) => e.stopPropagation()}
-            className="fixed z-50 w-56 bg-white border border-gray-200 rounded-xl shadow-lg py-1"
+            className="fixed z-50 w-56 bg-white border border-gray-200 rounded-xl shadow-lg py-1 overflow-y-auto"
             style={{
               right: actionMenu.right,
+              maxHeight: (actionMenu.up ? actionMenu.top : window.innerHeight - actionMenu.top) - 8,
               ...(actionMenu.up ? { bottom: window.innerHeight - actionMenu.top } : { top: actionMenu.top }),
             }}
           >

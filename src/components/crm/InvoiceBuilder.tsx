@@ -2,6 +2,7 @@
 // TrussCTR change: removes the "Also send Completion Certificate" option; the
 // completion certificate function is not on the shared backend.
 import React, { useState, useEffect, useRef } from 'react';
+import { formatCurrencyExact } from '@/lib/crmData';
 import { X, Plus, Trash2, FileText, Send, Download, Check, Calendar, DollarSign, ChevronDown, Eye, EyeOff } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { describeFunctionError } from '@/lib/emailApi';
@@ -464,7 +465,7 @@ const InvoiceBuilder: React.FC<Props> = ({
                             t.key === 'good' || (t.key === 'better' && includeBetter) || (t.key === 'best' && includeBest)
                         );
                         const isSelected = (key: string) => currentTier === key;
-                        const fmtTotal = (n?: number) => n != null ? `$${n.toLocaleString('en-US', { minimumFractionDigits: 0 })}` : null;
+                        const fmtTotal = (n?: number) => n != null ? formatCurrencyExact(n) : null;
                         return (
                             <div className="border border-gray-200 rounded-xl overflow-hidden">
                                 <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">

@@ -284,7 +284,7 @@ export default function SubscriptionView() {
                   ${p.price}<span className="text-sm font-normal text-gray-500">/mo</span>
                 </div>
                 <div className="text-xs text-gray-500 mt-0.5">
-                  ${p.annualPrice}/mo annual (${p.annualTotal.toLocaleString()}/yr)
+                  ${p.annualPrice.toFixed(2)}/mo annual (${p.annualTotal.toLocaleString()}/yr)
                 </div>
               </div>
               <ul className="space-y-1.5 flex-1">

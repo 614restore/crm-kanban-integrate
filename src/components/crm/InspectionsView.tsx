@@ -131,6 +131,8 @@ export default function InspectionsView() {
           )
           .eq('company_id', profile.company_id)
           .eq('project_type', 'inspection_report')
+          // Archived reports (including those of deleted customers) stay out, as on the Quotes list.
+          .or('is_archived.is.null,is_archived.eq.false')
           .order('created_at', { ascending: false }),
       ]);
       setRecords((data as InspectionRecord[]) ?? []);
@@ -297,7 +299,7 @@ export default function InspectionsView() {
    Inspection report list item
 ════════════════════════════════════════════════════════════ */
 function ReportListItem({ report, onOpen }: { report: ReportRow; onOpen: () => void }) {
-  const name = report.customers ? `${report.customers.first_name} ${report.customers.last_name}`.trim() : 'Customer';
+  const name = report.customers ? `${report.customers.first_name} ${report.customers.last_name}`.trim() : 'Customer removed';
   const state = reportState(report);
   return (
     <button onClick={onOpen} className="w-full text-left px-4 py-3 hover:bg-white transition-colors">

@@ -113,6 +113,23 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
         deposit_required: inv.deposit_required != null ? Number(inv.deposit_required) : null,
       })) as Invoice[];
 
+      // The customer join only follows customer_id; invoices made from a contact carry
+      // contact_id instead and showed as "Unknown". Look those customers up directly.
+      const missingIds = Array.from(new Set(filtered
+        .filter(inv => !inv.customer)
+        .map(inv => (inv as any).customer_id || (inv as any).contact_id)
+        .filter(Boolean))) as string[];
+      if (missingIds.length) {
+        const { data: people } = await supabase
+          .from('customers').select('id, first_name, last_name, email').in('id', missingIds);
+        const byId = new Map((people || []).map((p: any) => [p.id, p]));
+        filtered = filtered.map(inv => {
+          if (inv.customer) return inv;
+          const found = byId.get((inv as any).customer_id || (inv as any).contact_id);
+          return found ? { ...inv, customer: found } : inv;
+        });
+      }
+
       if (searchTerm) {
         const term = searchTerm.toLowerCase();
         filtered = filtered.filter(inv =>
@@ -176,7 +193,9 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
   };
 
   const getBalanceDue = (invoice: Invoice) =>
-    Math.max(0, invoice.total - (invoice.deposit_paid || 0));
+    invoice.status === 'paid' || invoice.status === 'cancelled'
+      ? 0
+      : Math.max(0, invoice.total - (invoice.deposit_paid || 0));
 
   const handleDownloadPdf = async (invoice: Invoice) => {
     if (generatingPdf) return;
@@ -286,9 +305,11 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
     }
   };
 
-  const totalInvoiced = invoices.reduce((sum, inv) => sum + inv.total, 0);
-  const totalPaid = invoices.reduce((sum, inv) => sum + (inv.deposit_paid || 0), 0);
-  const totalOutstanding = invoices.reduce((sum, inv) => sum + getBalanceDue(inv), 0);
+  // Cancelled and voided invoices are no longer owed or collected, so they stay out of the totals.
+  const countedInvoices = invoices.filter(inv => !['cancelled', 'void', 'voided'].includes(String(inv.status)));
+  const totalInvoiced = countedInvoices.reduce((sum, inv) => sum + inv.total, 0);
+  const totalPaid = countedInvoices.reduce((sum, inv) => sum + (inv.status === 'paid' ? inv.total : (inv.deposit_paid || 0)), 0);
+  const totalOutstanding = countedInvoices.reduce((sum, inv) => sum + getBalanceDue(inv), 0);
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 lg:p-8">
@@ -329,7 +350,7 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600 mb-1">Outstanding Balance</p>
-                <p className="text-2xl font-bold text-red-600">{formatCurrency(totalOutstanding)}</p>
+                <p className={`text-2xl font-bold ${totalOutstanding > 0 ? 'text-red-600' : 'text-gray-900'}`}>{formatCurrency(totalOutstanding)}</p>
               </div>
               <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
                 <TrendingUp className="w-6 h-6 text-red-600" />
@@ -467,7 +488,7 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
                           <p className="font-medium text-gray-900">
                             {invoice.customer
                               ? `${invoice.customer.first_name} ${invoice.customer.last_name}`
-                              : 'Unknown'}
+                              : 'Customer removed'}
                           </p>
                           <p className="text-sm text-gray-500">{invoice.customer?.email || ''}</p>
                         </div>

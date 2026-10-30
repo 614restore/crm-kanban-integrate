@@ -124,11 +124,14 @@ export default function SalesAnalytics() {
   const filtered = useMemo(() => {
     const cutoff = period === 'all' ? new Date(0) : new Date(Date.now() - PERIOD_MS[period]);
     // CRITICAL FIX: Filter by company_id to prevent cross-tenant data leakage
-    return state.contacts.filter((c) => 
-      c.company_id === profile?.company_id && 
+    // App contacts are already loaded for this company only and usually carry no company_id,
+    // so requiring one matched nothing and every count read 0. Only reject another company's id.
+    const companyId = profile?.company_id || state.companyId;
+    return state.contacts.filter((c) =>
+      (!c.company_id || c.company_id === companyId) &&
       new Date(c.createdAt) >= cutoff
     );
-  }, [state.contacts, period, profile?.company_id]);
+  }, [state.contacts, period, profile?.company_id, state.companyId]);
 
   const completed = filtered.filter((c) => isSoldStatus(c.status));
   const lost = filtered.filter((c) => isLostStatus(c.status));
@@ -153,7 +156,9 @@ export default function SalesAnalytics() {
   const appointments = state.appointments.filter((apt) => {
     const cutoff = period === 'all' ? new Date(0) : new Date(Date.now() - PERIOD_MS[period]);
     // CRITICAL FIX: Filter by company_id
-    return apt.company_id === profile?.company_id && new Date(apt.date) >= cutoff;
+    const companyId = profile?.company_id || state.companyId;
+    // Counted by when the appointment was booked, falling back to its date.
+    return (!apt.company_id || apt.company_id === companyId) && new Date(apt.createdAt || apt.date) >= cutoff;
   });
   
   // Self-generated metrics

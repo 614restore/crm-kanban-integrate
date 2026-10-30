@@ -516,8 +516,9 @@ export default function AutomationsView() {
               <Zap className="text-blue-600" size={24} />
             </div>
             <div>
-              <p className="text-2xl font-bold text-gray-900">1,247</p>
-              <p className="text-gray-500 text-sm">Actions This Month</p>
+              {/* Was a fixed placeholder (1,247). Runs aren't recorded yet, so show a real count instead. */}
+              <p className="text-2xl font-bold text-gray-900">{activeCount + inactiveCount}</p>
+              <p className="text-gray-500 text-sm">Total Automations</p>
             </div>
           </div>
         </div>

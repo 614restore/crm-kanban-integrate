@@ -533,7 +533,7 @@ export default function CommissionPayrollView() {
             <TrendingUp size={20} className="text-green-600" />
           </div>
           <div>
-            <p className="text-xs text-gray-500 font-medium">Total Revenue</p>
+            <p className="text-xs text-gray-500 font-medium">Sold Job Value</p>
             <p className="text-2xl font-bold text-gray-900">{formatCurrency(grandTotalRevenue)}</p>
           </div>
         </div>
@@ -576,7 +576,7 @@ export default function CommissionPayrollView() {
       {/* How payroll works (shown on first open, and from the button in the header) */}
       {showNotice && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
             <div className="flex items-center gap-3 mb-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
                 <Info size={20} className="text-amber-600" />
@@ -665,7 +665,7 @@ export default function CommissionPayrollView() {
                       <p className="font-semibold text-gray-900">{salesman.jobs.length}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500">Revenue</p>
+                      <p className="text-xs text-gray-500">Sold Job Value</p>
                       <p className="font-semibold text-gray-900">{formatCurrency(salesman.totalRevenue)}</p>
                     </div>
                     <div>

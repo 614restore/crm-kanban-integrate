@@ -86,9 +86,37 @@ export default function TeamView() {
   const pendingSeats = 0;
   const atSeatLimit = planLimit !== Infinity && (activeSeats + pendingSeats) >= planLimit;
 
-  // Debug logging for team members
+  // If the app-wide load missed the team (slow or failed read), fetch it again here
+  // so this page never says "0 team members" for a company that has people.
   useEffect(() => {
-  }, [state.teamMembers, state.companyId, profile]);
+    const companyId = state.companyId || profile?.company_id;
+    if (!companyId || state.teamMembers.length > 0) return;
+    let cancelled = false;
+    db.getTeamMembers(companyId).then((rows: any[]) => {
+      if (cancelled || !rows?.length) return;
+      dispatch({
+        type: 'SET_TEAM_MEMBERS',
+        payload: rows.map((tm: any) => ({
+          id: tm.id,
+          name: `${tm.first_name || ''} ${tm.last_name || ''}`.trim() || tm.full_name || tm.email,
+          email: tm.email,
+          role: (tm.role || 'sales') as any,
+          avatar: tm.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(`${tm.first_name || ''} ${tm.last_name || ''}`.trim() || tm.email || 'User')}&background=random`,
+          phone: tm.phone || '',
+          department: tm.department || 'General',
+          isActive: tm.is_active ?? true,
+          commission_rate: tm.commission_rate,
+          commission_rate_self_gen: tm.commission_rate_self_gen,
+          commission_rate_company: tm.commission_rate_company,
+          commission_rate_custom: tm.commission_rate_custom,
+          member_type: tm.member_type,
+          subcontractor_company: tm.subcontractor_company,
+        })),
+      });
+    }).catch(() => { /* the page still shows the invite button */ });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.companyId, profile?.company_id, state.teamMembers.length]);
 
   // Filter team members
   const filteredMembers = state.teamMembers.filter((tm) => {
@@ -419,8 +447,8 @@ export default function TeamView() {
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Team Management</h2>
           <p className="text-gray-500 mt-1">
-            {state.teamMembers.length} team members across {Object.keys(membersByDepartment).length}{' '}
-            departments
+            {state.teamMembers.length} team {state.teamMembers.length === 1 ? 'member' : 'members'} across {Object.keys(membersByDepartment).length}{' '}
+            {Object.keys(membersByDepartment).length === 1 ? 'department' : 'departments'}
           </p>
         </div>
         

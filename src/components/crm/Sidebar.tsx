@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useCRM, ViewType, canViewFinancials, canManageTeam, getActiveContactId } from '@/lib/crmStore';
+import { useCRM, ViewType, canViewFinancials, canManageTeam, getActiveContactId, NAV_RESELECT_EVENT } from '@/lib/crmStore';
 import type { BoardType } from '@/lib/crmData';
 import { useAuth } from '@/lib/authContext';
 import { useCompanyBrand } from '@/lib/useCompanyBrand';
@@ -182,6 +182,11 @@ export default function Sidebar() {
     if (item.boardType) {
       const board = state.boards.find((b) => b.type === item.boardType);
       if (board) dispatch({ type: 'SELECT_BOARD', payload: board.id });
+    }
+    // Clicking the screen you are already on should take you to its start
+    // (e.g. Quotes from inside a quote preview), not do nothing.
+    if (item.id === currentView && !item.boardType) {
+      window.dispatchEvent(new CustomEvent(NAV_RESELECT_EVENT, { detail: item.id }));
     }
     dispatch({ type: 'SET_VIEW', payload: item.id });
   };

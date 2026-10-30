@@ -1,5 +1,5 @@
 import { PROJECT_TYPE_GROUPS } from '@/lib/projectTypes';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { supabase } from '@/lib/supabase';
@@ -137,9 +137,23 @@ export default function QuickAddModal() {
     return withTimeout(resolveLogic(), 30000, 'Company resolution');
   };
 
+  // Every time the form opens it starts empty on the first step. Closing after
+  // "Save & Open Calendar" skipped the reset, so the next Quick Add reopened on the
+  // last step with the previous customer filled in (easy duplicate contacts).
+  useEffect(() => {
+    if (state.showQuickAdd) resetForm();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.showQuickAdd]);
+
   const handleClose = () => {
     dispatch({ type: 'TOGGLE_QUICK_ADD' });
+    resetForm();
+  };
+
+  function resetForm() {
     setCustomProjectType(false);
+    setDuplicates([]);
+    setShowDuplicateDialog(false);
     setFormData({
       firstName: '',
       lastName: '',
@@ -152,7 +166,7 @@ export default function QuickAddModal() {
       zip: '',
       leadSource: 'Door Knock',
       assignedTo: state.currentUser?.id || state.teamMembers[0]?.id || '',
-      status: 'lead',
+      status: 'prospect',
       projectType: '',
       roughEstimate: '',
       isRetail: false,
@@ -168,7 +182,7 @@ export default function QuickAddModal() {
     });
     setCurrentStep('basic');
     setScheduleAppt(false);
-  };
+  }
 
   const handleViewContact = (contactId: string) => {
     // Close dialogs and navigate to contact
@@ -394,7 +408,10 @@ export default function QuickAddModal() {
               { id: 'project', label: 'Project Details', icon: <Building size={16} /> },
               { id: 'insurance', label: 'Insurance', icon: <Shield size={16} /> },
               { id: 'appointment', label: 'Schedule', icon: <Calendar size={16} /> },
-            ].map((step, index) => (
+            ]
+              // Retail (cash) customers have no claim, so the Insurance step is skipped.
+              .filter((step) => !(formData.isRetail && step.id === 'insurance'))
+              .map((step, index, shown) => (
               <React.Fragment key={step.id}>
                 <button
                   onClick={() => setCurrentStep(step.id as FormStep)}
@@ -407,7 +424,7 @@ export default function QuickAddModal() {
                   {step.icon}
                   <span className="font-medium">{step.label}</span>
                 </button>
-                {index < 3 && <div className="flex-1 h-px bg-gray-300" />}
+                {index < shown.length - 1 && <div className="flex-1 h-px bg-gray-300" />}
               </React.Fragment>
             ))}
           </div>
@@ -511,7 +528,7 @@ export default function QuickAddModal() {
                     value={formData.city}
                     onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                     className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                    placeholder="Dallas"
+                    placeholder="Columbus"
                   />
                 </div>
                 <div>
@@ -521,7 +538,7 @@ export default function QuickAddModal() {
                     value={formData.state}
                     onChange={(e) => setFormData({ ...formData, state: e.target.value })}
                     className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                    placeholder="TX"
+                    placeholder="OH"
                   />
                 </div>
                 <div>
@@ -531,7 +548,7 @@ export default function QuickAddModal() {
                     value={formData.zip}
                     onChange={(e) => setFormData({ ...formData, zip: e.target.value })}
                     className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                    placeholder="75201"
+                    placeholder="43215"
                   />
                 </div>
               </div>
@@ -862,7 +879,7 @@ export default function QuickAddModal() {
             {currentStep !== 'basic' && (
               <button
                 onClick={() => {
-                  if (currentStep === 'appointment') setCurrentStep('insurance');
+                  if (currentStep === 'appointment') setCurrentStep(formData.isRetail ? 'project' : 'insurance');
                   else if (currentStep === 'insurance') setCurrentStep('project');
                   else setCurrentStep('basic');
                 }}
@@ -883,7 +900,7 @@ export default function QuickAddModal() {
               <button
                 onClick={() => {
                   if (currentStep === 'basic') setCurrentStep('project');
-                  else if (currentStep === 'project') setCurrentStep('insurance');
+                  else if (currentStep === 'project') setCurrentStep(formData.isRetail ? 'appointment' : 'insurance');
                   else setCurrentStep('appointment');
                 }}
                 disabled={currentStep === 'basic' && !isBasicValid}

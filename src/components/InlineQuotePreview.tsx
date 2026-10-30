@@ -1,5 +1,6 @@
 // Copied from QuoteMGR src/components/InlineQuotePreview.tsx (read-only reference).
 import React, { useState } from 'react';
+import { formatCurrencyExact } from '@/lib/crmData';
 import {
   Building2, Phone, Mail, Shield, FileText, CheckCircle, Camera, AlertCircle, X, DollarSign, ExternalLink
 } from 'lucide-react';
@@ -61,7 +62,7 @@ const InlineQuotePreview: React.FC<InlineQuotePreviewProps> = ({
   const [currentPage, setCurrentPage] = useState('cover');
 
   const formatCurrency = (val: number) =>
-    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(val);
+    formatCurrencyExact(val);
 
   const goodTotal = lineItems.reduce((sum, item) => sum + item.quantity * item.good_price, 0);
   const betterTotal = lineItems.reduce((sum, item) => sum + item.quantity * item.better_price, 0);

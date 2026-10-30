@@ -317,7 +317,7 @@ Jane,Smith,jane@example.com,555-9999,555-8888,456 Oak Ave,Boulder,CO,80301,Prosp
           <div>
             <h2 className="text-xl font-semibold text-gray-900">Contacts</h2>
             <p className="text-sm text-gray-500 mt-1">
-              {filteredContacts.length} contacts found
+              {filteredContacts.length} {filteredContacts.length === 1 ? 'contact' : 'contacts'} found
             </p>
           </div>
           <div className="flex items-center gap-3">

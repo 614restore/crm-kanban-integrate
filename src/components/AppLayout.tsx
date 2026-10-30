@@ -404,13 +404,13 @@ function dbAppointmentToAppAppointment(dbAppointment: any, contacts: Contact[]):
 // Helper function to convert DB invoice to app invoice
 function dbInvoiceToAppInvoice(dbInvoice: any, contacts: Contact[]): Invoice {
   // Invoices are filed against customer_id (contact_id is the older name for the same thing).
-  const contactRef = dbInvoice.contact_id || dbInvoice.customer_id;
-  const contact = contacts.find(c => c.id === contactRef);
+  const contactId = dbInvoice.contact_id || dbInvoice.customer_id || '';
+  const contact = contacts.find(c => c.id === contactId);
   return {
     id: dbInvoice.id,
     invoiceNumber: dbInvoice.invoice_number || undefined,
-    contactId: contactRef,
-    contactName: contact ? `${contact.firstName} ${contact.lastName}` : 'Unknown',
+    contactId,
+    contactName: contact ? `${contact.firstName} ${contact.lastName}` : 'Customer removed',
     jobId: dbInvoice.job_id || '',
     // The column is `total`; there is no `amount`, which made every invoice read as $NaN.
     amount: Number(dbInvoice.total ?? dbInvoice.amount ?? 0),
@@ -806,14 +806,14 @@ function CRMApp() {
         // null = the read failed or timed out (handled below), unlike [] which means no contacts.
         withFetchTimeout(db.getAllContacts(profile.company_id), null, 8000),
         withFetchTimeout(db.getCommunications(profile.company_id), [], 8000),
-        withFetchTimeout(db.getAppointments(profile.company_id), [], 3000),
-        withFetchTimeout(db.getInvoices(profile.company_id), [], 8000),
+        withFetchTimeout(db.getAppointments(profile.company_id), null, 8000),
+        withFetchTimeout(db.getInvoices(profile.company_id), null, 8000),
         withFetchTimeout(db.getKanbanBoards(profile.company_id), [], 8000),
         withFetchTimeout(db.getLeadSources(profile.company_id), [], 8000),
         withFetchTimeout(db.getAutomations(profile.company_id), [], 8000),
-        withFetchTimeout(db.getTeamMembers(profile.company_id), [], 8000),
+        withFetchTimeout(db.getTeamMembers(profile.company_id), null, 8000),
         withFetchTimeout(db.getCompany(profile.company_id), null, 8000), // pre-warm company cache
-        withFetchTimeout(db.getQuoteSummaries(profile.company_id), [], 8000),
+        withFetchTimeout(db.getQuoteSummaries(profile.company_id), null, 8000),
         withFetchTimeout(db.getProjects(profile.company_id), [], 8000),
         withFetchTimeout(db.getWorkOrders(profile.company_id), [], 8000),
         withFetchTimeout(db.getSuppliers(profile.company_id), [], 8000),
@@ -874,10 +874,14 @@ function CRMApp() {
       });
 
       // Convert DB appointments to app appointments
-      const appointments = dbAppointments.map(apt => dbAppointmentToAppAppointment(apt, enrichedContacts));
+      // null = that read failed or timed out: keep what is already on screen (or the saved copy)
+      // instead of showing nothing, e.g. Signed Quotes $0 or no appointments until a later refresh.
+      const keep = <K extends 'appointments' | 'invoices' | 'quotes'>(key: K) =>
+        ((stateRef.current as any)[key]?.length ? (stateRef.current as any)[key] : ((cached as any)?.[key] ?? [])) as CRMState[K];
+      const appointments = dbAppointments ? dbAppointments.map(apt => dbAppointmentToAppAppointment(apt, enrichedContacts)) : keep('appointments');
 
       // Convert DB invoices to app invoices
-      const invoices = dbInvoices.map(inv => dbInvoiceToAppInvoice(inv, enrichedContacts));
+      const invoices = dbInvoices ? dbInvoices.map(inv => dbInvoiceToAppInvoice(inv, enrichedContacts)) : keep('invoices');
 
       // Convert DB boards to app boards (with columns)
       // Each getKanbanBoardWithColumns call is individually capped at 6 s so a slow
@@ -931,7 +935,18 @@ function CRMApp() {
       }));
 
       // Convert DB team members to app team members
-      const teamMembers: TeamMember[] = dbTeamMembers.map(tm => ({
+      // A failed or slow team read used to come back as [] and wipe the team: the Team
+      // page said "0 team members" and every Assign To list was empty. Keep the team
+      // already on screen (or the saved copy); with nothing at all, the signed-in user
+      // is still a member of their own company.
+      const keptTeamMembers: TeamMember[] = stateRef.current.teamMembers?.length
+        ? stateRef.current.teamMembers
+        : (((cached as any)?.teamMembers as TeamMember[] | undefined) ?? []);
+      if (!dbTeamMembers?.length) console.warn('[loadData] Team members read failed, timed out or came back empty; keeping the team already loaded.');
+      const teamRows = dbTeamMembers?.length
+        ? dbTeamMembers
+        : keptTeamMembers.length ? [] : [profile as any];
+      const mappedTeamMembers: TeamMember[] = teamRows.map(tm => ({
         id: tm.id,
         name: `${tm.first_name || ''} ${tm.last_name || ''}`.trim() || tm.email,
         email: tm.email,
@@ -939,7 +954,7 @@ function CRMApp() {
         avatar: tm.avatar_url || buildFallbackAvatar(tm.first_name, tm.last_name, tm.email),
         phone: tm.phone || '',
         department: tm.department || 'General',
-        isActive: tm.is_active,
+        isActive: tm.is_active ?? true,
         commission_rate: tm.commission_rate,
         commission_rate_self_gen: tm.commission_rate_self_gen,
         commission_rate_company: tm.commission_rate_company,
@@ -947,8 +962,9 @@ function CRMApp() {
         member_type: tm.member_type,
         subcontractor_company: tm.subcontractor_company,
       }));
+      const teamMembers: TeamMember[] = mappedTeamMembers.length ? mappedTeamMembers : keptTeamMembers;
 
-      const quotes = (dbQuotes || []).map(toQuoteSummary);
+      const quotes = dbQuotes ? dbQuotes.map(toQuoteSummary) : keep('quotes');
 
       const projects = (dbProjects || []).map((p: any) => ({
         id: p.id,
