@@ -157,12 +157,18 @@ export default function QuotesView() {
     const close = () => setActionMenu(null);
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
     window.addEventListener('mousedown', close);
-    window.addEventListener('scroll', close, true);
+    // Scrolling the page closes the menu, but scrolling inside the menu (to reach
+    // "Create invoice" on a short screen) must not.
+    const onScroll = (e: Event) => {
+      if (e.target instanceof Element && e.target.closest('[role="menu"]')) return;
+      close();
+    };
+    window.addEventListener('scroll', onScroll, true);
     window.addEventListener('resize', close);
     window.addEventListener('keydown', onKey);
     return () => {
       window.removeEventListener('mousedown', close);
-      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('scroll', onScroll, true);
       window.removeEventListener('resize', close);
       window.removeEventListener('keydown', onKey);
     };
@@ -173,7 +179,7 @@ export default function QuotesView() {
     const rect = button.getBoundingClientRect();
     // Open upward only when there is more room above than below; the menu scrolls if neither side fits.
     const spaceBelow = window.innerHeight - rect.bottom;
-    const up = spaceBelow < 380 && rect.top > spaceBelow;
+    const up = spaceBelow < 480 && rect.top > spaceBelow;
     setActionMenu({
       quote: q,
       top: up ? rect.top - 4 : rect.bottom + 4,
@@ -235,6 +241,14 @@ export default function QuotesView() {
   useEffect(() => {
     if (companyId) loadQuotes();
     setSelectedIds(new Set());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId, showArchived]);
+
+  // The top bar's refresh button: re-read quotes so new signatures show without reloading the page.
+  useEffect(() => {
+    const refresh = () => { if (companyId) loadQuotes(); };
+    window.addEventListener('crm-force-refresh', refresh);
+    return () => window.removeEventListener('crm-force-refresh', refresh);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId, showArchived]);
 

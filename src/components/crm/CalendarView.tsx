@@ -363,7 +363,7 @@ export default function CalendarView() {
     <div className="h-full flex flex-col">
       {/* Header */}
       <div className="p-6 bg-white border-b border-gray-200">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div>
             <h2 className="text-2xl font-bold text-gray-900">Calendar</h2>
             <p className="text-gray-500 mt-1">
@@ -387,13 +387,13 @@ export default function CalendarView() {
           </div>
         </div>
 
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
               <button onClick={viewMode === 'month' ? handlePrevMonth : handlePrevWeek} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
                 <ChevronLeft size={20} />
               </button>
-              <span className="font-medium text-gray-900 min-w-[200px] text-center">
+              <span className="font-medium text-gray-900 min-w-[140px] sm:min-w-[200px] text-center">
                 {viewMode === 'month'
                   ? currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
                   : `${weekDates[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${weekDates[6].toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`}
@@ -430,9 +430,10 @@ export default function CalendarView() {
 
       {/* Content */}
       <div className="flex-1 overflow-auto bg-gray-50">
+        {/* On a phone the day panel goes under the month grid instead of squeezing it. */}
         {viewMode === 'month' ? (
-          <div className="flex h-full">
-            <div className="flex-1 p-4">
+          <div className="flex flex-col lg:flex-row h-full">
+            <div className="flex-1 min-w-0 p-2 sm:p-4">
               <div className="bg-white rounded-xl border border-gray-200 overflow-hidden h-full flex flex-col">
                 <div className="grid grid-cols-7 border-b border-gray-200">
                   {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
@@ -473,7 +474,7 @@ export default function CalendarView() {
             </div>
 
             {/* Day Detail Sidebar */}
-            <div className="w-80 border-l border-gray-200 bg-white p-4 overflow-y-auto">
+            <div className="w-full lg:w-80 border-t lg:border-t-0 lg:border-l border-gray-200 bg-white p-4 overflow-y-auto">
               {selectedDate ? (
                 <>
                   <div className="flex items-center justify-between mb-4">

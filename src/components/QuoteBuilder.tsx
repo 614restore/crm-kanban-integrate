@@ -3057,7 +3057,10 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
       // prices already included margin). Now we use default_margin_percent so
       // companies that price at cost get the right markup applied automatically.
       const defaultMargin = localCompany.default_margin_percent ?? (companyPricing.length === 0 ? 50 : 0);
-      const isFirstApply = lineItems.length === 0 && priceAdjPctRef.current === 0 && defaultMargin > 0;
+      // Per-square rates are all-in prices the user typed, so no margin goes on top
+      // (it turned a $400/sq Good tier into $600/sq on the first click).
+      const isFirstApply = lineItems.length === 0 && priceAdjPctRef.current === 0 && defaultMargin > 0
+        && effectivePricingMode !== 'per-sq';
       let finalItems = normalizeSortOrder(result);
       if (isFirstApply) {
         const mult = 1 + defaultMargin / 100;
