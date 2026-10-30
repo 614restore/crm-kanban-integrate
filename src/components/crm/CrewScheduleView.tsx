@@ -226,7 +226,7 @@ function SubcontractorFormModal({ existing, companyId, onClose, onSaved }: Subco
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
               <input
@@ -442,7 +442,7 @@ function AssignmentModal({
             </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
               <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)}
@@ -743,7 +743,7 @@ export default function CrewScheduleView({ contactFilterId }: { contactFilterId?
   return (
     <div className="flex flex-col h-full bg-gray-50">
       {/* Page header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
+      <div className="bg-white border-b border-gray-200 px-4 sm:px-6 py-4">
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-50 rounded-lg">
@@ -755,10 +755,10 @@ export default function CrewScheduleView({ contactFilterId }: { contactFilterId?
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => setShowSubManager(v => !v)}
-              className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors ${
+              className={`flex items-center gap-2 px-3 py-1.5 whitespace-nowrap text-sm font-medium rounded-lg border transition-colors ${
                 showSubManager
                   ? 'bg-orange-50 border-orange-300 text-orange-700'
                   : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
@@ -777,7 +777,7 @@ export default function CrewScheduleView({ contactFilterId }: { contactFilterId?
             <button onClick={nextWeek} className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 text-gray-600">
               <ChevronRight size={16} />
             </button>
-            <span className="text-sm font-medium text-gray-700 ml-1">
+            <span className="text-sm font-medium text-gray-700 ml-1 whitespace-nowrap">
               {weekDates[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
               {' – '}
               {weekDates[6].toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -786,7 +786,7 @@ export default function CrewScheduleView({ contactFilterId }: { contactFilterId?
         </div>
 
         {/* Stats */}
-        <div className="mt-4 grid grid-cols-3 gap-4 max-w-2xl">
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-2xl">
           <div className="flex items-center gap-3 bg-blue-50 rounded-lg px-4 py-3">
             <BarChart3 size={18} className="text-blue-600 shrink-0" />
             <div>

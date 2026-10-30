@@ -406,7 +406,8 @@ export default function DocumentCenter() {
 
   return (
     <>
-    <div className="h-full flex">
+    {/* On a phone the side panel stacks above the files and the folders become a row to swipe. */}
+    <div className="h-full flex flex-col md:flex-row overflow-y-auto md:overflow-visible">
       <input
         ref={fileInputRef}
         type="file"
@@ -425,7 +426,7 @@ export default function DocumentCenter() {
       />
 
       {/* Sidebar */}
-      <div className="w-64 bg-white border-r border-gray-200 p-4 flex-shrink-0 overflow-y-auto">
+      <div className="w-full md:w-64 bg-white border-b md:border-b-0 md:border-r border-gray-200 p-4 flex-shrink-0 md:overflow-y-auto">
         {/* Customer Filter */}
         <div className="mb-4">
           <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Customer</label>
@@ -467,12 +468,12 @@ export default function DocumentCenter() {
           </div>
         )}
 
-        <nav className="space-y-1">
+        <nav className="flex md:block gap-1 md:space-y-1 overflow-x-auto md:overflow-visible">
           {categories.map((cat) => (
             <button
               key={cat.id}
               onClick={() => setCategoryFilter(cat.id as DocCategory)}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg transition-colors ${
+              className={`flex-shrink-0 md:w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg whitespace-nowrap transition-colors ${
                 categoryFilter === cat.id
                   ? 'bg-blue-50 text-blue-700'
                   : 'text-gray-600 hover:bg-gray-50'
@@ -488,16 +489,15 @@ export default function DocumentCenter() {
         </nav>
 
         {/* Storage Info */}
-        <div className="mt-8 p-3 bg-gray-50 rounded-lg text-xs text-gray-500 text-center">
+        <div className="hidden md:block mt-8 p-3 bg-gray-50 rounded-lg text-xs text-gray-500 text-center">
           {allDocuments.length} file{allDocuments.length !== 1 ? 's' : ''} stored
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col">
-        {/* Header */}
-        <div className="p-6 bg-white border-b border-gray-200">
-          <div className="flex items-center justify-between mb-4">
+      <div className="flex-1 min-w-0 flex flex-col">
+        <div className="p-4 sm:p-6 bg-white border-b border-gray-200">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <h2 className="text-xl font-semibold text-gray-900">
               {categories.find((c) => c.id === categoryFilter)?.label || 'All Files'}
             </h2>

@@ -777,13 +777,14 @@ export default function PipelineBoard() {
   return (
     <div className="h-full flex flex-col">
       {/* ── Top Bar ─────────────────────────────────────────────── */}
-      <div className="p-6 bg-white border-b border-gray-200">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+      {/* On a phone the board name + count sit on one line and the buttons wrap under them. */}
+      <div className="p-4 sm:p-6 bg-white border-b border-gray-200">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 min-w-0">
             <div className="relative">
               <button
                 onClick={() => setShowBoardSelector(!showBoardSelector)}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors whitespace-nowrap"
               >
                 {showAllBoards ? (
                   <><LayoutGrid size={16} className="text-indigo-600" /><span className="font-semibold text-indigo-700">All Boards</span></>
@@ -853,15 +854,15 @@ export default function PipelineBoard() {
             {(() => {
               // Count the contacts this board actually shows, not every contact in the company.
               const onBoard = new Set((currentBoard?.columns ?? []).flatMap((col) => getColumnContacts(col).map((c) => c.id))).size;
-              return <div className="text-sm text-gray-500">{onBoard} {onBoard === 1 ? 'contact' : 'contacts'} on this board</div>;
+              return <div className="text-sm text-gray-500 whitespace-nowrap">{onBoard} {onBoard === 1 ? 'contact' : 'contacts'} on this board</div>;
             })()}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {/* ── Owner Priority Toggle ── */}
             <button
               onClick={() => setShowPriorityPanel(!showPriorityPanel)}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors border ${
+              className={`flex items-center gap-2 px-3 py-2 whitespace-nowrap rounded-lg text-sm font-medium transition-colors border ${
                 showPriorityPanel
                   ? 'bg-amber-50 text-amber-700 border-amber-300'
                   : 'bg-white text-gray-600 border-gray-200 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-300'
@@ -873,7 +874,7 @@ export default function PipelineBoard() {
             </button>
             <button
               onClick={() => dispatch({ type: 'TOGGLE_QUICK_ADD' })}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap"
             >
               <Plus size={18} /><span className="font-medium">Add Contact</span>
             </button>

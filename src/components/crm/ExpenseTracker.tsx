@@ -873,7 +873,7 @@ const ExpenseDetailModal: React.FC<{
         </DialogHeader>
         
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <Label>Amount</Label>
               <p className="text-2xl font-bold">${expense.amount.toFixed(2)}</p>
@@ -896,7 +896,7 @@ const ExpenseDetailModal: React.FC<{
             <p>{expense.description}</p>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <Label>Category</Label>
               <p>{expense.category}</p>
@@ -921,7 +921,7 @@ const ExpenseDetailModal: React.FC<{
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <Label>Submitted By</Label>
               <p>{expense.submittedBy}</p>

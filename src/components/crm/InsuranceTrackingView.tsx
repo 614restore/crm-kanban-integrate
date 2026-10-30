@@ -361,7 +361,7 @@ export default function InsuranceTrackingView({ contactId, contactName }: Insura
     <div className="flex flex-col h-full bg-gray-50">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div className="flex items-center gap-3">
             <Shield size={24} className="text-blue-600" />
             <div>
@@ -383,7 +383,7 @@ export default function InsuranceTrackingView({ contactId, contactName }: Insura
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-4 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
           <div className="bg-blue-50 rounded-lg p-3 text-center">
             <p className="text-2xl font-bold text-blue-700">{openClaims}</p>
             <p className="text-xs text-blue-600">Open Claims</p>
@@ -536,7 +536,7 @@ export default function InsuranceTrackingView({ contactId, contactName }: Insura
                 <X size={20} />
               </button>
             </div>
-            <div className="p-6 grid grid-cols-2 gap-4">
+            <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
               {!contactId && (
                 <div className="col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Customer *</label>

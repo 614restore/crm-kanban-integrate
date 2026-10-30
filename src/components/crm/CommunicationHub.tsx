@@ -641,13 +641,13 @@ export default function CommunicationHub() {
       </div>
 
       <div className="flex flex-1 min-h-0">
-      {/* Left Panel - Communication List */}
-      <div className="w-1/2 border-r border-gray-200 flex flex-col bg-white">
+      {/* Left Panel - Communication List. On a phone only one panel shows: the list, or the open message. */}
+      <div className={`${selectedComm ? 'hidden md:flex' : 'flex'} w-full md:w-1/2 border-r border-gray-200 flex-col bg-white`}>
         {/* Header */}
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center justify-between mb-4">
+        <div className="p-4 sm:p-6 border-b border-gray-200">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <h2 className="text-xl font-semibold text-gray-900">Communications</h2>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={() => setShowTemplates(true)}
                 disabled={!hasSelectedThread}
@@ -774,11 +774,18 @@ export default function CommunicationHub() {
       </div>
 
       {/* Right Panel - Communication Detail */}
-      <div className="w-1/2 flex flex-col bg-gray-50">
+      <div className={`${selectedComm ? 'flex' : 'hidden md:flex'} w-full md:w-1/2 flex-col bg-gray-50`}>
         {selectedCommData ? (
           <>
+            <button
+              type="button"
+              onClick={() => setSelectedComm(null)}
+              className="md:hidden flex items-center gap-1 px-4 py-3 text-sm font-medium text-blue-600 bg-white border-b border-gray-200"
+            >
+              ← All communications
+            </button>
             {/* Detail Header */}
-            <div className="p-6 bg-white border-b border-gray-200">
+            <div className="p-4 sm:p-6 bg-white border-b border-gray-200">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-4">
                   <div className={`w-12 h-12 rounded-full flex items-center justify-center ${getTypeBg(selectedCommData.type)}`}>

@@ -1494,17 +1494,17 @@ export default function SettingsView() {
       />
 
       {/* Main content row */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
 
-      {/* Sidebar */}
-      <div className="w-64 flex-shrink-0 bg-white border-r border-gray-200 p-4 overflow-y-auto">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4 px-3">Settings</h2>
-        <nav className="space-y-1">
+      {/* Sidebar — on a phone it becomes a row of tabs to swipe through, so the settings get the full width */}
+      <div className="md:w-64 flex-shrink-0 bg-white border-b md:border-b-0 md:border-r border-gray-200 p-2 md:p-4 overflow-x-auto md:overflow-x-visible md:overflow-y-auto">
+        <h2 className="hidden md:block text-lg font-semibold text-gray-900 mb-4 px-3">Settings</h2>
+        <nav className="flex md:block gap-1 md:space-y-1">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as SettingsTab)}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+              className={`flex-shrink-0 md:w-full flex items-center gap-2 md:gap-3 px-3 py-2 rounded-lg whitespace-nowrap transition-colors ${
                 activeTab === tab.id
                   ? 'bg-blue-50 text-blue-700'
                   : 'text-gray-600 hover:bg-gray-50'
@@ -1518,13 +1518,13 @@ export default function SettingsView() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto p-8">
+      <div className="flex-1 overflow-auto p-4 md:p-8">
         {activeTab === 'company' && (
           <div className="max-w-3xl space-y-8">
             <div>
               <h3 className="text-xl font-semibold text-gray-900 mb-6">Company Profile</h3>
               <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-6">
-                <div className="flex items-center gap-6">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
                   <div className="relative group">
                     {isUploadingLogo ? (
                       <div className="w-20 h-20 rounded-xl bg-gray-100 flex items-center justify-center">
@@ -1551,7 +1551,7 @@ export default function SettingsView() {
                       </button>
                     )}
                   </div>
-                  <div>
+                  <div className="min-w-0 w-full">
                     <h4 className="text-lg font-semibold text-gray-900">{companyForm.name}</h4>
                     <p className="text-gray-500">Premium roofing and restoration services</p>
                     <button
@@ -1578,7 +1578,7 @@ export default function SettingsView() {
                         value={companyLogoUrlInput}
                         onChange={(e) => setCompanyLogoUrlInput(e.target.value)}
                         placeholder="Or paste logo image URL"
-                        className="w-72 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                        className="w-full sm:w-72 min-w-0 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                       />
                       <button
                         onClick={handleSaveCompanyLogoUrl}
@@ -1592,7 +1592,7 @@ export default function SettingsView() {
                 </div>
 
                 <div
-                  className="grid grid-cols-2 gap-6"
+                  className="grid grid-cols-1 sm:grid-cols-2 gap-6"
                   onPaste={handleCompanyLogoPaste}
                   title="Paste an image here to upload the company logo"
                 >
@@ -1651,7 +1651,7 @@ export default function SettingsView() {
                   />
                 </div>
 
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
                     <input
@@ -1697,7 +1697,7 @@ export default function SettingsView() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Contractor License #</label>
                     <input
@@ -1750,7 +1750,7 @@ export default function SettingsView() {
                   The name and address shown in the "From" field on all outgoing emails.
                   {!companyForm.smtp_host && ' Leave blank to use the system default.'}
                 </p>
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Sender Name</label>
                     <input
@@ -1864,7 +1864,7 @@ export default function SettingsView() {
                   );
                 })()}
 
-                <div className="grid grid-cols-2 gap-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">SMTP Host</label>
                     <input
@@ -2059,7 +2059,7 @@ export default function SettingsView() {
               <h3 className="text-xl font-semibold text-gray-900 mb-6">My Profile</h3>
               <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-6">
                 <div
-                  className="flex items-center gap-6"
+                  className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6"
                   onPaste={handleAvatarPaste}
                   title="Paste an image here to upload your avatar"
                 >
@@ -2090,7 +2090,7 @@ export default function SettingsView() {
                       </button>
                     )}
                   </div>
-                  <div>
+                  <div className="min-w-0 w-full">
                     <h4 className="text-lg font-semibold text-gray-900">
                       {profile?.first_name && profile?.last_name 
                         ? `${profile.first_name} ${profile.last_name}`
@@ -2122,7 +2122,7 @@ export default function SettingsView() {
                         value={profileAvatarUrlInput}
                         onChange={(e) => setProfileAvatarUrlInput(e.target.value)}
                         placeholder="Or paste profile image URL"
-                        className="w-72 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                        className="w-full sm:w-72 min-w-0 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                       />
                       <button
                         onClick={handleSaveAvatarUrl}
@@ -2137,7 +2137,7 @@ export default function SettingsView() {
 
                 {editingProfile ? (
                   <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           First Name
@@ -2459,7 +2459,7 @@ export default function SettingsView() {
                 
                 <div className="space-y-3">
                   <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-xs font-semibold text-gray-700">Production Key</span>
                         <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">Active</span>
@@ -2474,7 +2474,7 @@ export default function SettingsView() {
                   </div>
 
                   <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-xs font-semibold text-gray-700">Test Key</span>
                         <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">Test Mode</span>
@@ -2507,7 +2507,7 @@ export default function SettingsView() {
                 <div className="space-y-2 mb-4">
                   {([] as { event: string; url: string }[]).map((webhook, idx) => (
                     <div key={idx} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                      <div className="flex-1">
+                      <div className="flex-1 min-w-0">
                         <div className="text-xs font-semibold text-gray-700 mb-1">{webhook.event}</div>
                         <code className="text-xs text-gray-600 font-mono">{webhook.url}</code>
                       </div>
@@ -2575,14 +2575,14 @@ export default function SettingsView() {
                     { from: 'Contingency', to: 'Approved', trigger: 'Customer or insurance approves', auto: false, note: 'Requires manual confirmation' },
                     { from: 'Approved', to: 'Signed', trigger: 'Customer signs contract/estimate', auto: false, note: 'Requires manual confirmation' },
                   ].map((rule, i) => (
-                    <div key={i} className={`flex items-center gap-3 p-3 rounded-lg text-sm ${rule.auto ? 'bg-green-50 border border-green-100' : 'bg-amber-50 border border-amber-100'}`}>
-                      <span className="font-medium text-gray-700 min-w-[160px]">{rule.from}</span>
+                    <div key={i} className={`flex flex-wrap items-center gap-x-3 gap-y-1 p-3 rounded-lg text-sm ${rule.auto ? 'bg-green-50 border border-green-100' : 'bg-amber-50 border border-amber-100'}`}>
+                      <span className="font-medium text-gray-700 sm:min-w-[160px]">{rule.from}</span>
                       <span className="text-gray-400">&#8594;</span>
-                      <span className="font-medium text-gray-700 min-w-[160px]">{rule.to}</span>
+                      <span className="font-medium text-gray-700 sm:min-w-[160px]">{rule.to}</span>
                       <span className={`px-2 py-0.5 rounded text-xs font-medium ${rule.auto ? 'bg-green-200 text-green-800' : 'bg-amber-200 text-amber-800'}`}>
                         {rule.auto ? 'Auto' : 'Manual'}
                       </span>
-                      <span className="text-gray-500 text-xs flex-1">{rule.trigger}</span>
+                      <span className="text-gray-500 text-xs basis-full sm:basis-0 sm:flex-1">{rule.trigger}</span>
                     </div>
                   ))}
                 </div>
@@ -2599,12 +2599,12 @@ export default function SettingsView() {
                     { from: 'Build Phase', to: 'Cleanup', trigger: 'Delayed 3 seconds for review', auto: true },
                     { from: 'Cleanup', to: 'Completed', trigger: 'Delayed 3 seconds for review', auto: true },
                   ].map((rule, i) => (
-                    <div key={i} className="flex items-center gap-3 p-3 rounded-lg text-sm bg-green-50 border border-green-100">
-                      <span className="font-medium text-gray-700 min-w-[160px]">{rule.from}</span>
+                    <div key={i} className="flex flex-wrap items-center gap-x-3 gap-y-1 p-3 rounded-lg text-sm bg-green-50 border border-green-100">
+                      <span className="font-medium text-gray-700 sm:min-w-[160px]">{rule.from}</span>
                       <span className="text-gray-400">&#8594;</span>
-                      <span className="font-medium text-gray-700 min-w-[160px]">{rule.to}</span>
+                      <span className="font-medium text-gray-700 sm:min-w-[160px]">{rule.to}</span>
                       <span className="px-2 py-0.5 rounded text-xs font-medium bg-green-200 text-green-800">Auto</span>
-                      <span className="text-gray-500 text-xs flex-1">{rule.trigger}</span>
+                      <span className="text-gray-500 text-xs basis-full sm:basis-0 sm:flex-1">{rule.trigger}</span>
                     </div>
                   ))}
                 </div>
@@ -2619,14 +2619,14 @@ export default function SettingsView() {
                     { from: 'Invoicing', to: 'Pending Payment', trigger: 'Invoice sent to customer', auto: true },
                     { from: 'Pending Payment', to: 'Paid', trigger: 'Payment received', auto: false, note: 'Triggered by payment confirmation' },
                   ].map((rule, i) => (
-                    <div key={i} className={`flex items-center gap-3 p-3 rounded-lg text-sm ${rule.auto !== false ? 'bg-green-50 border border-green-100' : 'bg-amber-50 border border-amber-100'}`}>
-                      <span className="font-medium text-gray-700 min-w-[160px]">{rule.from}</span>
+                    <div key={i} className={`flex flex-wrap items-center gap-x-3 gap-y-1 p-3 rounded-lg text-sm ${rule.auto !== false ? 'bg-green-50 border border-green-100' : 'bg-amber-50 border border-amber-100'}`}>
+                      <span className="font-medium text-gray-700 sm:min-w-[160px]">{rule.from}</span>
                       <span className="text-gray-400">&#8594;</span>
-                      <span className="font-medium text-gray-700 min-w-[160px]">{rule.to}</span>
+                      <span className="font-medium text-gray-700 sm:min-w-[160px]">{rule.to}</span>
                       <span className={`px-2 py-0.5 rounded text-xs font-medium ${rule.auto !== false ? 'bg-green-200 text-green-800' : 'bg-amber-200 text-amber-800'}`}>
                         {rule.auto !== false ? 'Auto' : 'Manual'}
                       </span>
-                      <span className="text-gray-500 text-xs flex-1">{rule.trigger}</span>
+                      <span className="text-gray-500 text-xs basis-full sm:basis-0 sm:flex-1">{rule.trigger}</span>
                     </div>
                   ))}
                 </div>
