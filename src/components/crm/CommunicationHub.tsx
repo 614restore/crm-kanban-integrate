@@ -631,7 +631,7 @@ export default function CommunicationHub() {
               📱 SMS & Voice Calling Coming Soon!
             </p>
             <p className="text-xs text-gray-600">
-              Twilio integration in progress — send texts and make calls directly from TrussCTR (Q2 2026)
+              Twilio integration in progress — send texts and make calls directly from TrussCTR
             </p>
           </div>
           <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">

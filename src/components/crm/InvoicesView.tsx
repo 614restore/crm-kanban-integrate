@@ -350,7 +350,7 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600 mb-1">Outstanding Balance</p>
-                <p className="text-2xl font-bold text-red-600">{formatCurrency(totalOutstanding)}</p>
+                <p className={`text-2xl font-bold ${totalOutstanding > 0 ? 'text-red-600' : 'text-gray-900'}`}>{formatCurrency(totalOutstanding)}</p>
               </div>
               <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
                 <TrendingUp className="w-6 h-6 text-red-600" />

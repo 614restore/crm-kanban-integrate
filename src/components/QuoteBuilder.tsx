@@ -4479,19 +4479,24 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
 
       {/* Progress Steps — wraps to fit the window; labels shorten as it narrows */}
       <div className="flex flex-wrap items-center gap-x-1 gap-y-2 mb-8">
-        {activeSteps.map((step, i) => (
+        {activeSteps.map((step, i) => {
+          // Optional steps left empty are passed, not done, so they get no green check.
+          const skipped = (step.id === 'photos' && photos.length === 0)
+            || (step.id === 'project' && !projectDescription.trim() && !measurementData);
+          const done = i < currentStep && !skipped;
+          return (
           <React.Fragment key={step.id}>
             <button
               onClick={() => setCurrentStep(i)}
               title={step.label}
               className={`flex items-center gap-2 px-2.5 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all ${i === currentStep
                 ? 'bg-[#1e3a5f] text-white shadow-lg'
-                : i < currentStep
+                : done
                   ? 'bg-green-100 text-green-700'
                   : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                 }`}
             >
-              {i < currentStep ? <Check className="w-4 h-4 flex-shrink-0" /> : <step.icon className="w-4 h-4 flex-shrink-0" />}
+              {done ? <Check className="w-4 h-4 flex-shrink-0" /> : <step.icon className="w-4 h-4 flex-shrink-0" />}
               {/* Full name on wide screens, short name from medium up, and on the
                   narrowest screens just the number — except the step you are on. */}
               <span className="hidden xl:inline">{step.label}</span>
@@ -4500,7 +4505,8 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
             </button>
             {i < activeSteps.length - 1 && <ChevronRight className="hidden sm:block w-4 h-4 text-gray-300 flex-shrink-0" />}
           </React.Fragment>
-        ))}
+          );
+        })}
       </div>
 
       {/* Step Content */}
@@ -4600,17 +4606,17 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
                 <input type="text" value={customer.city || ''} onChange={(e) => setCustomer({ ...customer, city: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#1e3a5f] focus:border-transparent outline-none" placeholder="Dallas" />
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#1e3a5f] focus:border-transparent outline-none" placeholder="Columbus" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
                 <input type="text" value={customer.state || ''} onChange={(e) => setCustomer({ ...customer, state: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#1e3a5f] focus:border-transparent outline-none" placeholder="TX" />
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#1e3a5f] focus:border-transparent outline-none" placeholder="OH" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">ZIP Code</label>
                 <input type="text" value={customer.zip || ''} onChange={(e) => setCustomer({ ...customer, zip: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#1e3a5f] focus:border-transparent outline-none" placeholder="75201" />
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#1e3a5f] focus:border-transparent outline-none" placeholder="43215" />
               </div>
             </div>
           </div>

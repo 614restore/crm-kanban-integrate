@@ -24,6 +24,13 @@ import {
   ChevronDown,
 } from 'lucide-react';
 
+// 9:00 AM, or the next whole hour when that has already passed today.
+function defaultStartTime(date: string): string {
+  if (date !== toLocalDateString(new Date())) return '09:00';
+  const nextHour = new Date().getHours() + 1;
+  return nextHour <= 9 ? '09:00' : `${String(Math.min(nextHour, 23)).padStart(2, '0')}:00`;
+}
+
 interface AppointmentModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -148,13 +155,15 @@ export default function AppointmentModal({
         setLocation(editingAppointment.location || '');
         setNotes(editingAppointment.notes || '');
       } else {
+        const newDate = selectedDate ? toLocalDateString(selectedDate) : defaultDate;
         setTitle('');
         setType('inspection');
-        setDate(selectedDate ? toLocalDateString(selectedDate) : defaultDate);
-        setTime('09:00');
+        setDate(newDate);
+        setTime(defaultStartTime(newDate));
         setDuration(60);
         setContactId(preselectedContactId || '');
-        setAssignedTo('');
+        // Start with the rep the contact is assigned to.
+        setAssignedTo(state.contacts.find(c => c.id === preselectedContactId)?.assignedTo || '');
         setLocation('');
         setNotes('');
       }
