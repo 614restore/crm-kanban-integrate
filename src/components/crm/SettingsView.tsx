@@ -1493,18 +1493,30 @@ export default function SettingsView() {
         disabled={isUploadingAvatar}
       />
 
-      {/* Main content row: on a phone the menu is a row of tabs above the content */}
+      {/* Main content row: on a phone the menu is a dropdown above the content */}
       <div className="flex flex-1 flex-col sm:flex-row overflow-hidden">
 
       {/* Sidebar */}
       <div className="w-full sm:w-64 flex-shrink-0 bg-white border-b sm:border-b-0 sm:border-r border-gray-200 p-3 sm:p-4 sm:overflow-y-auto">
         <h2 className="hidden sm:block text-lg font-semibold text-gray-900 mb-4 px-3">Settings</h2>
-        <nav className="flex gap-2 overflow-x-auto sm:block sm:space-y-1">
+        <label className="sm:hidden block">
+          <span className="sr-only">Settings section</span>
+          <select
+            value={activeTab}
+            onChange={(e) => setActiveTab(e.target.value as SettingsTab)}
+            className="w-full px-3 py-2.5 border border-gray-200 rounded-lg bg-white text-gray-900 font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+          >
+            {tabs.map((tab) => (
+              <option key={tab.id} value={tab.id}>{tab.label}</option>
+            ))}
+          </select>
+        </label>
+        <nav className="hidden sm:block space-y-1">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as SettingsTab)}
-              className={`flex-shrink-0 whitespace-nowrap sm:w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
                 activeTab === tab.id
                   ? 'bg-blue-50 text-blue-700'
                   : 'text-gray-600 hover:bg-gray-50'

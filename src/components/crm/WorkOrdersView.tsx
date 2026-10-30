@@ -821,16 +821,16 @@ export default function WorkOrdersView() {
           {filteredWorkOrders.map((workOrder) => (
             <div
               key={workOrder.id}
-              className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow"
+              className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 hover:shadow-md transition-shadow"
             >
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
                     <h3 className="text-lg font-semibold text-gray-900">{workOrder.title}</h3>
                     <StatusBadge status={workOrder.status} />
                     <PriorityBadge priority={workOrder.priority} />
                   </div>
-                  <div className="flex items-center gap-4 text-sm text-gray-600 mb-2">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-600 mb-2">
                     <span className="font-mono">{workOrder.workOrderNumber}</span>
                     <span className="flex items-center gap-1">
                       <Users size={14} />
@@ -853,7 +853,7 @@ export default function WorkOrdersView() {
                     <p className="text-sm text-gray-600">{workOrder.description}</p>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   {workOrder.status === 'scheduled' && (
                     <button
                       onClick={() => handleStartWork(workOrder.id)}

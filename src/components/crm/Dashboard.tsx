@@ -498,7 +498,7 @@ export default function Dashboard() {
                     className={`flex items-center gap-3 px-5 py-2.5 hover:bg-gray-50 transition-colors ${customerId ? 'cursor-pointer' : ''}`}
                   >
                     <span className="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0" />
-                    <span className="text-sm text-gray-800 truncate flex-1">
+                    <span className="text-sm text-gray-800 truncate flex-1 min-w-0">
                       <span className="font-medium">{item.ev.actor_name || 'A customer'}</span>
                       {' signed '}
                       <span className="text-gray-500">{quoteNo}</span>
@@ -517,7 +517,7 @@ export default function Dashboard() {
                     className={`flex items-center gap-3 px-5 py-2.5 hover:bg-gray-50 transition-colors ${contact ? 'cursor-pointer' : ''}`}
                   >
                     <span className="w-2 h-2 rounded-full bg-violet-400 flex-shrink-0" />
-                    <span className="text-sm text-gray-800 truncate flex-1">
+                    <span className="text-sm text-gray-800 truncate flex-1 min-w-0">
                       Appointment set —{' '}
                       <span className="font-medium">{name}</span>
                     </span>
@@ -534,7 +534,7 @@ export default function Dashboard() {
                     className="flex items-center gap-3 px-5 py-2.5 hover:bg-gray-50 transition-colors cursor-pointer"
                   >
                     <span className="w-2 h-2 rounded-full bg-blue-400 flex-shrink-0" />
-                    <span className="text-sm text-gray-800 truncate flex-1">
+                    <span className="text-sm text-gray-800 truncate flex-1 min-w-0">
                       New customer assigned —{' '}
                       <span className="font-medium">{getContactFullName(contact)}</span>
                     </span>
@@ -551,7 +551,7 @@ export default function Dashboard() {
                   className="flex items-center gap-3 px-5 py-2.5 hover:bg-gray-50 transition-colors cursor-pointer"
                 >
                   <span className="w-2 h-2 rounded-full bg-orange-400 flex-shrink-0" />
-                  <span className="text-sm text-gray-800 truncate flex-1">
+                  <span className="text-sm text-gray-800 truncate flex-1 min-w-0">
                     Build scheduled —{' '}
                     <span className="font-medium">{getContactFullName(contact)}</span>
                     <span className="text-gray-400"> · {statusLabels[contact.status] ?? contact.status}</span>

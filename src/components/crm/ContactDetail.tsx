@@ -1887,17 +1887,17 @@ export default function ContactDetail() {
   return (
     <div className="h-full flex flex-col bg-gray-50">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+      <div className="bg-white border-b border-gray-200 px-4 sm:px-6 py-4">
+        <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto sm:gap-4">
             <button
               onClick={handleBack}
               className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
             >
               <ArrowLeft size={20} className="text-gray-600" />
             </button>
-            <div className="flex items-center gap-4">
-              <div className="relative group cursor-pointer w-14 h-14" onClick={() => avatarInputRef.current?.click()}>
+            <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+              <div className="relative group cursor-pointer w-14 h-14 flex-shrink-0" onClick={() => avatarInputRef.current?.click()}>
                 {contactAvatarUrl ? (
                   <img src={contactAvatarUrl} alt="" className="w-14 h-14 rounded-full object-cover" />
                 ) : (
@@ -1910,11 +1910,11 @@ export default function ContactDetail() {
                 </div>
               </div>
               <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
-              <div>
-                <ScheduleName as="h1" contactId={contact.id} className="text-2xl font-bold">
+              <div className="min-w-0">
+                <ScheduleName as="h1" contactId={contact.id} className="text-xl sm:text-2xl font-bold break-words">
                   {getContactFullName(contact)}
                 </ScheduleName>
-                <div className="flex items-center gap-3 mt-1">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
                   <span
                     className={`px-3 py-1 rounded-full text-sm font-medium ${
                       statusColors[contact.status]
@@ -1948,7 +1948,7 @@ export default function ContactDetail() {
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {isEditing ? (
               <>
                 <button
@@ -2000,12 +2000,12 @@ export default function ContactDetail() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 mt-6 -mb-px">
+        <div className="grid grid-cols-4 gap-1 mt-4 sm:flex sm:mt-6 -mb-px">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as TabType)}
-              className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors ${
+              className={`flex flex-col items-center gap-1 px-1 py-2 text-xs sm:flex-row sm:gap-2 sm:px-4 sm:py-3 sm:text-base border-b-2 transition-colors ${
                 activeTab === tab.id
                   ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -2019,7 +2019,7 @@ export default function ContactDetail() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 overflow-auto p-4 sm:p-6">
         <NextAppointmentCard contactId={contact.id} />
         <CountersignBanner contactId={contact.id} />
 

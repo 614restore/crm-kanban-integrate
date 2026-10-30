@@ -468,7 +468,7 @@ export default function DocumentCenter() {
           </div>
         )}
 
-        <nav className="flex gap-2 overflow-x-auto pb-1 sm:block sm:space-y-1 sm:pb-0">
+        <nav className="flex flex-wrap gap-2 sm:block sm:space-y-1">
           {categories.map((cat) => (
             <button
               key={cat.id}
@@ -541,22 +541,22 @@ export default function DocumentCenter() {
               <table className="w-full">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
-                    <th className="text-left px-6 py-3 text-xs font-medium uppercase tracking-wide text-gray-500">
+                    <th className="text-left px-3 sm:px-6 py-3 text-xs font-medium uppercase tracking-wide text-gray-500">
                       Name
                     </th>
-                    <th className="text-left px-6 py-3 text-xs font-medium uppercase tracking-wide text-gray-500">
+                    <th className="hidden sm:table-cell text-left px-3 sm:px-6 py-3 text-xs font-medium uppercase tracking-wide text-gray-500">
                       Contact
                     </th>
-                    <th className="text-left px-6 py-3 text-xs font-medium uppercase tracking-wide text-gray-500">
+                    <th className="hidden sm:table-cell text-left px-3 sm:px-6 py-3 text-xs font-medium uppercase tracking-wide text-gray-500">
                       Category
                     </th>
-                    <th className="text-left px-6 py-3 text-xs font-medium uppercase tracking-wide text-gray-500">
+                    <th className="hidden sm:table-cell text-left px-3 sm:px-6 py-3 text-xs font-medium uppercase tracking-wide text-gray-500">
                       Size
                     </th>
-                    <th className="text-left px-6 py-3 text-xs font-medium uppercase tracking-wide text-gray-500">
+                    <th className="hidden sm:table-cell text-left px-3 sm:px-6 py-3 text-xs font-medium uppercase tracking-wide text-gray-500">
                       Uploaded
                     </th>
-                    <th className="text-left px-6 py-3 text-xs font-medium uppercase tracking-wide text-gray-500">
+                    <th className="text-left px-3 sm:px-6 py-3 text-xs font-medium uppercase tracking-wide text-gray-500">
                       Actions
                     </th>
                   </tr>
@@ -564,13 +564,13 @@ export default function DocumentCenter() {
                 <tbody className="divide-y divide-gray-100">
                   {sortedDocuments.map((doc) => (
                     <tr key={doc.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4">
+                      <td className="px-3 sm:px-6 py-4">
                         <div className="flex items-center gap-3">
                           {getFileIcon(doc.type)}
                           <span className="font-medium text-gray-900">{doc.name}</span>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="hidden sm:table-cell px-3 sm:px-6 py-4">
                         {doc.contactName ? (
                           <button
                             onClick={() =>
@@ -584,7 +584,7 @@ export default function DocumentCenter() {
                           <span className="text-gray-400">-</span>
                         )}
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="hidden sm:table-cell px-3 sm:px-6 py-4">
                         <span
                           className={`px-2 py-1 rounded-full text-xs font-medium capitalize ${getCategoryColor(
                             doc.category
@@ -593,14 +593,14 @@ export default function DocumentCenter() {
                           {doc.badge ?? doc.category}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-gray-600">{doc.size}</td>
-                      <td className="px-6 py-4">
+                      <td className="hidden sm:table-cell px-3 sm:px-6 py-4 text-gray-600">{doc.size}</td>
+                      <td className="hidden sm:table-cell px-3 sm:px-6 py-4">
                         <div className="text-sm">
                           <p className="text-gray-900">{formatDate(doc.uploadedAt)}</p>
                           <p className="text-gray-500">{doc.uploadedBy}</p>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-3 sm:px-6 py-4">
                         <div className="flex items-center gap-1">
                           <button
                             onClick={() => handleOpenDocument(doc.url)}

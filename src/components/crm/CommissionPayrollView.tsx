@@ -435,12 +435,12 @@ export default function CommissionPayrollView() {
         </div>
 
         {/* Owed vs Paid */}
-        <div className="mt-4 flex max-w-full overflow-x-auto rounded-lg bg-gray-100 p-1 sm:inline-flex">
+        <div className="mt-4 grid grid-cols-2 gap-1 rounded-lg bg-gray-100 p-1 sm:inline-flex sm:gap-0">
           {(['owed', 'pending', 'costs', 'paid'] as const).map((v) => (
             <button
               key={v}
               onClick={() => setView(v)}
-              className={`flex-shrink-0 whitespace-nowrap px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
+              className={`text-center sm:whitespace-nowrap px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
                 view === v ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
               }`}
             >

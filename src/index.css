@@ -101,6 +101,14 @@
   }
 }
 
+/* On a phone the page itself never scrolls sideways (iOS lets a page pan if anything pokes past the edge). */
+@media (max-width: 639px) {
+  html,
+  body {
+    overflow-x: hidden;
+  }
+}
+
 /* Custom scrollbar styles */
 ::-webkit-scrollbar {
   width: 8px;
