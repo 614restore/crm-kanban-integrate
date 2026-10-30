@@ -135,6 +135,7 @@ export default function InvoiceModal() {
       };
 
       dispatch({ type: 'ADD_INVOICE', payload: newInvoice });
+      if (!(status === 'sent' && !selectedContact?.email)) toast.success('Invoice saved');
 
       // Send email to customer when marking as sent
       if (status === 'sent' && selectedContact?.email) {

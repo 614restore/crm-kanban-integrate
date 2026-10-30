@@ -1340,6 +1340,13 @@ function CRMApp() {
     };
   }, [profile?.company_id, loadData, requestSoftReload]);
 
+  // The top bar's refresh button reloads everything in the background.
+  useEffect(() => {
+    const refresh = () => { loadData({ silent: true }); };
+    window.addEventListener('crm-force-refresh', refresh);
+    return () => window.removeEventListener('crm-force-refresh', refresh);
+  }, [loadData]);
+
   // Polling fallback when realtime websocket is unavailable.
   useEffect(() => {
     if (!profile?.company_id) return;

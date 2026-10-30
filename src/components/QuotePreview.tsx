@@ -1312,8 +1312,8 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
             </div>
           )}
 
-          {/* Customer download bar */}
-          {isCustomerView && (
+          {/* Customer download bar. Once signed, the signed bar at the bottom has the one Print button. */}
+          {isCustomerView && !signedBarShown && (
             <div className="bg-white border-b print:hidden px-4 py-2 flex items-center justify-end">
               <button
                 onClick={handleDownloadLive}

@@ -1043,6 +1043,13 @@ export default function ContactDetail() {
     return () => { cancelled = true; };
   }, [contactId, profile?.company_id, quotesVersion]);
 
+  // The top bar's refresh button: re-read quotes and payments (a customer may have just signed).
+  useEffect(() => {
+    const refresh = () => { setQuotesVersion((v) => v + 1); setPaymentsVersion((v) => v + 1); };
+    window.addEventListener('crm-force-refresh', refresh);
+    return () => window.removeEventListener('crm-force-refresh', refresh);
+  }, []);
+
   useEffect(() => {
     if (!isEditing) setProjectTypeCustom(false);
   }, [isEditing]);

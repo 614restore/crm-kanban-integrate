@@ -47,7 +47,9 @@ export default function ContactList() {
   const { profile } = useAuth();
   const filteredContacts = useFilteredContacts();
   const importInputRef = useRef<HTMLInputElement>(null);
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  // Phones start on cards: the 12-column table squeezed names down to "T…".
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>(() =>
+    typeof window !== 'undefined' && window.innerWidth < 768 ? 'grid' : 'list');
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
@@ -312,15 +314,15 @@ Jane,Smith,jane@example.com,555-9999,555-8888,456 Oak Ave,Boulder,CO,80301,Prosp
       />
 
       {/* Header */}
-      <div className="p-6 bg-white border-b border-gray-200">
-        <div className="flex items-center justify-between mb-4">
+      <div className="p-4 sm:p-6 bg-white border-b border-gray-200">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div>
             <h2 className="text-xl font-semibold text-gray-900">Contacts</h2>
             <p className="text-sm text-gray-500 mt-1">
               {filteredContacts.length} {filteredContacts.length === 1 ? 'contact' : 'contacts'} found
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <button
               onClick={() => setShowArchived(a => !a)}
               className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors text-sm font-medium ${showArchived ? 'bg-amber-100 text-amber-700' : 'text-gray-600 hover:bg-gray-100'}`}
@@ -367,8 +369,8 @@ Jane,Smith,jane@example.com,555-9999,555-8888,456 Oak Ave,Boulder,CO,80301,Prosp
         </div>
 
         {/* View Toggle & Bulk Actions */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-4">
             {selectedContacts.size > 0 && (
               <div className="flex items-center gap-3 px-4 py-2 bg-blue-50 rounded-lg">
                 <span className="text-sm font-medium text-blue-700">

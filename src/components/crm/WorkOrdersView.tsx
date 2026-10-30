@@ -311,7 +311,8 @@ export default function WorkOrdersView() {
         state: workOrderState.trim() || undefined,
         zip: zip.trim() || undefined,
         notes: notes.trim() || undefined,
-        attachments: attachments.length > 0 ? attachments : undefined,
+        // The column is NOT NULL, so an empty list is sent rather than leaving it out.
+        attachments,
         created_by: profile.id,
       };
 

@@ -2136,6 +2136,11 @@ export const generateQuoteHTML = ({
             gap: 8px;
             margin-top: 12px;
           }
+          /* Four boxes are too narrow on a phone: the quote number was cut to "QT-2026-". */
+          @media screen and (max-width: 640px) {
+            .hero-meta-grid { grid-template-columns: repeat(2, 1fr); }
+          }
+          .hero-meta-card { min-width: 0; }
           .cover-badge-row {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
