@@ -2958,10 +2958,6 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
             const effectiveGood   = tier ? (tier === 'good'   ? (hasGood   ? goodRate   : 0) : 0) : (hasGood   ? goodRate   : firstRate);
             const effectiveBetter = tier ? (tier === 'better' ? (hasBetter ? betterRate : 0) : 0) : (hasBetter ? betterRate : effectiveGood);
             const effectiveBest   = tier ? (tier === 'best'   ? (hasBest   ? bestRate   : 0) : 0) : (hasBest   ? bestRate   : effectiveBetter);
-            // Description label
-            const tierLabel = tier
-              ? `${tier.charAt(0).toUpperCase() + tier.slice(1)} tier ($${(tier === 'good' ? effectiveGood : tier === 'better' ? effectiveBetter : effectiveBest).toFixed(2)}/sq all-in)`
-              : `$${effectiveGood.toFixed(2)}/$${effectiveBetter.toFixed(2)}/$${effectiveBest.toFixed(2)}/sq all-in (Good/Better/Best)`;
             // Rates entered are $/sq — a bundle-billed shingle item (3 bundles/sq)
             // needs the equivalent per-bundle price so the total still matches.
             const isBdl = importedItems[targetIdx].unit === 'bdl';
@@ -2970,7 +2966,8 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
               good_price:   toCents(isBdl ? effectiveGood / 3 : effectiveGood),
               better_price: toCents(isBdl ? effectiveBetter / 3 : effectiveBetter),
               best_price:   toCents(isBdl ? effectiveBest / 3 : effectiveBest),
-              description: `${tierLabel}. Other items show quantities for material ordering only.`,
+              // No tier name or rate here: this one line shows in every option the customer sees.
+              description: 'Priced per square, all-in. Other items show quantities for material ordering only.',
             };
           }
         }
@@ -3390,15 +3387,13 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
           const effectiveGood   = tier ? (tier === 'good'   ? (hasGood   ? goodRate   : 0) : 0) : (hasGood   ? goodRate   : firstRate);
           const effectiveBetter = tier ? (tier === 'better' ? (hasBetter ? betterRate : 0) : 0) : (hasBetter ? betterRate : effectiveGood);
           const effectiveBest   = tier ? (tier === 'best'   ? (hasBest   ? bestRate   : 0) : 0) : (hasBest   ? bestRate   : effectiveBetter);
-          const tierLabel = tier
-            ? `${tier.charAt(0).toUpperCase() + tier.slice(1)} tier ($${(tier === 'good' ? effectiveGood : tier === 'better' ? effectiveBetter : effectiveBest).toFixed(2)}/sq all-in)`
-            : `$${effectiveGood.toFixed(2)}/$${effectiveBetter.toFixed(2)}/$${effectiveBest.toFixed(2)}/sq all-in (Good/Better/Best)`;
           importedItems[targetIdx] = {
             ...importedItems[targetIdx],
             good_price:   effectiveGood,
             better_price: effectiveBetter,
             best_price:   effectiveBest,
-            description: `${tierLabel}. Other items show quantities for material ordering only.`,
+            // No tier name or rate here: this one line shows in every option the customer sees.
+              description: 'Priced per square, all-in. Other items show quantities for material ordering only.',
           };
         }
       }

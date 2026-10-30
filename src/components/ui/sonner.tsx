@@ -12,6 +12,11 @@ const Toaster = ({ ...props }: ToasterProps) => {
     <Sonner
       theme={theme as ToasterProps["theme"]}
       className="toaster group"
+      // Each toast can be closed by hand, and at most three show at once so they
+      // never pile up over the page's buttons.
+      closeButton
+      visibleToasts={3}
+      duration={4000}
       toastOptions={{
         classNames: {
           toast:

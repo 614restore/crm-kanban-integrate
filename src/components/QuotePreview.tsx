@@ -1223,7 +1223,7 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
                     className="flex items-center gap-1.5 px-3 py-2 text-sm bg-[#1e3a5f] text-white rounded-lg hover:bg-[#152d4a] transition-colors font-medium shadow-sm"
                     title="Download the live professional layout (what customers see)"
                   >
-                    <Download className="w-4 h-4" /><span className="hidden sm:inline">Download Live</span><span className="sm:hidden">Live</span>
+                    <Download className="w-4 h-4" /><span className="hidden sm:inline">Download PDF</span><span className="sm:hidden">PDF</span>
                   </button>
                 )}
                 {(photos.length > 0 || quote?.project_type === 'inspection_report') && (
@@ -2935,14 +2935,14 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {/* Download Live Button */}
+            {/* Download PDF Button */}
             <button
               onClick={handleDownloadLive}
               className="flex items-center gap-1.5 px-3 py-2 text-sm bg-[#ff6b35] text-white rounded-lg hover:bg-[#e55a2b] transition-colors font-medium shadow-sm"
             >
               <>
                 <Download className="w-4 h-4" />
-                <span className="hidden sm:inline">Download Live</span>
+                <span className="hidden sm:inline">Download PDF</span>
                 <span className="sm:hidden">PDF</span>
               </>
             </button>

@@ -1683,7 +1683,7 @@ export async function generateQuotePDF(
       lines: [
         `Quote #: ${quote.quote_number}`,
         `Date Issued: ${new Date(quote.created_at).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' })}`,
-        `Valid Until: ${new Date(new Date(quote.created_at).getTime() + 28 * 86400000).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' })}`,
+        `Valid Until: ${new Date(new Date(quote.created_at).getTime() + 30 * 86400000).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' })}`,
       ],
     },
   ];
