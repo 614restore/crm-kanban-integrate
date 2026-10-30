@@ -147,7 +147,11 @@ export const generateQuoteHTML = ({
     quote.measurement_data ?? null,
   );
   const legalNotice = getLegalNotice(customer.state, company.state);
-  const cancellationDeadline = calculateCancellationDeadline(quote.sent_at || quote.created_at || new Date());
+  // The 3-day right to cancel runs from when the customer signs.
+  const cancellationDeadline = calculateCancellationDeadline(quote.signed_at || quote.sent_at || quote.created_at || new Date());
+  // Quotes saved without an expiry are good for 30 days from when they were made, not "today".
+  const validUntil = quote.valid_until
+    || new Date(new Date(quote.created_at || Date.now()).getTime() + 30 * 86400000).toISOString();
   const acceptedSections = selectedSections?.length
     ? selectedSections
     : Object.keys(groupedItems);
@@ -353,7 +357,7 @@ export const generateQuoteHTML = ({
 
           <div class="sidebar-card compact">
             <div class="sidebar-title">Project Snapshot</div>
-            <div class="snapshot-row"><span>Valid Until</span><strong>${formatDate(quote.valid_until || new Date())}</strong></div>
+            <div class="snapshot-row"><span>Valid Until</span><strong>${formatDate(validUntil)}</strong></div>
             <div class="snapshot-row"><span>Sections</span><strong>${Object.keys(groupedItems).length}</strong></div>
             <div class="snapshot-row"><span>Photos</span><strong>${photos.length}</strong></div>
             <div class="snapshot-row"><span>Options</span><strong>${getVisibleTierCount(quote)}</strong></div>
@@ -909,10 +913,6 @@ export const generateQuoteHTML = ({
             </ul>
             <p style="font-size:10.5px;color:#92400e;line-height:1.6;margin:0 0 8px">Those costs may include adjuster meetings and scope negotiations, permit fees, engineering or inspection reports, ordered materials with non-refundable restocking fees, or emergency services already performed. Because the project will not be completed, there is no longer a contract value from which the contractor can recover these expenses.</p>
             <p style="font-size:10.5px;color:#92400e;line-height:1.6;margin:0 0 6px">Where applicable, administrative fees are structured in line with standard insurance industry <strong>Overhead &amp; Profit (O&amp;P) percentages</strong> — typically 10% overhead and 10% profit — a range already recognized by insurance adjusters and defensible before a mediator or arbitrator.</p>
-            <div style="background:#fff8e1;border-left:3px solid #f59e0b;padding:8px 10px;border-radius:0 6px 6px 0;">
-              <p style="font-weight:700;font-size:10px;color:#78350f;margin:0 0 3px">Key Legal Note</p>
-              <p style="font-size:10px;color:#92400e;line-height:1.6;margin:0">State contractor regulations may place caps on cancellation fees or require specific language for a fee to qualify as legitimate liquidated damages rather than an unenforceable penalty. Aligning fees with standard O&amp;P percentages (10%–20%) provides the strongest legal justification.</p>
-            </div>
           </div>` : ''}
           <div style="border-top:1.5px solid #e5e7eb;padding-top:14px">
             <p style="font-size:11px;color:#6b7280;margin:0 0 6px">Property Owner Signature — Acknowledging Receipt of Right to Cancel &amp; Date</p>
@@ -1090,7 +1090,7 @@ export const generateQuoteHTML = ({
       </div>
 
       <div class="footer" style="margin-top:20px;">
-        <p>${escapeHtml(company.name)} | ${escapeHtml(company.phone || '')} | ${escapeHtml(company.email || '')}</p>
+        <p>${[company.name, company.phone, company.email].filter(Boolean).map(v => escapeHtml(String(v))).join(' | ')}</p>
         ${(company as any).license_number ? `<p>License #${escapeHtml((company as any).license_number)}</p>` : ''}
         ${attributionHtml}
       </div>
@@ -1173,7 +1173,7 @@ export const generateQuoteHTML = ({
           <div class="accept-party-label">Quote Details</div>
           <div class="accept-party-detail"><strong>Quote #:</strong> ${escapeHtml(String(quote.quote_number))}</div>
           <div class="accept-party-detail"><strong>Date Issued:</strong> ${formatDate(quote.created_at || new Date())}</div>
-          <div class="accept-party-detail"><strong>Valid Until:</strong> ${formatDate(quote.valid_until || new Date())}</div>
+          <div class="accept-party-detail"><strong>Valid Until:</strong> ${formatDate(validUntil)}</div>
           ${signedDate ? `<div class="accept-party-detail"><strong>Signed:</strong> ${formatDate(signedDate)}</div>` : ''}
         </div>
       </div>
@@ -1310,7 +1310,7 @@ export const generateQuoteHTML = ({
           ${escapeHtml(legalNotice.contractAgreementText)}
         </p>
         <p class="accept-legal-body" style="margin-top: 10px;">
-          By signing below, the Customer acknowledges that they have read, understand, and agree to the full scope of work and pricing described in Quote #${escapeHtml(String(quote.quote_number))} issued by ${escapeHtml(company.name)}. The Customer agrees that the scope, materials, and pricing set forth in this quote constitute a binding agreement upon execution. Any changes to the scope of work must be agreed upon in writing by both parties. This quote is valid until ${formatDate(quote.valid_until || new Date())}.
+          By signing below, the Customer acknowledges that they have read, understand, and agree to the full scope of work and pricing described in Quote #${escapeHtml(String(quote.quote_number))} issued by ${escapeHtml(company.name)}. The Customer agrees that the scope, materials, and pricing set forth in this quote constitute a binding agreement upon execution. Any changes to the scope of work must be agreed upon in writing by both parties. This quote is valid until ${formatDate(validUntil)}.
         </p>
         <p class="accept-legal-body" style="margin-top: 10px;">
           ${(() => {
@@ -1366,7 +1366,7 @@ export const generateQuoteHTML = ({
       </div>
 
       <div class="footer">
-        <p>${escapeHtml(company.name)} | ${escapeHtml(company.phone || '')} | ${escapeHtml(company.email || '')}</p>
+        <p>${[company.name, company.phone, company.email].filter(Boolean).map(v => escapeHtml(String(v))).join(' | ')}</p>
         ${company.license_number ? `<p>License #${escapeHtml(company.license_number)}</p>` : ''}
         ${attributionHtml}
       </div>
@@ -1453,15 +1453,6 @@ export const generateQuoteHTML = ({
           </div>
         </div>
 
-        <div style="background:#fffde7;border-left:4px solid #f59e0b;padding:10px 12px;border-radius:0 8px 8px 0;margin-bottom:10px;">
-          <p style="font-weight:700;font-size:10.5px;color:#78350f;margin:0 0 4px;">Recommended Contract Language</p>
-          <p style="font-size:10.5px;color:#7c6600;line-height:1.7;margin:0;font-style:italic;">"If Property Owner cancels this Agreement after the insurance carrier has approved the claim and before repairs have commenced, and Contractor has incurred costs related to the claim that cannot be recouped through project completion, Property Owner shall be liable to Contractor for: (a) all actual documented expenses incurred, including permit fees, engineering reports, restocking fees, and completed emergency services; and (b) an administrative and liquidated damages fee equal to [10%–20%] of the total approved insurance claim amount to compensate Contractor for administrative overhead, scope preparation, and lost business opportunity."</p>
-        </div>
-
-        <div style="background:#fff8e1;border-left:3px solid #f59e0b;padding:8px 12px;border-radius:0 6px 6px 0;">
-          <p style="font-weight:700;font-size:10px;color:#78350f;margin:0 0 3px;">Key Legal Note</p>
-          <p style="font-size:10.5px;color:#92400e;line-height:1.6;margin:0;">State contractor regulations may cap cancellation penalties or require specific language for a fee to qualify as legitimate liquidated damages rather than an unenforceable penalty. Aligning fees with standard O&amp;P percentages (10%–20%) and tying them to documented, unrecouped costs provides the strongest legal justification.</p>
-        </div>
       </div>` : ''}
 
       <div class="accept-legal-box" style="background:#fef3c7; border-color:#f59e0b; margin-top:16px;">
@@ -1506,7 +1497,7 @@ export const generateQuoteHTML = ({
       </div>
 
       <div class="footer">
-        <p>${escapeHtml(company.name)} | ${escapeHtml(company.phone || '')} | ${escapeHtml(company.email || '')}</p>
+        <p>${[company.name, company.phone, company.email].filter(Boolean).map(v => escapeHtml(String(v))).join(' | ')}</p>
         ${company.license_number ? `<p>License #${escapeHtml(company.license_number)}</p>` : ''}
         ${attributionHtml}
       </div>
