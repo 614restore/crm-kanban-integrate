@@ -705,7 +705,7 @@ export default function WorkOrdersView() {
   return (
     <div className="p-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center">
             <Clipboard size={20} className="text-white" />
@@ -715,7 +715,7 @@ export default function WorkOrdersView() {
             <p className="text-sm text-gray-500">Schedule jobs and assign crews</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={handleExport}
             className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
@@ -734,7 +734,7 @@ export default function WorkOrdersView() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-5 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-6">
         <div className="bg-white rounded-lg border border-gray-200 p-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-500">Total</span>
@@ -899,7 +899,7 @@ export default function WorkOrdersView() {
               </div>
 
               {/* Work Order Details Grid */}
-              <div className="grid grid-cols-5 gap-4 pt-4 border-t border-gray-100">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 pt-4 border-t border-gray-100">
                 <div>
                   <p className="text-xs text-gray-500 mb-1">Scheduled</p>
                   <p className="text-sm font-medium text-gray-900">{formatDate(workOrder.scheduledDate)}</p>

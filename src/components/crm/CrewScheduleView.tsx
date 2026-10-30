@@ -755,7 +755,7 @@ export default function CrewScheduleView({ contactFilterId }: { contactFilterId?
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => setShowSubManager(v => !v)}
               className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors ${
@@ -777,7 +777,7 @@ export default function CrewScheduleView({ contactFilterId }: { contactFilterId?
             <button onClick={nextWeek} className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 text-gray-600">
               <ChevronRight size={16} />
             </button>
-            <span className="text-sm font-medium text-gray-700 ml-1">
+            <span className="text-sm font-medium text-gray-700 ml-1 whitespace-nowrap">
               {weekDates[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
               {' – '}
               {weekDates[6].toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}

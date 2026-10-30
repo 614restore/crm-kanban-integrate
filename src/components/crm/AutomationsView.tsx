@@ -472,7 +472,7 @@ export default function AutomationsView() {
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Workflow Automations</h2>
           <p className="text-gray-500 mt-1">{activeCount} active, {inactiveCount} inactive automations</p>

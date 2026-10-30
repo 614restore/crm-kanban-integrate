@@ -257,12 +257,12 @@ export default function Dashboard() {
   return (
     <div className="p-6 space-y-6">
       {/* Welcome Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Welcome back, {firstName}!</h2>
           <p className="text-gray-500 mt-1">Here's what's happening with your business today.</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={() => dispatch({ type: 'SET_VIEW', payload: 'pipeline' })}
             className="px-4 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors font-medium text-gray-700"

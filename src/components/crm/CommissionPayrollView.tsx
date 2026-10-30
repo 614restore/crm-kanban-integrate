@@ -399,14 +399,14 @@ export default function CommissionPayrollView() {
     <div className="flex flex-col h-full overflow-hidden bg-gray-50">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-6 py-4 flex-shrink-0">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Commission Payroll</h1>
             <p className="text-sm text-gray-500 mt-0.5">
               Sales commissions for sold jobs — owners and management only
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
           {canEditSettings && (
             <button
               onClick={() => setShowSettings(true)}
@@ -435,12 +435,12 @@ export default function CommissionPayrollView() {
         </div>
 
         {/* Owed vs Paid */}
-        <div className="mt-4 inline-flex rounded-lg bg-gray-100 p-1">
+        <div className="mt-4 flex max-w-full overflow-x-auto rounded-lg bg-gray-100 p-1 sm:inline-flex">
           {(['owed', 'pending', 'costs', 'paid'] as const).map((v) => (
             <button
               key={v}
               onClick={() => setView(v)}
-              className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
+              className={`flex-shrink-0 whitespace-nowrap px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
                 view === v ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
               }`}
             >
@@ -518,7 +518,7 @@ export default function CommissionPayrollView() {
       </div>
 
       {/* Summary cards */}
-      <div className="px-6 py-4 grid grid-cols-3 gap-4 flex-shrink-0">
+      <div className="px-6 py-4 grid grid-cols-1 sm:grid-cols-3 gap-4 flex-shrink-0">
         <div className="bg-white rounded-xl border border-gray-200 p-4 flex items-center gap-3">
           <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
             <Users size={20} className="text-blue-600" />

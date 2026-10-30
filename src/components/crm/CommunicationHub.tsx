@@ -18,6 +18,7 @@ import {
   type MentionTarget,
 } from '@/lib/mentions';
 import {
+  ChevronLeft,
   Mail,
   MessageSquare,
   Phone,
@@ -621,7 +622,7 @@ export default function CommunicationHub() {
     <div className="h-full flex flex-col">
       {/* Coming Soon Banner for SMS/Voice */}
       <div className="bg-gradient-to-r from-green-50 to-blue-50 border-b border-green-200 px-6 py-3">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
             <MessageSquare className="w-5 h-5 text-green-600" />
             <Phone className="w-5 h-5 text-blue-600" />
@@ -641,13 +642,13 @@ export default function CommunicationHub() {
       </div>
 
       <div className="flex flex-1 min-h-0">
-      {/* Left Panel - Communication List */}
-      <div className="w-1/2 border-r border-gray-200 flex flex-col bg-white">
+      {/* Left Panel - Communication List (on a phone, hidden while a message is open) */}
+      <div className={`w-full sm:w-1/2 border-r border-gray-200 flex-col bg-white ${selectedCommData ? 'hidden sm:flex' : 'flex'}`}>
         {/* Header */}
         <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
             <h2 className="text-xl font-semibold text-gray-900">Communications</h2>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={() => setShowTemplates(true)}
                 disabled={!hasSelectedThread}
@@ -773,12 +774,18 @@ export default function CommunicationHub() {
         </div>
       </div>
 
-      {/* Right Panel - Communication Detail */}
-      <div className="w-1/2 flex flex-col bg-gray-50">
+      {/* Right Panel - Communication Detail (on a phone, only once a message is open) */}
+      <div className={`w-full sm:w-1/2 flex-col bg-gray-50 ${selectedCommData ? 'flex' : 'hidden sm:flex'}`}>
         {selectedCommData ? (
           <>
             {/* Detail Header */}
             <div className="p-6 bg-white border-b border-gray-200">
+              <button
+                onClick={() => setSelectedComm(null)}
+                className="sm:hidden mb-3 flex items-center gap-1 text-sm font-medium text-blue-600"
+              >
+                <ChevronLeft size={16} /> Back to messages
+              </button>
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-4">
                   <div className={`w-12 h-12 rounded-full flex items-center justify-center ${getTypeBg(selectedCommData.type)}`}>
