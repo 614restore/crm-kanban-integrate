@@ -2099,7 +2099,8 @@ class DatabaseService {
       .from('change_orders')
       .select('*')
       .eq('contact_id', contactId)
-      .eq('status', 'signed')
+      // Approved change orders are signed ones the team has accepted; they stay in the signed list.
+      .in('status', ['signed', 'approved'])
       .order('signed_at', { ascending: false });
     if (error) { console.error('Error fetching signed change orders:', error); return []; }
     return data || [];

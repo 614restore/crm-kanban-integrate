@@ -24,6 +24,8 @@ interface ChangeOrder {
   status: string;
   signed_by_name?: string;
   signed_at?: string;
+  /** The customer's drawn signature (a data: image), returned once the order is signed. */
+  signature_data?: string | null;
   sign_token: string;
   companies?: {
     name: string;
@@ -84,6 +86,15 @@ export default function SignChangeOrder() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, signedBy: signedBy.trim(), signatureData }),
       });
+      if (res.status === 409) {
+        // Signed already (another tab or person): show the signed copy instead of an error.
+        const latest = await fetch(`${API_BASE}&token=${encodeURIComponent(token ?? "")}`).then((r) => (r.ok ? r.json() : null));
+        if (latest?.changeOrder) {
+          setChangeOrder(latest.changeOrder);
+          setAlreadySigned(!!latest.alreadySigned);
+          return;
+        }
+      }
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || "Failed to submit signature.");
@@ -138,25 +149,6 @@ export default function SignChangeOrder() {
     );
   }
 
-  if (alreadySigned && changeOrder) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-        <div className="bg-white rounded-xl shadow p-8 max-w-md w-full text-center">
-          <div className="w-14 h-14 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-4">
-            <svg className="w-7 h-7 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          <h1 className="text-xl font-semibold text-gray-800 mb-2">Already Signed</h1>
-          <p className="text-gray-500 text-sm">
-            Change order <span className="font-medium">#{changeOrder.change_order_number}</span> was already
-            signed{changeOrder.signed_by_name ? ` by ${changeOrder.signed_by_name}` : ""}.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   if (!changeOrder) return null;
 
   const company = changeOrder.companies;
@@ -177,9 +169,15 @@ export default function SignChangeOrder() {
               <h1 className="text-2xl font-bold text-gray-900">{changeOrder.title}</h1>
               <p className="text-sm text-gray-500 mt-1">Change Order #{changeOrder.change_order_number}</p>
             </div>
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800 whitespace-nowrap">
-              Awaiting Signature
-            </span>
+            {alreadySigned ? (
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 whitespace-nowrap">
+                {changeOrder.status === 'approved' ? 'Signed & Approved' : 'Signed'}
+              </span>
+            ) : (
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800 whitespace-nowrap">
+                Awaiting Signature
+              </span>
+            )}
           </div>
           {changeOrder.description && (
             <p className="mt-4 text-sm text-gray-600">{changeOrder.description}</p>
@@ -236,7 +234,42 @@ export default function SignChangeOrder() {
           </div>
         )}
 
+        {/* Signed copy: the signature on record, read-only */}
+        {alreadySigned && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
+            <h2 className="text-base font-semibold text-gray-800">Signature</h2>
+            {changeOrder.signature_data?.startsWith('data:image/') && (
+              <img
+                src={changeOrder.signature_data}
+                alt={`Signature of ${changeOrder.signed_by_name || 'the customer'}`}
+                className="max-h-32 border-b border-gray-300"
+              />
+            )}
+            <div className="text-sm text-gray-600 space-y-0.5">
+              {changeOrder.signed_by_name && (
+                <p>Signed by <span className="font-medium text-gray-800">{changeOrder.signed_by_name}</span></p>
+              )}
+              {changeOrder.signed_at && (
+                <p>
+                  on{' '}
+                  {new Date(changeOrder.signed_at).toLocaleString('en-US', {
+                    month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
+                  })}
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="print:hidden w-full border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-2.5 px-4 rounded-lg text-sm transition-colors"
+            >
+              Print / Save as PDF
+            </button>
+          </div>
+        )}
+
         {/* Signature Form */}
+        {!alreadySigned && (
         <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-5">
           <h2 className="text-base font-semibold text-gray-800">Sign to Approve Change Order</h2>
 
@@ -287,6 +320,7 @@ export default function SignChangeOrder() {
             By signing, you authorize the additional work and costs described in this change order.
           </p>
         </form>
+        )}
 
         {/* Company footer */}
         {company && (

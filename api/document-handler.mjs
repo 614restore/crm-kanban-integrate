@@ -8,6 +8,9 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY;
 
 const db = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
+// A change order in either status carries the customer's signature and can never be signed again.
+const SIGNED_CHANGE_ORDER_STATUSES = ['signed', 'approved'];
+
 // smtpConfig: { host, port, user, pass, secure, fromName, fromEmail } — if provided, use SMTP; else Resend
 async function sendEmail(to, subject, html, from = '614 Restore <scopemgr@614restore.com>', smtpConfig = null) {
   try {
@@ -171,9 +174,13 @@ export default async function handler(req, res) {
     if (req.method === 'GET') {
       const { token } = req.query;
       if (!token) return res.status(400).json({ error: 'Missing token' });
-      const { data: co } = await db.from('change_orders').select('id,change_order_number,title,description,total,subtotal,tax,notes,items,status,signed_by_name,signed_at,sign_token,companies(name,from_email:email,phone,address,city,state,zip)').eq('sign_token', token).single();
+      const { data: co } = await db.from('change_orders').select('id,change_order_number,title,description,total,subtotal,tax,notes,items,status,signed_by_name,signed_at,signature_data,sign_token,companies(name,from_email:email,phone,address,city,state,zip)').eq('sign_token', token).single();
       if (!co) return res.status(404).json({ error: 'Change order not found' });
-      return res.status(200).json({ changeOrder: co, alreadySigned: co.status === 'signed' });
+      // Approved is a signed change order the contractor has accepted: still signed, never signable again.
+      const isSigned = SIGNED_CHANGE_ORDER_STATUSES.includes(co.status);
+      // The signature image is only shown back once there is one; an unsigned order has none to leak.
+      if (!isSigned) delete co.signature_data;
+      return res.status(200).json({ changeOrder: co, alreadySigned: isSigned });
     }
 
     if (req.method === 'POST') {
@@ -181,16 +188,22 @@ export default async function handler(req, res) {
       if (!token || !signedBy) return res.status(400).json({ error: 'Missing required fields' });
       const { data: existing } = await db.from('change_orders').select('id,status,title,change_order_number,total,created_by,contact_id,company_id').eq('sign_token', token).single();
       if (!existing) return res.status(404).json({ error: 'Change order not found' });
-      if (existing.status === 'signed') return res.status(409).json({ error: 'Already signed' });
+      if (SIGNED_CHANGE_ORDER_STATUSES.includes(existing.status)) return res.status(409).json({ error: 'Already signed' });
 
       const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || null;
-      const { data } = await db.from('change_orders').update({
+      // Guarded on status too, so two submissions at once cannot both sign and overwrite each other.
+      const { data, error: signErr } = await db.from('change_orders').update({
         status: 'signed',
         signed_by_name: signedBy,
         signature_data: signatureData || null,
         signed_at: new Date().toISOString(),
         signed_ip: ip,
-      }).eq('sign_token', token).select().single();
+      }).eq('sign_token', token).not('status', 'in', `(${SIGNED_CHANGE_ORDER_STATUSES.join(',')})`).select().maybeSingle();
+      if (signErr) {
+        console.error('sign-change-order update failed:', signErr);
+        return res.status(500).json({ error: 'Could not record your signature. Please try again.' });
+      }
+      if (!data) return res.status(409).json({ error: 'Already signed' });
 
       // Let the person who sent it know. A problem here must never undo the customer's signature.
       try {
@@ -204,6 +217,8 @@ export default async function handler(req, res) {
             message: `${label} — "${existing.title || 'Untitled'}" — was signed by ${signedBy}`,
             related_type: 'contact',
             related_id: existing.contact_id ?? null,
+            // Lets "View change order" open this exact change order.
+            data: { change_order_id: existing.id },
           });
           const { data: sender } = await db.from('profiles').select('email,full_name').eq('id', existing.created_by).single();
           if (sender?.email) {
