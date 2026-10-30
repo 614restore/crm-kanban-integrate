@@ -1493,18 +1493,18 @@ export default function SettingsView() {
         disabled={isUploadingAvatar}
       />
 
-      {/* Main content row */}
-      <div className="flex flex-1 overflow-hidden">
+      {/* Main content row: on a phone the menu is a row of tabs above the content */}
+      <div className="flex flex-1 flex-col sm:flex-row overflow-hidden">
 
       {/* Sidebar */}
-      <div className="w-64 flex-shrink-0 bg-white border-r border-gray-200 p-4 overflow-y-auto">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4 px-3">Settings</h2>
-        <nav className="space-y-1">
+      <div className="w-full sm:w-64 flex-shrink-0 bg-white border-b sm:border-b-0 sm:border-r border-gray-200 p-3 sm:p-4 sm:overflow-y-auto">
+        <h2 className="hidden sm:block text-lg font-semibold text-gray-900 mb-4 px-3">Settings</h2>
+        <nav className="flex gap-2 overflow-x-auto sm:block sm:space-y-1">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as SettingsTab)}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+              className={`flex-shrink-0 whitespace-nowrap sm:w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
                 activeTab === tab.id
                   ? 'bg-blue-50 text-blue-700'
                   : 'text-gray-600 hover:bg-gray-50'
@@ -1518,13 +1518,13 @@ export default function SettingsView() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto p-8">
+      <div className="flex-1 min-w-0 overflow-auto p-4 sm:p-8">
         {activeTab === 'company' && (
           <div className="max-w-3xl space-y-8">
             <div>
               <h3 className="text-xl font-semibold text-gray-900 mb-6">Company Profile</h3>
               <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-6">
-                <div className="flex items-center gap-6">
+                <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:gap-6">
                   <div className="relative group">
                     {isUploadingLogo ? (
                       <div className="w-20 h-20 rounded-xl bg-gray-100 flex items-center justify-center">
@@ -1551,7 +1551,7 @@ export default function SettingsView() {
                       </button>
                     )}
                   </div>
-                  <div>
+                  <div className="min-w-0 w-full sm:w-auto">
                     <h4 className="text-lg font-semibold text-gray-900">{companyForm.name}</h4>
                     <p className="text-gray-500">Premium roofing and restoration services</p>
                     <button
@@ -1572,13 +1572,13 @@ export default function SettingsView() {
                       )}
                     </button>
                     <p className="text-xs text-gray-400 mt-1">Max 5MB • JPG, PNG, GIF, WebP</p>
-                    <div className="mt-3 flex gap-2">
+                    <div className="mt-3 flex flex-wrap gap-2">
                       <input
                         type="url"
                         value={companyLogoUrlInput}
                         onChange={(e) => setCompanyLogoUrlInput(e.target.value)}
                         placeholder="Or paste logo image URL"
-                        className="w-72 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                        className="w-full sm:w-72 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                       />
                       <button
                         onClick={handleSaveCompanyLogoUrl}

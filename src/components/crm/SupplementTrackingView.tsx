@@ -261,7 +261,7 @@ export default function SupplementTrackingView({ contactId, contactName }: Suppl
     <div className="flex flex-col h-full bg-gray-50">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
           <div className="flex items-center gap-3">
             {activeClaim && (
               <button
@@ -292,7 +292,7 @@ export default function SupplementTrackingView({ contactId, contactName }: Suppl
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => dispatch({ type: 'SET_VIEW', payload: 'insurance-tracking' })}
               className="flex items-center gap-2 px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm"

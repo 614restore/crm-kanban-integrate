@@ -361,7 +361,7 @@ export default function InsuranceTrackingView({ contactId, contactName }: Insura
     <div className="flex flex-col h-full bg-gray-50">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
           <div className="flex items-center gap-3">
             <Shield size={24} className="text-blue-600" />
             <div>

@@ -321,7 +321,7 @@ const ExpenseTracker: React.FC = () => {
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <Receipt className="w-6 h-6" />
           <h1 className="text-3xl font-bold">Expense Tracking</h1>

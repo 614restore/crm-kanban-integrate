@@ -443,7 +443,7 @@ export default function TeamView() {
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Team Management</h2>
           <p className="text-gray-500 mt-1">
@@ -453,7 +453,7 @@ export default function TeamView() {
         </div>
         
         {/* Tabs */}
-        <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg">
+        <div className="flex flex-wrap items-center gap-1 bg-gray-100 p-1 rounded-lg">
           <button
             onClick={() => setActiveTab('team')}
             className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${

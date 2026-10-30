@@ -778,8 +778,8 @@ export default function PipelineBoard() {
     <div className="h-full flex flex-col">
       {/* ── Top Bar ─────────────────────────────────────────────── */}
       <div className="p-6 bg-white border-b border-gray-200">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
             <div className="relative">
               <button
                 onClick={() => setShowBoardSelector(!showBoardSelector)}
@@ -857,7 +857,7 @@ export default function PipelineBoard() {
             })()}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {/* ── Owner Priority Toggle ── */}
             <button
               onClick={() => setShowPriorityPanel(!showPriorityPanel)}

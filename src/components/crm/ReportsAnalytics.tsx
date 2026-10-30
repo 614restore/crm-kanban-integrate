@@ -423,12 +423,12 @@ const ReportsAnalytics: React.FC = () => {
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <BarChart className="w-6 h-6" />
           <h1 className="text-3xl font-bold">Reports & Analytics</h1>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
             <SelectTrigger className="w-40">
               <SelectValue />
@@ -528,7 +528,7 @@ const ReportsAnalytics: React.FC = () => {
 
       {/* Analytics Tabs */}
       <Tabs defaultValue="revenue" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="flex w-full justify-start overflow-x-auto sm:grid sm:grid-cols-6">
           <TabsTrigger value="revenue" className="flex items-center gap-2">
             <DollarSign className="w-4 h-4" />
             Revenue
