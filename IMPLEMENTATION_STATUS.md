@@ -149,7 +149,7 @@ These features have the data structure in place but need additional UI/integrati
 
 **💡 Want This Feature?**
 ```
-📧 Contact: 614restorellc@gmail.com
+📧 Contact: devmgr.app@gmail.com
 Subject: "Photo Checklist Feature Request"
 
 Let's discuss your specific photo requirements:
@@ -177,7 +177,7 @@ Let's discuss your specific photo requirements:
 
 **💡 Want This Feature?**
 ```
-📧 Contact: 614restorellc@gmail.com
+📧 Contact: devmgr.app@gmail.com
 Subject: "Completion Checklist Feature Request"
 
 Let's discuss your QC process:
@@ -205,7 +205,7 @@ Let's discuss your QC process:
 
 **💡 Want This Feature?**
 ```
-📧 Contact: 614restorellc@gmail.com
+📧 Contact: devmgr.app@gmail.com
 Subject: "Dual Signature Feature Request"
 
 Let's discuss your sign-off workflow:
@@ -236,7 +236,7 @@ Let's discuss your sign-off workflow:
 
 **💡 Want This Feature?**
 ```
-📧 Contact: 614restorellc@gmail.com
+📧 Contact: devmgr.app@gmail.com
 Subject: "Auto-Invoice Feature Request"
 
 Let's discuss your invoicing workflow:
@@ -265,7 +265,7 @@ Let's discuss your invoicing workflow:
 
 **💡 Want This Feature?**
 ```
-📧 Contact: 614restorellc@gmail.com
+📧 Contact: devmgr.app@gmail.com
 Subject: "Material List Integration Request"
 
 Let's discuss your material tracking needs:
@@ -294,7 +294,7 @@ Let's discuss your material tracking needs:
 
 **💡 Want This Feature?**
 ```
-📧 Contact: 614restorellc@gmail.com
+📧 Contact: devmgr.app@gmail.com
 Subject: "Work Order Notifications Request"
 
 Let's discuss your communication needs:
@@ -326,7 +326,7 @@ Let's discuss your communication needs:
 
 **💡 Want This Feature?**
 ```
-📧 Contact: 614restorellc@gmail.com
+📧 Contact: devmgr.app@gmail.com
 Subject: "Mobile App Development Request"
 
 This is a major feature. Let's discuss:
@@ -445,7 +445,7 @@ vercel deploy --prod
 
 ## 💬 Get Help or Request Features
 
-**Email:** 614restorellc@gmail.com
+**Email:** devmgr.app@gmail.com
 
 **For Feature Requests, Include:**
 1. Feature name from "Future Features" section

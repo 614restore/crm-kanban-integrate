@@ -403,14 +403,16 @@ function dbAppointmentToAppAppointment(dbAppointment: any, contacts: Contact[]):
 
 // Helper function to convert DB invoice to app invoice
 function dbInvoiceToAppInvoice(dbInvoice: any, contacts: Contact[]): Invoice {
-  // Invoices from the shared quote backend carry customer_id and total; older ones contact_id and amount.
+  // Invoices are filed against customer_id (contact_id is the older name for the same thing).
   const contactId = dbInvoice.contact_id || dbInvoice.customer_id || '';
   const contact = contacts.find(c => c.id === contactId);
   return {
     id: dbInvoice.id,
+    invoiceNumber: dbInvoice.invoice_number || undefined,
     contactId,
     contactName: contact ? `${contact.firstName} ${contact.lastName}` : 'Customer removed',
     jobId: dbInvoice.job_id || '',
+    // The column is `total`; there is no `amount`, which made every invoice read as $NaN.
     amount: Number(dbInvoice.total ?? dbInvoice.amount ?? 0),
     status: dbInvoice.status,
     dueDate: dbInvoice.due_date || '',

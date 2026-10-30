@@ -8,7 +8,7 @@
 **Features**:
 - Green-themed banner with Sparkles icon
 - Call button: (614) 808-8899
-- Email: 614restorellc@gmail.com with pre-filled subject
+- Email: devmgr.app@gmail.com with pre-filled subject
 - Description: SMS messaging with Twilio integration options
 
 **Where to Use**:
@@ -31,7 +31,7 @@ import { SMSIntegrationBanner } from '@/components/crm/FeatureBanner';
 **Features**:
 - Purple-themed banner with Sparkles icon
 - Call button: (614) 808-8899
-- Email: 614restorellc@gmail.com with pre-filled subject
+- Email: devmgr.app@gmail.com with pre-filled subject
 - Description: Voice calls, voicemail, call recording, click-to-call
 
 **Where to Use**:

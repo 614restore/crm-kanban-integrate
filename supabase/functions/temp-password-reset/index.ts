@@ -113,6 +113,8 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         from: FROM_EMAIL,
+        // Replies go to support; the From address must stay on the verified sending domain.
+        reply_to: 'devmgr.app@gmail.com',
         to: [email],
         subject: 'Your TrussCTR temporary password',
         html: `

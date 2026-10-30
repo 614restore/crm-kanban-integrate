@@ -39,4 +39,4 @@ Wait 2-3 minutes for Vercel to deploy, then refresh your site!
 ║  Visit: https://crm-kanban-integrate.vercel.app              ║
 ╚══════════════════════════════════════════════════════════════╝
 
-Questions? Email: 614restorellc@gmail.com
+Questions? Email: devmgr.app@gmail.com

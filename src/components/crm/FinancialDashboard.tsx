@@ -139,11 +139,11 @@ export default function FinancialDashboard() {
       const fromName = companyProfile?.from_name || companyProfile?.name || 'TrussCTR';
       await sendEmail({
         to: contact.email,
-        subject: `Invoice ${existingInvoice.id} from ${companyProfile?.name || 'our company'}`,
+        subject: `Invoice ${existingInvoice.invoiceNumber || existingInvoice.id} from ${companyProfile?.name || 'our company'}`,
         html: `
           <p>Hello ${contact.firstName},</p>
           <p>Your invoice is ready.</p>
-          <p><strong>Invoice:</strong> ${existingInvoice.id}</p>
+          <p><strong>Invoice:</strong> ${existingInvoice.invoiceNumber || existingInvoice.id}</p>
           <p><strong>Amount:</strong> ${formatCurrency(existingInvoice.amount)}</p>
           <p><strong>Due Date:</strong> ${formatDate(existingInvoice.dueDate)}</p>
           <p>Please reply to this email if you have any questions.</p>
@@ -214,7 +214,7 @@ export default function FinancialDashboard() {
             contactName: invoice.contactName,
             contactEmail: contact.email,
             userId: user?.id || 'system',
-            userEmail: user?.email || 'system@trussctr.com',
+            userEmail: user?.email || 'devmgr.app@gmail.com',
             companyId: profile.company_id,
             source: 'payment_processing',
             reason: `Invoice ${newStatus}: ${invoice.invoiceNumber}`,
@@ -256,7 +256,7 @@ export default function FinancialDashboard() {
     const matchesSearch =
       searchQuery === '' ||
       (inv.contactName ?? '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (inv.id ?? '').toLowerCase().includes(searchQuery.toLowerCase());
+      (inv.invoiceNumber ?? inv.id ?? '').toLowerCase().includes(searchQuery.toLowerCase());
     return matchesFilter && matchesSearch;
   });
 
@@ -676,7 +676,7 @@ export default function FinancialDashboard() {
               {filteredInvoices.map((invoice) => (
                 <tr key={invoice.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4">
-                    <span className="font-medium text-gray-900">{invoice.id}</span>
+                    <span className="font-medium text-gray-900">{invoice.invoiceNumber || invoice.id}</span>
                   </td>
                   <td className="px-6 py-4">
                     <span className="text-gray-700">{invoice.contactName}</span>

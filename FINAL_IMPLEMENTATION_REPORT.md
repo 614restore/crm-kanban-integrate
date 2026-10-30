@@ -403,7 +403,7 @@ import { SMSNotificationsBanner, MobileAppBanner } from './FeatureBanner';
 ## 📞 Support & Feature Requests
 
 ### For Users
-**Email:** 614restorellc@gmail.com
+**Email:** devmgr.app@gmail.com
 
 **When Requesting Features:**
 1. Use the "Request This Feature" button in banners
@@ -548,7 +548,7 @@ All documentation is in your project root:
 
 **Everything else is optional future enhancements.**
 
-**Contact 614restorellc@gmail.com for:**
+**Contact devmgr.app@gmail.com for:**
 - Feature requests
 - Custom development
 - Technical support

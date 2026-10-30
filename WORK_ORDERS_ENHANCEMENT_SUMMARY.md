@@ -352,7 +352,7 @@ Not yet implemented but data structure supports:
 
 For questions or additional features:
 - Open GitHub issue
-- Email: 614restorellc@gmail.com
+- Email: devmgr.app@gmail.com
 
 ---
 
