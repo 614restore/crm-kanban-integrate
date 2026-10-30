@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import InvoiceTaxSettings from '@/components/settings/InvoiceTaxSettings';
 import { useCRM, canManageLeadSources } from '@/lib/crmStore';
 import StormAlertSettings from '@/components/settings/StormAlertSettings';
+import StormHistorySettings from '@/components/settings/StormHistorySettings';
 import { useAuth } from '@/lib/authContext';
 import { defaultLeadSources } from '@/lib/crmData';
 import { toast } from 'sonner';
@@ -2415,6 +2416,7 @@ export default function SettingsView() {
               <p className="text-sm text-gray-500">Configure when and how you receive notifications.</p>
             </div>
             {effectiveCompanyId && <StormAlertSettings companyId={effectiveCompanyId} userRole={userRole} />}
+            {effectiveCompanyId && <StormHistorySettings companyId={effectiveCompanyId} userRole={userRole} />}
             <NotificationToggles />
             {/* The full per-person preferences: channels, alert types, hail and wind limits, quiet hours, service-area
                 ZIP codes. This page existed but was not reachable from anywhere in the app. The mobile app has the
