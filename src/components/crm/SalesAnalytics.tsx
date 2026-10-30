@@ -327,28 +327,28 @@ export default function SalesAnalytics() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100">
-                  <th className="text-left py-2 px-3 text-xs font-semibold text-gray-500 uppercase">Rep</th>
-                  <th className="text-right py-2 px-3 text-xs font-semibold text-gray-500 uppercase">Leads</th>
-                  <th className="text-right py-2 px-3 text-xs font-semibold text-gray-500 uppercase">Closed</th>
-                  <th className="text-right py-2 px-3 text-xs font-semibold text-gray-500 uppercase">Close %</th>
-                  <th className="text-right py-2 px-3 text-xs font-semibold text-gray-500 uppercase">Revenue</th>
+                  <th className="text-left py-2 px-2 sm:px-3 text-xs font-semibold text-gray-500 uppercase">Rep</th>
+                  <th className="text-right py-2 px-2 sm:px-3 text-xs font-semibold text-gray-500 uppercase">Leads</th>
+                  <th className="text-right py-2 px-2 sm:px-3 text-xs font-semibold text-gray-500 uppercase">Closed</th>
+                  <th className="hidden sm:table-cell text-right py-2 px-2 sm:px-3 text-xs font-semibold text-gray-500 uppercase">Close %</th>
+                  <th className="text-right py-2 px-2 sm:px-3 text-xs font-semibold text-gray-500 uppercase">Revenue</th>
                 </tr>
               </thead>
               <tbody>
                 {byRep.map((rep, i) => (
                   <tr key={rep.name} className={`border-b border-gray-50 ${i === 0 ? 'bg-yellow-50/50' : 'hover:bg-gray-50'}`}>
-                    <td className="py-2.5 px-3 font-medium text-gray-900">
+                    <td className="py-2.5 px-2 sm:px-3 font-medium text-gray-900">
                       <div className="flex items-center gap-2">
                         {i === 0 && <Award size={13} className="text-yellow-500" />}
                         {rep.name}
                       </div>
                     </td>
-                    <td className="py-2.5 px-3 text-right text-gray-600">{rep.leads}</td>
-                    <td className="py-2.5 px-3 text-right text-gray-600">{rep.closed}</td>
-                    <td className="py-2.5 px-3 text-right text-gray-600">
+                    <td className="py-2.5 px-2 sm:px-3 text-right text-gray-600">{rep.leads}</td>
+                    <td className="py-2.5 px-2 sm:px-3 text-right text-gray-600">{rep.closed}</td>
+                    <td className="hidden sm:table-cell py-2.5 px-2 sm:px-3 text-right text-gray-600">
                       {rep.leads > 0 ? `${((rep.closed / rep.leads) * 100).toFixed(0)}%` : '—'}
                     </td>
-                    <td className="py-2.5 px-3 text-right font-semibold text-green-700">{fmt(rep.revenue)}</td>
+                    <td className="py-2.5 px-2 sm:px-3 text-right font-semibold text-green-700">{fmt(rep.revenue)}</td>
                   </tr>
                 ))}
               </tbody>

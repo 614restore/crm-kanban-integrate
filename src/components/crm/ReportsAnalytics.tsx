@@ -528,28 +528,28 @@ const ReportsAnalytics: React.FC = () => {
 
       {/* Analytics Tabs */}
       <Tabs defaultValue="revenue" className="space-y-4">
-        <TabsList className="flex w-full justify-start overflow-x-auto sm:grid sm:grid-cols-6">
-          <TabsTrigger value="revenue" className="flex items-center gap-2">
+        <TabsList className="grid h-auto w-full grid-cols-3 gap-1 sm:h-10 sm:grid-cols-6 sm:gap-0">
+          <TabsTrigger value="revenue" className="flex items-center gap-1.5 whitespace-normal text-center sm:gap-2 sm:whitespace-nowrap">
             <DollarSign className="w-4 h-4" />
             Revenue
           </TabsTrigger>
-          <TabsTrigger value="projects" className="flex items-center gap-2">
+          <TabsTrigger value="projects" className="flex items-center gap-1.5 whitespace-normal text-center sm:gap-2 sm:whitespace-nowrap">
             <Briefcase className="w-4 h-4" />
             Projects
           </TabsTrigger>
-          <TabsTrigger value="leads" className="flex items-center gap-2">
+          <TabsTrigger value="leads" className="flex items-center gap-1.5 whitespace-normal text-center sm:gap-2 sm:whitespace-nowrap">
             <Users className="w-4 h-4" />
             Lead Sources
           </TabsTrigger>
-          <TabsTrigger value="team" className="flex items-center gap-2">
+          <TabsTrigger value="team" className="flex items-center gap-1.5 whitespace-normal text-center sm:gap-2 sm:whitespace-nowrap">
             <Award className="w-4 h-4" />
             Team
           </TabsTrigger>
-          <TabsTrigger value="individual" className="flex items-center gap-2">
+          <TabsTrigger value="individual" className="flex items-center gap-1.5 whitespace-normal text-center sm:gap-2 sm:whitespace-nowrap">
             <UserCheck className="w-4 h-4" />
             Individual
           </TabsTrigger>
-          <TabsTrigger value="trends" className="flex items-center gap-2">
+          <TabsTrigger value="trends" className="flex items-center gap-1.5 whitespace-normal text-center sm:gap-2 sm:whitespace-nowrap">
             <TrendingUp className="w-4 h-4" />
             Trends
           </TabsTrigger>
@@ -798,10 +798,10 @@ const ReportsAnalytics: React.FC = () => {
                     <tr className="border-b">
                       <th className="text-left p-2">Source</th>
                       <th className="text-right p-2">Leads</th>
-                      <th className="text-right p-2">Conversions</th>
+                      <th className="hidden sm:table-cell text-right p-2">Conversions</th>
                       <th className="text-right p-2">Rate</th>
                       <th className="text-right p-2">Revenue</th>
-                      <th className="text-right p-2">Cost per Lead</th>
+                      <th className="hidden sm:table-cell text-right p-2">Cost per Lead</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -809,14 +809,14 @@ const ReportsAnalytics: React.FC = () => {
                       <tr key={source.source} className="border-b">
                         <td className="p-2 font-medium">{source.source}</td>
                         <td className="p-2 text-right">{source.leads}</td>
-                        <td className="p-2 text-right">{source.conversions}</td>
+                        <td className="hidden sm:table-cell p-2 text-right">{source.conversions}</td>
                         <td className="p-2 text-right">
                           <Badge className={source.conversionRate > 40 ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}>
                             {source.conversionRate.toFixed(1)}%
                           </Badge>
                         </td>
                         <td className="p-2 text-right font-bold">${source.revenue.toLocaleString()}</td>
-                        <td className="p-2 text-right">${Math.round(source.revenue / source.leads).toLocaleString()}</td>
+                        <td className="hidden sm:table-cell p-2 text-right">${Math.round(source.revenue / source.leads).toLocaleString()}</td>
                       </tr>
                     ))}
                   </tbody>

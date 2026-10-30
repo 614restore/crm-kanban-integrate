@@ -458,14 +458,14 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
               <table className="w-full">
                 <thead className="border-b border-gray-200 bg-gray-50">
                   <tr>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Invoice</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Customer</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Amount</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Paid</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Balance</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Status</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Date</th>
-                    <th className="px-6 py-4 text-right text-xs font-semibold text-gray-700 uppercase">Actions</th>
+                    <th className="px-3 sm:px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Invoice</th>
+                    <th className="hidden sm:table-cell px-3 sm:px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Customer</th>
+                    <th className="hidden sm:table-cell px-3 sm:px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Amount</th>
+                    <th className="hidden sm:table-cell px-3 sm:px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Paid</th>
+                    <th className="px-3 sm:px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Balance</th>
+                    <th className="hidden sm:table-cell px-3 sm:px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Status</th>
+                    <th className="hidden sm:table-cell px-3 sm:px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Date</th>
+                    <th className="px-3 sm:px-6 py-4 text-right text-xs font-semibold text-gray-700 uppercase">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -475,15 +475,16 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
                       className="hover:bg-gray-50 transition-colors cursor-pointer"
                       onClick={() => onViewInvoice(invoice.id)}
                     >
-                      <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-3 sm:px-6 py-4" onClick={(e) => e.stopPropagation()}>
                         <p
                           className="font-semibold text-[#1e3a5f] cursor-pointer hover:underline"
                           onClick={() => onViewInvoice(invoice.id)}
                         >
                           {invoice.invoice_number}
                         </p>
+                        <p className="sm:hidden text-xs text-gray-600">{invoice.customer ? `${invoice.customer.first_name} ${invoice.customer.last_name}` : 'Customer removed'}</p>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="hidden sm:table-cell px-3 sm:px-6 py-4">
                         <div className="min-w-0">
                           <p className="font-medium text-gray-900">
                             {invoice.customer
@@ -493,26 +494,27 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
                           <p className="text-sm text-gray-500">{invoice.customer?.email || ''}</p>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="hidden sm:table-cell px-3 sm:px-6 py-4">
                         <p className="font-semibold text-gray-900">{formatCurrency(invoice.total)}</p>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="hidden sm:table-cell px-3 sm:px-6 py-4">
                         <p className="text-gray-700">{formatCurrency(invoice.deposit_paid || 0)}</p>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-3 sm:px-6 py-4">
                         <p className="font-medium text-gray-900">{formatCurrency(getBalanceDue(invoice))}</p>
+                        <div className="sm:hidden mt-1">{getStatusBadge(invoice.status)}</div>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="hidden sm:table-cell px-3 sm:px-6 py-4">
                         {getStatusBadge(invoice.status)}
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="hidden sm:table-cell px-3 sm:px-6 py-4">
                         <p className="text-sm text-gray-600">{formatDate(invoice.issued_date)}</p>
                       </td>
-                      <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-3 sm:px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1">
                           <button
                             onClick={() => onViewInvoice(invoice.id)}
-                            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                            className="hidden sm:block p-2 hover:bg-gray-100 rounded-lg transition-colors"
                             title="View details"
                           >
                             <Eye className="w-4 h-4 text-gray-600" />

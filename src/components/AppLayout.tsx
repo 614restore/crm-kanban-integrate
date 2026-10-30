@@ -1640,8 +1640,9 @@ useEffect(() => {
             <TrialBanner companyId={profile?.company_id ?? state.companyId ?? null} />
           )}
           
-          {/* Main content area */}
-          <main className="flex-1 min-h-0 overflow-auto">
+          {/* Main content area. On a phone the page never slides sideways; things that should
+              (the boards, wide tables) scroll inside their own boxes. */}
+          <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden sm:overflow-auto">
             <ViewRouter />
           </main>
         </div>

@@ -7157,7 +7157,7 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
               return (
                 <div className="space-y-4">
                   {/* Option tab bar */}
-                  <div className="flex gap-2 overflow-x-auto pb-1">
+                  <div className="flex flex-wrap gap-2">
                     {effectiveScopeOptions.map(opt => {
                       const optTotal = lineItems.filter(i => i.quote_option_id === opt.id).reduce((s, i) => s + i.quantity * (i.good_price ?? 0), 0);
                       const isActive = effectiveActiveOptionId === opt.id;

@@ -720,17 +720,17 @@ export default function MaterialOrdersView() {
           {filteredOrders.map((order) => (
             <div
               key={order.id}
-              className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow"
+              className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 hover:shadow-md transition-shadow"
             >
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
                     <h3 className="text-lg font-semibold text-gray-900">
                       {order.supplierName}
                     </h3>
                     <StatusBadge status={order.status} />
                   </div>
-                  <div className="flex items-center gap-4 text-sm text-gray-600 mb-2">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-600 mb-2">
                     <span className="font-mono">{order.orderNumber}</span>
                     {order.items && order.items.length > 0 && (
                       <span className="text-purple-600 font-medium">{order.items.length} line item{order.items.length !== 1 ? 's' : ''}</span>
@@ -740,7 +740,7 @@ export default function MaterialOrdersView() {
                     <p className="text-sm text-gray-600">{order.notes}</p>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   {order.status === 'ordered' && (
                     <button
                       onClick={() => handleMarkDelivered(order.id)}

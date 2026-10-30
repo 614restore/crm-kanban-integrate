@@ -888,7 +888,7 @@ export default function QuotesView() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wide">
               <tr>
-                <th className="w-10 px-4 py-3">
+                <th className="w-10 px-2 sm:px-4 py-3">
                   <input
                     type="checkbox"
                     aria-label="Select all quotes"
@@ -896,14 +896,14 @@ export default function QuotesView() {
                     onChange={(e) => setSelectedIds(e.target.checked ? new Set(filtered.map((q) => q.id)) : new Set())}
                   />
                 </th>
-                <th className="text-left px-4 py-3">Quote #</th>
-                <th className="text-left px-4 py-3">Customer</th>
-                <th className="text-left px-4 py-3">Status</th>
-                <th className="text-right px-4 py-3">Good</th>
-                <th className="text-right px-4 py-3">Better</th>
-                <th className="text-right px-4 py-3">Best</th>
-                <th className="text-left px-4 py-3">Created</th>
-                <th className="text-right px-4 py-3">Actions</th>
+                <th className="text-left px-2 sm:px-4 py-3">Quote #</th>
+                <th className="hidden sm:table-cell text-left px-2 sm:px-4 py-3">Customer</th>
+                <th className="text-left px-2 sm:px-4 py-3">Status</th>
+                <th className="hidden sm:table-cell text-right px-2 sm:px-4 py-3">Good</th>
+                <th className="hidden sm:table-cell text-right px-2 sm:px-4 py-3">Better</th>
+                <th className="hidden sm:table-cell text-right px-2 sm:px-4 py-3">Best</th>
+                <th className="hidden sm:table-cell text-left px-2 sm:px-4 py-3">Created</th>
+                <th className="text-right px-2 sm:px-4 py-3">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -913,7 +913,7 @@ export default function QuotesView() {
                   onClick={() => openEdit(q.id)}
                   className="hover:bg-gray-50 cursor-pointer transition-colors"
                 >
-                  <td className="w-10 px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                  <td className="w-10 px-2 sm:px-4 py-3" onClick={(e) => e.stopPropagation()}>
                     <input
                       type="checkbox"
                       aria-label={`Select quote ${q.quote_number}`}
@@ -921,9 +921,9 @@ export default function QuotesView() {
                       onChange={() => toggleSelected(q.id)}
                     />
                   </td>
-                  <td className="px-4 py-3 font-medium text-gray-900">{q.quote_number}</td>
-                  <td className="px-4 py-3"><ScheduleName contactId={q.customer_id || q.contact_id} fallbackClass="text-gray-700">{contactName(q.contact_id || q.customer_id)}</ScheduleName></td>
-                  <td className="px-4 py-3">
+                  <td className="px-2 sm:px-4 py-3 font-medium text-gray-900">{q.quote_number}<div className="sm:hidden mt-0.5 text-xs font-normal"><ScheduleName contactId={q.customer_id || q.contact_id} fallbackClass="text-gray-700">{contactName(q.contact_id || q.customer_id)}</ScheduleName></div></td>
+                  <td className="hidden sm:table-cell px-2 sm:px-4 py-3"><ScheduleName contactId={q.customer_id || q.contact_id} fallbackClass="text-gray-700">{contactName(q.contact_id || q.customer_id)}</ScheduleName></td>
+                  <td className="px-2 sm:px-4 py-3">
                     <span className={`text-xs px-2 py-1 rounded-full font-medium ${STATUS_COLORS[q.status] || 'bg-gray-100 text-gray-700'}`}>
                       {q.status}
                     </span>
@@ -933,11 +933,11 @@ export default function QuotesView() {
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right text-gray-700">{money(q.good_total)}</td>
-                  <td className="px-4 py-3 text-right text-gray-700">{q.include_better === false ? <span className="text-gray-300">—</span> : money(q.better_total)}</td>
-                  <td className="px-4 py-3 text-right text-gray-700">{q.include_best === false ? <span className="text-gray-300">—</span> : money(q.best_total)}</td>
-                  <td className="px-4 py-3 text-gray-500">{new Date(q.created_at).toLocaleDateString()}</td>
-                  <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                  <td className="hidden sm:table-cell px-2 sm:px-4 py-3 text-right text-gray-700">{money(q.good_total)}</td>
+                  <td className="hidden sm:table-cell px-2 sm:px-4 py-3 text-right text-gray-700">{q.include_better === false ? <span className="text-gray-300">—</span> : money(q.better_total)}</td>
+                  <td className="hidden sm:table-cell px-2 sm:px-4 py-3 text-right text-gray-700">{q.include_best === false ? <span className="text-gray-300">—</span> : money(q.best_total)}</td>
+                  <td className="hidden sm:table-cell px-2 sm:px-4 py-3 text-gray-500">{new Date(q.created_at).toLocaleDateString()}</td>
+                  <td className="px-2 sm:px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                     <button
                       onMouseDown={(e) => e.stopPropagation()}
                       onClick={(e) => toggleActionMenu(q, e.currentTarget)}

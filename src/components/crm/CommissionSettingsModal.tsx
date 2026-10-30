@@ -156,7 +156,45 @@ export default function CommissionSettingsModal({ companyId, company, people, on
             <p className="text-xs text-gray-500 mb-2">
               Leave Method on &ldquo;Company default&rdquo; unless this person is paid differently. The rates apply to percent of total (self-generated and company leads; a custom rate overrides both, handy for commercial reps). Off the top and Sales share apply to a profit split; blank uses the company numbers.
             </p>
-            <div className="overflow-x-auto">
+            {/* On a phone each salesperson is a card; the table is for wider screens. */}
+            <div className="sm:hidden space-y-3">
+              {rows.map((r) => (
+                <div key={r.id} className="rounded-lg border border-gray-200 p-3 space-y-2">
+                  <p className="font-medium text-gray-800">{r.name}</p>
+                  <label className="flex items-center justify-between gap-3 text-sm text-gray-600">
+                    Method
+                    <select
+                      value={r.method}
+                      onChange={(e) => setRow(r.id, { method: e.target.value })}
+                      className="px-2 py-1 border border-gray-200 rounded-md text-sm"
+                    >
+                      <option value="">Company default</option>
+                      <option value="percent_total">Percent of total</option>
+                      <option value="profit_split">Profit split</option>
+                    </select>
+                  </label>
+                  {([
+                    ['Self-gen %', 'self', ''],
+                    ['Company %', 'comp', ''],
+                    ['Custom %', 'custom', ''],
+                    ['Off the top %', 'overhead', 'default'],
+                    ['Sales share %', 'split', 'default'],
+                  ] as const).map(([label, key, placeholder]) => (
+                    <label key={key} className="flex items-center justify-between gap-3 text-sm text-gray-600">
+                      {label}
+                      <input
+                        className={input}
+                        inputMode="decimal"
+                        placeholder={placeholder || undefined}
+                        value={r[key]}
+                        onChange={(e) => setRow(r.id, { [key]: e.target.value })}
+                      />
+                    </label>
+                  ))}
+                </div>
+              ))}
+            </div>
+            <div className="hidden sm:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
                   <tr>

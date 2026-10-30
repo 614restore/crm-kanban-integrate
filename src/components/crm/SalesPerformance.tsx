@@ -295,7 +295,7 @@ export default function SalesPerformance() {
         </div>
       </div>
 
-      <div className="flex gap-1 overflow-x-auto -mx-1 px-1 pb-1">
+      <div className="flex flex-wrap gap-1">
         {PRESETS.map((p) => (
           <button
             key={p.id}
