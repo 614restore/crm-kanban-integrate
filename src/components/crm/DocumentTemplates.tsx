@@ -3201,14 +3201,14 @@ const DocumentTemplates: React.FC = () => {
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="container mx-auto p-0 sm:p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <FileText className="w-6 h-6" />
-          <h1 className="text-3xl font-bold">Document Templates</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold">Document Templates</h1>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {/* Document Scanner */}
           <DocumentScanner
             onDocumentUploaded={(document) => {
@@ -3250,10 +3250,10 @@ const DocumentTemplates: React.FC = () => {
       )}
 
       {/* Main layout: folder sidebar + templates */}
-      <div className="flex gap-6 items-start">
+      <div className="flex flex-col sm:flex-row gap-6 items-stretch sm:items-start">
 
         {/* ── Folder Sidebar ─────────────────────────────────────────── */}
-        <div className="w-52 flex-shrink-0 space-y-1">
+        <div className="w-full sm:w-52 flex-shrink-0 space-y-1">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider px-2 mb-2">Folders</p>
 
           {/* All Templates */}
