@@ -418,6 +418,7 @@ function dbInvoiceToAppInvoice(dbInvoice: any, contacts: Contact[]): Invoice {
     dueDate: dbInvoice.due_date || '',
     createdAt: dbInvoice.created_at,
     paidAt: dbInvoice.paid_at,
+    quoteId: dbInvoice.quote_id || undefined,
     items: [], // Items loaded separately if needed
   };
 }

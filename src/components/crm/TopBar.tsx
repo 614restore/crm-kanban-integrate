@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useCRM, getActiveContactId } from '@/lib/crmStore';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useCRM, getActiveContactId, contactMatchesSearch } from '@/lib/crmStore';
 import { db, DbNotification } from '@/lib/database';
 import { useAuth } from '@/lib/authContext';
 import { useNotificationFeed, type FeedNotification } from '@/hooks/useNotificationFeed';
@@ -23,6 +23,8 @@ import {
 } from 'lucide-react';
 import { statusLabels, CustomerStatus, getContactFullName } from '@/lib/crmData';
 
+const SEARCH_PREVIEW_LIMIT = 6;
+
 export default function TopBar() {
   const { state, dispatch } = useCRM();
   const { profile } = useAuth();
@@ -38,6 +40,24 @@ export default function TopBar() {
     return () => window.removeEventListener('keydown', onKey);
   }, [showFilters, showNotifications]);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Header search. The contact list filters itself from the same query, so the matches list
+  // is only for the other screens.
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const searchActive = state.searchQuery.trim() !== '' && state.currentView !== 'contacts';
+  const searchMatches = useMemo(
+    () => (searchActive ? state.contacts.filter((c) => contactMatchesSearch(c, state.searchQuery)) : []),
+    [searchActive, state.contacts, state.searchQuery],
+  );
+  const openSearchResult = (contactId: string) => {
+    setShowSearchResults(false);
+    dispatch({ type: 'SET_SEARCH', payload: '' });
+    dispatch({ type: 'SELECT_CONTACT', payload: contactId });
+  };
+  const showAllResults = () => {
+    setShowSearchResults(false);
+    dispatch({ type: 'SET_VIEW', payload: 'contacts' });
+  };
 
   const handleRefresh = () => {
     setIsRefreshing(true);
@@ -141,10 +161,20 @@ export default function TopBar() {
             placeholder="Search contacts by name, email, phone or address..."
             value={state.searchQuery}
             onChange={(e) => {
+              // On the contact list the search filters it as you type. Anywhere else the matches
+              // show under the box; it used to jump to the list on the first letter.
               dispatch({ type: 'SET_SEARCH', payload: e.target.value });
-              // The search filters the contact list; typing anywhere else used to do nothing,
-              // so open the list with the results.
-              if (e.target.value && state.currentView !== 'contacts') dispatch({ type: 'SET_VIEW', payload: 'contacts' });
+              setShowSearchResults(true);
+            }}
+            onFocus={() => setShowSearchResults(true)}
+            onBlur={() => setShowSearchResults(false)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                setShowSearchResults(false);
+                e.currentTarget.blur();
+              } else if (e.key === 'Enter' && searchActive) {
+                showAllResults();
+              }
             }}
             className="w-full pl-10 pr-4 py-2 bg-gray-100 border border-transparent rounded-lg focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all outline-none"
           />
@@ -152,9 +182,47 @@ export default function TopBar() {
             <button
               onClick={() => dispatch({ type: 'SET_SEARCH', payload: '' })}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              aria-label="Clear search"
             >
               <X size={16} />
             </button>
+          )}
+          {showSearchResults && searchActive && (
+            // onMouseDown keeps the box focused so a click lands before the list closes.
+            <div
+              className="absolute left-0 right-0 top-full mt-1 z-50 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden"
+              onMouseDown={(e) => e.preventDefault()}
+            >
+              {searchMatches.length === 0 ? (
+                <p className="px-4 py-3 text-sm text-gray-500">No contacts match “{state.searchQuery.trim()}”</p>
+              ) : (
+                <ul className="max-h-80 overflow-y-auto">
+                  {searchMatches.slice(0, SEARCH_PREVIEW_LIMIT).map((c) => (
+                    <li key={c.id}>
+                      <button
+                        type="button"
+                        onClick={() => openSearchResult(c.id)}
+                        className="w-full text-left px-4 py-2 hover:bg-gray-50 focus:bg-gray-50 outline-none"
+                      >
+                        <span className="block text-sm font-medium text-gray-900 truncate">{getContactFullName(c)}</span>
+                        <span className="block text-xs text-gray-500 truncate">
+                          {[c.address, c.phone1, c.email].filter(Boolean).join(' · ')}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {searchMatches.length > 0 && (
+                <button
+                  type="button"
+                  onClick={showAllResults}
+                  className="w-full text-left px-4 py-2 text-sm font-medium text-blue-600 border-t border-gray-100 hover:bg-gray-50"
+                >
+                  See all {searchMatches.length} {searchMatches.length === 1 ? 'result' : 'results'} in Contacts
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>

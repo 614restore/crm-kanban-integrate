@@ -731,20 +731,28 @@ export function useActiveContact() {
   return id ? state.contacts.find((c) => c.id === id) || null : null;
 }
 
+/** Whether a contact matches the header search: name (first, last or both), email, phone or address. */
+export function contactMatchesSearch(c: Contact, search: string): boolean {
+  const query = search.trim().toLowerCase();
+  if (!query) return true;
+  const fullName = `${c.firstName || ''} ${c.lastName || ''}`.toLowerCase();
+  const digits = query.replace(/\D/g, '');
+  return (
+    fullName.includes(query) ||
+    (c.email || '').toLowerCase().includes(query) ||
+    (c.phone1 || '').includes(query) ||
+    // "6145550110" finds "(614) 555-0110"
+    (digits.length >= 3 && (c.phone1 || '').replace(/\D/g, '').includes(digits)) ||
+    (c.address || '').toLowerCase().includes(query)
+  );
+}
+
 export function useFilteredContacts() {
   const { state } = useCRM();
   let filtered = [...state.contacts];
-  
-  if (state.searchQuery) {
-    const query = state.searchQuery.toLowerCase();
-    filtered = filtered.filter(
-      (c) =>
-        c.firstName.toLowerCase().includes(query) ||
-        c.lastName.toLowerCase().includes(query) ||
-        c.email.toLowerCase().includes(query) ||
-        c.phone1.includes(query) ||
-        c.address.toLowerCase().includes(query)
-    );
+
+  if (state.searchQuery.trim()) {
+    filtered = filtered.filter((c) => contactMatchesSearch(c, state.searchQuery));
   }
   
   if (state.filterStatus !== 'all') {
