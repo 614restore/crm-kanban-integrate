@@ -197,6 +197,16 @@ export interface QuoteSummary {
   includeBetter: boolean;
   includeBest: boolean;
   createdAt: string;
+  /** Last change; the dashboard's activity list is ordered by it. Falls back to createdAt. */
+  updatedAt?: string;
+  /** Where a signed job is on the Project board (scheduled, in_progress, completed, invoiced, paid). */
+  jobStage?: string | null;
+  projectDescription?: string | null;
+  /** Hand-entered tier totals that replace the calculated ones when useManualTotals is on. */
+  useManualTotals?: boolean;
+  manualGoodTotal?: number | null;
+  manualBetterTotal?: number | null;
+  manualBestTotal?: number | null;
 }
 
 /** Maps a row from the quotes table to a QuoteSummary. */
@@ -214,6 +224,13 @@ export function toQuoteSummary(row: any): QuoteSummary {
     includeBetter: row.include_better !== false,
     includeBest: row.include_best !== false,
     createdAt: row.created_at,
+    updatedAt: row.updated_at ?? row.created_at,
+    jobStage: row.job_stage ?? null,
+    projectDescription: row.project_description ?? null,
+    useManualTotals: row.use_manual_totals === true,
+    manualGoodTotal: row.manual_good_total == null ? null : Number(row.manual_good_total),
+    manualBetterTotal: row.manual_better_total == null ? null : Number(row.manual_better_total),
+    manualBestTotal: row.manual_best_total == null ? null : Number(row.manual_best_total),
   };
 }
 

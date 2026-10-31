@@ -1,60 +1,32 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import ScheduleName from './ScheduleName';
 import { supabase } from '@/lib/supabase';
-import { useCRM, usePipelineStats, useFinancialStats, useUpcomingAppointments } from '@/lib/crmStore';
+import { useCRM, useFinancialStats, useUpcomingAppointments } from '@/lib/crmStore';
+import { computeDashboardMetrics, DASHBOARD_STAGES } from '@/lib/dashboardMetrics';
 import { useAuth } from '@/lib/authContext';
 import { appointmentStart } from '@/lib/appointmentUrgency';
 import {
   formatCurrency,
   formatDate,
-  statusLabels,
   getContactFullName,
   type Contact,
-  type Appointment,
 } from '@/lib/crmData';
 import {
   TrendingUp,
   Users,
   DollarSign,
   Calendar,
-  ArrowUpRight,
-  ArrowDownRight,
   Clock,
   AlertTriangle,
   CheckCircle,
-  Phone,
-  Mail,
-  MapPin,
   ChevronRight,
-  Target,
   Zap,
-  PenLine,
-  HardHat,
   Settings2,
+  Briefcase,
 } from 'lucide-react';
 
-interface QuoteActivity {
-  id: string;
-  quote_id: string | null;
-  event_type: string;
-  actor_name: string | null;
-  created_at: string;
-  quotes: { quote_number: string | null; customer_id: string | null } | null;
-}
-
-type ActivityItem =
-  | { kind: 'appointment'; time: number; appt: Appointment; contact: Contact | undefined }
-  | { kind: 'build'; time: number; contact: Contact }
-  | { kind: 'quote'; time: number; ev: QuoteActivity }
-  | { kind: 'assignment'; time: number; contact: Contact };
-
-const BUILD_STATUSES = new Set(['build_phase', 'in_progress', 'ordering_material']);
-
+// Older saved settings also carry the event switches the list used to have; only the row count is read now.
 interface ActivityPrefs {
-  showAppointments: boolean;
-  showBuilds: boolean;
-  showSigned: boolean;
-  showAssignments: boolean;
   maxRows: 5 | 8 | 10;
 }
 
@@ -63,13 +35,14 @@ const PREFS_KEY = 'dashboard_activity_prefs';
 function loadPrefs(): ActivityPrefs {
   try {
     const raw = localStorage.getItem(PREFS_KEY);
-    if (raw) return { ...defaultPrefs(), ...JSON.parse(raw) };
+    const saved = raw ? JSON.parse(raw) : null;
+    if (saved && [5, 8, 10].includes(saved.maxRows)) return { maxRows: saved.maxRows };
   } catch { /* ignore */ }
   return defaultPrefs();
 }
 
 function defaultPrefs(): ActivityPrefs {
-  return { showAppointments: true, showBuilds: true, showSigned: true, showAssignments: true, maxRows: 8 };
+  return { maxRows: 5 };
 }
 
 const timeAgo = (ms: number): string => {
@@ -85,7 +58,6 @@ const timeAgo = (ms: number): string => {
 export default function Dashboard() {
   const { state, dispatch } = useCRM();
   const { profile } = useAuth();
-  const pipelineStats = usePipelineStats();
   const financialStats = useFinancialStats();
   const weekOfAppointments = useUpcomingAppointments(7);
   // An appointment whose start time has passed but is still "scheduled" was missed: it is
@@ -102,29 +74,6 @@ export default function Dashboard() {
       })
       .sort((a, b) => (appointmentStart(b)?.getTime() ?? 0) - (appointmentStart(a)?.getTime() ?? 0));
   }, [state.appointments]);
-
-  // Calculate real trends by comparing contacts from last 30 days vs previous 30 days
-  const trends = useMemo(() => {
-    const now = Date.now();
-    const thirtyDays = 30 * 24 * 60 * 60 * 1000;
-    const recent = state.contacts.filter(c => now - new Date(c.createdAt).getTime() < thirtyDays);
-    const previous = state.contacts.filter(c => {
-      const age = now - new Date(c.createdAt).getTime();
-      return age >= thirtyDays && age < thirtyDays * 2;
-    });
-
-    const contactGrowth = previous.length > 0
-      ? Math.round(((recent.length - previous.length) / previous.length) * 100)
-      : recent.length > 0 ? 100 : 0;
-
-    const recentValue = recent.reduce((s, c) => s + (c.projectValue || 0), 0);
-    const prevValue = previous.reduce((s, c) => s + (c.projectValue || 0), 0);
-    const valueGrowth = prevValue > 0
-      ? Math.round(((recentValue - prevValue) / prevValue) * 100)
-      : recentValue > 0 ? 100 : 0;
-
-    return { contactGrowth, valueGrowth };
-  }, [state.contacts]);
 
   const [prefs, setPrefs] = useState<ActivityPrefs>(loadPrefs);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -145,70 +94,38 @@ export default function Dashboard() {
     return () => document.removeEventListener('mousedown', handler);
   }, [settingsOpen]);
 
-  // Quote activity from customers — signed events only.
-  const [quoteEvents, setQuoteEvents] = useState<QuoteActivity[]>([]);
+  // Payments recorded this month, for Revenue (MTD).
   const companyId = state.companyId;
+  const [monthPayments, setMonthPayments] = useState<{ amount: number; created_at: string }[]>([]);
   useEffect(() => {
     if (!companyId) return;
     let cancelled = false;
     const load = async () => {
-      // Only events for quotes that still show in the app: an archived quote (e.g. one whose customer was
-      // deleted) is hidden everywhere else, so its signature shouldn't appear here either.
-      const { data, error } = await (supabase.from('quote_notifications') as any)
-        .select('id, quote_id, event_type, actor_name, created_at, quotes:quote_id!inner(quote_number, customer_id, is_archived)')
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const { data, error } = await supabase
+        .from('payments')
+        .select('amount, created_at')
         .eq('company_id', companyId)
-        .eq('event_type', 'signed')
-        .eq('quotes.is_archived', false)
-        .order('created_at', { ascending: false })
-        .limit(10);
-      if (cancelled || error) return;
-      setQuoteEvents((data ?? []) as QuoteActivity[]);
+        .gte('created_at', monthStart.toISOString());
+      if (cancelled) return;
+      if (error) {
+        console.error('Dashboard: could not load this month\'s payments', error);
+        return;
+      }
+      setMonthPayments(((data as { amount: number | string; created_at: string }[]) || [])
+        .map((p) => ({ amount: Number(p.amount) || 0, created_at: p.created_at })));
     };
     void load();
-    const timer = window.setInterval(load, 45000);
+    const timer = window.setInterval(load, 60000);
     return () => { cancelled = true; window.clearInterval(timer); };
-  }, [companyId]);
+  }, [companyId, state.invoices.length]);
 
-  // Recent activity feed — filtered and capped by user prefs.
-  const feed: ActivityItem[] = useMemo(() => {
-    const now = Date.now();
-    const thirtyDays = 30 * 24 * 60 * 60 * 1000;
-    const sevenDays = 7 * 24 * 60 * 60 * 1000;
-    const currentUserId = profile?.id ?? state.currentUser?.id;
-    const items: ActivityItem[] = [
-      ...(prefs.showAppointments
-        ? state.appointments
-            .map(appt => ({ appt, booked: appt.createdAt ? new Date(appt.createdAt).getTime() : NaN }))
-            .filter(({ booked }) => Number.isFinite(booked) && now - booked < thirtyDays)
-            .sort((a, b) => b.booked - a.booked)
-            .slice(0, prefs.maxRows)
-            .map(({ appt, booked }): ActivityItem => ({
-              kind: 'appointment',
-              time: booked,
-              appt,
-              contact: state.contacts.find(c => c.id === appt.contactId),
-            }))
-        : []),
-      ...(prefs.showBuilds
-        ? [...state.contacts]
-            .filter(c => BUILD_STATUSES.has(c.status) && now - new Date(c.updatedAt).getTime() < sevenDays)
-            .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-            .slice(0, prefs.maxRows)
-            .map((contact): ActivityItem => ({ kind: 'build', time: new Date(contact.updatedAt).getTime(), contact }))
-        : []),
-      ...(prefs.showSigned
-        ? quoteEvents.map((ev): ActivityItem => ({ kind: 'quote', time: new Date(ev.created_at).getTime(), ev }))
-        : []),
-      ...(prefs.showAssignments && currentUserId
-        ? [...state.contacts]
-            .filter(c => c.assignedTo === currentUserId && now - new Date(c.createdAt).getTime() < sevenDays)
-            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-            .slice(0, prefs.maxRows)
-            .map((contact): ActivityItem => ({ kind: 'assignment', time: new Date(contact.createdAt).getTime(), contact }))
-        : []),
-    ];
-    return items.sort((a, b) => b.time - a.time).slice(0, prefs.maxRows);
-  }, [state.appointments, state.contacts, quoteEvents, prefs, profile?.id, state.currentUser?.id]);
+  // The same figures, funnel and activity list as the phone app's home screen.
+  const metrics = useMemo(
+    () => computeDashboardMetrics(state.quotes, state.contacts, monthPayments, new Date(), prefs.maxRows),
+    [state.quotes, state.contacts, monthPayments, prefs.maxRows],
+  );
 
   // Contact IDs that have at least one signed-but-not-approved change order.
   const [signedCOContactIds, setSignedCOContactIds] = useState<Set<string>>(new Set());
@@ -278,65 +195,28 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-              <Users className="text-blue-600" size={24} />
+      {/* KPI Cards — the same four figures as the phone app's home screen, two across on phones like it */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
+        {([
+          { label: 'Pipeline Value', value: formatCurrency(metrics.pipelineValue), Icon: DollarSign, tint: 'bg-green-100 text-green-600', hint: 'Quotes not yet signed', view: 'quotes' },
+          { label: 'Open Leads', value: String(metrics.openLeads), Icon: Users, tint: 'bg-blue-100 text-blue-600', hint: 'Customers with no quote yet', view: 'contacts' },
+          { label: 'Jobs In Progress', value: String(metrics.jobsInProgress), Icon: Briefcase, tint: 'bg-amber-100 text-amber-600', hint: 'Signed jobs not yet paid off', view: 'pipeline' },
+          { label: 'Revenue (MTD)', value: formatCurrency(metrics.revenueMTD), Icon: TrendingUp, tint: 'bg-slate-100 text-slate-700', hint: 'Payments recorded this month', view: 'financial' },
+        ] as const).map(({ label, value, Icon, tint, hint, view }) => (
+          <button
+            key={label}
+            type="button"
+            onClick={() => dispatch({ type: 'SET_VIEW', payload: view })}
+            title={hint}
+            className="min-w-0 text-left bg-white rounded-xl p-4 sm:p-6 border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
+          >
+            <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center ${tint}`}>
+              <Icon size={22} />
             </div>
-            {trends.contactGrowth !== 0 && (
-              <span className={`flex items-center gap-1 ${trends.contactGrowth >= 0 ? 'text-green-600' : 'text-red-600'} text-sm font-medium`}>
-                {trends.contactGrowth >= 0 ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
-                {Math.abs(trends.contactGrowth)}%
-              </span>
-            )}
-          </div>
-          <p className="text-3xl font-bold text-gray-900 mt-4">{pipelineStats.totalContacts}</p>
-          <p className="text-gray-500 text-sm mt-1">Total Contacts</p>
-        </div>
-
-        <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-              <DollarSign className="text-green-600" size={24} />
-            </div>
-            {trends.valueGrowth !== 0 && (
-              <span className={`flex items-center gap-1 ${trends.valueGrowth >= 0 ? 'text-green-600' : 'text-red-600'} text-sm font-medium`}>
-                {trends.valueGrowth >= 0 ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
-                {Math.abs(trends.valueGrowth)}%
-              </span>
-            )}
-          </div>
-          <p className="text-3xl font-bold text-gray-900 mt-4">
-            {formatCurrency(pipelineStats.totalValue)}
-          </p>
-          <p className="text-gray-500 text-sm mt-1">Pipeline Value</p>
-        </div>
-
-        <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
-              <Target className="text-purple-600" size={24} />
-            </div>
-          </div>
-          <p className="text-3xl font-bold text-gray-900 mt-4">
-            {pipelineStats.conversionRate.toFixed(1)}%
-          </p>
-          <p className="text-gray-500 text-sm mt-1">Conversion Rate</p>
-        </div>
-
-        <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center">
-              <TrendingUp className="text-amber-600" size={24} />
-            </div>
-          </div>
-          <p className="text-3xl font-bold text-gray-900 mt-4">
-            {formatCurrency(pipelineStats.avgDealSize)}
-          </p>
-          <p className="text-gray-500 text-sm mt-1">Avg Deal Size</p>
-        </div>
+            <p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-3 sm:mt-4 truncate">{value}</p>
+            <p className="text-gray-500 text-xs sm:text-sm mt-1">{label}</p>
+          </button>
+        ))}
       </div>
 
       {/* Main Content Grid */}
@@ -356,31 +236,27 @@ export default function Dashboard() {
           </div>
           <div className="p-6">
             <div className="space-y-4">
-              {Object.entries(pipelineStats.byStatus)
-                .filter(([status]) => !['completed', 'lost'].includes(status))
-                .slice(0, 6)
-                .map(([status, count]) => {
-                  const percentage = (count / pipelineStats.totalContacts) * 100;
+              {(() => {
+                const total = DASHBOARD_STAGES.reduce((sum, st) => sum + metrics.stageCounts[st.id], 0);
+                if (total === 0) {
+                  return <p className="text-sm text-gray-500 text-center py-6">No customers or quotes yet. Add a contact to get started.</p>;
+                }
+                return DASHBOARD_STAGES.filter((st) => metrics.stageCounts[st.id] > 0).map((st) => {
+                  const count = metrics.stageCounts[st.id];
                   return (
-                    <div key={status} className="flex items-center gap-4">
-                      <div className="w-32 text-sm font-medium text-gray-700">
-                        {statusLabels[status as keyof typeof statusLabels] ?? status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
-                      </div>
+                    <div key={st.id} className="flex items-center gap-4">
+                      <div className="w-32 text-sm font-medium text-gray-700">{st.label}</div>
                       <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
                         <div
                           className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-500"
-                          style={{ width: `${percentage}%` }}
+                          style={{ width: `${(count / total) * 100}%` }}
                         />
                       </div>
-                      <div className="w-12 text-right text-sm font-semibold text-gray-900">
-                        {count}
-                      </div>
+                      <div className="w-12 text-right text-sm font-semibold text-gray-900">{count}</div>
                     </div>
                   );
-                })}
-              {Object.keys(pipelineStats.byStatus).filter((st) => !['completed', 'lost'].includes(st)).length === 0 && (
-                <p className="text-sm text-gray-500 text-center py-6">No open jobs in the pipeline yet. Add a contact to get started.</p>
-              )}
+                });
+              })()}
             </div>
           </div>
         </div>
@@ -444,26 +320,7 @@ export default function Dashboard() {
               </button>
               {settingsOpen && (
                 <div className="absolute right-0 top-8 z-30 w-52 bg-white border border-gray-200 rounded-xl shadow-lg p-3 space-y-3">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Show events</p>
-                  {(
-                    [
-                      { key: 'showAppointments', label: 'Appointments set' },
-                      { key: 'showBuilds',        label: 'Builds scheduled' },
-                      { key: 'showSigned',        label: 'Quote signatures' },
-                      { key: 'showAssignments',   label: 'New assignments' },
-                    ] as { key: keyof ActivityPrefs; label: string }[]
-                  ).map(({ key, label }) => (
-                    <label key={key} className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={prefs[key] as boolean}
-                        onChange={e => setPrefs(p => ({ ...p, [key]: e.target.checked }))}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-3.5 w-3.5"
-                      />
-                      <span className="text-sm text-gray-700">{label}</span>
-                    </label>
-                  ))}
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide pt-1">Rows to show</p>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Rows to show</p>
                   <div className="flex gap-1.5">
                     {([5, 8, 10] as const).map(n => (
                       <button
@@ -484,82 +341,26 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="py-1">
-            {feed.length === 0 && (
+            {metrics.recent.length === 0 && (
               <p className="px-5 py-4 text-sm text-gray-400">No recent activity</p>
             )}
-            {feed.map((item) => {
-              if (item.kind === 'quote') {
-                const customerId = item.ev.quotes?.customer_id ?? null;
-                const quoteNo = item.ev.quotes?.quote_number ?? 'a quote';
-                return (
-                  <div
-                    key={`q-${item.ev.id}`}
-                    onClick={() => customerId && handleViewContact(customerId)}
-                    className={`flex items-center gap-3 px-5 py-2.5 hover:bg-gray-50 transition-colors ${customerId ? 'cursor-pointer' : ''}`}
-                  >
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0" />
-                    <span className="text-sm text-gray-800 truncate flex-1 min-w-0">
-                      <span className="font-medium">{item.ev.actor_name || 'A customer'}</span>
-                      {' signed '}
-                      <span className="text-gray-500">{quoteNo}</span>
-                    </span>
-                    <span className="text-xs text-gray-400 flex-shrink-0 ml-2">{timeAgo(item.time)}</span>
-                  </div>
-                );
-              }
-              if (item.kind === 'appointment') {
-                const contact = item.contact;
-                const name = contact ? getContactFullName(contact) : 'Unknown';
-                return (
-                  <div
-                    key={`a-${item.appt.id}`}
-                    onClick={() => contact && handleViewContact(contact.id)}
-                    className={`flex items-center gap-3 px-5 py-2.5 hover:bg-gray-50 transition-colors ${contact ? 'cursor-pointer' : ''}`}
-                  >
-                    <span className="w-2 h-2 rounded-full bg-violet-400 flex-shrink-0" />
-                    <span className="text-sm text-gray-800 truncate flex-1 min-w-0">
-                      Appointment set —{' '}
-                      <span className="font-medium">{name}</span>
-                    </span>
-                    <span className="text-xs text-gray-400 flex-shrink-0 ml-2">{timeAgo(item.time)}</span>
-                  </div>
-                );
-              }
-              if (item.kind === 'assignment') {
-                const contact = item.contact;
-                return (
-                  <div
-                    key={`as-${contact.id}`}
-                    onClick={() => handleViewContact(contact.id)}
-                    className="flex items-center gap-3 px-5 py-2.5 hover:bg-gray-50 transition-colors cursor-pointer"
-                  >
-                    <span className="w-2 h-2 rounded-full bg-blue-400 flex-shrink-0" />
-                    <span className="text-sm text-gray-800 truncate flex-1 min-w-0">
-                      New customer assigned —{' '}
-                      <span className="font-medium">{getContactFullName(contact)}</span>
-                    </span>
-                    <span className="text-xs text-gray-400 flex-shrink-0 ml-2">{timeAgo(item.time)}</span>
-                  </div>
-                );
-              }
-              // kind === 'build'
-              const contact = item.contact;
-              return (
-                <div
-                  key={`b-${contact.id}`}
-                  onClick={() => handleViewContact(contact.id)}
-                  className="flex items-center gap-3 px-5 py-2.5 hover:bg-gray-50 transition-colors cursor-pointer"
-                >
-                  <span className="w-2 h-2 rounded-full bg-orange-400 flex-shrink-0" />
-                  <span className="text-sm text-gray-800 truncate flex-1 min-w-0">
-                    Build scheduled —{' '}
-                    <span className="font-medium">{getContactFullName(contact)}</span>
-                    <span className="text-gray-400"> · {statusLabels[contact.status] ?? contact.status}</span>
-                  </span>
-                  <span className="text-xs text-gray-400 flex-shrink-0 ml-2">{timeAgo(item.time)}</span>
-                </div>
-              );
-            })}
+            {metrics.recent.map((item) => (
+              <div
+                key={item.key}
+                onClick={() => item.customerId && handleViewContact(item.customerId)}
+                className={`flex items-center gap-3 px-5 py-2.5 hover:bg-gray-50 transition-colors ${item.customerId ? 'cursor-pointer' : ''}`}
+              >
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${item.kind === 'lead' ? 'bg-violet-400' : 'bg-emerald-400'}`} />
+                <span className="text-sm text-gray-800 truncate flex-1 min-w-0">
+                  <span className="font-medium">{item.name}</span>
+                  <span className="text-gray-500"> · {item.meta}</span>
+                </span>
+                {item.value != null && (
+                  <span className="text-sm font-semibold text-gray-900 flex-shrink-0">{formatCurrency(item.value)}</span>
+                )}
+                <span className="text-xs text-gray-400 flex-shrink-0 ml-2 w-16 text-right">{timeAgo(new Date(item.at).getTime())}</span>
+              </div>
+            ))}
           </div>
         </div>
 

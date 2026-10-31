@@ -286,7 +286,7 @@ export default function QuotesView() {
     try {
       const { data, error } = await supabase
         .from('quotes')
-        .select('id, quote_number, status, contact_id, customer_id, project_type, good_total, better_total, best_total, include_better, include_best, contractor_signed_at, selected_tier, created_at, share_token, cover_page_title, project_description')
+        .select('id, quote_number, status, contact_id, customer_id, project_type, good_total, better_total, best_total, include_better, include_best, contractor_signed_at, selected_tier, created_at, share_token, cover_page_title, project_description, updated_at, job_stage, use_manual_totals, manual_good_total, manual_better_total, manual_best_total')
         .eq('company_id', companyId)
         .eq('is_archived', showArchived)
         // Inspection reports are photo documents with no line items; they are not quotes and have
