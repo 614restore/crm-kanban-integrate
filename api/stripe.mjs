@@ -45,6 +45,23 @@ export default async function handler(req, res) {
     process.env.SUPABASE_SERVICE_ROLE_KEY
   );
 
+  // ── OWNER TEST BYPASS ──────────────────────────────────────────────────────
+  // When STRIPE_OWNER_TEST_MODE=true, the owner account skips Stripe entirely
+  // and gets redirected straight to the success screen. Real users are never
+  // affected. Disable by setting STRIPE_OWNER_TEST_MODE=false in Vercel.
+  if (process.env.STRIPE_OWNER_TEST_MODE === 'true' && action === 'checkout') {
+    const bypassUser = await optionalAuth(req);
+    const ownerEmail = process.env.OWNER_EMAIL || '';
+    if (ownerEmail && bypassUser?.email === ownerEmail) {
+      const { priceId } = payload;
+      const priceToPlnMap = buildPriceToPlnMap();
+      const resolvedPlanId = priceToPlnMap.get(priceId) || 'starter';
+      return res.status(200).json({
+        url: `${appUrl}/?checkout=success&plan=${resolvedPlanId}&trial=1`,
+      });
+    }
+  }
+
   // ── CHECKOUT ───────────────────────────────────────────────────────────────
   if (action === 'checkout') {
     const user = await optionalAuth(req);
