@@ -11,7 +11,6 @@ import {
 import {
   recordPayment,
   createStripePaymentLink,
-  getStripeApiKey,
   sendPaymentReceipt,
   PAYMENT_METHOD_LABELS,
   type Payment,
@@ -174,14 +173,9 @@ export default function PaymentModal({
 
     setGeneratingLink(true);
     try {
-      const stripeKey = await getStripeApiKey(companyId);
-      if (!stripeKey) {
-        toast.error('Stripe is not connected. Go to Settings → Integrations to connect it.');
-        return;
-      }
-
+      // The server uses the company's Stripe key and says so when Stripe is not connected.
       const description = `Payment — ${contactName}`;
-      const { url, id } = await createStripePaymentLink(parsedAmount, description, stripeKey);
+      const { url, id } = await createStripePaymentLink(parsedAmount, description);
       setGeneratedLink(url);
       setLinkId(id);
     } catch (err) {

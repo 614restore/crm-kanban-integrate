@@ -1,9 +1,8 @@
 // useEmail — unified email-sending hook.
 //
-// Provides a stable React callback that sends email through whatever backend
-// is currently configured:
-//   1. SendGrid  — if the SendGrid integration is active in company_integrations
-//   2. Fallback  — server-side /api/send endpoint (SMTP or Resend)
+// Provides a stable React callback that sends email through the server-side
+// /api/send endpoint, which tries the company's SMTP, then its SendGrid account
+// (from company_integrations), then the platform sender.
 //
 // This hook is thin: `emailApi.sendEmail` already encapsulates the routing
 // logic so that non-React callers (automationEngine, etc.) also benefit from
@@ -16,10 +15,9 @@ export type { SendEmailPayload };
 
 export interface UseEmailReturn {
   /**
-   * Send an email. Automatically routes through SendGrid when configured,
-   * or falls back to the existing /api/send-email endpoint.
+   * Send an email through /api/send.
    *
-   * @throws Error if sending fails on both paths.
+   * @throws Error if the server could not send it.
    */
   sendEmail: (payload: SendEmailPayload) => Promise<unknown>;
 }
