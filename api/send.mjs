@@ -5,6 +5,7 @@
 //   type: 'email'  — send email via company SMTP → company SendGrid → platform Resend
 //   type: 'sms'    — send SMS via company's own Twilio account (from company_integrations)
 //   type: 'invite' — send team invite email via platform Resend (always platform-level)
+//   type: 'payment-link' — create a Stripe Payment Link on the company's own Stripe account
 
 import { createClient } from '@supabase/supabase-js';
 import nodemailer from 'nodemailer';
@@ -148,6 +149,39 @@ async function sendViaTwilio(accountSid, authToken, from, to, body) {
   return data;
 }
 
+// ── Stripe payment link (company's own Stripe account) ───────────────────────
+async function stripePost(secretKey, path, params) {
+  const res = await fetch(`https://api.stripe.com/v1/${path}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Basic ${Buffer.from(`${secretKey}:`).toString('base64')}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Stripe-Version': '2023-10-16',
+    },
+    body: new URLSearchParams(params).toString(),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(data?.error?.message || `Stripe error ${res.status}`);
+    err.status = res.status >= 500 ? 502 : 400;
+    throw err;
+  }
+  return data;
+}
+
+// A one-time price for the amount, then a payment link for it.
+async function createStripePaymentLink(secretKey, amountCents, description) {
+  const price = await stripePost(secretKey, 'prices', {
+    unit_amount: String(amountCents),
+    currency: 'usd',
+    'product_data[name]': description,
+  });
+  return stripePost(secretKey, 'payment_links', {
+    'line_items[0][price]': price.id,
+    'line_items[0][quantity]': '1',
+  });
+}
+
 // Record a text message on the customer's thread. The communications table holds `content` and
 // `customer_id` (required); the earlier code wrote `body`, `from_address` and other columns that table
 // does not have, so no text message was ever saved. A message with no customer to attach to is not logged.
@@ -283,6 +317,34 @@ export default async function handler(req, res) {
       const result = await sendViaTwilio(twilio.accountSid, twilio.authToken, fromNorm, toNorm, smsBody);
       await logSms({ companyId, customerId: contactId, userId: user.id, direction: 'outbound', subject: `SMS to ${toNorm}`, content: smsBody });
       return res.status(200).json({ sid: result.sid, status: result.status });
+    } catch (error) {
+      return res.status(error?.status || 500).json({ error: error.message });
+    }
+  }
+
+  // ── PAYMENT LINK ───────────────────────────────────────────────────────────
+  // A Stripe Payment Link on the company's own Stripe account, for a customer to pay. The company's
+  // secret key is read here; the browser used to load it and call Stripe itself.
+  if (type === 'payment-link') {
+    const amount = Number(payload.amount);
+    const description = String(payload.description || 'Payment').slice(0, 250);
+    if (!Number.isFinite(amount) || amount <= 0 || amount > 999999.99) {
+      return res.status(400).json({ error: 'Enter an amount between $0.01 and $999,999.99' });
+    }
+
+    const companyId = await getCompanyId(user.id);
+    const stripe = companyId ? await getCompanyIntegration(companyId, 'stripe') : null;
+    const secretKey = stripe?.secretKey || stripe?.apiKey;
+    if (!secretKey) {
+      return res.status(503).json({
+        error: 'Stripe not configured',
+        message: 'Stripe is not connected. Go to Settings → Integrations to connect it.',
+      });
+    }
+
+    try {
+      const link = await createStripePaymentLink(secretKey, Math.round(amount * 100), description);
+      return res.status(200).json({ url: link.url, id: link.id });
     } catch (error) {
       return res.status(error?.status || 500).json({ error: error.message });
     }

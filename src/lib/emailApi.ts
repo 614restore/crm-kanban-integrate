@@ -36,34 +36,26 @@ function getApiBaseUrl(): string | null {
 }
 
 /**
- * Send an email via the server-side /api/send endpoint.
- * This is the legacy fallback path used when SendGrid is not configured.
- * Prefer `useEmail()` from `@/hooks/useEmail` in React components — it
- * automatically routes through SendGrid when the integration is active.
+ * Send an email via the server-side /api/send endpoint, which tries the company's SMTP, then its
+ * SendGrid account, then the platform sender. The company's keys stay on the server.
  */
 export async function sendEmail(payload: SendEmailPayload, timeoutMs: number = 12000): Promise<unknown> {
-  // Try SendGrid first if it is configured and active.
-  // Import lazily to avoid circular dependencies and keep the bundle clean
-  // when SendGrid is never used.
-  try {
-    const { integrationManager } = await import('./integrations/manager');
-    const sg = integrationManager.getSendGrid();
-    if (sg) {
-      const result = await sg.sendEmail(payload.to, payload.subject, payload.html);
-      if (result.success) {
-        return { provider: 'sendgrid', messageId: result.messageId };
-      }
-      // Non-fatal — log and fall through to the server endpoint.
-      console.warn('[emailApi] SendGrid failed, falling back to server endpoint:', result.error);
-    }
-  } catch {
-    // If the integration manager is unavailable (SSR, test env, etc.), fall through silently.
-  }
+  return postToSendApi({ type: 'email', ...payload }, timeoutMs, 'Email API');
+}
 
-  // Fallback: server-side endpoint (SMTP or Resend).
+/**
+ * POST to the server-side /api/send endpoint as the signed-in user. Texts, payment links and
+ * email go through it so the company's Twilio, Stripe and SendGrid keys never reach the browser.
+ * Throws with the server's own message when it refuses.
+ */
+export async function postToSendApi<T = unknown>(
+  body: Record<string, unknown>,
+  timeoutMs: number = 12000,
+  label: string = 'Server',
+): Promise<T> {
   const baseUrl = getApiBaseUrl();
   if (!baseUrl) {
-    throw new Error('Email API is not configured. Set VITE_EMAIL_API_BASE_URL to your Vercel app URL.');
+    throw new Error(`${label} is not configured. Set VITE_EMAIL_API_BASE_URL to your Vercel app URL.`);
   }
 
   const { data: { session } } = await supabase.auth.getSession();
@@ -80,27 +72,29 @@ export async function sendEmail(payload: SendEmailPayload, timeoutMs: number = 1
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${accessToken}`,
       },
-      body: JSON.stringify({ type: 'email', ...payload }),
+      body: JSON.stringify(body),
       signal: controller.signal,
     });
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
-      throw new Error(`Email API timed out after ${Math.round(timeoutMs / 1000)}s`);
+      throw new Error(`${label} timed out after ${Math.round(timeoutMs / 1000)}s`);
     }
     throw error;
   } finally {
     window.clearTimeout(timer);
   }
 
-  const body = await response.json().catch(() => ({}));
+  const reply = await response.json().catch(() => ({})) as { error?: string; message?: string };
   if (!response.ok) {
-    const message = (body as { error?: string; message?: string })?.error
-      || (body as { error?: string; message?: string })?.message
-      || `Email API failed (${response.status})`;
+    // "Twilio not configured" comes with a message saying where to set it up; show that.
+    const message = (reply.message && reply.error && /not configured/i.test(reply.error) ? reply.message : null)
+      || reply.error
+      || reply.message
+      || `${label} failed (${response.status})`;
     throw new Error(message);
   }
 
-  return body;
+  return reply as T;
 }
 
 /**

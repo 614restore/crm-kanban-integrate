@@ -1,23 +1,17 @@
-// useTwilio — hook for sending SMS via Twilio credentials stored in company_integrations.
+// useTwilio — hook for sending SMS through the company's Twilio account.
 //
-// Loads accountSid, authToken, and fromNumber from Supabase (integration_id = 'twilio', enabled).
-// Settings saves a row keyed by integration_id with an enabled flag; this used to search integration_type /
-// is_active, which are never filled in, so saved Twilio credentials were never found.
-// Exposes sendSMS(to, message) which calls the Twilio Messages API directly using
-// btoa() for auth (browser-safe; avoids Node's Buffer).
-// On success, logs an 'sms' record to the communications table.
+// The Twilio keys stay on the server: this only asks whether Twilio is connected
+// (get_my_integration_status, which returns no keys), and sendSMS posts to
+// /api/send, which reads the keys, sends the text and logs it on the customer's
+// thread. The browser used to load the Account SID and Auth Token and call Twilio
+// itself, which put them in the hands of anyone signed in to the company.
 
 import { useState, useEffect, useCallback } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
+import { postToSendApi } from '../lib/emailApi';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
-
-interface TwilioCredentials {
-  accountSid: string;
-  authToken: string;
-  fromNumber: string;
-}
 
 interface SendSMSParams {
   to: string;
@@ -35,10 +29,10 @@ export interface UseTwilioReturn {
 
 export function useTwilio(): UseTwilioReturn {
   const { profile } = useAuth();
-  const [credentials, setCredentials] = useState<TwilioCredentials | null>(null);
+  const [twilioEnabled, setTwilioEnabled] = useState(false);
   const [loadingCredentials, setLoadingCredentials] = useState(true);
 
-  // Load Twilio credentials from company_integrations
+  // Whether Twilio is connected and switched on for the company
   useEffect(() => {
     const companyId = profile?.company_id;
     if (!companyId) {
@@ -50,31 +44,14 @@ export function useTwilio(): UseTwilioReturn {
 
     (async () => {
       try {
-        const { data } = await supabase
-          .from('company_integrations')
-          .select('credentials, enabled')
-          .eq('company_id', companyId)
-          .eq('integration_id', 'twilio')
-          .maybeSingle();
-
-        if (!cancelled) {
-          if (
-            data?.enabled &&
-            data.credentials?.accountSid &&
-            data.credentials?.authToken &&
-            data.credentials?.fromNumber
-          ) {
-            setCredentials({
-              accountSid: data.credentials.accountSid,
-              authToken: data.credentials.authToken,
-              fromNumber: data.credentials.fromNumber,
-            });
-          } else {
-            setCredentials(null);
-          }
-        }
-      } catch {
-        if (!cancelled) setCredentials(null);
+        const { data, error } = await supabase.rpc('get_my_integration_status', { p_company_id: companyId });
+        if (error) throw error;
+        const twilio = ((data as Array<{ integration_id: string; enabled: boolean; configured: boolean }>) || [])
+          .find((row) => row.integration_id === 'twilio');
+        if (!cancelled) setTwilioEnabled(!!(twilio?.enabled && twilio.configured));
+      } catch (error) {
+        console.warn('[useTwilio] could not check the Twilio connection:', error);
+        if (!cancelled) setTwilioEnabled(false);
       } finally {
         if (!cancelled) setLoadingCredentials(false);
       }
@@ -84,56 +61,12 @@ export function useTwilio(): UseTwilioReturn {
   }, [profile?.company_id]);
 
   const mutation = useMutation({
-    mutationFn: async ({ to, message, contactId, companyId }: SendSMSParams) => {
-      if (!credentials) {
+    mutationFn: async ({ to, message, contactId }: SendSMSParams) => {
+      if (!twilioEnabled) {
         throw new Error('Twilio is not configured. Add credentials in Settings → Integrations.');
       }
-
-      const { accountSid, authToken, fromNumber } = credentials;
-      const authHeader = `Basic ${btoa(`${accountSid}:${authToken}`)}`;
-
-      const params = new URLSearchParams();
-      params.append('From', fromNumber);
-      params.append('To', to);
-      params.append('Body', message);
-
-      const response = await fetch(
-        `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(accountSid)}/Messages.json`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: authHeader,
-            'Content-Type': 'application/x-www-form-urlencoded',
-            Accept: 'application/json',
-          },
-          body: params.toString(),
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const twilioMessage = errorData?.message || response.statusText;
-        throw new Error(`Failed to send SMS: ${twilioMessage}`);
-      }
-
-      const result = await response.json();
-
-      // Log to communications table if contact context is provided
-      if (contactId && companyId) {
-        const { data: { user } } = await supabase.auth.getUser();
-        await supabase.from('communications').insert({
-          contact_id: contactId,
-          company_id: companyId,
-          type: 'sms',
-          direction: 'outbound',
-          content: message,
-          status: 'sent',
-          created_by: user?.id ?? null,
-          created_at: new Date().toISOString(),
-        });
-      }
-
-      return result;
+      // The server logs the text on the customer's thread when it has the customer.
+      return postToSendApi({ type: 'sms', to, body: message, contactId }, 15000, 'Text messaging');
     },
     onSuccess: () => {
       toast.success('SMS sent successfully');
@@ -151,7 +84,7 @@ export function useTwilio(): UseTwilioReturn {
   );
 
   return {
-    twilioEnabled: !!credentials,
+    twilioEnabled,
     loadingCredentials,
     sendSMS,
     isSending: mutation.isPending,

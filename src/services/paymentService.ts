@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { postToSendApi } from '../lib/emailApi';
 
 export interface Payment {
   id: string;
@@ -174,77 +175,18 @@ export async function sendPaymentReceipt(params: {
   }
 }
 
-// Retrieve the company's Stripe secret key from company_integrations
-export async function getStripeApiKey(companyId: string): Promise<string | null> {
-  const { data } = await supabase
-    .from('company_integrations')
-    .select('credentials')
-    .eq('company_id', companyId)
-    .eq('integration_id', 'stripe')
-    .maybeSingle();
-
-  return data?.credentials?.secretKey || data?.credentials?.apiKey || null;
-}
-
-const STRIPE_BASE = 'https://api.stripe.com/v1';
-const STRIPE_VERSION = '2023-10-16';
-
-function stripeHeaders(apiKey: string): HeadersInit {
-  return {
-    Authorization: `Basic ${btoa(`${apiKey}:`)}`,
-    'Content-Type': 'application/x-www-form-urlencoded',
-    'Stripe-Version': STRIPE_VERSION,
-  };
-}
-
 /**
- * Creates a Stripe Payment Link for the given amount.
- * Returns the shareable URL that the customer can open to pay.
+ * Creates a Stripe Payment Link for the given amount on the company's own Stripe account.
+ * Returns the shareable URL that the customer can open to pay. The server reads the company's
+ * Stripe secret key; it never reaches the browser.
  */
 export async function createStripePaymentLink(
   amount: number,
   description: string,
-  stripeApiKey: string,
 ): Promise<{ url: string; id: string }> {
-  const headers = stripeHeaders(stripeApiKey);
-
-  // Step 1: create an ad-hoc one-time price
-  const priceBody = new URLSearchParams({
-    'unit_amount': Math.round(amount * 100).toString(),
-    'currency': 'usd',
-    'product_data[name]': description,
-  });
-
-  const priceRes = await fetch(`${STRIPE_BASE}/prices`, {
-    method: 'POST',
-    headers,
-    body: priceBody.toString(),
-  });
-
-  if (!priceRes.ok) {
-    const err = await priceRes.json();
-    throw new Error(err.error?.message || 'Failed to create Stripe price');
-  }
-
-  const price = await priceRes.json();
-
-  // Step 2: create the payment link from that price
-  const linkBody = new URLSearchParams({
-    'line_items[0][price]': price.id,
-    'line_items[0][quantity]': '1',
-  });
-
-  const linkRes = await fetch(`${STRIPE_BASE}/payment_links`, {
-    method: 'POST',
-    headers,
-    body: linkBody.toString(),
-  });
-
-  if (!linkRes.ok) {
-    const err = await linkRes.json();
-    throw new Error(err.error?.message || 'Failed to create Stripe payment link');
-  }
-
-  const link = await linkRes.json();
-  return { url: link.url, id: link.id };
+  return postToSendApi<{ url: string; id: string }>(
+    { type: 'payment-link', amount, description },
+    20000,
+    'Stripe payment link',
+  );
 }
