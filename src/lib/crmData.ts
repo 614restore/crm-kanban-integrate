@@ -303,6 +303,8 @@ export interface Invoice {
   dueDate: string;
   createdAt: string;
   paidAt?: string;
+  /** The quote the invoice was made from; receipts on that quote pay it. */
+  quoteId?: string;
   items: InvoiceItem[];
 }
 

@@ -49,6 +49,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useCRM, useFinancialStats } from '@/lib/crmStore';
 import { formatCurrency, getContactFullName } from '@/lib/crmData';
 import { printDataAsPDF } from '@/lib/exportUtils';
+import { buildRevenueCoverage } from '@/lib/revenueCoverage';
 
 interface RevenueData {
   month: string;
@@ -109,16 +110,34 @@ const ReportsAnalytics: React.FC = () => {
 
   // Receipts (payments recorded on quotes, from either app) are revenue too. Without them
   // this page said $0 while the Dashboard and Financial Overview showed what was collected.
-  const [receipts, setReceipts] = useState<Array<{ amount: number; created_at: string; customer_id: string | null }>>([]);
+  const [receipts, setReceipts] = useState<Array<{ amount: number; created_at: string; customer_id: string | null; quote_id: string | null }>>([]);
   useEffect(() => {
     if (!state.companyId) return;
     let cancelled = false;
-    supabase.from('payments')
-      .select('amount, created_at, customer_id')
-      .eq('company_id', state.companyId)
-      .then(({ data, error }) => {
-        if (!cancelled && !error) setReceipts(((data as any[]) || []).map((p) => ({ ...p, amount: Number(p.amount) || 0 })));
-      });
+    const companyId = state.companyId;
+    (async () => {
+      let { data, error }: { data: Array<Record<string, unknown>> | null; error: { message: string } | null } =
+        await supabase.from('payments')
+          .select('amount, created_at, customer_id, quote_id')
+          .eq('company_id', companyId);
+      // A database without receipts-on-quotes yet: match by customer only.
+      if (error && /quote_id/i.test(error.message)) {
+        ({ data, error } = await supabase.from('payments')
+          .select('amount, created_at, customer_id')
+          .eq('company_id', companyId));
+      }
+      if (cancelled) return;
+      if (error) {
+        console.error('Reports: could not load receipts', error);
+        return;
+      }
+      setReceipts((data || []).map((p) => ({
+        amount: Number(p.amount) || 0,
+        created_at: String(p.created_at ?? ''),
+        customer_id: (p.customer_id as string | null) ?? null,
+        quote_id: (p.quote_id as string | null) ?? null,
+      })));
+    })();
     return () => { cancelled = true; };
   }, [state.companyId, state.invoices.length]);
 
@@ -140,9 +159,8 @@ const ReportsAnalytics: React.FC = () => {
     const cutoff = new Date(now.getFullYear(), now.getMonth() - (monthCount - 1), 1);
 
     const monthKey = (d: Date) => d.toLocaleString('default', { month: 'short', year: selectedPeriod === 'ytd' || monthCount <= 3 ? undefined : '2-digit' });
-    // Receipts first; a paid invoice only adds revenue when no receipt covers that customer
-    // (the same rule as the shared company_financial_summary the Dashboard uses).
-    const customersWithReceipts = new Set(receipts.map((r) => r.customer_id).filter(Boolean) as string[]);
+    // Receipts first, then only what no receipt covers (the Dashboard's rules), so nothing is counted twice.
+    const { invoiceCoveredByReceipt, customerCoveredElsewhere } = buildRevenueCoverage(receipts, state.invoices);
     receipts.forEach((r) => {
       const d = new Date(r.created_at);
       if (isNaN(d.getTime()) || d < cutoff) return;
@@ -158,18 +176,20 @@ const ReportsAnalytics: React.FC = () => {
       if (isNaN(d.getTime()) || d < cutoff) return;
       const key = monthKey(d);
       if (months[key]) {
-        if (inv.status === 'paid' && !customersWithReceipts.has(inv.contactId)) months[key].revenue += Number(inv.amount) || 0;
+        if (inv.status === 'paid' && !invoiceCoveredByReceipt(inv)) months[key].revenue += Number(inv.amount) || 0;
         if (inv.contactId && inv.status !== 'cancelled') months[key].projects.add(inv.contactId);
       }
     });
-    // Sum deposits & final payments from contacts by completed month
+    // Deposits & final payments tracked on the customer, by the month the customer was last updated
     state.contacts.forEach((c) => {
-      if (c.status === 'completed' && c.finalPaymentPaid && c.finalPaymentAmount && !customersWithReceipts.has(c.id)) {
-        const d = new Date(c.updatedAt);
-        if (isNaN(d.getTime()) || d < cutoff) return;
-        const key = d.toLocaleString('default', { month: 'short', year: selectedPeriod === 'ytd' || monthCount <= 3 ? undefined : '2-digit' });
-        if (months[key]) months[key].revenue += c.finalPaymentAmount;
-      }
+      if (customerCoveredElsewhere(c.id)) return;
+      const collected = (c.depositPaid ? Number(c.depositAmount) || 0 : 0)
+        + (c.finalPaymentPaid ? Number(c.finalPaymentAmount) || 0 : 0);
+      if (collected <= 0) return;
+      const d = new Date(c.updatedAt);
+      if (isNaN(d.getTime()) || d < cutoff) return;
+      const key = monthKey(d);
+      if (months[key]) months[key].revenue += collected;
     });
     // Estimate expenses as 65% of revenue (industry avg) when we don't have real expense data
     return Object.entries(months).map(([month, data]) => {
