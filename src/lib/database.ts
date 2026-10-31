@@ -1565,7 +1565,7 @@ class DatabaseService {
     assertCompanyId(companyId, 'getQuoteSummaries');
     const { data, error } = await supabase
       .from('quotes')
-      .select('id, quote_number, cover_page_title, status, contact_id, customer_id, good_total, better_total, best_total, selected_tier, created_at')
+      .select('id, quote_number, cover_page_title, status, contact_id, customer_id, good_total, better_total, best_total, include_better, include_best, selected_tier, created_at, project_description, updated_at, job_stage, use_manual_totals, manual_good_total, manual_better_total, manual_best_total')
       .eq('company_id', companyId)
       .eq('is_archived', false)
       .order('created_at', { ascending: false });
