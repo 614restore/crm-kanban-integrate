@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import InvoiceTaxSettings from '@/components/settings/InvoiceTaxSettings';
 import { useCRM, canManageLeadSources } from '@/lib/crmStore';
 import StormAlertSettings from '@/components/settings/StormAlertSettings';
+import StormHistorySettings from '@/components/settings/StormHistorySettings';
 import { useAuth } from '@/lib/authContext';
 import { defaultLeadSources } from '@/lib/crmData';
 import { toast } from 'sonner';
@@ -2071,7 +2072,7 @@ export default function SettingsView() {
               <h3 className="text-xl font-semibold text-gray-900 mb-6">My Profile</h3>
               <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-6">
                 <div
-                  className="flex items-center gap-6"
+                  className="flex items-center gap-4 sm:gap-6"
                   onPaste={handleAvatarPaste}
                   title="Paste an image here to upload your avatar"
                 >
@@ -2102,13 +2103,13 @@ export default function SettingsView() {
                       </button>
                     )}
                   </div>
-                  <div>
-                    <h4 className="text-lg font-semibold text-gray-900">
-                      {profile?.first_name && profile?.last_name 
+                  <div className="min-w-0 flex-1">
+                    <h4 className="text-lg font-semibold text-gray-900 break-words">
+                      {profile?.first_name && profile?.last_name
                         ? `${profile.first_name} ${profile.last_name}`
                         : profile?.email || 'User'}
                     </h4>
-                    <p className="text-gray-500">{profile?.email}</p>
+                    <p className="text-gray-500 break-all">{profile?.email}</p>
                     <p className="text-sm text-gray-400 capitalize mt-1">{profile?.role || 'User'}</p>
                     <button
                       onClick={() => profileAvatarInputRef.current?.click()}
@@ -2134,7 +2135,7 @@ export default function SettingsView() {
                         value={profileAvatarUrlInput}
                         onChange={(e) => setProfileAvatarUrlInput(e.target.value)}
                         placeholder="Or paste profile image URL"
-                        className="w-72 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                        className="min-w-0 flex-1 sm:flex-none sm:w-72 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                       />
                       <button
                         onClick={handleSaveAvatarUrl}
@@ -2415,11 +2416,12 @@ export default function SettingsView() {
               <p className="text-sm text-gray-500">Configure when and how you receive notifications.</p>
             </div>
             {effectiveCompanyId && <StormAlertSettings companyId={effectiveCompanyId} userRole={userRole} />}
+            {effectiveCompanyId && <StormHistorySettings companyId={effectiveCompanyId} userRole={userRole} />}
             <NotificationToggles />
             {/* The full per-person preferences: channels, alert types, hail and wind limits, quiet hours, service-area
                 ZIP codes. This page existed but was not reachable from anywhere in the app. The mobile app has the
                 same screen (Settings, Notification Preferences) and saves to the same row. */}
-            <div className="bg-white rounded-xl border border-gray-200 -mx-6 md:mx-0">
+            <div className="bg-white rounded-xl border border-gray-200 -mx-4 sm:-mx-6 md:mx-0">
               <NotificationPreferences />
             </div>
           </div>
@@ -2587,14 +2589,14 @@ export default function SettingsView() {
                     { from: 'Contingency', to: 'Approved', trigger: 'Customer or insurance approves', auto: false, note: 'Requires manual confirmation' },
                     { from: 'Approved', to: 'Signed', trigger: 'Customer signs contract/estimate', auto: false, note: 'Requires manual confirmation' },
                   ].map((rule, i) => (
-                    <div key={i} className={`flex items-center gap-3 p-3 rounded-lg text-sm ${rule.auto ? 'bg-green-50 border border-green-100' : 'bg-amber-50 border border-amber-100'}`}>
-                      <span className="font-medium text-gray-700 min-w-[160px]">{rule.from}</span>
+                    <div key={i} className={`flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-1 p-3 rounded-lg text-sm ${rule.auto ? 'bg-green-50 border border-green-100' : 'bg-amber-50 border border-amber-100'}`}>
+                      <span className="font-medium text-gray-700 sm:min-w-[160px]">{rule.from}</span>
                       <span className="text-gray-400">&#8594;</span>
-                      <span className="font-medium text-gray-700 min-w-[160px]">{rule.to}</span>
+                      <span className="font-medium text-gray-700 sm:min-w-[160px]">{rule.to}</span>
                       <span className={`px-2 py-0.5 rounded text-xs font-medium ${rule.auto ? 'bg-green-200 text-green-800' : 'bg-amber-200 text-amber-800'}`}>
                         {rule.auto ? 'Auto' : 'Manual'}
                       </span>
-                      <span className="text-gray-500 text-xs flex-1">{rule.trigger}</span>
+                      <span className="text-gray-500 text-xs basis-full sm:basis-auto flex-1">{rule.trigger}</span>
                     </div>
                   ))}
                 </div>
@@ -2611,12 +2613,12 @@ export default function SettingsView() {
                     { from: 'Build Phase', to: 'Cleanup', trigger: 'Delayed 3 seconds for review', auto: true },
                     { from: 'Cleanup', to: 'Completed', trigger: 'Delayed 3 seconds for review', auto: true },
                   ].map((rule, i) => (
-                    <div key={i} className="flex items-center gap-3 p-3 rounded-lg text-sm bg-green-50 border border-green-100">
-                      <span className="font-medium text-gray-700 min-w-[160px]">{rule.from}</span>
+                    <div key={i} className="flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-1 p-3 rounded-lg text-sm bg-green-50 border border-green-100">
+                      <span className="font-medium text-gray-700 sm:min-w-[160px]">{rule.from}</span>
                       <span className="text-gray-400">&#8594;</span>
-                      <span className="font-medium text-gray-700 min-w-[160px]">{rule.to}</span>
+                      <span className="font-medium text-gray-700 sm:min-w-[160px]">{rule.to}</span>
                       <span className="px-2 py-0.5 rounded text-xs font-medium bg-green-200 text-green-800">Auto</span>
-                      <span className="text-gray-500 text-xs flex-1">{rule.trigger}</span>
+                      <span className="text-gray-500 text-xs basis-full sm:basis-auto flex-1">{rule.trigger}</span>
                     </div>
                   ))}
                 </div>
@@ -2631,14 +2633,14 @@ export default function SettingsView() {
                     { from: 'Invoicing', to: 'Pending Payment', trigger: 'Invoice sent to customer', auto: true },
                     { from: 'Pending Payment', to: 'Paid', trigger: 'Payment received', auto: false, note: 'Triggered by payment confirmation' },
                   ].map((rule, i) => (
-                    <div key={i} className={`flex items-center gap-3 p-3 rounded-lg text-sm ${rule.auto !== false ? 'bg-green-50 border border-green-100' : 'bg-amber-50 border border-amber-100'}`}>
-                      <span className="font-medium text-gray-700 min-w-[160px]">{rule.from}</span>
+                    <div key={i} className={`flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-1 p-3 rounded-lg text-sm ${rule.auto !== false ? 'bg-green-50 border border-green-100' : 'bg-amber-50 border border-amber-100'}`}>
+                      <span className="font-medium text-gray-700 sm:min-w-[160px]">{rule.from}</span>
                       <span className="text-gray-400">&#8594;</span>
-                      <span className="font-medium text-gray-700 min-w-[160px]">{rule.to}</span>
+                      <span className="font-medium text-gray-700 sm:min-w-[160px]">{rule.to}</span>
                       <span className={`px-2 py-0.5 rounded text-xs font-medium ${rule.auto !== false ? 'bg-green-200 text-green-800' : 'bg-amber-200 text-amber-800'}`}>
                         {rule.auto !== false ? 'Auto' : 'Manual'}
                       </span>
-                      <span className="text-gray-500 text-xs flex-1">{rule.trigger}</span>
+                      <span className="text-gray-500 text-xs basis-full sm:basis-auto flex-1">{rule.trigger}</span>
                     </div>
                   ))}
                 </div>

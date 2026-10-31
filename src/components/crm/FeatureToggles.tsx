@@ -331,13 +331,13 @@ export default function FeatureToggles() {
                     }`}
                   >
                     <div className="flex items-start justify-between gap-4">
-                      <div className="flex items-start gap-3 flex-1">
+                      <div className="flex items-start gap-3 flex-1 min-w-0">
                         <div className={`p-2 rounded-lg ${isEnabled ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-400'}`}>
                           {feature.icon}
                         </div>
-                        
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2 mb-1">
                             <h3 className="font-medium text-gray-900">{feature.label}</h3>
                             {feature.comingSoon && (
                               <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-semibold rounded-full">
