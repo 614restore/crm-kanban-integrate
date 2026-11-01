@@ -5,7 +5,8 @@
 //  - Jobs In Progress — signed quotes whose job is not paid off
 //  - Revenue (MTD)    — payments recorded since the 1st of this month
 // and one funnel across both boards: the Sales stages come from the quote's status, the
-// Project stages from its job_stage.
+// Project stages from its job_stage. Recent Activity is for work still going on, so it leaves
+// out closed-out jobs (see isClosedOut); they still count in the funnel's Closed/Paid stage.
 import type { Contact, QuoteSummary } from './crmData';
 
 export const DASHBOARD_STAGES = [
@@ -64,6 +65,18 @@ export function quoteStage(q: Pick<QuoteSummary, 'status' | 'jobStage'>): Dashbo
   return null; // declined / expired sit outside the funnel
 }
 
+/**
+ * A job that is finished and paid off: its quote's job is Closed/Paid on the Project board, or the
+ * customer is marked Paid (closed out) on the Billing board. "Completed" alone is not closed out;
+ * the customer may still owe money.
+ */
+export function isClosedOut(
+  q: Pick<QuoteSummary, 'status' | 'jobStage'> | null,
+  customerStatus: string | null | undefined,
+): boolean {
+  return customerStatus === 'paid' || (q != null && quoteStage(q) === 'paid');
+}
+
 export interface DashboardActivity {
   key: string;
   kind: 'quote' | 'lead';
@@ -86,7 +99,7 @@ export interface DashboardMetrics {
 
 export function computeDashboardMetrics(
   quotes: QuoteForMetrics[],
-  contacts: Pick<Contact, 'id' | 'firstName' | 'lastName' | 'city' | 'createdAt'>[],
+  contacts: Pick<Contact, 'id' | 'firstName' | 'lastName' | 'city' | 'createdAt' | 'status'>[],
   payments: { amount: number; created_at: string }[],
   now: Date = new Date(),
   recentLimit = 5,
@@ -110,29 +123,34 @@ export function computeDashboardMetrics(
   const fullName = (c: { firstName?: string; lastName?: string } | undefined) =>
     c ? `${c.firstName || ''} ${c.lastName || ''}`.trim() : '';
 
-  const fromQuotes: DashboardActivity[] = quotes.map((q) => {
-    const stage = quoteStage(q);
-    return {
-      key: `q:${q.id}`,
-      kind: 'quote',
-      customerId: q.contactId,
-      name: fullName(q.contactId ? contactById.get(q.contactId) : undefined) || q.quoteNumber,
-      meta: [DASHBOARD_STAGES.find((s) => s.id === stage)?.label ?? q.status, q.projectDescription || null]
-        .filter(Boolean)
-        .join(' · '),
-      value: q.status === 'signed' ? quoteContractValue(q) : quoteOpenValue(q),
-      at: q.updatedAt || q.createdAt,
-    };
-  });
-  const fromLeads: DashboardActivity[] = leads.map((c) => ({
-    key: `c:${c.id}`,
-    kind: 'lead',
-    customerId: c.id,
-    name: fullName(c),
-    meta: c.city ? `New lead · ${c.city}` : 'New lead',
-    value: null,
-    at: c.createdAt,
-  }));
+  const statusOf = (customerId: string | null) => (customerId ? contactById.get(customerId)?.status : undefined);
+  const fromQuotes: DashboardActivity[] = quotes
+    .filter((q) => !isClosedOut(q, statusOf(q.contactId)))
+    .map((q) => {
+      const stage = quoteStage(q);
+      return {
+        key: `q:${q.id}`,
+        kind: 'quote',
+        customerId: q.contactId,
+        name: fullName(q.contactId ? contactById.get(q.contactId) : undefined) || q.quoteNumber,
+        meta: [DASHBOARD_STAGES.find((s) => s.id === stage)?.label ?? q.status, q.projectDescription || null]
+          .filter(Boolean)
+          .join(' · '),
+        value: q.status === 'signed' ? quoteContractValue(q) : quoteOpenValue(q),
+        at: q.updatedAt || q.createdAt,
+      };
+    });
+  const fromLeads: DashboardActivity[] = leads
+    .filter((c) => !isClosedOut(null, c.status))
+    .map((c) => ({
+      key: `c:${c.id}`,
+      kind: 'lead',
+      customerId: c.id,
+      name: fullName(c),
+      meta: c.city ? `New lead · ${c.city}` : 'New lead',
+      value: null,
+      at: c.createdAt,
+    }));
 
   return {
     pipelineValue: quotes
