@@ -565,7 +565,7 @@ export default function ContactDetail() {
           signedAt: est.accepted_at || est.updated_at,
           amount: est.total,
           viewUrl: est.sign_token
-            ? `${origin}/sign?estimateId=${est.id}&token=${est.sign_token}`
+            ? `${origin}/sign-estimate/${est.sign_token}`
             : undefined,
         })),
         ...signedWorkOrders.map(wo => ({
