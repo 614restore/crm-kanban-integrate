@@ -234,7 +234,7 @@ export default function QuickAddModal() {
           city: formData.city || undefined,
           state: formData.state || undefined,
           zip: formData.zip || undefined,
-          status: formData.status,
+          status: scheduleAppt ? 'appt_set' : formData.status,
           lead_source: formData.leadSource,
           assigned_to: assignedTo,
           tags: [],
