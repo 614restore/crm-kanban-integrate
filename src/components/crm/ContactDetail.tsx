@@ -4121,8 +4121,9 @@ export default function ContactDetail() {
               )}
             </div>
             
-            <JobStatusTimeline 
-              contact={contact} 
+            <JobStatusTimeline
+              contact={contact}
+              receiptsCount={receiptsCount}
               jobs={contactWorkOrders.map(wo => ({
                 id: wo.id,
                 contactId: wo.contactId || contact.id,

@@ -1676,7 +1676,8 @@ class DatabaseService {
   async updateEstimateItem(itemId: string, updates: Partial<DbEstimateItem>): Promise<DbEstimateItem | null> {
     const { data, error } = await supabase
       .from('estimate_items')
-      .update({ ...updates, updated_at: new Date().toISOString() })
+      // estimate_items has no updated_at column.
+      .update(updates)
       .eq('id', itemId)
       .select()
       .single();
@@ -1931,7 +1932,9 @@ class DatabaseService {
     if (this.inDemoMode()) return true;
     try {
       const { error } = await this.raceTimeout(
-        supabase.from('notifications').update({ read: true, updated_at: new Date().toISOString() }).eq('id', notificationId),
+        // notifications has no updated_at column; sending one makes every
+        // "mark as read" fail, so the bell can never be cleared.
+        supabase.from('notifications').update({ read: true }).eq('id', notificationId),
         10000, 'markNotificationRead'
       );
       if (error) { console.error('Error marking notification read:', error); return false; }
@@ -1943,7 +1946,7 @@ class DatabaseService {
     assertCompanyId(companyId, 'markAllNotificationsRead');
     if (this.inDemoMode()) return true;
     let query = supabase.from('notifications')
-      .update({ read: true, updated_at: new Date().toISOString() })
+      .update({ read: true })
       .eq('company_id', companyId).eq('read', false);
     if (userId) query = query.or(`user_id.eq.${userId},user_id.is.null`);
     const { error } = await query;
@@ -2152,10 +2155,8 @@ export async function updateTimeEntry(entryId: string, updates: {
 }): Promise<void> {
   const { error } = await supabase
     .from('time_entries')
-    .update({
-      ...updates,
-      updated_at: new Date().toISOString()
-    })
+    // time_entries has no updated_at column.
+    .update(updates)
     .eq('id', entryId);
 
   if (error) {
@@ -2362,10 +2363,8 @@ export async function getCustomerAssignments(userId: string): Promise<DbCustomer
 export async function removeCustomerAssignment(userId: string, contactId: string): Promise<void> {
   const { error } = await supabase
     .from('customer_assignments')
-    .update({ 
-      is_active: false, 
-      updated_at: new Date().toISOString() 
-    })
+    // customer_assignments has no updated_at column.
+    .update({ is_active: false })
     .eq('user_id', userId)
     .eq('contact_id', contactId);
 

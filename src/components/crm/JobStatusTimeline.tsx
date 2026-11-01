@@ -24,6 +24,9 @@ import {
 interface JobStatusTimelineProps {
   contact: Contact;
   jobs?: Job[];
+  /** Payments recorded on the Financial tab. A recorded payment counts as a collected deposit
+   *  even when nobody ticked the deposit box on the customer record. */
+  receiptsCount?: number;
   onStatusChange?: (newStatus: CustomerStatus) => void;
   onScheduleInspection?: () => void;
   onCreateQuote?: () => void;
@@ -179,12 +182,16 @@ function findStepIndex(status: CustomerStatus): number {
 const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({
   contact,
   jobs = [],
+  receiptsCount = 0,
   onStatusChange,
   onScheduleInspection,
   onCreateQuote,
 }) => {
   const [showRevertModal, setShowRevertModal] = useState(false);
   const [revertTargetStep, setRevertTargetStep] = useState<PowerStep | null>(null);
+
+  // Matches the Financial tab: either the deposit box on the customer or a real recorded payment.
+  const depositCollected = contact.depositPaid || receiptsCount > 0;
 
   const normalizedStatus = resolveStatus(contact.status);
   const currentStepIndex = findStepIndex(normalizedStatus);
@@ -268,7 +275,7 @@ const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({
                 ${contact.projectValue.toLocaleString()}
               </div>
               <div className="text-sm text-green-600">
-                {contact.depositPaid ? 'Deposit collected' : 'Deposit pending'}
+                {depositCollected ? 'Deposit collected' : 'Deposit pending'}
               </div>
             </div>
           )}
@@ -317,7 +324,7 @@ const JobStatusTimeline: React.FC<JobStatusTimelineProps> = ({
                         Value: ${contact.projectValue.toLocaleString()}
                       </div>
                     )}
-                    {step.id === 'approval_sold' && contact.depositPaid && (
+                    {step.id === 'approval_sold' && depositCollected && (
                       <div className="text-xs text-green-600 mt-1">
                         Deposit: {contact.depositDate ? new Date(contact.depositDate).toLocaleDateString() : 'Collected'}
                       </div>

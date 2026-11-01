@@ -178,7 +178,7 @@ export default function Sidebar() {
     const activeId = getActiveContactId(state);
     const openContact = activeId ? state.contacts.find((c) => c.id === activeId) : null;
     if (item.stormMode === 'live') return openLiveRadarFor(dispatch, openContact);
-    if (item.stormMode === 'history') return void openStormHistoryFor(dispatch, openContact);
+    if (item.stormMode === 'history') return void openStormHistoryFor(dispatch, openContact, profile?.company_id);
     if (item.boardType) {
       const board = state.boards.find((b) => b.type === item.boardType);
       if (board) dispatch({ type: 'SELECT_BOARD', payload: board.id });

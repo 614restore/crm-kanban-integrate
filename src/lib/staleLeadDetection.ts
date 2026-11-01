@@ -127,10 +127,25 @@ export async function notifyOwnersOfStaleContacts(companyId: string, staleContac
       }
     }
     
+    // Stale-lead detection runs on every app load and every 4 hours after that,
+    // in every open tab. Without this guard each run files the same warning
+    // again, which is what buried the notification bell in duplicates. Skip
+    // anything already reported to this person in the last 24 hours.
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { data: recentStale } = await supabase
+      .from('notifications')
+      .select('user_id, related_type, related_id')
+      .eq('company_id', companyId)
+      .in('related_type', ['stale_leads', 'stale_leads_user'])
+      .gte('created_at', since);
+    const alreadyNotified = new Set(
+      (recentStale ?? []).map(n => `${n.user_id}|${n.related_type}|${n.related_id ?? ''}`)
+    );
+
     // Create notifications for each owner
     for (const owner of owners) {
       // Notification for unassigned stale contacts
-      if (unassigned.length > 0) {
+      if (unassigned.length > 0 && !alreadyNotified.has(`${owner.id}|stale_leads|`)) {
         await db.createNotification({
           company_id: companyId,
           user_id: owner.id,
@@ -144,6 +159,7 @@ export async function notifyOwnersOfStaleContacts(companyId: string, staleContac
       
       // Notifications for each user's stale contacts
       for (const [userId, userStaleContacts] of staleByUser.entries()) {
+        if (alreadyNotified.has(`${owner.id}|stale_leads_user|${userId}`)) continue;
         const userName = userStaleContacts[0].assignedToName || 'Team Member';
         await db.createNotification({
           company_id: companyId,
