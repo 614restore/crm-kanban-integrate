@@ -525,10 +525,22 @@ export default function TeamView() {
             <div className="bg-gradient-to-r from-slate-900 to-slate-800 rounded-xl p-6 text-white">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-slate-400 text-sm">Company ID</p>
-                  <p className="text-2xl font-mono font-bold mt-1">{companyId}</p>
+                  {companyName ? (
+                    <>
+                      <p className="text-slate-400 text-sm">Company</p>
+                      <p className="text-2xl font-bold mt-1 break-words">{companyName}</p>
+                      <p className="text-slate-400 text-xs font-mono mt-2 break-all">
+                        Company ID: {companyId}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-slate-400 text-sm">Company ID</p>
+                      <p className="text-2xl font-mono font-bold mt-1 break-all">{companyId}</p>
+                    </>
+                  )}
                   <p className="text-slate-400 text-sm mt-2">
-                    Your company's ID. Quote it if you contact support.
+                    Quote your Company ID if you contact support.
                   </p>
                 </div>
                 <button
