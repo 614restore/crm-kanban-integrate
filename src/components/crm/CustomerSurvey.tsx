@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { db } from '@/lib/database';
 import { useAuth } from '@/lib/authContext';
+import { formatFullAddress } from '@/lib/formatAddress';
 
 interface CustomerSurveyProps {
   contact: Contact;
@@ -282,10 +283,12 @@ const CustomerSurvey: React.FC<CustomerSurveyProps> = ({
         <div className="bg-gray-50 rounded-lg p-4">
           <h3 className="font-medium text-gray-900 mb-2">Project Summary</h3>
           <div className="text-sm text-gray-600 space-y-1">
-            <div className="flex items-center gap-2">
-              <MapPin className="w-4 h-4" />
-              <span>{contact.address}, {contact.city}, {contact.state}</span>
-            </div>
+            {formatFullAddress({ address: contact.address, city: contact.city, state: contact.state }) && (
+              <div className="flex items-center gap-2">
+                <MapPin className="w-4 h-4" />
+                <span>{formatFullAddress({ address: contact.address, city: contact.city, state: contact.state })}</span>
+              </div>
+            )}
             {contact.projectType && (
               <div className="flex items-center gap-2">
                 <Award className="w-4 h-4" />

@@ -3,12 +3,13 @@
 // customers without an email.
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useCRM } from '@/lib/crmStore';
 import { describeFunctionError } from '@/lib/emailApi';
 import { toast } from 'sonner';
 import { generateInvoicePdf } from '@/lib/invoicePdfGenerator';
 import {
   Search, Download, Mail, CheckCircle2, MoreVertical,
-  Eye, Trash2, Calendar, DollarSign, TrendingUp
+  Eye, Trash2, Calendar, DollarSign, TrendingUp, FileText
 } from 'lucide-react';
 import type { InvoiceCompany as Company, PaymentRecord } from '@/lib/invoicePdfGenerator';
 
@@ -57,6 +58,7 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
   company,
   onViewInvoice,
 }) => {
+  const { dispatch } = useCRM();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -447,11 +449,28 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
                 <Mail className="w-8 h-8 text-gray-400" />
               </div>
               <p className="text-lg font-semibold text-gray-700 mb-2">No invoices yet</p>
-              <p className="text-sm text-gray-500 text-center">
-                {searchTerm || statusFilter !== 'all' || dateFromFilter || dateToFilter
-                  ? 'No invoices match your filters. Try adjusting your search criteria.'
-                  : 'Create your first invoice from a quote to get started.'}
-              </p>
+              {searchTerm || statusFilter !== 'all' || dateFromFilter || dateToFilter ? (
+                <p className="text-sm text-gray-500 text-center">
+                  No invoices match your filters. Try adjusting your search criteria.
+                </p>
+              ) : (
+                <>
+                  {/* Invoices are only made from a signed quote (Quotes → ⋯ → Create
+                      invoice). Saying only "from a quote" left new accounts looking
+                      for an invoice option that a draft quote never shows. */}
+                  <p className="text-sm text-gray-500 text-center max-w-sm">
+                    Invoices are created from a signed quote. Once a customer signs, open the
+                    quote&apos;s menu on the Quotes page and choose <span className="font-medium text-gray-700">Create invoice</span>.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => dispatch({ type: 'SET_VIEW', payload: 'quotes' })}
+                    className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-[#1e3a5f] text-white rounded-lg text-sm font-medium hover:bg-[#162d4a] transition-colors"
+                  >
+                    <FileText className="w-4 h-4" /> Go to Quotes
+                  </button>
+                </>
+              )}
             </div>
           ) : (
             <div className="overflow-x-auto">

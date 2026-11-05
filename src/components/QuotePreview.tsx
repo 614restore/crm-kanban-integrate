@@ -18,6 +18,7 @@ import { generateAndPrintInspectionReport } from '@/lib/inspectionReportGenerato
 import { quoteUrl, certUrl } from '@/lib/appUrl';
 import type { Quote, Company, LineItem, QuotePhoto, QuoteOption } from '@/data/quoteData';
 import { statusConfig, tierLabels } from '@/data/quoteData';
+import { formatCityStateZip, formatFullAddress } from '@/lib/formatAddress';
 
 interface QuotePreviewProps {
   quoteId: string;
@@ -1422,7 +1423,7 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
                       {company.phone && <span className="flex items-center gap-1"><Phone className="w-4 h-4" />{company.phone}</span>}
                       {company.email && <span className="flex items-center gap-1"><Mail className="w-4 h-4" />{company.email}</span>}
                     </div>
-                    <p>{company.address}, {company.city}, {company.state} {company.zip}</p>
+                    <p>{formatFullAddress(company)}</p>
                   </div>
                   {/* Sign bar on cover */}
                   {!isSigned && (
@@ -3598,7 +3599,7 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
                   <p className="font-bold uppercase tracking-widest text-[#ff6b35] text-[9px] mb-1">Property Owner</p>
                   <p className="font-semibold">{quote?.customer?.first_name} {quote?.customer?.last_name}</p>
                   {quote?.customer?.address && <p className="text-gray-500">{quote.customer.address}</p>}
-                  {quote?.customer?.city && <p className="text-gray-500">{quote.customer.city}, {quote.customer.state} {quote.customer.zip}</p>}
+                  {quote?.customer && formatCityStateZip(quote.customer) && <p className="text-gray-500">{formatCityStateZip(quote.customer)}</p>}
                 </div>
               </div>
 

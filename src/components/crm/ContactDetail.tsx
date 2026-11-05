@@ -47,6 +47,7 @@ import { useCRM, useCurrentContact } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
 import { supabase } from '@/lib/supabase';
+import { nextQuoteNumber } from '@/lib/quoteNumber';
 import { quoteValue, toQuoteSummary, type QuoteSummary } from '@/lib/crmData';
 import { formatPhoneNumber } from '@/lib/utils';
 import JobStatusTimeline from './JobStatusTimeline';
@@ -153,6 +154,7 @@ import {
   FileCheck,
   AlertTriangle,
 } from 'lucide-react';
+import { formatFullAddress } from '@/lib/formatAddress';
 
 type TabType = 'overview' | 'timeline' | 'documents' | 'financial' | 'projects' | 'jobStatus' | 'survey' | 'insurance';
 
@@ -1101,11 +1103,11 @@ export default function ContactDetail() {
       }
     }
     const label = signedQuoteLabel.trim() || 'Signed contract';
-    const quoteNumber = `QT-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`;
     // A date picked in the input is a calendar day; noon keeps it on that day in every timezone.
     const signedAt = signedQuoteDate ? new Date(`${signedQuoteDate}T12:00:00`).toISOString() : new Date().toISOString();
     setSavingSignedQuote(true);
     try {
+      const quoteNumber = await nextQuoteNumber(companyId, 'QT');
       const { error } = await supabase.from('quotes').insert({
         company_id: companyId,
         created_by: user?.id ?? null,
@@ -2335,7 +2337,7 @@ export default function ContactDetail() {
                     <div className="flex items-start gap-2">
                       <MapPin size={16} className="text-gray-400 mt-0.5" />
                       <span className="text-gray-900">
-                        {contact.address ? `${contact.address}, ${contact.city}, ${contact.state} ${contact.zip}` : '-'}
+                        {formatFullAddress(contact) || '-'}
                       </span>
                       {contact.address && (
                         <button

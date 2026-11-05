@@ -27,6 +27,7 @@ import { SMSDialog } from '../components/crm/SMSDialog';
 import { useTwilio } from '../hooks/useTwilio';
 import EagleViewPanel from '../components/crm/EagleViewPanel';
 import WeatherWidget from '../components/integrations/WeatherWidget';
+import { formatCityStateZip } from '@/lib/formatAddress';
 
 const MultiShotCamera = registerPlugin<{ open: (options?: { saveMode?: InspectionPhotoStorageMode }) => Promise<{ photos: string[] }> }>('MultiShotCamera');
 
@@ -981,7 +982,7 @@ function OverviewTab({ contact, onRefresh }: { contact: any; onRefresh: () => vo
               <div className="h-10 w-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 shrink-0"><MapPin size={18} /></div>
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] font-bold text-slate-400 uppercase">Address</p>
-                <p className="text-sm font-bold text-primary leading-tight">{contact.address}<br />{contact.city}, {contact.state} {contact.zip}</p>
+                <p className="text-sm font-bold text-primary leading-tight">{contact.address}{contact.address && formatCityStateZip(contact) && <br />}{formatCityStateZip(contact) || (!contact.address && '-')}</p>
               </div>
             </div>
           </div>

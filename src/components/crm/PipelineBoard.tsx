@@ -53,6 +53,7 @@ import {
 import { getNextStepForStatus, setPendingContactTab, type NextStep } from '@/lib/nextStepActions';
 import { fireAutomationEvent } from '@/lib/automationEngine';
 import type { KanbanStatus } from '@/lib/kanbanStatuses';
+import { formatCityState } from '@/lib/formatAddress';
 
 const NEXT_STEP_ICONS: Record<string, React.ElementType> = {
   Calendar,
@@ -1005,14 +1006,16 @@ export default function PipelineBoard() {
                               </div>
                             </div>
                             <div className="mt-2 space-y-1 ml-1">
-                              <div
-                                className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-blue-600 cursor-pointer transition-colors group/addr"
-                                onClick={(e) => openNavigation(e, contact)}
-                                title="Open in Maps"
-                              >
-                                <MapPin size={10} className="group-hover/addr:text-blue-500 transition-colors flex-shrink-0" />
-                                <span className="truncate underline-offset-2 group-hover/addr:underline">{contact.city}, {contact.state}</span>
-                              </div>
+                              {formatCityState(contact) && (
+                                <div
+                                  className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-blue-600 cursor-pointer transition-colors group/addr"
+                                  onClick={(e) => openNavigation(e, contact)}
+                                  title="Open in Maps"
+                                >
+                                  <MapPin size={10} className="group-hover/addr:text-blue-500 transition-colors flex-shrink-0" />
+                                  <span className="truncate underline-offset-2 group-hover/addr:underline">{formatCityState(contact)}</span>
+                                </div>
+                              )}
                               {contact.phone1 && (
                                 <div className="flex items-center gap-1.5 text-xs text-gray-500">
                                   <Phone size={10} /><span>{contact.phone1}</span>
@@ -1309,14 +1312,16 @@ export default function PipelineBoard() {
                             </div>
                           </div>
                           <div className="mt-3 space-y-1.5">
-                            <div
-                              className="flex items-center gap-2 text-xs text-gray-500 hover:text-blue-600 cursor-pointer transition-colors group/addr"
-                              onClick={(e) => openNavigation(e, contact)}
-                              title="Open in Maps"
-                            >
-                              <MapPin size={12} className="group-hover/addr:text-blue-500 transition-colors flex-shrink-0" />
-                              <span className="truncate underline-offset-2 group-hover/addr:underline">{contact.city}, {contact.state}</span>
-                            </div>
+                            {formatCityState(contact) && (
+                              <div
+                                className="flex items-center gap-2 text-xs text-gray-500 hover:text-blue-600 cursor-pointer transition-colors group/addr"
+                                onClick={(e) => openNavigation(e, contact)}
+                                title="Open in Maps"
+                              >
+                                <MapPin size={12} className="group-hover/addr:text-blue-500 transition-colors flex-shrink-0" />
+                                <span className="truncate underline-offset-2 group-hover/addr:underline">{formatCityState(contact)}</span>
+                              </div>
+                            )}
                             {contact.phone1 && (
                               <div className="flex items-center gap-2 text-xs text-gray-500">
                                 <Phone size={12} /><span>{contact.phone1}</span>

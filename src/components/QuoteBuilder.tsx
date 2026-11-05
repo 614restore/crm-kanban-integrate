@@ -9,6 +9,7 @@ import {
   Shield, AlertTriangle, Award
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { nextQuoteNumber } from '@/lib/quoteNumber';
 import { toast } from 'sonner';
 import LineItemEditor, { getProductSuggestions, getSidingProductSuggestions, SHINGLE_BRANDS, SIDING_BRANDS } from '@/components/LineItemEditor';
 import PhotoUploader from '@/components/PhotoUploader';
@@ -35,6 +36,7 @@ import { buildMeasurementLineItems } from '@/lib/measurementImport';
 import type { MeasurementProviderId } from '@/lib/measurementProviders';
 import type { AIQuotePhotoAnalysis, AIQuotePhotoSuggestedLineItem } from '@/lib/aiHelper';
 import { compressForUpload, COMPRESS_PRESETS, STORAGE_CACHE_CONTROL } from '@/lib/imageUtils';
+import { formatFullAddress } from '@/lib/formatAddress';
 
 interface QuoteBuilderProps {
   companyId: string;
@@ -3894,6 +3896,9 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
       // sorted by sort_order (using good_price per item, same as quote_options.subtotal).
       // Using calculateTotals() here would sum ALL options' items together.
       const sortedOptsForSave = [...quoteOptions].sort((a, b) => a.sort_order - b.sort_order);
+      const newQuoteNumber = quoteId
+        ? undefined
+        : await nextQuoteNumber(companyId, inspectionOnly ? 'IC' : invoiceMode ? 'IN' : 'QT');
       const resolvedSaveTotals = quoteStructureType === 'multi_scope' && quoteOptions.length > 0
         ? {
             good:   lineItems.filter(i => i.quote_option_id === sortedOptsForSave[0]?.id).reduce((s, i) => s + (i.quantity ?? 0) * (i.good_price ?? 0), 0),
@@ -3905,7 +3910,8 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
         company_id: companyId,
         created_by: userId,
         customer_id: customerId,
-        quote_number: quoteId ? undefined : `${inspectionOnly ? 'IC' : invoiceMode ? 'IN' : 'QT'}-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`,
+        // Drawn once so the saved quote and a same-click email carry the same number.
+        quote_number: newQuoteNumber,
         // A re-send must not un-sign a quote: a signature is a fact about the
         // customer that sending a new copy cannot undo. A *view* is the
         // opposite -- it describes the version the customer opened before, so
@@ -4002,7 +4008,7 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
         if (!updatedRow) throw new Error('Quote not found — it may have been deleted. Please refresh and try again.');
         savedQuoteId = updatedRow.id;
       } else {
-        const { data, error } = await supabase.from('quotes').insert({ ...quoteData, quote_number: `${inspectionOnly ? 'IC' : invoiceMode ? 'IN' : 'QT'}-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}` }).select().single();
+        const { data, error } = await supabase.from('quotes').insert(quoteData).select().single();
         if (error) throw error;
         savedQuoteId = data.id;
         setQuoteId(data.id);
@@ -5433,8 +5439,11 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
                     const sq  = parseFloat(manualSquares) || 0;
                     const qty = sq * (1 + manualWaste / 100);
                     const g   = parseFloat(manualPerSqGoodRate)   || 0;
-                    const b   = parseFloat(manualPerSqBetterRate) || g;
-                    const bs  = parseFloat(manualPerSqBestRate)   || b;
+                    // No fallback to the Good rate: each button below prices only its own
+                    // tier, so an empty Better/Best is $0 on the quote. Borrowing Good's rate
+                    // here showed Better and Best at Good's total and enabled their buttons.
+                    const b   = parseFloat(manualPerSqBetterRate) || 0;
+                    const bs  = parseFloat(manualPerSqBestRate)   || 0;
                     const fmt = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
                     const tiers = [
                       { key: 'good',   label: goodTierName   || 'Good',   val: manualPerSqGoodRate,   set: setManualPerSqGoodRate,   rate: g,  color: 'text-emerald-700', ring: 'focus:ring-emerald-400' },
@@ -8744,7 +8753,7 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
             <div className="bg-gray-50 rounded-xl p-4">
               <h3 className="text-sm font-semibold text-gray-700 mb-2">Customer</h3>
               <p className="text-sm text-gray-900">{customer.first_name} {customer.last_name}</p>
-              <p className="text-sm text-gray-500">{customer.address}, {customer.city}, {customer.state} {customer.zip}</p>
+              {formatFullAddress(customer) && <p className="text-sm text-gray-500">{formatFullAddress(customer)}</p>}
               {customer.email && <p className="text-sm text-gray-500">{customer.email}</p>}
             </div>
 

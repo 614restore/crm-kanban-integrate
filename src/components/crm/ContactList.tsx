@@ -38,6 +38,7 @@ import {
   ArchiveRestore,
   FileText,
 } from 'lucide-react';
+import { formatCityState } from '@/lib/formatAddress';
 
 type SortField = 'name' | 'status' | 'createdAt' | 'projectValue';
 type SortDirection = 'asc' | 'desc';
@@ -504,7 +505,7 @@ Jane,Smith,jane@example.com,555-9999,555-8888,456 Oak Ave,Boulder,CO,80301,Prosp
                       </span>
                     </div>
                     <div className="col-span-2 flex items-center text-sm text-gray-600">
-                      {contact.city}, {contact.state}
+                      {formatCityState(contact)}
                     </div>
                     <div className="col-span-2 flex items-center">
                       {contact.projectValue ? (
@@ -621,12 +622,12 @@ Jane,Smith,jane@example.com,555-9999,555-8888,456 Oak Ave,Boulder,CO,80301,Prosp
                       <Phone size={14} className="text-gray-400" />
                       <span>{contact.phone1}</span>
                     </div>
-                    <div className="flex items-center gap-2 text-gray-600">
-                      <MapPin size={14} className="text-gray-400" />
-                      <span>
-                        {contact.city}, {contact.state}
-                      </span>
-                    </div>
+                    {formatCityState(contact) && (
+                      <div className="flex items-center gap-2 text-gray-600">
+                        <MapPin size={14} className="text-gray-400" />
+                        <span>{formatCityState(contact)}</span>
+                      </div>
+                    )}
                   </div>
 
                   <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">

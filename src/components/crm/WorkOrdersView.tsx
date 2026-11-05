@@ -35,6 +35,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { withTimeout } from '@/lib/utils';
+import { formatCityState } from '@/lib/formatAddress';
 
 // Status badge component
 function StatusBadge({ status }: { status: WorkOrder['status'] }) {
@@ -842,10 +843,10 @@ export default function WorkOrdersView() {
                         {workOrder.projectName}
                       </span>
                     )}
-                    {workOrder.address && (
+                    {formatCityState(workOrder) && (
                       <span className="flex items-center gap-1">
                         <MapPin size={14} />
-                        {workOrder.city}, {workOrder.state}
+                        {formatCityState(workOrder)}
                       </span>
                     )}
                   </div>
