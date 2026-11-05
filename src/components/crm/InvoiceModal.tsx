@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { X, Plus, Trash2, Save, Send, DollarSign } from 'lucide-react';
 import { toLocalDateString } from '@/lib/dates';
 import { useInvoiceTax, effectiveTaxRate } from '@/lib/invoiceTax';
+import { formatFullAddress } from '@/lib/formatAddress';
 
 export default function InvoiceModal() {
   const { state, dispatch } = useCRM();
@@ -307,10 +308,9 @@ ${taxRate > 0 ? `<tr><td style="padding:4px 8px">Tax (${taxRate}%)</td><td style
               <div className="p-4 bg-gray-50 rounded-lg">
                 <p className="font-medium text-gray-900">{getContactFullName(selectedContact)}</p>
                 <p className="text-sm text-gray-500">{selectedContact.email}</p>
-                <p className="text-sm text-gray-500">
-                  {selectedContact.address}, {selectedContact.city}, {selectedContact.state}{' '}
-                  {selectedContact.zip}
-                </p>
+                {formatFullAddress(selectedContact) && (
+                  <p className="text-sm text-gray-500">{formatFullAddress(selectedContact)}</p>
+                )}
               </div>
             )}
 

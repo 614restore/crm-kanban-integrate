@@ -27,6 +27,7 @@ import {
   Download,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { formatCityState } from '@/lib/formatAddress';
 
 // Status badge component
 function StatusBadge({ status }: { status: Project['status'] }) {
@@ -582,10 +583,10 @@ export default function ProjectsView() {
                       <User size={14} />
                       {project.contactName}
                     </span>
-                    {project.address && (
+                    {formatCityState(project) && (
                       <span className="flex items-center gap-1">
                         <MapPin size={14} />
-                        {project.city}, {project.state}
+                        {formatCityState(project)}
                       </span>
                     )}
                   </div>
