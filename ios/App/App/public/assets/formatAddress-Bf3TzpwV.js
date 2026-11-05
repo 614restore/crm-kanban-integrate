@@ -1,0 +1,1 @@
+const t=t=>"string"==typeof t?t.trim():"";function n(n){const o=[t(n.state),t(n.zip)].filter(Boolean).join(" ");return[t(n.city),o].filter(Boolean).join(", ")}function o(t){return n({city:t.city,state:t.state})}function e(o){return[t(o.address),n(o)].filter(Boolean).join(", ")}export{e as a,n as b,o as f};
