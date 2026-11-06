@@ -117,6 +117,26 @@ const generateShareToken = (): string => {
 const money = (n: number | null | undefined) =>
   (n || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 
+/**
+ * Which tier the customer actually put their name to. sign_quote_customer
+ * records it as they sign; nothing writes it beforehand, so a quote only has
+ * one once there is a signature. Read through contractor_signed_at as well, so
+ * the choice keeps showing after the quote moves on past "signed".
+ */
+const signedTier = (q: QuoteRow): 'good' | 'better' | 'best' | null => {
+  if (q.status !== 'signed' && !q.contractor_signed_at) return null;
+  const tier = q.selected_tier;
+  return tier === 'good' || tier === 'better' || tier === 'best' ? tier : null;
+};
+
+const TIER_LABELS = { good: 'Good', better: 'Better', best: 'Best' } as const;
+
+/** The signed-for column is the one that matters; the other two are history. */
+const tierCellClass = (q: QuoteRow, tier: 'good' | 'better' | 'best') =>
+  signedTier(q) === tier
+    ? 'bg-green-50 font-semibold text-green-800 ring-1 ring-inset ring-green-200'
+    : 'text-gray-700';
+
 interface FinancingOptionRow {
   id: string;
   lender_name: string;
@@ -932,10 +952,18 @@ export default function QuotesView() {
                         Needs countersign
                       </span>
                     )}
+                    {/* The Good/Better/Best columns are hidden below sm, so on a
+                        phone the highlight alone would show nothing. Name the
+                        chosen tier here instead. */}
+                    {signedTier(q) && (
+                      <span className="sm:hidden ml-1.5 text-xs px-2 py-1 rounded-full font-medium bg-green-100 text-green-800">
+                        {TIER_LABELS[signedTier(q)!]}
+                      </span>
+                    )}
                   </td>
-                  <td className="hidden sm:table-cell px-2 sm:px-4 py-3 text-right text-gray-700">{money(q.good_total)}</td>
-                  <td className="hidden sm:table-cell px-2 sm:px-4 py-3 text-right text-gray-700">{q.include_better === false ? <span className="text-gray-300">—</span> : money(q.better_total)}</td>
-                  <td className="hidden sm:table-cell px-2 sm:px-4 py-3 text-right text-gray-700">{q.include_best === false ? <span className="text-gray-300">—</span> : money(q.best_total)}</td>
+                  <td className={`hidden sm:table-cell px-2 sm:px-4 py-3 text-right ${tierCellClass(q, 'good')}`} title={signedTier(q) === 'good' ? 'Signed for this tier' : undefined}>{money(q.good_total)}</td>
+                  <td className={`hidden sm:table-cell px-2 sm:px-4 py-3 text-right ${tierCellClass(q, 'better')}`} title={signedTier(q) === 'better' ? 'Signed for this tier' : undefined}>{q.include_better === false ? <span className="text-gray-300">—</span> : money(q.better_total)}</td>
+                  <td className={`hidden sm:table-cell px-2 sm:px-4 py-3 text-right ${tierCellClass(q, 'best')}`} title={signedTier(q) === 'best' ? 'Signed for this tier' : undefined}>{q.include_best === false ? <span className="text-gray-300">—</span> : money(q.best_total)}</td>
                   <td className="hidden sm:table-cell px-2 sm:px-4 py-3 text-gray-500">{new Date(q.created_at).toLocaleDateString()}</td>
                   <td className="px-2 sm:px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                     <button
