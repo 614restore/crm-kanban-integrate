@@ -262,18 +262,10 @@ const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
     setSendingEmail(true);
     setShowMenu(false);
     try {
-      const [lineItems, { data: recentLinks }] = await Promise.all([
-        fetchLineItems(invoice.id),
-        // Look for an existing Stripe payment link recorded for this customer
-        supabase
-          .from('payments')
-          .select('stripe_payment_link_url')
-          .eq('contact_id', invoice.customer_id ?? '')
-          .eq('payment_method', 'stripe_payment_link')
-          .not('stripe_payment_link_url', 'is', null)
-          .order('created_at', { ascending: false })
-          .limit(1),
-      ]);
+      // Payments don't store a Stripe payment link (there is no such column, so
+      // looking one up always failed); the email goes out without a pay link.
+      const lineItems = await fetchLineItems(invoice.id);
+      const recentLinks: { stripe_payment_link_url?: string }[] = [];
 
       const paymentLinkUrl = (recentLinks?.[0] as any)?.stripe_payment_link_url as string | undefined;
       const balanceDue = getBalanceDue();

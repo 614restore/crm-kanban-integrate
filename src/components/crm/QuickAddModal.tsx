@@ -188,7 +188,7 @@ export default function QuickAddModal() {
     // Close dialogs and navigate to contact
     setShowDuplicateDialog(false);
     handleClose();
-    dispatch({ type: 'SET_SELECTED_CONTACT', payload: contactId });
+    dispatch({ type: 'SELECT_CONTACT', payload: contactId });
   };
 
   const handleCreateAnyway = async () => {

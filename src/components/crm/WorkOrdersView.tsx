@@ -550,7 +550,7 @@ export default function WorkOrdersView() {
           assignedTo: updated.assigned_to || [],
           assignedToNames: (updated.assigned_to || []).map(id => {
             const m = state.teamMembers?.find((tm: any) => tm.id === id);
-            return m ? `${m.firstName} ${m.lastName}`.trim() : '';
+            return m ? (m.name || m.email || '') : '';
           }).filter(Boolean) as string[],
           estimatedHours: updated.estimated_hours ? Number(updated.estimated_hours) : undefined,
           actualHours: updated.actual_hours ? Number(updated.actual_hours) : undefined,

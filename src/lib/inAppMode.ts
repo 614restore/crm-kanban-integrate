@@ -2,7 +2,8 @@ import type { ViewType } from './crmStore';
 import type { BoardType } from './crmData';
 
 // The TrussCENTER phone app opens web tools it has no native screen for inside
-// its own screen, e.g. /?in_app=1&view=invoices or /?in_app=1&view=pipeline&board=billing.
+// its own screen, e.g. /?in_app=1&view=invoices, /?in_app=1&view=pipeline&board=billing,
+// or a customer's full page: /?in_app=1&view=contact-detail&contact=<customer id>.
 // In that mode the web shows just the one tool: the app supplies the header,
 // back button and tab bar, so the web's own menus are hidden.
 
@@ -13,8 +14,10 @@ const VIEWS: ViewType[] = [
   'financial', 'invoices', 'expenses', 'team', 'automations', 'settings', 'suppliers',
   'quotes', 'storm-search', 'work-orders', 'material-orders', 'reports', 'ai-assistant',
   'insurance-tracking', 'supplement-tracking', 'crew-schedule', 'equipment',
-  'commission-payroll', 'sales-analytics', 'inspections',
+  'commission-payroll', 'sales-analytics', 'inspections', 'projects', 'document-templates',
+  'contact-detail',
 ];
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const BOARDS: BoardType[] = ['sales', 'production', 'billing'];
 
 function readStart() {
@@ -24,13 +27,18 @@ function readStart() {
     const inApp = sessionStorage.getItem(IN_APP_KEY) === '1';
     const view = params.get('view') as ViewType | null;
     const board = params.get('board') as BoardType | null;
+    const contact = params.get('contact');
+    const contactId = inApp && contact && UUID.test(contact) ? contact : null;
+    const wanted = inApp && view && VIEWS.includes(view) ? view : null;
     return {
       inApp,
-      view: inApp && view && VIEWS.includes(view) ? view : null,
+      // A customer's page needs the customer; without one, open the customer list.
+      view: wanted === 'contact-detail' && !contactId ? 'contacts' as ViewType : wanted,
       board: inApp && board && BOARDS.includes(board) ? board : null,
+      contactId,
     };
   } catch {
-    return { inApp: false, view: null, board: null };
+    return { inApp: false, view: null, board: null, contactId: null };
   }
 }
 
@@ -42,6 +50,8 @@ export const IN_APP = start.inApp;
 export const inAppStartView: ViewType | null = start.view;
 /** For the boards: which board (by type) the app asked for. */
 export const inAppStartBoard: BoardType | null = start.board;
+/** For a customer's page: which customer the app asked for. */
+export const inAppStartContactId: string | null = start.contactId;
 
 /** Tells the TrussCENTER app something happened (e.g. the web sign-in ran out). */
 export function notifyApp(type: string) {

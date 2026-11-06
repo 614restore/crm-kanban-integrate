@@ -18,6 +18,7 @@ import MySignatureSettings from '@/components/settings/MySignatureSettings';
 import { formatPhoneNumber } from '@/lib/utils';
 import SubscriptionView from '@/components/crm/SubscriptionView';
 import FeatureToggles from '@/components/crm/FeatureToggles';
+import { IN_APP } from '@/lib/inAppMode';
 import {
   Settings,
   Building2,
@@ -1455,7 +1456,9 @@ export default function SettingsView() {
     { id: 'maps', label: 'Map Provider', icon: <Layers size={18} /> },
     { id: 'notifications', label: 'Notifications', icon: <Bell size={18} /> },
     { id: 'security', label: 'Security', icon: <Shield size={18} /> },
-    { id: 'billing', label: 'Subscription Plan', icon: <CreditCard size={18} /> },
+    // Not inside the TrussCENTER iPhone app: Apple requires subscriptions bought
+    // in an iPhone app to go through the App Store, which the app's own paywall does.
+    ...(IN_APP ? [] : [{ id: 'billing', label: 'Subscription Plan', icon: <CreditCard size={18} /> }]),
     { id: 'customer-billing', label: 'Financing Options', icon: <Receipt size={18} /> },
     { id: 'api', label: 'API Access', icon: <Key size={18} /> },
     { id: 'document-templates', label: 'Document Templates', icon: <FilePlus size={18} /> },
@@ -2428,7 +2431,7 @@ export default function SettingsView() {
         )}
 
         {/* SUBSCRIPTION PLAN TAB — app subscription only, deep-linked from paywall via tab: 'billing' */}
-        {activeTab === 'billing' && (
+        {activeTab === 'billing' && !IN_APP && (
           <div className="max-w-3xl space-y-6">
             <div>
               <h3 className="text-xl font-semibold text-gray-900 mb-2">Subscription Plan</h3>

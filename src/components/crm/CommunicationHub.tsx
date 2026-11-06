@@ -1,5 +1,6 @@
 import React, { useRef, useState, useMemo } from 'react';
 import { useCRM } from '@/lib/crmStore';
+import { useCompanyBrand } from '@/lib/useCompanyBrand';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
 import { sendEmail } from '@/lib/emailApi';
@@ -281,6 +282,7 @@ Best regards,
 
 export default function CommunicationHub() {
   const { state, dispatch } = useCRM();
+  const { name: companyBrandName } = useCompanyBrand();
   const { profile, session } = useAuth();
   const [filter, setFilter] = useState<CommFilter>('all');
   const [hideAuto, setHideAuto] = useState(false);
@@ -574,7 +576,7 @@ export default function CommunicationHub() {
       if (contact?.email) {
         // Parse optional "Subject: ..." line from compose text
         const lines = composeText.trim().split('\n');
-        let subject = `Message from ${state.companyName || 'TrussCTR'}`;
+        let subject = `Message from ${companyBrandName || 'TrussCTR'}`;
         let body = composeText.trim();
         if (lines[0].toLowerCase().startsWith('subject:')) {
           subject = lines[0].replace(/^subject:\s*/i, '').trim();

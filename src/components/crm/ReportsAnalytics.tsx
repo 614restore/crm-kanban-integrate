@@ -281,19 +281,19 @@ const ReportsAnalytics: React.FC = () => {
       .filter((tm) => tm.isActive)
       .map((tm) => {
         const repContacts = state.contacts.filter(
-          (c) => c.assignedTo === tm.userId || c.assignedTo === tm.id || c.assignedTo === tm.email
+          (c) => c.assignedTo === tm.id || c.assignedTo === tm.email
         );
         const totalLeads = repContacts.length;
         const closedDeals = repContacts.filter((c) => c.status === 'completed').length;
         const activeDeals = repContacts.filter((c) => ['active', 'in_progress', 'job_started'].includes(c.status || '')).length;
         const revenue = repContacts
           .filter((c) => c.status === 'completed')
-          .reduce((sum, c) => sum + (c.jobValue || c.estimateAmount || 0), 0);
+          .reduce((sum, c) => sum + (c.projectValue || 0), 0);
         const avgDealSize = closedDeals > 0 ? revenue / closedDeals : 0;
         const conversionRate = totalLeads > 0 ? (closedDeals / totalLeads) * 100 : 0;
         const pipeline = repContacts
           .filter((c) => !['completed', 'lost', 'cancelled'].includes(c.status || ''))
-          .reduce((sum, c) => sum + (c.jobValue || c.estimateAmount || 0), 0);
+          .reduce((sum, c) => sum + (c.projectValue || 0), 0);
         const monthlyRevenue: Record<string, number> = {};
         for (let i = 11; i >= 0; i--) {
           const d = new Date();
@@ -305,10 +305,10 @@ const ReportsAnalytics: React.FC = () => {
           .forEach((c) => {
             const d = new Date(c.updatedAt);
             const key = d.toLocaleString('default', { month: 'short' });
-            if (key in monthlyRevenue) monthlyRevenue[key] += c.jobValue || c.estimateAmount || 0;
+            if (key in monthlyRevenue) monthlyRevenue[key] += c.projectValue || 0;
           });
         return {
-          id: tm.userId || tm.id || tm.email,
+          id: tm.id || tm.email,
           name: tm.name || tm.email,
           role: tm.role || 'Sales Rep',
           totalLeads,
