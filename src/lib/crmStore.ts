@@ -1035,12 +1035,20 @@ export function useFinancialStats() {
   });
 
   if (shared) {
-    stats.totalCollected = Number(shared.total_collected);
-    stats.totalRevenue = Number(shared.total_collected);
-    stats.totalOutstanding = Number(shared.total_outstanding);
-    stats.paidInvoices = Number(shared.invoices_paid);
-    stats.outstandingInvoices = Number(shared.invoices_sent_balance);
-    stats.overdueInvoices = Number(shared.invoices_overdue_balance);
+    // A company with no payments yet gets null or a missing key back, because
+    // sum() over no rows is null in Postgres — and Number(undefined) is NaN,
+    // which reached the screen as "$NaN" across the Financial Overview. Keep
+    // the figure only when it really is a number.
+    const amount = (value: unknown) => {
+      const n = Number(value ?? 0);
+      return Number.isFinite(n) ? n : 0;
+    };
+    stats.totalCollected = amount(shared.total_collected);
+    stats.totalRevenue = amount(shared.total_collected);
+    stats.totalOutstanding = amount(shared.total_outstanding);
+    stats.paidInvoices = amount(shared.invoices_paid);
+    stats.outstandingInvoices = amount(shared.invoices_sent_balance);
+    stats.overdueInvoices = amount(shared.invoices_overdue_balance);
   }
 
   return stats;
