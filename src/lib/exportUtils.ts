@@ -254,12 +254,11 @@ export function exportMaterialOrdersToExcel(orders: MaterialOrder[], filename = 
   const data = orders.map(order => ({
     'Order Number': order.orderNumber,
     'Supplier': order.supplierName,
-    'Project': order.projectName || '',
     'Status': order.status,
     'Order Date': order.orderDate || '',
     'Expected Delivery': order.expectedDeliveryDate || '',
     'Actual Delivery': order.actualDeliveryDate || '',
-    'Total Amount': order.totalAmount,
+    'Total Amount': order.total,
   }));
   const workbook = XLSX.utils.book_new();
   addSheet(workbook, 'Material Orders', data);
@@ -293,7 +292,6 @@ export function exportSuppliersToExcel(suppliers: Supplier[], filename = 'suppli
     'Phone': supplier.phone || '',
     'City': supplier.city || '',
     'State': supplier.state || '',
-    'Category': supplier.category || '',
   }));
   const workbook = XLSX.utils.book_new();
   addSheet(workbook, 'Suppliers', data);
@@ -337,7 +335,7 @@ export function exportAllData(
 
   addSheet(workbook, 'Material Orders', materialOrders.map(mo => ({
     'Order #': mo.orderNumber, 'Supplier': mo.supplierName,
-    'Status': mo.status, 'Amount': mo.totalAmount,
+    'Status': mo.status, 'Amount': mo.total,
   })));
 
   const customerName = (contactId: string | null) => {

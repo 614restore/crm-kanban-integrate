@@ -2238,49 +2238,41 @@ export async function createDirectAccount(accountData: {
       return { success: false, error: 'No available limited permission seats' };
     }
 
-    // Create the user in Supabase Auth
-    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-      email: accountData.email,
-      password: accountData.password,
-      email_confirm: true,
-      user_metadata: {
-        first_name: accountData.first_name,
-        last_name: accountData.last_name || '',
-        created_by: accountData.created_by,
-        created_directly: true
-      }
-    });
-
-    if (authError) {
-      console.error('[DB] Create auth user error:', authError);
-      return { success: false, error: authError.message };
-    }
-
-    // Create the profile
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .insert({
-        id: authData.user.id,
-        email: accountData.email,
-        first_name: accountData.first_name,
-        last_name: accountData.last_name || '',
-        role: accountData.role,
+    // Logins can only be created on the server (it holds the admin key), the
+    // same way the iPhone app adds team members. It creates the login and the
+    // team member, and emails them a link to sign in.
+    const fullName = `${accountData.first_name} ${accountData.last_name || ''}`.trim();
+    const { data, error } = await supabase.functions.invoke('create-team-member', {
+      body: {
         company_id: accountData.company_id,
-        is_active: true,
-        is_limited_account: true,
-        created_directly: true,
-        account_expires_at: accountData.expires_at,
-        must_change_password: false
-      });
-
-    if (profileError) {
-      console.error('[DB] Create profile error:', profileError);
-      // Clean up the auth user if profile creation fails
-      await supabase.auth.admin.deleteUser(authData.user.id);
-      return { success: false, error: profileError.message };
+        full_name: fullName,
+        email: accountData.email,
+        password: accountData.password,
+        role: accountData.role,
+        app_name: 'TrussCTR',
+        redirect_to: typeof window !== 'undefined' ? window.location.origin : undefined,
+      },
+    });
+    const serverError = (data as { error?: string } | null)?.error;
+    if (error || serverError) {
+      let message = serverError || error?.message || 'Failed to create account';
+      try {
+        const ctx = (error as any)?.context;
+        const parsed = ctx && typeof ctx.json === 'function' ? await ctx.json() : null;
+        if (parsed?.error) message = parsed.error;
+      } catch { /* keep the message we have */ }
+      return { success: false, error: message };
     }
 
-    return { success: true, user: authData.user };
+    if (accountData.expires_at) {
+      await supabase
+        .from('team_members')
+        .update({ account_expires_at: new Date(accountData.expires_at).toISOString() })
+        .eq('company_id', accountData.company_id)
+        .eq('email', accountData.email.trim().toLowerCase());
+    }
+
+    return { success: true, user: (data as any)?.member ?? data };
   } catch (error) {
     console.error('[DB] Create direct account error:', error);
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
@@ -2307,14 +2299,16 @@ export async function updateLimitedAccount(userId: string, updates: {
   account_expires_at?: string;
   role?: 'canvasser' | 'field_contractor';
 }): Promise<void> {
+  // Limited accounts are canvasser / field-contractor team members (profiles is
+  // a read-only view of team_members here).
   const { error } = await supabase
-    .from('profiles')
+    .from('team_members')
     .update({
       ...updates,
       updated_at: new Date().toISOString()
     })
-    .eq('id', userId)
-    .eq('is_limited_account', true);
+    .eq('user_id', userId)
+    .in('role', ['canvasser', 'field_contractor']);
 
   if (error) {
     console.error('[DB] Update limited account error:', error);
@@ -2375,36 +2369,29 @@ export async function removeCustomerAssignment(userId: string, contactId: string
   }
 }
 
+const LIMITED_SEATS_PER_COMPANY = 5;
+
 export async function getLimitedSeatUsage(companyId: string): Promise<{
   total: number;
   used: number;
   available: number;
 }> {
-  // Fetch the seat cap from companies
-  const { data: company, error: companyError } = await supabase
-    .from('companies')
-    .select('limited_seats_total')
-    .eq('id', companyId)
-    .single();
-
-  if (companyError) {
-    console.error('[DB] Get limited seat usage error:', companyError);
-    throw new Error(`Failed to get seat usage: ${companyError.message}`);
-  }
-
-  // Count active limited accounts live instead of relying on a cached counter
+  // Count active limited accounts (canvasser / field-contractor team members)
+  // live instead of relying on a cached counter.
   const { count, error: countError } = await supabase
-    .from('profiles')
+    .from('team_members')
     .select('id', { count: 'exact', head: true })
     .eq('company_id', companyId)
-    .eq('is_limited_account', true)
+    .in('role', ['canvasser', 'field_contractor'])
     .eq('is_active', true);
 
   if (countError) {
     console.error('[DB] Count limited accounts error:', countError);
   }
 
-  const total = company?.limited_seats_total || 5;
+  // Every plan includes 5 canvasser seats (the same allowance the server
+  // enforces when the account is created).
+  const total = LIMITED_SEATS_PER_COMPANY;
   const used = count ?? 0;
 
   return {

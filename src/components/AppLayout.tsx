@@ -33,7 +33,7 @@ import { useIsMobile } from '@/hooks/useMediaQuery';
 import { Building2, Loader2, Zap, X, Tag, WifiOff, AlertTriangle, Download } from 'lucide-react';
 import { SubscriptionProvider, useSubscription } from '@/contexts/SubscriptionContext';
 import { exportAllData } from '@/lib/exportUtils';
-import { IN_APP, inAppStartView, inAppStartBoard } from '@/lib/inAppMode';
+import { IN_APP, inAppStartView, inAppStartBoard, inAppStartContactId } from '@/lib/inAppMode';
 import { needsCardForTrial, hasCardOnTrial, TRIAL_INFO_PATH } from '@/lib/trial';
 import StartTrialGate from './crm/StartTrialGate';
 import { toLocalDateString } from '@/lib/dates';
@@ -117,8 +117,9 @@ const initialState: CRMState = {
   currentUser: null,
   companyId: null,
   currentView: getInitialView(),
-  selectedContactId: null,
-  contextContactId: null,
+  // The TrussCENTER app opening one customer's full page.
+  selectedContactId: inAppStartContactId,
+  contextContactId: inAppStartContactId,
   viewHistory: [],
   selectedBoardId: 'board-retail',
   contacts: [],
@@ -1629,7 +1630,9 @@ useEffect(() => {
           )}
 
           {/* Expired subscription banner (non-dismissable) — read-only mode notice */}
-          {isExpiredReadOnly && (
+          {/* Plan banners link to Stripe checkout, which Apple doesn't allow inside
+              the TrussCENTER iPhone app (it has its own App Store paywall). */}
+          {isExpiredReadOnly && !IN_APP && (
             <ExpiredBanner
               companyId={profile?.company_id ?? state.companyId ?? null}
               onGoToBilling={goToBilling}
@@ -1637,7 +1640,7 @@ useEffect(() => {
           )}
 
           {/* Trial banner (shown when trial is active but ending soon) */}
-          {!isExpiredReadOnly && (
+          {!isExpiredReadOnly && !IN_APP && (
             <TrialBanner companyId={profile?.company_id ?? state.companyId ?? null} />
           )}
           
