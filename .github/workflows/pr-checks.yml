@@ -27,9 +27,9 @@ jobs:
         run: npx tsc --noEmit
 
       - name: Production build
+        # Supabase URL/key come from .env.production; the repo secret points at read-only QuoteMGR.
+        # (This step used to have an empty `env:` key under it, which GitHub rejects as an invalid workflow file.)
         run: npm run build
-        env:
-          # Supabase URL/key come from .env.production; the repo secret points at read-only QuoteMGR.
 
       - name: Verify dist/index.html exists
         run: test -f dist/index.html && echo "Build OK" || (echo "Build FAILED" && exit 1)
@@ -37,6 +37,5 @@ jobs:
       - name: Gherkin parse check
         run: |
           npx @cucumber/cucumber --dry-run \
-            --require-module ts-node/register \
             'tests/features/**/*.feature' 2>&1 | tee gherkin-check.txt
           grep -i "parse error" gherkin-check.txt && exit 1 || echo "Gherkin OK"

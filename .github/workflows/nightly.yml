@@ -36,9 +36,9 @@ jobs:
         continue-on-error: false
 
       - name: Production build
+        # Supabase URL/key come from .env.production; the repo secret points at read-only QuoteMGR.
+        # (This step used to have an empty `env:` key under it, which GitHub rejects as an invalid workflow file.)
         run: npm run build
-        env:
-          # Supabase URL/key come from .env.production; the repo secret points at read-only QuoteMGR.
 
       - name: Verify dist output
         run: |
@@ -52,7 +52,6 @@ jobs:
         run: |
           echo "Checking all .feature files are valid Gherkin..."
           npx @cucumber/cucumber --dry-run \
-            --require-module ts-node/register \
             'tests/features/**/*.feature' 2>&1 | tee gherkin-check.txt
           # Exit 0 even if step definitions are missing — we just want parse errors to fail
           grep -i "parse error" gherkin-check.txt && exit 1 || echo "No parse errors found."
