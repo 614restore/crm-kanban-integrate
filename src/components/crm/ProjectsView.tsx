@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useCRM, getActiveContactId } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { db } from '@/lib/database';
+import { supabase } from '@/lib/supabase';
 import { Project } from '@/lib/crmData';
 import { exportProjectsToExcel } from '@/lib/exportUtils';
 import {
@@ -363,6 +364,26 @@ export default function ProjectsView() {
             updatedAt: created.updated_at,
           };
           dispatch({ type: 'ADD_PROJECT', payload: appProject });
+                  // If contact was Closed/Paid/Lost, reset their pipeline status so
+                  // this new project starts fresh from the top of the pipeline.
+                  const selectedContact = state.contacts.find(c => c.id === selectedContactId);
+                  const closedStatuses = ['completed', 'paid', 'lost'];
+                  if (selectedContact && closedStatuses.includes(selectedContact.status)) {
+                              await supabase
+                                .from('contacts')
+                                .update({ status: 'lead', status_changed_at: new Date().toISOString() })
+                                .eq('id', selectedContactId)
+                                .eq('company_id', profile.company_id);
+                              await supabase.from('communications').insert({
+                                            contact_id: selectedContactId,
+                                            company_id: profile.company_id,
+                                            type: 'stage_change',
+                                            content: `New project "${name.trim()}" started - job status reset to beginning of pipeline`,
+                                            user_id: profile.id,
+                                            direction: 'outbound',
+                                            created_at: new Date().toISOString(),
+                              });
+                  }
           toast.success('Project created');
           handleCloseModal();
         } else {
