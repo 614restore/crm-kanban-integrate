@@ -325,6 +325,8 @@ const LineItemEditor: React.FC<LineItemEditorProps> = ({
   // Also collapses when Better and Best are both off in Project Details: the quote only
   // has one tier, so showing placeholder Better/Best columns just looks like extra tiers.
   const singleTier = activeTier !== undefined || (!betterEnabled && !bestEnabled);
+  // When singleTier is active but no explicit activeTier is set (disabled-tiers case),
+  // fall back to 'good' so all downstream activeTier! accesses are safe.
   const effectiveTier: 'good' | 'better' | 'best' = activeTier ?? 'good';
   // Active item: track which row is currently focused/selected for visual highlight
   const [activeItemId, setActiveItemId] = useState<string | null>(null);

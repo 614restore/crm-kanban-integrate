@@ -251,6 +251,11 @@ export default function QuickAddModal() {
           city: formData.city || undefined,
           state: formData.state || undefined,
           zip: formData.zip || undefined,
+          // Ticking "schedule an appointment" only opens the Calendar next; no
+          // appointment exists yet, so the status stays where the user put it.
+          // AppointmentModal promotes the contact to appt_set when one is really
+          // booked — and only from prospect or lead, so setting it here would
+          // stop that promotion ever running.
           status: formData.status,
           lead_source: formData.leadSource,
           assigned_to: assignedTo,

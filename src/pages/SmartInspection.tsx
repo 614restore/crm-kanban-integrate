@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Camera, ArrowLeft, CheckCircle2, Send } from 'lucide-react';
 import { PageTransition } from '../components/PageTransition';
@@ -21,6 +21,7 @@ export default function SmartInspection() {
   const [photoCounts, setPhotoCounts] = useState<Record<string, number>>({});
   const [submitting, setSubmitting] = useState(false);
   const [step, setStep] = useState<'photos' | 'questions'>('photos');
+  const captureInputRef = useRef<HTMLInputElement>(null);
   const [checklist, setChecklist] = useState({
     roofAge: '',
     material: '',
@@ -31,13 +32,24 @@ export default function SmartInspection() {
     const file = e.target.files?.[0];
     if (!file || !id || !profile) return;
 
+    // Reset the input immediately so the user can tap for the next photo
+    // without waiting for the current upload to finish.
+    if (captureInputRef.current) captureInputRef.current.value = '';
+
+    // Optimistic count — shows progress right away.
+    const elevation = activeElevation;
+    setPhotoCounts((prev) => ({
+      ...prev,
+      [elevation]: (prev[elevation] || 0) + 1,
+    }));
+
     try {
       const rawExt = (file.name.split('.').pop() || 'jpg').toLowerCase();
       // HEIC/HEIF from iOS camera roll cannot be rendered by browsers — normalise to jpg.
       // The accept attribute on the input below already asks iOS to convert, but this
       // guards against any edge-case where a HEIC still slips through.
       const ext = rawExt === 'heic' || rawExt === 'heif' ? 'jpg' : rawExt;
-      const fileName = `${activeElevation}_${Date.now()}.${ext}`;
+      const fileName = `${elevation}_${Date.now()}.${ext}`;
 
       const uploadResult = await secureUpload('documents', id, file, fileName);
 
@@ -48,19 +60,19 @@ export default function SmartInspection() {
       await supabase.from('documents').insert({
         contact_id: id,
         company_id: profile.company_id,
-        name: `${activeElevation} Slope Photo`,
+        name: `${elevation} Slope Photo`,
         type: 'photo',
-        url: buildStoredDocumentUrl(publicUrl, 'documents', filePath),
+        url: buildStoredDocumentUrl(publicUrl, 'documents', uploadResult.path),
         size: file.size,
         uploaded_by: profile.id,
       } as any);
-
-      setPhotoCounts((prev) => ({
-        ...prev,
-        [activeElevation]: (prev[activeElevation] || 0) + 1,
-      }));
     } catch (err) {
       console.error('Upload error:', err);
+      // Roll back the optimistic count on failure.
+      setPhotoCounts((prev) => ({
+        ...prev,
+        [elevation]: Math.max(0, (prev[elevation] || 1) - 1),
+      }));
       alert('Photo upload failed. Check Supabase storage bucket.');
     }
   };
@@ -196,6 +208,7 @@ export default function SmartInspection() {
 
           <label className="block w-full cursor-pointer">
             <input
+              ref={captureInputRef}
               type="file"
               accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
               capture="environment"
