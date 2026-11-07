@@ -3,6 +3,7 @@ import { useCRM } from '@/lib/crmStore';
 import { useAuth } from '@/lib/authContext';
 import { Appointment, Contact } from '@/lib/crmData';
 import { db } from '@/lib/database';
+import AppointmentNewCustomer from './AppointmentNewCustomer';
 import {
   getMentionTargets,
   getMentionSuggestions,
@@ -22,6 +23,7 @@ import {
   FileText,
   AlertTriangle,
   ChevronDown,
+  UserPlus,
 } from 'lucide-react';
 
 // 9:00 AM, or the next whole hour when that has already passed today.
@@ -113,6 +115,8 @@ export default function AppointmentModal({
   const [location, setLocation] = useState(editingAppointment?.location || '');
   const [notes, setNotes] = useState(editingAppointment?.notes || '');
   const [isSaving, setIsSaving] = useState(false);
+  // Adding a customer from inside the appointment, instead of leaving to add them on the dashboard first.
+  const [showNewCustomer, setShowNewCustomer] = useState(false);
 
   // Mention state
   const notesRef = useRef<HTMLTextAreaElement>(null);
@@ -546,6 +550,27 @@ export default function AppointmentModal({
                 </option>
               ))}
             </select>
+            {!editingAppointment && !showNewCustomer && (
+              <button
+                type="button"
+                onClick={() => setShowNewCustomer(true)}
+                className="mt-1.5 inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700"
+              >
+                <UserPlus size={14} /> New customer
+              </button>
+            )}
+            {!editingAppointment && showNewCustomer && effectiveCompanyId && (
+              <AppointmentNewCustomer
+                companyId={effectiveCompanyId}
+                assignedTo={assignedTo || state.currentUser?.id || profile?.id || ''}
+                onCancel={() => setShowNewCustomer(false)}
+                onCreated={(contact) => {
+                  setContactId(contact.id);
+                  setAssignedTo((prev) => prev || contact.assignedTo || '');
+                  setShowNewCustomer(false);
+                }}
+              />
+            )}
           </div>
 
           {/* Date & Time row */}
