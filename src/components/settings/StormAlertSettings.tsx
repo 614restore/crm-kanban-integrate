@@ -27,6 +27,13 @@ interface Settings {
   minWind: number;
   emailEnabled: boolean;
   contactRoles: string[];
+  // The Storm action on a customer: how far around their address to look, how
+  // far back, and the thresholds it opens with.
+  historyEnabled: boolean;
+  historyRadius: number;
+  historyMonths: number;
+  historyMinWind: number;
+  historyMinHail: number;
 }
 
 const DEFAULTS: Settings = {
@@ -36,6 +43,11 @@ const DEFAULTS: Settings = {
   minWind: 35,
   emailEnabled: true,
   contactRoles: [],
+  historyEnabled: true,
+  historyRadius: 10,
+  historyMonths: 12,
+  historyMinWind: 0,
+  historyMinHail: 0,
 };
 
 interface StormAlertSettingsProps {
@@ -57,7 +69,7 @@ export default function StormAlertSettings({ companyId, userRole }: StormAlertSe
       setLoading(true);
       const { data, error } = await supabase
         .from('companies')
-        .select('address, city, state, zip, latitude, storm_alerts_enabled, storm_area_radius_miles, storm_contact_radius_miles, storm_min_wind_mph, storm_contact_alert_roles, storm_email_enabled')
+        .select('address, city, state, zip, latitude, storm_alerts_enabled, storm_area_radius_miles, storm_contact_radius_miles, storm_min_wind_mph, storm_contact_alert_roles, storm_email_enabled, storm_history_enabled, storm_history_radius_miles, storm_history_months, storm_history_min_wind_mph, storm_history_min_hail_in')
         .eq('id', companyId)
         .maybeSingle();
       if (cancelled) return;
@@ -75,6 +87,11 @@ export default function StormAlertSettings({ companyId, userRole }: StormAlertSe
           minWind: row.storm_min_wind_mph ?? DEFAULTS.minWind,
           emailEnabled: row.storm_email_enabled ?? DEFAULTS.emailEnabled,
           contactRoles: Array.isArray(row.storm_contact_alert_roles) ? row.storm_contact_alert_roles : [],
+          historyEnabled: row.storm_history_enabled ?? DEFAULTS.historyEnabled,
+          historyRadius: Number(row.storm_history_radius_miles ?? DEFAULTS.historyRadius),
+          historyMonths: Number(row.storm_history_months ?? DEFAULTS.historyMonths),
+          historyMinWind: Number(row.storm_history_min_wind_mph ?? DEFAULTS.historyMinWind),
+          historyMinHail: Number(row.storm_history_min_hail_in ?? DEFAULTS.historyMinHail),
         });
         const address = [row.address, row.city, [row.state, row.zip].filter(Boolean).join(' ')].filter(Boolean).join(', ');
         setOffice({ address, located: row.latitude != null });
@@ -104,6 +121,11 @@ export default function StormAlertSettings({ companyId, userRole }: StormAlertSe
       p_min_wind_mph: settings.minWind,
       p_contact_alert_roles: settings.contactRoles,
       p_email_enabled: settings.emailEnabled,
+      p_history_enabled: settings.historyEnabled,
+      p_history_radius_miles: settings.historyRadius,
+      p_history_months: settings.historyMonths,
+      p_history_min_wind_mph: settings.historyMinWind,
+      p_history_min_hail_in: settings.historyMinHail,
     });
     setSaving(false);
     if (error) {
@@ -208,6 +230,86 @@ export default function StormAlertSettings({ companyId, userRole }: StormAlertSe
               />
               <span className="text-sm text-gray-700">Also send storm alerts by email</span>
             </label>
+          </div>
+
+          <div className="border-t border-gray-100 pt-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-gray-900">Storm history on a customer</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Adds a Storm button to each customer in Contacts that opens storm history for their address — no typing.
+                </p>
+              </div>
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 shrink-0">
+                <input
+                  type="checkbox"
+                  className="rounded"
+                  checked={settings.historyEnabled}
+                  disabled={disabled}
+                  onChange={(e) => update({ historyEnabled: e.target.checked })}
+                />
+                Show
+              </label>
+            </div>
+
+            {settings.historyEnabled && (
+              <div className="grid gap-4 sm:grid-cols-2 mt-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-1">Search radius (miles)</label>
+                  <input
+                    type="number"
+                    min={0.5}
+                    max={50}
+                    step={0.5}
+                    value={settings.historyRadius}
+                    disabled={disabled}
+                    onChange={(e) => update({ historyRadius: Number(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm disabled:bg-gray-50"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">How far around the customer's address to look for reports.</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-1">How far back (months)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={60}
+                    value={settings.historyMonths}
+                    disabled={disabled}
+                    onChange={(e) => update({ historyMonths: Number(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm disabled:bg-gray-50"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Storms older than this are left out.</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-1">Minimum wind speed (mph)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={200}
+                    value={settings.historyMinWind}
+                    disabled={disabled}
+                    onChange={(e) => update({ historyMinWind: Number(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm disabled:bg-gray-50"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">0 shows every wind report.</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-1">Minimum hail size (inches)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={6}
+                    step={0.25}
+                    value={settings.historyMinHail}
+                    disabled={disabled}
+                    onChange={(e) => update({ historyMinHail: Number(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm disabled:bg-gray-50"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">0 shows every hail report. 1 inch is about a quarter.</p>
+                </div>
+              </div>
+            )}
           </div>
 
           <div>
