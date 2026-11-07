@@ -2,6 +2,12 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useCRM, getActiveContactId } from '@/lib/crmStore';
 import { Appointment, formatDate } from '@/lib/crmData';
 import { db } from '@/lib/database';
+import {
+  appendNotes,
+  completedNote,
+  appointmentTypeLabel,
+  advanceAfterInspection,
+} from '@/lib/appointmentCompletion';
 import { fireAutomationEvent } from '@/lib/automationEngine';
 import { getMentionTargets, validateMentions } from '@/lib/mentions';
 import { toast } from 'sonner';
@@ -253,18 +259,12 @@ export default function CalendarView() {
     setShowModal(true);
   };
 
-  const handleCompleteInspection = async (appointment: Appointment) => {
-    if (appointment.type !== 'inspection' || appointment.status === 'completed') return;
-    const completedAt = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    const completionNote = `Completed on ${completedAt}`;
-    const updatedNotes = appointment.notes
-      ? `${appointment.notes}\n\n${completionNote}`
-      : completionNote;
-    const updatedAppointment: Appointment = {
-      ...appointment,
-      status: 'completed',
-      notes: updatedNotes,
-    };
+  // Mark any appointment complete, including one whose time has passed (a "missed" appointment). To change the
+  // date as well, or to undo this, open the appointment: its Status and date fields are there, and a changed
+  // date asks for a reason that is kept in the notes.
+  const handleCompleteAppointment = async (appointment: Appointment) => {
+    if (appointment.status === 'completed' || appointment.status === 'cancelled') return;
+    const updatedNotes = appendNotes(appointment.notes, completedNote(appointment.type));
     try {
       const updated = await db.updateAppointment(appointment.id, {
         status: 'completed',
@@ -274,45 +274,12 @@ export default function CalendarView() {
         toast.error('Failed to update appointment');
         return;
       }
-      dispatch({ type: 'UPDATE_APPOINTMENT', payload: updatedAppointment });
-
-      // Persist contact status advancement to DB
-      if (appointment.contactId) {
-        const contact = state.contacts.find((c) => c.id === appointment.contactId);
-        if (contact && contact.status === 'appt_set') {
-          const now = new Date().toISOString();
-          db.updateContact(appointment.contactId, {
-            status: 'estimating',
-            status_changed_at: now,
-          }).catch((err) => console.error('Failed to advance contact status:', err));
-          dispatch({
-            type: 'UPDATE_CONTACT_STATUS',
-            payload: { contactId: appointment.contactId, status: 'inspection_completed' },
-          });
-          // Fire automations for stage advancement and appointment completion
-          if (state.companyId) {
-            fireAutomationEvent('appointment_completed', state.companyId, {
-              contactId: contact.id,
-              contactName: `${contact.firstName} ${contact.lastName}`.trim(),
-              contactEmail: contact.email,
-              oldStatus: 'appt_set',
-              newStatus: 'estimating',
-            }).catch(() => {});
-            fireAutomationEvent('contact_status_changed', state.companyId, {
-              contactId: contact.id,
-              contactName: `${contact.firstName} ${contact.lastName}`.trim(),
-              contactEmail: contact.email,
-              oldStatus: 'appt_set',
-              newStatus: 'estimating',
-            }).catch(() => {});
-          }
-        }
-      }
-
-      toast.success('Inspection marked as complete!');
+      dispatch({ type: 'UPDATE_APPOINTMENT', payload: { ...appointment, status: 'completed', notes: updatedNotes } });
+      advanceAfterInspection(appointment, state.contacts, state.companyId, dispatch);
+      toast.success(`${appointmentTypeLabel(appointment.type)} marked as complete`);
     } catch (err) {
-      console.error('Error completing inspection:', err);
-      toast.error('Failed to mark inspection complete');
+      console.error('Error completing appointment:', err);
+      toast.error('Failed to mark the appointment complete');
     }
   };
 
@@ -550,8 +517,8 @@ export default function CalendarView() {
                               {apt.contactId && (
                                 <button onClick={() => handleNavigateToContact(apt.contactId)} className="p-1.5 hover:bg-blue-100 rounded transition-colors" title="View contact details"><ExternalLink size={14} className="text-blue-600" /></button>
                               )}
-                              {apt.type === 'inspection' && apt.status === 'scheduled' && (
-                                <button onClick={() => handleCompleteInspection(apt)} className="p-1.5 hover:bg-green-100 rounded transition-colors" title="Mark complete"><CheckCircle size={14} className="text-green-600" /></button>
+                              {(apt.status === 'scheduled' || apt.status === 'rescheduled') && (
+                                <button onClick={() => handleCompleteAppointment(apt)} className="p-1.5 hover:bg-green-100 rounded transition-colors" title="Mark complete"><CheckCircle size={14} className="text-green-600" /></button>
                               )}
                               <button onClick={() => handleEditAppointment(apt)} className="p-1.5 hover:bg-gray-100 rounded transition-colors" title="Edit"><Edit2 size={14} className="text-gray-500" /></button>
                               <button onClick={() => handleDeleteAppointment(apt)} className="p-1.5 hover:bg-red-100 rounded transition-colors" title="Delete"><Trash2 size={14} className="text-red-500" /></button>
@@ -630,6 +597,8 @@ export default function CalendarView() {
                                 <h3 className="font-semibold text-gray-900">{apt.title}</h3>
                                 <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${appointmentTypeColors[apt.type]}`}>{appointmentTypeLabels[apt.type]}</span>
                                 {apt.status === 'completed' && <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-200">Completed</span>}
+                                {apt.status === 'cancelled' && <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">Cancelled</span>}
+                                {isAppointmentMissed(apt) && <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 border border-red-200">Missed</span>}
                                 {!apt.assignedTo && apt.status === 'scheduled' && (
                                   <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200 flex items-center gap-1"><AlertTriangle size={10} />Unassigned</span>
                                 )}
@@ -643,8 +612,8 @@ export default function CalendarView() {
                             </div>
                           </div>
                           <div className="flex items-center gap-1">
-                            {apt.type === 'inspection' && apt.status === 'scheduled' && (
-                              <button onClick={() => handleCompleteInspection(apt)} className="p-2 hover:bg-green-100 rounded-lg transition-colors" title="Mark inspection complete"><CheckCircle size={16} className="text-green-600" /></button>
+                            {(apt.status === 'scheduled' || apt.status === 'rescheduled') && (
+                              <button onClick={() => handleCompleteAppointment(apt)} className="p-2 hover:bg-green-100 rounded-lg transition-colors" title="Mark complete"><CheckCircle size={16} className="text-green-600" /></button>
                             )}
                             <button onClick={() => handleEditAppointment(apt)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors"><Edit2 size={16} className="text-gray-500" /></button>
                             <button onClick={() => handleDeleteAppointment(apt)} className="p-2 hover:bg-red-100 rounded-lg transition-colors"><Trash2 size={16} className="text-red-500" /></button>

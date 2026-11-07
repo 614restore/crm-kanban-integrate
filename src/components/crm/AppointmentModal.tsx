@@ -5,6 +5,14 @@ import { Appointment, Contact } from '@/lib/crmData';
 import { db } from '@/lib/database';
 import AppointmentNewCustomer from './AppointmentNewCustomer';
 import {
+  appendNotes,
+  completedNote,
+  cancelledNote,
+  reopenedNote,
+  rescheduledNote,
+  advanceAfterInspection,
+} from '@/lib/appointmentCompletion';
+import {
   getMentionTargets,
   getMentionSuggestions,
   findActiveMentionQuery,
@@ -115,6 +123,11 @@ export default function AppointmentModal({
   const [location, setLocation] = useState(editingAppointment?.location || '');
   const [notes, setNotes] = useState(editingAppointment?.notes || '');
   const [isSaving, setIsSaving] = useState(false);
+  // Editing an existing appointment: its status can be changed (including marking a missed one done), and a
+  // changed date or time must say why, which is kept in the notes.
+  const startStatus = (editingAppointment?.status === 'rescheduled' ? 'scheduled' : editingAppointment?.status) || 'scheduled';
+  const [status, setStatus] = useState<'scheduled' | 'completed' | 'cancelled'>(startStatus as any);
+  const [changeReason, setChangeReason] = useState('');
   // Adding a customer from inside the appointment, instead of leaving to add them on the dashboard first.
   const [showNewCustomer, setShowNewCustomer] = useState(false);
 
@@ -158,6 +171,7 @@ export default function AppointmentModal({
         setAssignedTo(editingAppointment.assignedTo);
         setLocation(editingAppointment.location || '');
         setNotes(editingAppointment.notes || '');
+        setStatus((editingAppointment.status === 'rescheduled' ? 'scheduled' : editingAppointment.status) as any);
       } else {
         const newDate = selectedDate ? toLocalDateString(selectedDate) : defaultDate;
         setTitle('');
@@ -170,7 +184,9 @@ export default function AppointmentModal({
         setAssignedTo(state.contacts.find(c => c.id === preselectedContactId)?.assignedTo || '');
         setLocation('');
         setNotes('');
+        setStatus('scheduled');
       }
+      setChangeReason('');
       setShowReschedule(false);
     }
   }, [isOpen, editingAppointment, selectedDate, preselectedContactId]);
@@ -284,6 +300,12 @@ export default function AppointmentModal({
       return;
     }
 
+    const dateChanged = !!editingAppointment && (date !== editingAppointment.date || time !== editingAppointment.time);
+    if (dateChanged && !changeReason.trim()) {
+      toast.error('Say why the date or time is changing. It is saved in the appointment notes.');
+      return;
+    }
+
     setIsSaving(true);
 
     try {
@@ -293,7 +315,24 @@ export default function AppointmentModal({
         : 'Unknown';
 
       if (editingAppointment) {
-        // Update existing
+        // Update existing. A changed date or status leaves a dated line in the notes, so the history stays.
+        const was = editingAppointment.status === 'rescheduled' ? 'scheduled' : editingAppointment.status;
+        const added: string[] = [];
+        if (dateChanged) {
+          added.push(
+            rescheduledNote(
+              { date: editingAppointment.date, time: editingAppointment.time },
+              { date, time },
+              changeReason,
+            ),
+          );
+        }
+        if (status !== was) {
+          if (status === 'completed') added.push(completedNote(type as Appointment['type']));
+          else if (status === 'cancelled') added.push(cancelledNote(type as Appointment['type']));
+          else added.push(reopenedNote(type as Appointment['type']));
+        }
+        const savedNotes = appendNotes(notes, ...added) || undefined;
         const updated = await db.updateAppointment(editingAppointment.id, {
           title: title.trim(),
           type,
@@ -303,8 +342,8 @@ export default function AppointmentModal({
           contact_id: contactId,
           assigned_to: assignedTo || undefined,
           location: location || undefined,
-          notes: notes.trim() || undefined,
-          status: editingAppointment.status,
+          notes: savedNotes,
+          status,
         });
 
         if (!updated) {
@@ -323,10 +362,14 @@ export default function AppointmentModal({
           contactName,
           assignedTo: assignedTo || '',
           location: location || '',
-          notes: notes.trim() || undefined,
+          notes: savedNotes,
+          status,
         };
 
         dispatch({ type: 'UPDATE_APPOINTMENT', payload: updatedApp });
+        if (status === 'completed' && was !== 'completed') {
+          advanceAfterInspection(updatedApp, state.contacts, effectiveCompanyId, dispatch);
+        }
         toast.success('Appointment updated');
 
         // Fire mention notifications for anyone @tagged in the notes
@@ -573,6 +616,22 @@ export default function AppointmentModal({
             )}
           </div>
 
+          {/* Status: only when editing, so a missed appointment can be marked done or put back */}
+          {editingAppointment && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value as 'scheduled' | 'completed' | 'cancelled')}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+              >
+                <option value="scheduled">Scheduled</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+          )}
+
           {/* Date & Time row */}
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -605,6 +664,22 @@ export default function AppointmentModal({
               </select>
             </div>
           </div>
+
+          {editingAppointment && (date !== editingAppointment.date || time !== editingAppointment.time) && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-3">
+              <label className="block text-sm font-medium text-amber-900 mb-1">
+                Why is the date or time changing? <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={changeReason}
+                onChange={(e) => setChangeReason(e.target.value)}
+                placeholder="e.g. Customer asked to move it, or it happened on a different day"
+                className="w-full px-3 py-2 border border-amber-300 rounded-lg bg-white text-sm focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none"
+              />
+              <p className="text-xs text-amber-700 mt-1">Saved in the notes with the old and new date.</p>
+            </div>
+          )}
 
           {/* Duration */}
           <div>
