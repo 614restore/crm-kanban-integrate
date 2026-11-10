@@ -3439,8 +3439,8 @@ const DocumentTemplates: React.FC = () => {
                     {/* Title row */}
                     <div className="flex items-start gap-2">
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 mb-1 min-w-0">
-                          <h3 className="font-semibold text-sm truncate">{template.name}</h3>
+                        <div className="flex items-start gap-1.5 mb-1 min-w-0">
+                          <h3 className="font-semibold text-sm min-w-0 wrap-anywhere">{template.name}</h3>
                           {template.isDefault && (
                             <Badge variant="secondary" className="text-[10px] shrink-0">Default</Badge>
                           )}

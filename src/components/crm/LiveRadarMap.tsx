@@ -4,7 +4,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import 'leaflet/dist/leaflet.css';
 import { AlertTriangle, Pause, Play } from 'lucide-react';
-import { CircleMarker, GeoJSON, MapContainer, Popup, TileLayer, Tooltip, useMap } from 'react-leaflet';
+import { CircleMarker, GeoJSON, MapContainer, Popup, TileLayer, Tooltip, useMap, AttributionControl } from 'react-leaflet';
 import { useMapSettings } from '@/hooks/useMapSettings';
 import { FREE_TILES, radarTileUrl } from '@/lib/mapProviders';
 import { STORM_CATEGORY_COLORS } from '@/components/crm/StormMap';
@@ -78,7 +78,10 @@ export default function LiveRadarMap({
 
   return (
     <div className="relative isolate h-[560px] w-full overflow-hidden rounded-xl border border-gray-200">
-      <MapContainer center={[center.lat, center.lon]} zoom={zoom} scrollWheelZoom className="h-full w-full">
+      {/* Map credits go top-right: the radar controls cover the bottom of the map,
+          and on a phone the credits wrap onto several lines under them. */}
+      <MapContainer center={[center.lat, center.lon]} zoom={zoom} scrollWheelZoom attributionControl={false} className="h-full w-full">
+        <AttributionControl position="topright" prefix={false} />
         <Recenter lat={center.lat} lon={center.lon} zoom={zoom} />
         <TileLayer
           key={baseTiles.url}

@@ -8,7 +8,7 @@ import { formatLossDate } from '@/lib/claimStorm';
 const Row = ({ label, children }: { label: string; children: React.ReactNode }) => (
   <div className="min-w-0">
     <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">{label}</p>
-    <p className="truncate text-sm text-gray-900">{children || <span className="text-gray-300">—</span>}</p>
+    <p className="wrap-anywhere text-sm text-gray-900">{children || <span className="text-gray-300">—</span>}</p>
   </div>
 );
 
