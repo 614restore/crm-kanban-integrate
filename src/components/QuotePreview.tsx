@@ -878,27 +878,18 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
       setShowContingencySigning(false);
       loadQuote();
       toast.success('Agreement signed — thank you!');
-      if (!isCustomerView) {
-        saveSignedPdfToDocuments(quoteId, company).catch(console.error);
-      }
 
-      // Send the customer their signed contingency copy — with the document
-      // actually attached. This previously posted a bare 'signed' alert, so
-      // the homeowner got an email about a copy they never received.
-      if (quote?.share_token) {
-        sendFullSignedDocumentToCustomer(quoteId, company).catch(err => {
-          console.error(err);
-          // Fall back to the bare notification rather than going silent.
-          supabase.functions.invoke('send-quote-alert', {
-            body: {
-              share_token: quote.share_token,
-              event_type: 'signed',
-              signer_name: signerName,
-              signer_signature_data: contingencyAgreementSig,
-            },
-          }).catch(console.error);
-        });
-      }
+      // Notify the salesman that the customer signed. The full executed document
+      // is NOT sent to the customer yet — it will be sent after the salesman
+      // countersigns via the Documents hub.
+      supabase.functions.invoke('send-quote-alert', {
+        body: {
+          share_token: shareToken || quote?.share_token,
+          event_type: 'signed',
+          signer_name: signerName,
+          signer_signature_data: contingencyAgreementSig,
+        },
+      }).catch(console.error);
     } catch (err: any) {
       toast.error(`Failed to save signature: ${err.message}`);
     } finally {

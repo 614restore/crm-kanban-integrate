@@ -2648,85 +2648,7 @@ export default function ContactDetail() {
               </div>
             )}
 
-            {/* ── Signed Documents ── */}
-            {(docSubTab === 'all' || docSubTab === 'legal') && <div className="bg-white rounded-xl border border-gray-200">
-              <div className="p-5 border-b border-gray-200 flex items-center gap-3">
-                <CheckCircle size={20} className="text-green-600" />
-                <h3 className="text-lg font-semibold text-gray-900">Signed Documents</h3>
-                {signedDocs.length > 0 && (
-                  <span className="ml-auto bg-green-100 text-green-700 text-xs font-semibold px-2.5 py-0.5 rounded-full">
-                    {signedDocs.length}
-                  </span>
-                )}
-              </div>
-              <div className="divide-y divide-gray-100">
-                {signedDocs.map((doc) => (
-                  <div key={`${doc.docType}-${doc.id}`} className="p-4 flex items-center justify-between hover:bg-gray-50">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <CheckCircle size={20} className="text-green-600" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                            doc.docType === 'agreement'
-                              ? 'bg-green-100 text-green-700'
-                              : doc.docType === 'estimate'
-                              ? 'bg-blue-100 text-blue-700'
-                              : doc.docType === 'work_order'
-                              ? 'bg-purple-100 text-purple-700'
-                              : 'bg-orange-100 text-orange-700'
-                          }`}>
-                            {doc.docType === 'agreement'
-                              ? 'Agreement'
-                              : doc.docType === 'estimate'
-                              ? 'Estimate'
-                              : doc.docType === 'work_order'
-                              ? 'Work Order'
-                              : 'Change Order'}
-                          </span>
-                          <span className="text-xs text-gray-400">{doc.label}</span>
-                        </div>
-                        <p className="font-medium text-gray-900">{doc.title}</p>
-                        <p className="text-sm text-gray-500">
-                          {doc.signedBy ? `Signed by ${doc.signedBy}` : 'Signed'} · {formatDate(doc.signedAt)}
-                          {doc.amount != null && ` · ${formatCurrency(doc.amount)}`}
-                        </p>
-                      </div>
-                    </div>
-                    {doc.docType === 'agreement' && doc.viewUrl ? (
-                      // Stored PDFs need a signed URL; handleOpenDocument resolves it
-                      // (and opens plain links as-is).
-                      <button
-                        onClick={() => handleOpenDocument(doc.viewUrl, doc.title)}
-                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
-                        title="View signed document"
-                      >
-                        <ExternalLink size={18} className="text-gray-500" />
-                      </button>
-                    ) : doc.viewUrl && (
-                      <a
-                        href={doc.viewUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
-                        title="View signed document"
-                      >
-                        <ExternalLink size={18} className="text-gray-500" />
-                      </a>
-                    )}
-                  </div>
-                ))}
-                {signedDocs.length === 0 && (
-                  <div className="p-8 text-center text-gray-400">
-                    <CheckCircle size={28} className="mx-auto mb-2 opacity-30" />
-                    <p className="text-sm">No signed documents yet</p>
-                  </div>
-                )}
-              </div>
-            </div>}
-
-            {/* ── Uploaded Files ── */}
+            {/* ── Uploaded Files (photos first, before signed docs) ── */}
             {(docSubTab === 'all' || docSubTab === 'photos' || docSubTab === 'docs') && (() => {
               const FIELD_ROLES = new Set(['subcontractor','canvasser','field_tech','field_contractor','production_manager','project_manager']);
               const getRoleForUploader = (uploadedBy: string) => {
@@ -2879,6 +2801,82 @@ export default function ContactDetail() {
                 </div>
               );
             })()}
+
+            {/* ── Signed Documents ── */}
+            {(docSubTab === 'all' || docSubTab === 'legal') && <div className="bg-white rounded-xl border border-gray-200">
+              <div className="p-5 border-b border-gray-200 flex items-center gap-3">
+                <CheckCircle size={20} className="text-green-600" />
+                <h3 className="text-lg font-semibold text-gray-900">Signed Documents</h3>
+                {signedDocs.length > 0 && (
+                  <span className="ml-auto bg-green-100 text-green-700 text-xs font-semibold px-2.5 py-0.5 rounded-full">
+                    {signedDocs.length}
+                  </span>
+                )}
+              </div>
+              <div className="divide-y divide-gray-100">
+                {signedDocs.map((doc) => (
+                  <div key={`${doc.docType}-${doc.id}`} className="p-4 flex items-center justify-between hover:bg-gray-50">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <CheckCircle size={20} className="text-green-600" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                            doc.docType === 'agreement'
+                              ? 'bg-green-100 text-green-700'
+                              : doc.docType === 'estimate'
+                              ? 'bg-blue-100 text-blue-700'
+                              : doc.docType === 'work_order'
+                              ? 'bg-purple-100 text-purple-700'
+                              : 'bg-orange-100 text-orange-700'
+                          }`}>
+                            {doc.docType === 'agreement'
+                              ? 'Agreement'
+                              : doc.docType === 'estimate'
+                              ? 'Estimate'
+                              : doc.docType === 'work_order'
+                              ? 'Work Order'
+                              : 'Change Order'}
+                          </span>
+                          <span className="text-xs text-gray-400">{doc.label}</span>
+                        </div>
+                        <p className="font-medium text-gray-900">{doc.title}</p>
+                        <p className="text-sm text-gray-500">
+                          {doc.signedBy ? `Signed by ${doc.signedBy}` : 'Signed'} · {formatDate(doc.signedAt)}
+                          {doc.amount != null && ` · ${formatCurrency(doc.amount)}`}
+                        </p>
+                      </div>
+                    </div>
+                    {doc.docType === 'agreement' && doc.viewUrl ? (
+                      <button
+                        onClick={() => handleOpenDocument(doc.viewUrl, doc.title)}
+                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
+                        title="View signed document"
+                      >
+                        <ExternalLink size={18} className="text-gray-500" />
+                      </button>
+                    ) : doc.viewUrl && (
+                      <a
+                        href={doc.viewUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
+                        title="View signed document"
+                      >
+                        <ExternalLink size={18} className="text-gray-500" />
+                      </a>
+                    )}
+                  </div>
+                ))}
+                {signedDocs.length === 0 && (
+                  <div className="p-8 text-center text-gray-400">
+                    <CheckCircle size={28} className="mx-auto mb-2 opacity-30" />
+                    <p className="text-sm">No signed documents yet</p>
+                  </div>
+                )}
+              </div>
+            </div>}
           </div>
         )}
 
