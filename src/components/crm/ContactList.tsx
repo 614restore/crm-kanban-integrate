@@ -489,10 +489,10 @@ Jane,Smith,jane@example.com,555-9999,555-8888,456 Oak Ave,Boulder,CO,80301,Prosp
                         {contact.lastName[0]}
                       </div>
                       <div className="min-w-0">
-                        <ScheduleName as="p" contactId={contact.id} className="font-medium truncate">
+                        <ScheduleName as="p" contactId={contact.id} className="font-medium wrap-anywhere">
                           {getContactFullName(contact)}
                         </ScheduleName>
-                        <p className="text-sm text-gray-500 truncate">{contact.email}</p>
+                        <p className="text-sm text-gray-500 wrap-anywhere">{contact.email}</p>
                       </div>
                     </div>
                     <div className="col-span-2 flex items-center">
@@ -616,7 +616,7 @@ Jane,Smith,jane@example.com,555-9999,555-8888,456 Oak Ave,Boulder,CO,80301,Prosp
                   <div className="space-y-2 text-sm">
                     <div className="flex items-center gap-2 text-gray-600">
                       <Mail size={14} className="text-gray-400" />
-                      <span className="truncate">{contact.email}</span>
+                      <span className="min-w-0 wrap-anywhere">{contact.email}</span>
                     </div>
                     <div className="flex items-center gap-2 text-gray-600">
                       <Phone size={14} className="text-gray-400" />

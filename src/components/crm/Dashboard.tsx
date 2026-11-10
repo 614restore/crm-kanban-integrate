@@ -351,7 +351,7 @@ export default function Dashboard() {
                 className={`flex items-center gap-3 px-5 py-2.5 hover:bg-gray-50 transition-colors ${item.customerId ? 'cursor-pointer' : ''}`}
               >
                 <span className={`w-2 h-2 rounded-full flex-shrink-0 ${item.kind === 'lead' ? 'bg-violet-400' : 'bg-emerald-400'}`} />
-                <span className="text-sm text-gray-800 truncate flex-1 min-w-0">
+                <span className="text-sm text-gray-800 flex-1 min-w-0 wrap-anywhere">
                   <span className="font-medium">{item.name}</span>
                   <span className="text-gray-500"> · {item.meta}</span>
                 </span>

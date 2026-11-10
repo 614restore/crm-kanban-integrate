@@ -1653,12 +1653,14 @@ export const roleLabels: Record<UserRole, string> = {
 
 // Helper functions
 export function formatCurrency(amount: number): string {
+  // A missing or broken amount shows as $0, never "$NaN".
+  const v = Number.isFinite(Number(amount)) ? Number(amount) : 0;
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  }).format(amount);
+  }).format(v);
 }
 
 /** Dollars that keep their cents when there are any: $1,050 but $1,042.20 (never $1,042.2). */

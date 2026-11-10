@@ -99,6 +99,36 @@
   pre, code {
     @apply font-mono;
   }
+
+  /* A word longer than its box wraps instead of running out of it. */
+  body {
+    overflow-wrap: break-word;
+  }
+
+  /* Phone readability. A grid column is as wide as its longest unbreakable
+     text by default, so on a phone an email or claim number in a two-column
+     grid ran into the next column. Let columns shrink to the space they have
+     so their text wraps inside them. (In the base layer, so a utility class
+     on a particular element still wins.) */
+  .grid > * {
+    min-width: 0;
+  }
+
+  /* Emails, links and similar long values can break anywhere, which also lets
+     the boxes around them shrink (break-word alone doesn't). */
+  a[href^="mailto:"],
+  a[href^="tel:"],
+  a[href^="http"] {
+    overflow-wrap: anywhere;
+  }
+}
+
+@layer utilities {
+  /* Wrap long values (emails, names, claim numbers) onto the next line
+     rather than cutting them off with "…" or letting them overflow. */
+  .wrap-anywhere {
+    overflow-wrap: anywhere;
+  }
 }
 
 /* On a phone the page itself never scrolls sideways (iOS lets a page pan if anything pokes past the edge). */
@@ -106,6 +136,19 @@
   html,
   body {
     overflow-x: hidden;
+  }
+
+  /* Forms on a phone: one field per row. Two or three text boxes side by side
+     leave each only a few characters wide ("office@614res", "Columb"), so a
+     grid that holds form fields stacks into one column. Grids of cards and
+     stats keep their columns. */
+  .grid:has(> * > :is(input:not([type="checkbox"], [type="radio"], [type="hidden"], [type="color"], [type="range"]), select, textarea)),
+  .grid:has(> * > * > :is(input:not([type="checkbox"], [type="radio"], [type="hidden"], [type="color"], [type="range"]), select, textarea)) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .grid:has(> * > :is(input:not([type="checkbox"], [type="radio"], [type="hidden"], [type="color"], [type="range"]), select, textarea)) > *,
+  .grid:has(> * > * > :is(input:not([type="checkbox"], [type="radio"], [type="hidden"], [type="color"], [type="range"]), select, textarea)) > * {
+    grid-column: 1 / -1;
   }
 }
 
