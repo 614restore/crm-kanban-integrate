@@ -57,6 +57,35 @@ describe('computeDashboardMetrics (same figures as the phone home screen)', () =
   });
 });
 
+describe('Recent Activity leaves out closed-out jobs', () => {
+  const people = [
+    { ...contact('open', 'Olive', 'Open'), status: 'signed' },
+    { ...contact('done', 'Paul', 'Paid'), status: 'paid' },
+    { ...contact('fin', 'Fay', 'Finished'), status: 'completed' },
+  ];
+  const quotes = [
+    quote({ id: 'a', contactId: 'open', status: 'signed', jobStage: 'paid', updatedAt: '2026-10-30T09:00:00Z' }),
+    quote({ id: 'b', contactId: 'open', status: 'sent', goodTotal: 900, updatedAt: '2026-10-29T09:00:00Z' }),
+    quote({ id: 'c', contactId: 'done', status: 'signed', jobStage: 'completed', updatedAt: '2026-10-28T09:00:00Z' }),
+    quote({ id: 'd', contactId: 'fin', status: 'signed', jobStage: 'completed', updatedAt: '2026-10-27T09:00:00Z' }),
+  ];
+  const m = computeDashboardMetrics(quotes, people, []);
+
+  it('drops a job that is Closed/Paid, and every job of a customer marked Paid', () => {
+    expect(m.recent.map((r) => r.key)).toEqual(['q:b', 'q:d']);
+  });
+
+  it('keeps a Completed job (money may still be owed) and still counts closed jobs in the funnel', () => {
+    expect(m.recent.find((r) => r.key === 'q:d')?.meta).toBe('Completed');
+    expect(m.stageCounts.paid).toBe(1);
+  });
+
+  it('drops a closed-out customer with no quote from the leads in the list', () => {
+    const r = computeDashboardMetrics([], [{ ...contact('x', 'Pam', 'Paid'), status: 'paid' }], []);
+    expect(r.recent).toEqual([]);
+  });
+});
+
 describe('quote values', () => {
   it('an open quote is worth its highest offered tier, using hand-entered totals when on', () => {
     expect(quoteOpenValue(quote({ goodTotal: 1, betterTotal: 2, bestTotal: 3, includeBetter: true, includeBest: true }))).toBe(3);
