@@ -46,6 +46,22 @@ const start = readStart();
 
 /** True when running inside the TrussCENTER app. */
 export const IN_APP = start.inApp;
+
+/** True in TrussCTR's own iPhone/Android app (the Capacitor build), not in a browser. */
+export const IS_NATIVE_APP: boolean = (() => {
+  try {
+    return typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.() === true;
+  } catch {
+    return false;
+  }
+})();
+
+/**
+ * App Store rules (3.1.1) don't allow an app to sell its own subscription through a web checkout,
+ * or to point people to one. In either app, plans, prices and checkout buttons stay hidden; people
+ * sign up and manage billing on the website.
+ */
+export const HIDE_PURCHASES = IN_APP || IS_NATIVE_APP;
 /** The tool the app asked to open, if any. */
 export const inAppStartView: ViewType | null = start.view;
 /** For the boards: which board (by type) the app asked for. */

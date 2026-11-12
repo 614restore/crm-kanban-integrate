@@ -16,6 +16,7 @@ import {
 
 import { PRICE_IDS, startCheckout, openBillingPortal } from '@/lib/billing';
 import { TRIAL_INFO_PATH, hasCardOnTrial } from '@/lib/trial';
+import { HIDE_PURCHASES } from '@/lib/inAppMode';
 const STRIPE_BILLING_PORTAL_URL: string = import.meta.env.VITE_STRIPE_BILLING_PORTAL_URL || '';
 
 export const PLANS = [
@@ -92,6 +93,18 @@ function trialDaysRemaining(trialEndsAt?: string): number | null {
 const chartSrc = `${import.meta.env.BASE_URL}crm-user-tier-comparison.html`.replace('//', '/');
 
 export default function SubscriptionView() {
+  // Inside the iPhone apps plans can't be bought or shown (App Store rule 3.1.1).
+  if (HIDE_PURCHASES) {
+    return (
+      <div className="bg-white rounded-xl border border-gray-200 p-6 text-sm text-gray-600">
+        Your plan can't be viewed or changed in the app.
+      </div>
+    );
+  }
+  return <SubscriptionPlans />;
+}
+
+function SubscriptionPlans() {
   const { state } = useCRM();
   const { profile, session } = useAuth();
   const [company, setCompany] = useState<DbCompany | null>(null);

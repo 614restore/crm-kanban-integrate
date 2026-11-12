@@ -7,6 +7,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { HIDE_PURCHASES } from '@/lib/inAppMode';
 
 export default function More() {
   const navigate = useNavigate();
@@ -190,12 +191,12 @@ export default function More() {
                 ))}
               </div>
             </div>
-            <p className="text-xs text-slate-400 text-center">
+            {!HIDE_PURCHASES && <p className="text-xs text-slate-400 text-center">
               To upgrade or manage billing, visit{' '}
               <span className="text-accent font-bold">trussctr.com</span>
               {' '}or contact{' '}
               <span className="text-accent font-bold">devmgr.app@gmail.com</span>
-            </p>
+            </p>}
           </div>
         </div>
       );

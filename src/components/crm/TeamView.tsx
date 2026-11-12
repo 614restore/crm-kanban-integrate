@@ -31,6 +31,7 @@ import {
   Settings,
   Users2,
 } from 'lucide-react';
+import { HIDE_PURCHASES } from '@/lib/inAppMode';
 
 export default function TeamView() {
   const { state, dispatch } = useCRM();
@@ -189,7 +190,7 @@ export default function TeamView() {
       const activeCount = state.teamMembers.length;
       toast.error(
         `Your ${plan} plan allows up to ${limit} user${limit === 1 ? '' : 's'} and you have ${activeCount}. ` +
-        `Upgrade your plan to add more team members.`
+        (HIDE_PURCHASES ? `Your plan's team size limit has been reached.` : `Upgrade your plan to add more team members.`)
       );
       return;
     }
@@ -500,7 +501,7 @@ export default function TeamView() {
               <button
                 onClick={() => {
                   if (atSeatLimit) {
-                    toast.error(`Your ${subscriptionPlan} plan allows up to ${planLimit} user${planLimit === 1 ? '' : 's'}. Upgrade to add more team members.`);
+                    toast.error(`Your ${subscriptionPlan} plan allows up to ${planLimit} user${planLimit === 1 ? '' : 's'}.${HIDE_PURCHASES ? '' : ' Upgrade to add more team members.'}`);
                     return;
                   }
                   setShowInviteModal(true);
@@ -510,7 +511,7 @@ export default function TeamView() {
                     ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
                     : 'bg-blue-600 text-white hover:bg-blue-700'
                 }`}
-                title={atSeatLimit ? `Plan limit reached (${planLimit} users). Upgrade to add more.` : 'Invite a team member'}
+                title={atSeatLimit ? `Plan limit reached (${planLimit} users).${HIDE_PURCHASES ? '' : ' Upgrade to add more.'}` : 'Invite a team member'}
               >
                 <UserPlus size={18} />
                 <span className="font-medium">

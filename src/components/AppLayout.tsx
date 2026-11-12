@@ -33,7 +33,7 @@ import { useIsMobile } from '@/hooks/useMediaQuery';
 import { Building2, Loader2, Zap, X, Tag, WifiOff, AlertTriangle, Download } from 'lucide-react';
 import { SubscriptionProvider, useSubscription } from '@/contexts/SubscriptionContext';
 import { exportAllData } from '@/lib/exportUtils';
-import { IN_APP, inAppStartView, inAppStartBoard, inAppStartContactId } from '@/lib/inAppMode';
+import { IN_APP, IS_NATIVE_APP, HIDE_PURCHASES, inAppStartView, inAppStartBoard, inAppStartContactId } from '@/lib/inAppMode';
 import { needsCardForTrial, hasCardOnTrial, TRIAL_INFO_PATH } from '@/lib/trial';
 import StartTrialGate from './crm/StartTrialGate';
 import { toLocalDateString } from '@/lib/dates';
@@ -1602,7 +1602,7 @@ useEffect(() => {
   //    The 12s auth timeout in authContext is the outer safety net.
   // New companies save a card before using the web app. Not inside the
   // TrussCENTER app: purchases there go through the App Store.
-  if (!IN_APP && billingCompany && needsCardForTrial(billingCompany)) {
+  if (!HIDE_PURCHASES && billingCompany && needsCardForTrial(billingCompany)) {
     return <StartTrialGate company={billingCompany} onReady={setBillingCompany} />;
   }
 
@@ -1632,15 +1632,21 @@ useEffect(() => {
           {/* Expired subscription banner (non-dismissable) — read-only mode notice */}
           {/* Plan banners link to Stripe checkout, which Apple doesn't allow inside
               the TrussCENTER iPhone app (it has its own App Store paywall). */}
-          {isExpiredReadOnly && !IN_APP && (
+          {isExpiredReadOnly && !HIDE_PURCHASES && (
             <ExpiredBanner
               companyId={profile?.company_id ?? state.companyId ?? null}
               onGoToBilling={goToBilling}
             />
           )}
+          {/* In TrussCTR's own iPhone app: say why editing is off, without a way to buy. */}
+          {isExpiredReadOnly && IS_NATIVE_APP && !IN_APP && (
+            <div className="px-4 py-2.5 bg-amber-50 border-b border-amber-200 text-sm text-amber-800">
+              This account's plan isn't active, so it's view-only for now.
+            </div>
+          )}
 
           {/* Trial banner (shown when trial is active but ending soon) */}
-          {!isExpiredReadOnly && !IN_APP && (
+          {!isExpiredReadOnly && !HIDE_PURCHASES && (
             <TrialBanner companyId={profile?.company_id ?? state.companyId ?? null} />
           )}
           

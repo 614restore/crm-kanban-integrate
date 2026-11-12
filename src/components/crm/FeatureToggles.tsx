@@ -18,6 +18,7 @@ import {
   Shield,
   Loader2
 } from 'lucide-react';
+import { HIDE_PURCHASES } from '@/lib/inAppMode';
 
 export interface CompanyFeatures {
   stale_lead_detection: boolean;
@@ -304,7 +305,7 @@ export default function FeatureToggles() {
         <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
         <div className="text-sm text-blue-800">
           <p className="font-medium mb-1">Current Plan: {companyPlan.charAt(0).toUpperCase() + companyPlan.slice(1)}</p>
-          <p>Some features require a Professional or Enterprise plan. Upgrade in the Billing section to unlock all features.</p>
+          <p>Some features require a Professional or Enterprise plan.{HIDE_PURCHASES ? '' : ' Upgrade in the Billing section to unlock all features.'}</p>
         </div>
       </div>
 
