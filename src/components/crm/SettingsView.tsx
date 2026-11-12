@@ -1953,18 +1953,18 @@ export default function SettingsView() {
                   <span className="text-sm text-gray-700">Use SSL/TLS (port 465) — uncheck for STARTTLS (port 587)</span>
                 </label>
 
-                <div className="flex items-center gap-3 pt-1">
+                <div className="flex flex-wrap items-center gap-3 pt-1">
                   <button
                     onClick={handleSaveSmtp}
                     disabled={isSavingSmtp}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="whitespace-nowrap flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isSavingSmtp ? <><Loader2 size={18} className="animate-spin" />Saving...</> : <><Save size={18} />Save SMTP Settings</>}
                   </button>
                   <button
                     onClick={handleTestSmtp}
                     disabled={isTestingSmtp || !companyForm.smtp_host}
-                    className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="whitespace-nowrap flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isTestingSmtp ? <><Loader2 size={18} className="animate-spin" />Sending...</> : <><Send size={18} />Send Test Email</>}
                   </button>

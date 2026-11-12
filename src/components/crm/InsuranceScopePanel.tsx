@@ -224,12 +224,12 @@ export default function InsuranceScopePanel({ contactId, companyId, currentProje
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h3 className="text-lg font-semibold text-gray-900">Insurance Scope of Work</h3>
         <button
           onClick={() => fileRef.current?.click()}
           disabled={!!working}
-          className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 disabled:opacity-50"
+          className="whitespace-nowrap inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 disabled:opacity-50"
         >
           <Upload size={16} /> Upload Scope
         </button>

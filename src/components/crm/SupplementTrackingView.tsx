@@ -311,18 +311,18 @@ export default function SupplementTrackingView({ contactId, contactName }: Suppl
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-4 mb-4">
-          <div className="bg-orange-50 rounded-lg p-3 text-center">
+        <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4">
+          <div className="bg-orange-50 rounded-lg p-2 sm:p-3 text-center">
             <p className="text-2xl font-bold text-orange-600">{filtered.length}</p>
-            <p className="text-xs text-orange-500">Total Supplements</p>
+            <p className="text-[11px] sm:text-xs text-orange-500">Total Supplements</p>
           </div>
-          <div className="bg-green-50 rounded-lg p-3 text-center">
+          <div className="bg-green-50 rounded-lg p-2 sm:p-3 text-center">
             <p className="text-2xl font-bold text-green-700">${totalApproved.toLocaleString()}</p>
-            <p className="text-xs text-green-600">Total Approved</p>
+            <p className="text-[11px] sm:text-xs text-green-600">Total Approved</p>
           </div>
-          <div className="bg-gray-50 rounded-lg p-3 text-center border border-gray-200">
+          <div className="bg-gray-50 rounded-lg p-2 sm:p-3 text-center border border-gray-200">
             <p className="text-2xl font-bold text-gray-700">${totalRequested.toLocaleString()}</p>
-            <p className="text-xs text-gray-500">Total Requested</p>
+            <p className="text-[11px] sm:text-xs text-gray-500">Total Requested</p>
           </div>
         </div>
 

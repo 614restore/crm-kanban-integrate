@@ -534,7 +534,7 @@ export default function TeamView() {
                 <button
               onClick={handleCopyCompanyId}
               disabled={!state.companyId}
-              className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
+              className="whitespace-nowrap flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
             >
               {copied ? (
                 <>
