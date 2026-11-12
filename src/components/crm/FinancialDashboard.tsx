@@ -591,7 +591,7 @@ export default function FinancialDashboard() {
 
       {/* QuickBooks Integration Banner */}
       <div className="bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl p-6 text-white">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
               <svg viewBox="0 0 24 24" className="w-8 h-8 fill-current">
@@ -607,7 +607,7 @@ export default function FinancialDashboard() {
           </div>
           <button
             onClick={handleConnectQuickBooks}
-            className="px-6 py-3 bg-white text-green-600 rounded-lg font-semibold hover:bg-green-50 transition-colors"
+            className="self-start sm:self-auto whitespace-nowrap px-6 py-3 bg-white text-green-600 rounded-lg font-semibold hover:bg-green-50 transition-colors"
           >
             Connect QuickBooks
           </button>

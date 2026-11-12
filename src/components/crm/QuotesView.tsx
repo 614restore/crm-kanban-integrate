@@ -924,14 +924,17 @@ export default function QuotesView() {
                   <td className="px-2 sm:px-4 py-3 font-medium text-gray-900">{q.quote_number}<div className="sm:hidden mt-0.5 text-xs font-normal"><ScheduleName contactId={q.customer_id || q.contact_id} fallbackClass="text-gray-700">{contactName(q.contact_id || q.customer_id)}</ScheduleName></div></td>
                   <td className="hidden sm:table-cell px-2 sm:px-4 py-3"><ScheduleName contactId={q.customer_id || q.contact_id} fallbackClass="text-gray-700">{contactName(q.contact_id || q.customer_id)}</ScheduleName></td>
                   <td className="px-2 sm:px-4 py-3">
-                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${STATUS_COLORS[q.status] || 'bg-gray-100 text-gray-700'}`}>
-                      {q.status}
-                    </span>
-                    {q.status === 'signed' && !q.contractor_signed_at && (
-                      <span className="ml-1.5 text-xs px-2 py-1 rounded-full font-medium bg-amber-100 text-amber-800" title="The customer has signed. Open the quote and add your signature to send them the completed copy.">
-                        Needs countersign
+                    {/* Stacked on phones so neither pill breaks across lines in the narrow column. */}
+                    <div className="flex flex-col sm:flex-row sm:flex-wrap items-start gap-1.5">
+                      <span className={`whitespace-nowrap capitalize text-xs px-2 py-1 rounded-full font-medium ${STATUS_COLORS[q.status] || 'bg-gray-100 text-gray-700'}`}>
+                        {q.status}
                       </span>
-                    )}
+                      {q.status === 'signed' && !q.contractor_signed_at && (
+                        <span className="whitespace-nowrap text-xs px-2 py-1 rounded-full font-medium bg-amber-100 text-amber-800" title="The customer has signed. Open the quote and add your signature to send them the completed copy.">
+                          Countersign
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="hidden sm:table-cell px-2 sm:px-4 py-3 text-right text-gray-700">{money(q.good_total)}</td>
                   <td className="hidden sm:table-cell px-2 sm:px-4 py-3 text-right text-gray-700">{q.include_better === false ? <span className="text-gray-300">—</span> : money(q.better_total)}</td>

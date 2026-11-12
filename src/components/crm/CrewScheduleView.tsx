@@ -786,7 +786,7 @@ export default function CrewScheduleView({ contactFilterId }: { contactFilterId?
         </div>
 
         {/* Stats */}
-        <div className="mt-4 grid grid-cols-3 gap-4 max-w-2xl">
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4 max-w-2xl">
           <div className="flex items-center gap-3 bg-blue-50 rounded-lg px-4 py-3">
             <BarChart3 size={18} className="text-blue-600 shrink-0" />
             <div>

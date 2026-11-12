@@ -548,28 +548,28 @@ const ReportsAnalytics: React.FC = () => {
 
       {/* Analytics Tabs */}
       <Tabs defaultValue="revenue" className="space-y-4">
-        <TabsList className="grid h-auto w-full grid-cols-3 gap-1 sm:h-10 sm:grid-cols-6 sm:gap-0">
-          <TabsTrigger value="revenue" className="flex items-center gap-1.5 whitespace-normal text-center sm:gap-2 sm:whitespace-nowrap">
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:h-10 sm:grid-cols-6 sm:gap-0">
+          <TabsTrigger value="revenue" className="flex items-center gap-1.5 whitespace-nowrap text-center sm:gap-2">
             <DollarSign className="w-4 h-4" />
             Revenue
           </TabsTrigger>
-          <TabsTrigger value="projects" className="flex items-center gap-1.5 whitespace-normal text-center sm:gap-2 sm:whitespace-nowrap">
+          <TabsTrigger value="projects" className="flex items-center gap-1.5 whitespace-nowrap text-center sm:gap-2">
             <Briefcase className="w-4 h-4" />
             Projects
           </TabsTrigger>
-          <TabsTrigger value="leads" className="flex items-center gap-1.5 whitespace-normal text-center sm:gap-2 sm:whitespace-nowrap">
+          <TabsTrigger value="leads" className="flex items-center gap-1.5 whitespace-nowrap text-center sm:gap-2">
             <Users className="w-4 h-4" />
             Lead Sources
           </TabsTrigger>
-          <TabsTrigger value="team" className="flex items-center gap-1.5 whitespace-normal text-center sm:gap-2 sm:whitespace-nowrap">
+          <TabsTrigger value="team" className="flex items-center gap-1.5 whitespace-nowrap text-center sm:gap-2">
             <Award className="w-4 h-4" />
             Team
           </TabsTrigger>
-          <TabsTrigger value="individual" className="flex items-center gap-1.5 whitespace-normal text-center sm:gap-2 sm:whitespace-nowrap">
+          <TabsTrigger value="individual" className="flex items-center gap-1.5 whitespace-nowrap text-center sm:gap-2">
             <UserCheck className="w-4 h-4" />
             Individual
           </TabsTrigger>
-          <TabsTrigger value="trends" className="flex items-center gap-1.5 whitespace-normal text-center sm:gap-2 sm:whitespace-nowrap">
+          <TabsTrigger value="trends" className="flex items-center gap-1.5 whitespace-nowrap text-center sm:gap-2">
             <TrendingUp className="w-4 h-4" />
             Trends
           </TabsTrigger>

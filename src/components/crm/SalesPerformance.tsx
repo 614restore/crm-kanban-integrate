@@ -332,7 +332,7 @@ export default function SalesPerformance() {
           const Icon = card.icon;
           return (
             <div key={card.key} className="rounded-xl border border-gray-200 p-3 sm:p-4" title={card.hint}>
-              <div className="flex items-start justify-between gap-2">
+              <div className="flex flex-col-reverse items-start gap-2 sm:flex-row sm:justify-between">
                 <span className="text-xs sm:text-sm font-medium text-gray-500 leading-tight">{card.label}</span>
                 <span className={`w-8 h-8 shrink-0 rounded-lg flex items-center justify-center ${card.tint}`}>
                   <Icon size={16} />
