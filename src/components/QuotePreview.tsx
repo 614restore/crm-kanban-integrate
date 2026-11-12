@@ -4,8 +4,10 @@ import { formatCurrencyExact } from '@/lib/crmData';
 import {
   ArrowLeft, Download, Send, Mail, Printer, CheckCircle, Clock, Eye,
   Building2, Phone, Globe, MapPin, Shield, FileText, Camera, AlertCircle, X, Loader2,
-  DollarSign, ArrowRight, LayoutList, Monitor, ZoomIn, ExternalLink, PenLine, Star, Award
+  DollarSign, ArrowRight, LayoutList, Monitor, ZoomIn, ExternalLink, PenLine, Star, Award,
+  CloudLightning,
 } from 'lucide-react';
+import { describeStormEntry, formatStormDate, hasStormReport, type QuoteStormReport } from '@/lib/stormReportDoc';
 import { supabase } from '@/lib/supabase';
 import { sendFullSignedDocumentToCustomer, saveSignedPdfToDocuments } from '@/lib/fullSignedDocument';
 import { toast } from 'sonner';
@@ -1165,6 +1167,7 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
     ? [
         { id: 'cover', label: 'Cover Page' },
         ...(photos.length > 0 ? [{ id: 'photos', label: 'Inspection Photos' }] : []),
+        ...(hasStormReport(quote?.storm_report) ? [{ id: 'storm', label: 'Storm Report' }] : []),
         ...(classicInclAbout ? [{ id: 'about', label: 'About Us' }] : []),
         { id: 'contingency-terms', label: 'Contingency Agreement' },
         ...(classicInclWarranty ? [{ id: 'warranty', label: 'Warranty' }] : []),
@@ -1173,6 +1176,7 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
         { id: 'cover', label: 'Cover Page' },
         ...(classicInclAbout ? [{ id: 'about', label: 'About Us' }] : []),
         ...(photos.length > 0 ? [{ id: 'photos', label: 'Inspection Photos' }] : []),
+        ...(hasStormReport(quote?.storm_report) ? [{ id: 'storm', label: 'Storm Report' }] : []),
         ...classicTierPages,
         ...(quote?.contingency_enabled ? [{ id: 'contingency-terms', label: 'Contingency Agreement' }] : []),
         ...(quote?.show_financing && (financingOptions.length > 0 || lenderIntegrations.length > 0) ? [{ id: 'financing', label: 'Financing Options' }] : []),
@@ -1695,6 +1699,49 @@ const QuotePreview: React.FC<QuotePreviewProps> = ({ quoteId, company, onBack, i
               )}
 
               {/* FINANCING */}
+              {/* STORM REPORT */}
+              {currentPage === 'storm' && hasStormReport(quote?.storm_report) && (() => {
+                const report = quote.storm_report as QuoteStormReport;
+                return (
+                  <div className="p-6 lg:p-10">
+                    <div className="flex items-center gap-3 mb-1">
+                      <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center flex-shrink-0">
+                        <CloudLightning className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <div className="min-w-0">
+                        <h2 className="text-2xl font-bold text-gray-900">Storm Report</h2>
+                        <p className="text-sm text-gray-500 mt-0.5">Storms recorded within {report.radiusMiles} miles of {report.address || 'this property'}</p>
+                      </div>
+                    </div>
+                    <div className="mt-6 overflow-x-auto rounded-xl border border-gray-200">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wide">
+                          <tr>
+                            <th className="text-left px-3 py-2">Date</th>
+                            <th className="text-left px-3 py-2">Event</th>
+                            <th className="text-left px-3 py-2">Distance</th>
+                            <th className="text-left px-3 py-2 hidden sm:table-cell">Location</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {[...report.entries].sort((a, b) => b.date.localeCompare(a.date)).map((e, i) => (
+                            <tr key={i}>
+                              <td className="px-3 py-2 whitespace-nowrap text-gray-900">{formatStormDate(e.date)}</td>
+                              <td className="px-3 py-2 font-medium text-gray-900">{describeStormEntry(e)}</td>
+                              <td className="px-3 py-2 whitespace-nowrap text-gray-600">{e.distanceMiles} mi {e.direction}</td>
+                              <td className="px-3 py-2 text-gray-500 hidden sm:table-cell">{e.place || '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="mt-4 text-xs text-gray-400">
+                      Source: National Weather Service storm reports and NOAA radar hail detection. Compiled {formatStormDate(report.generatedAt)}.
+                    </p>
+                  </div>
+                );
+              })()}
+
               {currentPage === 'contingency-terms' && (
                 <div className="p-8 lg:p-12">
                   <div className="flex items-center gap-3 mb-6">
