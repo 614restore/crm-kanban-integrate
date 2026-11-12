@@ -156,6 +156,11 @@ export interface Document {
   category?: 'roof' | 'walls' | 'premium' | 'general' | null;
   starred?: boolean;
   photo_notes?: string | null;
+  // Uploaded quotes: the total typed by whoever uploaded it, whether the customer signed it, and whether the
+  // amount is included in the customer's Project Value (only counts once signed).
+  quoteTotal?: number | null;
+  quoteSigned?: boolean;
+  countsTowardTotal?: boolean;
 }
 
 export interface TeamMember {
