@@ -9,7 +9,8 @@ import {
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { foldDocumentText } from '@/lib/pdfGenerator';
-import { buildFullSignedDocumentPdf } from '@/lib/fullSignedDocument';
+import { buildFullSignedDocumentPdf, sendFullSignedDocumentToCustomer, saveSignedPdfToDocuments } from '@/lib/fullSignedDocument';
+import { SignaturePad } from '@/components/crm/SignaturePad';
 import autoTable from 'jspdf-autotable';
 import { supabase } from '@/lib/supabase';
 import { certUrl, quoteUrl, cancelNoticeUrl } from '@/lib/appUrl';
@@ -48,7 +49,7 @@ const StatusBadge: React.FC<{ status: DocStatus; label: string }> = ({ status, l
     na:       null,
   };
   return (
-    <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${cls[status]}`}>
+    <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${cls[status]}`}>
       {icons[status]}
       {label}
     </span>
@@ -145,9 +146,11 @@ const DocRow: React.FC<{
     <div className="flex items-center gap-3 w-full">
       <div className="w-8 h-8 bg-white/70 border border-gray-100 rounded-lg flex items-center justify-center shrink-0 shadow-sm">{icon}</div>
       <div className="flex-1 min-w-0 text-left">
-        <p className="text-sm font-semibold text-gray-800">{label}</p>
+        <p className="text-sm font-semibold text-gray-800 leading-tight">{label}</p>
+        <div className="mt-1.5">
+          <StatusBadge status={status} label={statusLabel} />
+        </div>
       </div>
-      <StatusBadge status={status} label={statusLabel} />
       {hasActions && (
         <ChevronDown
           className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`}
@@ -255,6 +258,10 @@ const DocumentsWizard: React.FC<DocumentsWizardProps> = ({ quotes, company, curr
 
   // Contingency preview
   const [showContingencyPreview, setShowContingencyPreview] = useState(false);
+
+  // Contractor countersign
+  const [showCountersignModal, setShowCountersignModal] = useState(false);
+  const [countersigning, setCountersigning] = useState(false);
 
   // Share via email
   const [shareEmail, setShareEmail] = useState('');
@@ -1376,6 +1383,37 @@ const DocumentsWizard: React.FC<DocumentsWizardProps> = ({ quotes, company, curr
     }
   };
 
+  const handleCountersign = async (sigData: string) => {
+    if (!fullQuote) return;
+    setCountersigning(true);
+    try {
+      const signedAt = new Date().toISOString();
+      const signedBy = company?.name ?? 'Contractor';
+      const { error } = await supabase.from('quotes').update({
+        contractor_signature_data: sigData,
+        contractor_signed_at: signedAt,
+        contractor_signed_by: signedBy,
+      }).eq('id', fullQuote.id);
+      if (error) throw error;
+      setFullQuote((prev: any) => prev ? {
+        ...prev,
+        contractor_signature_data: sigData,
+        contractor_signed_at: signedAt,
+        contractor_signed_by: signedBy,
+      } : prev);
+      setShowCountersignModal(false);
+      toast.success('Countersigned — sending document to customer…');
+      await Promise.all([
+        sendFullSignedDocumentToCustomer(fullQuote.id, company).catch(console.error),
+        saveSignedPdfToDocuments(fullQuote.id, company).catch(console.error),
+      ]);
+    } catch (err: any) {
+      toast.error(`Failed to countersign: ${err.message}`);
+    } finally {
+      setCountersigning(false);
+    }
+  };
+
   // ── Invoice editor ─────────────────────────────────────────────────────────
   const handleOpenInvoiceEditor = () => {
     if (!invoice) return;
@@ -2016,8 +2054,8 @@ const DocumentsWizard: React.FC<DocumentsWizardProps> = ({ quotes, company, curr
                 <DocRow
                   icon={<Shield className="w-4 h-4 text-indigo-500" />}
                   label="Contingency Agreement"
-                  status={!isInsurance ? 'na' : contingencySigned ? 'complete' : 'unsigned'}
-                  statusLabel={!isInsurance ? 'Not Applicable' : contingencySigned ? 'Signed' : 'Not Signed'}
+                  status={!isInsurance ? 'na' : (contingencySigned && fullQuote?.contractor_signed_at) ? 'complete' : contingencySigned ? 'sent' : 'unsigned'}
+                  statusLabel={!isInsurance ? 'Not Applicable' : (contingencySigned && fullQuote?.contractor_signed_at) ? 'Fully Executed' : contingencySigned ? 'Awaiting countersignature' : 'Not Signed'}
                   dimmed={!isInsurance}
                 >
                   {isInsurance && (
@@ -2042,6 +2080,14 @@ const DocumentsWizard: React.FC<DocumentsWizardProps> = ({ quotes, company, curr
                         icon={<Send className="w-3 h-3" />}
                         label={contingencySigned ? 'Resend' : 'Send to Customer'}
                       />
+                      {contingencySigned && !fullQuote?.contractor_signed_at && (
+                        <ActionBtn
+                          variant="primary"
+                          onClick={() => setShowCountersignModal(true)}
+                          icon={<Pencil className="w-3 h-3" />}
+                          label="Countersign"
+                        />
+                      )}
                     </div>
                   )}
                 </DocRow>
@@ -2690,7 +2736,60 @@ const DocumentsWizard: React.FC<DocumentsWizardProps> = ({ quotes, company, curr
 
       </div>
     </div>
+
+    {showCountersignModal && (
+      <CountersignModal
+        onSign={handleCountersign}
+        onClose={() => setShowCountersignModal(false)}
+        saving={countersigning}
+      />
+    )}
     </>
+  );
+};
+
+// ─── Contractor countersign modal ────────────────────────────────────────────
+const CountersignModal: React.FC<{
+  onSign: (sigData: string) => void;
+  onClose: () => void;
+  saving: boolean;
+}> = ({ onSign, onClose, saving }) => {
+  const [sigData, setSigData] = useState<string | null>(null);
+  return createPortal(
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-bold text-gray-800">Countersign Agreement</h2>
+          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <p className="text-xs text-gray-500">
+          Sign below as the company representative to fully execute this contingency agreement.
+          Once countersigned, a completed copy will be sent to the customer automatically.
+        </p>
+        <div className="border border-gray-200 rounded-xl overflow-hidden">
+          <SignaturePad onSave={setSigData} />
+        </div>
+        <div className="flex gap-2 justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => sigData && onSign(sigData)}
+            disabled={!sigData || saving}
+            className="px-4 py-2 text-sm font-semibold bg-[#1e3a5f] text-white rounded-lg hover:bg-[#162d4a] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+            {saving ? 'Saving…' : 'Countersign & Send'}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 };
 
