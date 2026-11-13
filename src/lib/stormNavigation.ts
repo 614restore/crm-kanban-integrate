@@ -3,6 +3,7 @@ import type { Dispatch } from 'react';
 import type { CRMAction } from '@/lib/crmStore';
 import { focusLiveRadar, focusStormHistory, focusStormSearch, type LiveRadarFocus } from '@/lib/stormReports';
 import { geocodeAddress } from '@/lib/geocode';
+import { loadStormHistorySettings } from '@/lib/stormHistorySettings';
 import { toast } from 'sonner';
 
 /** Live radar, centered on the office unless a place is given. */
@@ -37,16 +38,34 @@ export function openLiveRadarFor(dispatch: Dispatch<CRMAction>, contact?: WithAd
   openLiveRadar(dispatch, property ? { address: property.address, label: property.address, state: property.state } : {});
 }
 
-/** Storm Data: searched around the customer's address when one is open, otherwise left blank. */
-export async function openStormHistoryFor(dispatch: Dispatch<CRMAction>, contact?: WithAddress | null) {
+/**
+ * Storm Data: searched around the customer's address when one is open, otherwise left blank.
+ * The radius, months back and the wind and hail thresholds come from the company's
+ * storm history settings, so a rep never has to type the address or set the filters.
+ */
+export async function openStormHistoryFor(
+  dispatch: Dispatch<CRMAction>,
+  contact?: WithAddress | null,
+  companyId?: string | null,
+) {
   const property = propertyOf(contact);
   if (!property) return openStormHistory(dispatch);
+  const settings = await loadStormHistorySettings(companyId);
   const found = await geocodeAddress(property.address).catch(() => null);
   if (!found) {
     // Could not place the address: still open Storm Data, and say why it is empty.
     toast.error("Couldn't locate this customer's address, so Storm Data opened blank. Type the address to search.");
     return openStormHistory(dispatch);
   }
-  focusStormSearch({ lat: found.lat, lon: found.lon, label: property.address, state: property.state, radiusMiles: 10, months: 12 });
+  focusStormSearch({
+    lat: found.lat,
+    lon: found.lon,
+    label: property.address,
+    state: property.state,
+    radiusMiles: settings.radiusMiles,
+    months: settings.months,
+    minWind: settings.minWind,
+    minHail: settings.minHail,
+  });
   dispatch({ type: 'SET_VIEW', payload: 'storm-search' });
 }
