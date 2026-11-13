@@ -152,6 +152,43 @@
   }
 }
 
+/* A two-column field grid becomes one column on a phone. Side by side at 375px
+   each field gets ~160px, which runs an email into the phone number beside it.
+   There are ~150 of these grids across the app, so this is a rule rather than
+   a markup change in each one.
+
+   :has() keeps it to grids that really hold fields — a grid whose own children
+   carry a label. Two-up stat tiles and button pairs have no label, so they are
+   left at two columns, which is what they should be. */
+@media (max-width: 639px) {
+  .grid.grid-cols-2:has(> div > label),
+  .grid.grid-cols-2:has(> div > div > label) {
+    /* minmax(0, 1fr), not 1fr: a grid track's default minimum is the content's
+       own width, which is what lets a long email push past the card edge. */
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* A field told to span both columns would otherwise keep implying a second
+     one, leaving the grid two-wide after all. */
+  .grid.grid-cols-2:has(> div > label) > .col-span-2,
+  .grid.grid-cols-2:has(> div > div > label) > .col-span-2 {
+    grid-column: span 1 / span 1;
+  }
+
+  /* One column is still not enough on its own. An email or URL has no spaces,
+     so there is nowhere to break it: measured at phone width, a long address
+     is ~445px of text in a 343px box and runs straight out past the card edge.
+     Let it break mid-string instead. Applied to the field cell so the label,
+     the value and any input inside inherit it.
+
+     "anywhere" rather than "break-word" so the text also reports a small
+     min-content width, which is what lets the grid track shrink to fit. */
+  .grid:has(> div > label) > div,
+  .grid:has(> div > div > label) > div {
+    overflow-wrap: anywhere;
+  }
+}
+
 /* Custom scrollbar styles */
 ::-webkit-scrollbar {
   width: 8px;
