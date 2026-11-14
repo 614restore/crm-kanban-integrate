@@ -262,6 +262,11 @@ const DocumentsWizard: React.FC<DocumentsWizardProps> = ({ quotes, company, curr
   const [showCountersignModal, setShowCountersignModal] = useState(false);
   const [countersigning, setCountersigning] = useState(false);
 
+  // Workmanship warranty form
+  const [warrantyCompletionDate, setWarrantyCompletionDate] = useState('');
+  const [warrantyRepName, setWarrantyRepName] = useState('');
+  const [savingWarrantyToDocs, setSavingWarrantyToDocs] = useState(false);
+
   // Share via email
   const [shareEmail, setShareEmail] = useState('');
   const [sendingShareEmail, setSendingShareEmail] = useState(false);
@@ -1382,6 +1387,323 @@ const DocumentsWizard: React.FC<DocumentsWizardProps> = ({ quotes, company, curr
     }
   };
 
+  const generateWarrantyPdf = (mode: 'download' | 'view' | 'blob' = 'download'): jsPDF | null => {
+    if (!fullQuote) return null;
+    const margin = 50;
+    const pageW = 612;
+    const pageH = 792;
+    const contentW = pageW - margin * 2;
+    const doc = new jsPDF({ unit: 'pt', format: 'letter' });
+    foldDocumentText(doc);
+
+    const co = company ?? {};
+    const cust = fullQuote.customer ?? {};
+    const companyName = co.name ?? '';
+    const custName = `${cust.first_name ?? ''} ${cust.last_name ?? ''}`.trim();
+    const custAddr = [cust.address, [cust.city, cust.state, cust.zip].filter(Boolean).join(', ')].filter(Boolean).join(', ');
+    const compCityState = [co.city, co.state].filter(Boolean).join(', ');
+    const completionDateDisplay = warrantyCompletionDate
+      ? new Date(warrantyCompletionDate + 'T12:00:00').toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
+      : '___/___/______';
+    const govState = co.state ?? '[State]';
+
+    let y = margin;
+
+    // ── Header ─────────────────────────────────────────────────────────────────
+    // Dark bar across the top
+    doc.setFillColor(30, 58, 95);
+    doc.rect(0, 0, pageW, 60, 'F');
+
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(255, 255, 255);
+    doc.text(companyName, margin, 24);
+
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(150, 190, 230);
+    doc.text('ROOFING & INTERIOR RESTORATION SERVICES', margin, 38);
+
+    // Right-side company details
+    const rightX = pageW - margin;
+    doc.setTextColor(220, 230, 240);
+    doc.setFontSize(8);
+    if (compCityState) doc.text(compCityState, rightX, 20, { align: 'right' });
+    if (co.phone) doc.text(`Phone: ${co.phone}`, rightX, 31, { align: 'right' });
+    if (co.license_number) doc.text(`License / Reg #: ${co.license_number}`, rightX, 42, { align: 'right' });
+
+    // Accent line below header
+    doc.setDrawColor(41, 182, 246);
+    doc.setLineWidth(2);
+    doc.line(0, 60, pageW, 60);
+
+    y = 85;
+
+    // ── Title ──────────────────────────────────────────────────────────────────
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(30, 40, 60);
+    doc.text('LIMITED WORKMANSHIP & INSTALLATION WARRANTY', pageW / 2, y, { align: 'center' });
+    y += 14;
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 110, 130);
+    doc.text('Tiered Labor Coverage for Roofing & Interior Restoration Projects', pageW / 2, y, { align: 'center' });
+    y += 18;
+
+    // ── Info box (2×2 grid) ────────────────────────────────────────────────────
+    const boxH = 60;
+    doc.setDrawColor(200, 210, 220);
+    doc.setLineWidth(0.5);
+    doc.rect(margin, y, contentW, boxH);
+    // vertical divider
+    doc.line(margin + contentW / 2, y, margin + contentW / 2, y + boxH);
+    // horizontal divider
+    doc.line(margin, y + boxH / 2, margin + contentW, y + boxH / 2);
+
+    const labelFs = 7;
+    const valueFs = 9;
+    const cellPad = 6;
+    const halfW = contentW / 2;
+
+    const drawCell = (label: string, value: string, cx: number, cy: number, cw: number) => {
+      doc.setFontSize(labelFs);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(80, 100, 130);
+      doc.text(label.toUpperCase(), cx + cellPad, cy + cellPad + labelFs);
+      doc.setFontSize(valueFs);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(40, 50, 65);
+      const lines = doc.splitTextToSize(value || '—', cw - cellPad * 2);
+      doc.text(lines[0] ?? '', cx + cellPad, cy + cellPad + labelFs + 11);
+    };
+
+    drawCell('Property Owner / Client Name', custName, margin, y, halfW);
+    drawCell('Project / Property Address', custAddr, margin + halfW, y, halfW);
+    drawCell('Contract / Invoice Reference #', fullQuote.quote_number ?? '', margin, y + boxH / 2, halfW);
+    drawCell('Date of Substantial Completion (Start Date)', completionDateDisplay, margin + halfW, y + boxH / 2, halfW);
+    y += boxH + 14;
+
+    // ── Section helper ─────────────────────────────────────────────────────────
+    const ensureSpace = (needed: number) => {
+      if (y + needed > pageH - margin) { doc.addPage(); y = margin; }
+    };
+
+    const drawSectionLabel = (num: string, title: string) => {
+      ensureSpace(28);
+      doc.setDrawColor(41, 182, 246);
+      doc.setLineWidth(3);
+      doc.line(margin, y, margin, y + 14);
+      doc.setLineWidth(0.5);
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(30, 40, 60);
+      doc.text(`${num}. ${title}`, margin + 8, y + 11);
+      y += 22;
+    };
+
+    const drawBody = (text: string) => {
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(60, 70, 85);
+      const lines = doc.splitTextToSize(text, contentW);
+      lines.forEach((line: string) => {
+        ensureSpace(13);
+        doc.text(line, margin, y);
+        y += 12;
+      });
+      y += 4;
+    };
+
+    const drawBullet = (bold: string, rest: string) => {
+      ensureSpace(14);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(60, 70, 85);
+      doc.text('•  ', margin, y);
+      doc.setFont('helvetica', 'bold');
+      doc.text(bold + ':', margin + 10, y);
+      const boldW = doc.getTextWidth(bold + ': ') + 10;
+      doc.setFont('helvetica', 'normal');
+      const restLines = doc.splitTextToSize(rest, contentW - boldW - 2);
+      doc.text(restLines[0] ?? '', margin + boldW, y);
+      y += 12;
+      for (let i = 1; i < restLines.length; i++) {
+        ensureSpace(12);
+        doc.text(restLines[i], margin + boldW, y);
+        y += 12;
+      }
+      y += 2;
+    };
+
+    // ── Section 1 ──────────────────────────────────────────────────────────────
+    drawSectionLabel('1', 'Tiered Workmanship Coverage');
+    drawBody(`${companyName} ("Contractor") warrants to the above-named Property Owner ("Owner") that all labor and installation services performed under the referenced contract were executed in a good and workmanlike manner in accordance with applicable ${govState} building codes and industry standards. Subject to the terms, conditions, and exclusions set forth below, Contractor provides the following tiered labor coverage commencing on the Date of Substantial Completion:`);
+
+    // Coverage table
+    autoTable(doc, {
+      startY: y,
+      head: [['WORK CATEGORY', 'WARRANTY PERIOD', 'COVERED SCOPE OF INSTALLATION LABOR']],
+      body: [
+        ['Roofing Systems &\nExterior Tie-Ins', '2 Years\n(24 Months)', 'Covers defects or water intrusion directly caused by improper installation of roofing shingles, underlayment, ice and water barrier, drip edge, step/counter flashing, valley metal, pipe boots, ridge vents, or roof penetrations installed by Contractor.'],
+        ['Interior Restoration &\nFinishes', '1 Year\n(12 Months)', 'Covers interior defects directly resulting from Contractor\'s improper installation of drywall hanging, taping/mudding, texture matching, interior painting, trim/molding, subflooring, or interior carpentry performed within the original contract scope.'],
+      ],
+      styles: { fontSize: 8, cellPadding: 5, textColor: [40, 50, 65] },
+      headStyles: { fillColor: [30, 58, 95], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
+      columnStyles: {
+        0: { cellWidth: 110, fontStyle: 'bold' },
+        1: { cellWidth: 80, fillColor: [235, 245, 255], fontStyle: 'bold', halign: 'center' },
+        2: { cellWidth: contentW - 190 },
+      },
+      margin: { left: margin, right: margin },
+    });
+    y = (doc as any).lastAutoTable.finalY + 14;
+
+    // ── Section 2 ──────────────────────────────────────────────────────────────
+    drawSectionLabel('2', 'Remedy & Limitation of Liability');
+    drawBody("If a covered installation defect arises within the applicable warranty period, Contractor's sole obligation and Owner's exclusive remedy shall be the repair or re-installation of the defective workmanship at no labor charge to Owner. Replacement materials required to correct an installation error will match existing materials as closely as reasonably possible; however, Contractor is not responsible for exact color, sheen, or texture matches due to natural aging, fading, or manufacturer dye-lot variations. Performing warranty repairs does not extend the original warranty period.");
+
+    // ── Section 3 ──────────────────────────────────────────────────────────────
+    drawSectionLabel('3', 'Exclusions & Non-Warrantable Conditions');
+    drawBody(`This Limited Workmanship Warranty applies strictly to installation labor performed by ${companyName} and does not cover any of the following:`);
+    drawBullet('Weather & Acts of God', 'Damage caused by hail, high winds, tornadoes, lightning, ice damming, heavy snow loads, falling limbs, flooding, or other severe weather events.');
+    drawBullet('Normal Wear, Settling & Aging', 'Natural structural settling, thermal expansion/contraction, hairline drywall/paint cracks caused by framing movement or humidity fluctuations, or normal wear and tear.');
+    drawBullet('Manufacturer Material Defects', 'Failure or defects in shingles, underlayment, paint, adhesives, sealants, or building products (covered solely under the respective product manufacturer\'s warranty).');
+    drawBullet('Pre-Existing & Structural Conditions', 'Latent rot, mold, mildew, fungal decay, inadequate attic ventilation, foundation movement, or pre-existing plumbing/roof leaks outside Contractor\'s contracted scope.');
+    drawBullet('Third-Party Alterations or Neglect', 'Work altered, repaired, penetrated (e.g., satellite dishes, solar mounts, holiday hardware), or damaged by Owner, subsequent contractors, pests/animals, or lack of routine homeowner maintenance (such as keeping gutters and valleys clear of debris).');
+
+    // ── Section 4 ──────────────────────────────────────────────────────────────
+    drawSectionLabel('4', 'Claims Procedure & Conditions Precedent');
+    drawBullet('Timely Written Notice', `Owner must notify ${companyName} in writing within fourteen (14) days of discovering a suspected installation defect so Contractor may inspect and mitigate further damage.`);
+    drawBullet("Right to Inspect & Cure", "Contractor must be afforded reasonable property access to inspect the issue prior to any third-party repairs. Any unauthorized repair performed before Contractor's inspection voids coverage for that item.");
+    drawBullet('Account Standing & Non-Transferability', 'This warranty becomes effective only upon receipt of full final payment under the contract, is extended solely to the original Owner named above, and is non-transferable upon sale or transfer of the property.');
+
+    // ── Section 5 box ──────────────────────────────────────────────────────────
+    ensureSpace(60);
+    const sec5Text = `Section 5 — Sole Express Warranty & Amendments: This document constitutes the entire express workmanship warranty provided by ${companyName}. No verbal statements, representations, or modifications by any employee, crew member, or sales representative shall alter or expand these terms unless executed in writing and signed by an authorized officer of ${companyName}. Governed by the laws of the State of ${govState}.`;
+    const sec5Lines = doc.splitTextToSize(sec5Text, contentW - 16);
+    const sec5H = sec5Lines.length * 12 + 16;
+    doc.setFillColor(245, 248, 252);
+    doc.setDrawColor(200, 210, 225);
+    doc.setLineWidth(0.5);
+    doc.rect(margin, y, contentW, sec5H, 'FD');
+    doc.setFontSize(8.5);
+    doc.setTextColor(50, 60, 80);
+    sec5Lines.forEach((line: string, i: number) => {
+      if (i === 0) {
+        // Bold "Section 5 — Sole Express Warranty & Amendments:"
+        doc.setFont('helvetica', 'bold');
+        const boldPart = 'Section 5 — Sole Express Warranty & Amendments:';
+        doc.text(boldPart, margin + 8, y + 12);
+        doc.setFont('helvetica', 'normal');
+        // rest of line after bold part
+        const rest = line.slice(boldPart.length);
+        if (rest) doc.text(rest, margin + 8 + doc.getTextWidth(boldPart), y + 12);
+      } else {
+        doc.text(line, margin + 8, y + 12 + i * 12);
+      }
+    });
+    y += sec5H + 20;
+
+    // ── Signature block ────────────────────────────────────────────────────────
+    ensureSpace(100);
+    const sigDate = warrantyCompletionDate
+      ? new Date(warrantyCompletionDate + 'T12:00:00').toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
+      : '';
+    const halfSigW = contentW / 2 - 10;
+
+    // Left — Contractor
+    doc.setDrawColor(150, 160, 175);
+    doc.setLineWidth(0.5);
+    doc.line(margin, y + 20, margin + halfSigW, y + 20);
+    doc.setFontSize(7.5);
+    doc.setTextColor(100, 110, 130);
+    doc.text('Authorized Representative Signature', margin, y + 27);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(40, 50, 65);
+    doc.text('Authorized Representative:', margin, y + 44);
+    doc.setFont('helvetica', 'normal');
+    doc.text(warrantyRepName || '__________________________', margin, y + 56);
+    doc.text(`Company: ${companyName}`, margin, y + 68);
+    doc.text(`Date: ${sigDate || '__/__/____'}`, margin, y + 80);
+
+    // Right — Owner
+    const rightSigX = margin + halfSigW + 20;
+    doc.line(rightSigX, y + 20, rightSigX + halfSigW, y + 20);
+    doc.setFontSize(7.5);
+    doc.setTextColor(100, 110, 130);
+    doc.text('Property Owner Signature', rightSigX, y + 27);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(40, 50, 65);
+    doc.text('Property Owner:', rightSigX, y + 44);
+    doc.setFont('helvetica', 'normal');
+    doc.text(custName || '__________________________', rightSigX, y + 56);
+    doc.text('Date Signed: __/__/____', rightSigX, y + 68);
+    y += 90;
+
+    // ── Footer ─────────────────────────────────────────────────────────────────
+    ensureSpace(24);
+    doc.setDrawColor(200, 210, 220);
+    doc.line(margin, y, pageW - margin, y);
+    y += 8;
+    const footerParts = [companyName, compCityState, co.phone ?? '', co.email ?? ''].filter(Boolean);
+    doc.setFontSize(7.5);
+    doc.setTextColor(130, 140, 155);
+    doc.text(footerParts.join('  •  ') + '  •  Retain this certificate with your project close-out documents.', pageW / 2, y, { align: 'center' });
+
+    return doc;
+  };
+
+  const handleWarrantyPdf = (mode: 'download' | 'view') => {
+    setGeneratingPdf(`warranty-${mode}`);
+    try {
+      const doc = generateWarrantyPdf();
+      if (!doc) return;
+      const fileName = `Workmanship-Warranty-${fullQuote?.quote_number ?? 'document'}.pdf`;
+      openOrSavePdf(doc, fileName, mode);
+    } finally {
+      setGeneratingPdf(null);
+    }
+  };
+
+  const handleSaveWarrantyToDocuments = async () => {
+    if (!fullQuote) return;
+    setSavingWarrantyToDocs(true);
+    try {
+      const doc = generateWarrantyPdf('blob');
+      if (!doc) throw new Error('Could not generate PDF');
+      const pdfBlob = doc.output('blob');
+
+      const fileName = `Workmanship-Warranty-${fullQuote.quote_number ?? fullQuote.id}.pdf`;
+      const storagePath = `${fullQuote.company_id}/${fullQuote.contact_id ?? fullQuote.id}/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('documents')
+        .upload(storagePath, pdfBlob, { contentType: 'application/pdf', upsert: true });
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage.from('documents').getPublicUrl(storagePath);
+
+      await supabase.from('documents').upsert({
+        company_id: fullQuote.company_id,
+        contact_id: fullQuote.contact_id ?? null,
+        quote_id: fullQuote.id,
+        name: fileName,
+        type: 'contract',
+        url: urlData.publicUrl,
+        size: pdfBlob.size,
+      }, { onConflict: 'company_id,name,quote_id' });
+
+      toast.success('Warranty saved to customer documents');
+    } catch (err: any) {
+      toast.error(`Failed to save: ${err.message}`);
+    } finally {
+      setSavingWarrantyToDocs(false);
+    }
+  };
+
   const handleCountersign = async (sigData: string) => {
     if (!fullQuote) return;
     setCountersigning(true);
@@ -2182,6 +2504,69 @@ const DocumentsWizard: React.FC<DocumentsWizardProps> = ({ quotes, company, curr
                       icon={<ExternalLink className="w-3 h-3" />}
                       label={certSigned ? 'Manage' : certSent ? 'Manage' : 'Send Certificate'}
                     />
+                  </div>
+                </DocRow>
+
+                {/* ── Workmanship Warranty ── */}
+                <DocRow
+                  icon={<Shield className="w-4 h-4 text-green-600" />}
+                  label="Workmanship Warranty"
+                  status="none"
+                  statusLabel="Generate"
+                >
+                  <div className="space-y-3">
+                    <p className="text-xs text-gray-500 leading-relaxed">
+                      Generate a Limited Workmanship & Installation Warranty for this customer. Fill in the completion date and your name/title below — all other info is pulled from the job and your company profile.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">
+                          Date of Substantial Completion
+                        </label>
+                        <input
+                          type="date"
+                          value={warrantyCompletionDate}
+                          onChange={e => setWarrantyCompletionDate(e.target.value)}
+                          className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]/30"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">
+                          Authorized Rep Name & Title
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. John Smith, Project Manager"
+                          value={warrantyRepName}
+                          onChange={e => setWarrantyRepName(e.target.value)}
+                          className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]/30"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <ActionBtn
+                        variant="primary"
+                        onClick={() => handleWarrantyPdf('view')}
+                        disabled={!!generatingPdf || !warrantyCompletionDate || !warrantyRepName.trim()}
+                        icon={generatingPdf === 'warranty-view' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Eye className="w-3 h-3" />}
+                        label="View PDF"
+                      />
+                      <ActionBtn
+                        onClick={() => handleWarrantyPdf('download')}
+                        disabled={!!generatingPdf || !warrantyCompletionDate || !warrantyRepName.trim()}
+                        icon={generatingPdf === 'warranty-download' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
+                        label="Download PDF"
+                      />
+                      <ActionBtn
+                        onClick={handleSaveWarrantyToDocuments}
+                        disabled={savingWarrantyToDocs || !warrantyCompletionDate || !warrantyRepName.trim()}
+                        icon={savingWarrantyToDocs ? <Loader2 className="w-3 h-3 animate-spin" /> : <FilePlus className="w-3 h-3" />}
+                        label={savingWarrantyToDocs ? 'Saving…' : 'Save to Documents'}
+                      />
+                    </div>
+                    {(!warrantyCompletionDate || !warrantyRepName.trim()) && (
+                      <p className="text-[11px] text-amber-600">Fill in both fields above to enable PDF generation.</p>
+                    )}
                   </div>
                 </DocRow>
 
