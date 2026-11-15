@@ -12,6 +12,7 @@
  * Returns { ok, status, detail }: ok when the provider returned an image with HTTP 2xx.
  */
 import { createClient } from '@supabase/supabase-js';
+import { withCors } from './_cors-web';
 
 export const config = { runtime: 'edge' };
 
@@ -38,7 +39,7 @@ async function isSignedIn(req: Request): Promise<boolean> {
   return !error && !!user;
 }
 
-export default async function handler(req: Request): Promise<Response> {
+async function handle(req: Request): Promise<Response> {
   if (req.method !== 'GET') return json({ error: 'Method not allowed' }, 405);
   if (!(await isSignedIn(req))) return json({ error: 'Unauthorized' }, 401);
 
@@ -81,3 +82,5 @@ export default async function handler(req: Request): Promise<Response> {
     clearTimeout(timer);
   }
 }
+
+export default withCors(handle, 'GET, OPTIONS');

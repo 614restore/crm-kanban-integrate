@@ -10,6 +10,7 @@
  * Returns { lat, lon, displayName } or 404 when the address isn't found.
  */
 import { createClient } from '@supabase/supabase-js';
+import { withCors } from './_cors-web';
 
 export const config = { runtime: 'edge' };
 
@@ -66,7 +67,7 @@ async function nominatimLookup(q: string) {
   };
 }
 
-export default async function handler(req: Request): Promise<Response> {
+async function handle(req: Request): Promise<Response> {
   if (req.method !== 'GET') return json({ error: 'Method not allowed' }, 405);
 
   const q = (new URL(req.url).searchParams.get('q') || '').trim();
@@ -84,3 +85,5 @@ export default async function handler(req: Request): Promise<Response> {
   }
   return json({ error: 'Address not found' }, 404);
 }
+
+export default withCors(handle, 'GET, OPTIONS');

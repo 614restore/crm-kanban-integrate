@@ -29,6 +29,7 @@
  *   SUPABASE_SERVICE_ROLE_KEY — Service role key (never sent to browser)
  */
 import { createClient } from '@supabase/supabase-js';
+import { withCors } from './_cors-web';
 
 export const config = { runtime: 'edge' };
 
@@ -107,20 +108,8 @@ async function resolveAIConfig(token: string): Promise<AIConfiguration | null> {
   };
 }
 
-export default async function handler(req: Request): Promise<Response> {
+async function handle(req: Request): Promise<Response> {
   const jsonHeaders = { 'Content-Type': 'application/json' };
-
-  // Handle CORS preflight (same-origin calls don't trigger this, but belt-and-suspenders)
-  if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        'Access-Control-Allow-Origin': 'https://trussctr.614restore.com',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      },
-    });
-  }
 
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
@@ -264,3 +253,6 @@ export default async function handler(req: Request): Promise<Response> {
     headers: jsonHeaders,
   });
 }
+
+// Preflights and cross-origin headers (the iPhone app calls from capacitor://localhost).
+export default withCors(handle, 'POST, OPTIONS');
