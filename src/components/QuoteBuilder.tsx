@@ -37,6 +37,8 @@ import type { MeasurementProviderId } from '@/lib/measurementProviders';
 import type { AIQuotePhotoAnalysis, AIQuotePhotoSuggestedLineItem } from '@/lib/aiHelper';
 import { compressForUpload, COMPRESS_PRESETS, STORAGE_CACHE_CONTROL } from '@/lib/imageUtils';
 import { formatFullAddress } from '@/lib/formatAddress';
+import StormReportSection from '@/components/quote/StormReportSection';
+import { hasStormReport, type QuoteStormReport } from '@/lib/stormReportDoc';
 
 interface QuoteBuilderProps {
   companyId: string;
@@ -673,6 +675,9 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
   const [quoteStructureType, setQuoteStructureType] = useState<QuoteStructureType>(
     inspectionOnly ? 'inspection_report' : invoiceMode ? 'insurance_invoice' : 'tiered'
   );
+
+  // Storms near the property, attached as a Storm Report page
+  const [stormReport, setStormReport] = useState<QuoteStormReport | null>(null);
 
   // Brochure / file attachments
   const [attachedFiles, setAttachedFiles] = useState<CompanyFileRecord[]>([]);
@@ -1688,6 +1693,7 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
       }
 
       setAttachedFiles(Array.isArray((quote as any).attached_files) ? (quote as any).attached_files : []);
+      setStormReport(hasStormReport((quote as any).storm_report) ? (quote as any).storm_report : null);
       setIncludeBrochures((quote as any).include_brochures !== false);
       setUpgrades(Array.isArray((quote as any)?.upgrades) ? (quote as any).upgrades : []);
 
@@ -3960,6 +3966,7 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
         cover_photo_offset_y: coverPhotoOffsetY,
         show_financing: showFinancing,
         attached_files: attachedFiles,
+        storm_report: stormReport,
         include_brochures: includeBrochures,
         upgrades: upgrades.map(u => ({ ...u, is_suggested: true })),
         sales_rep_photo_url: salesRepPhotoUrl || null,
@@ -8374,6 +8381,13 @@ const QuoteBuilder: React.FC<QuoteBuilderProps> = ({
         {renderStep === 7 && (
           <div className="space-y-6">
             <h2 className="text-lg font-semibold text-gray-900">Review & Send</h2>
+
+            <StormReportSection
+              companyId={companyId}
+              address={formatFullAddress({ address: customer.address, city: customer.city, state: customer.state, zip: customer.zip })}
+              value={stormReport}
+              onChange={(next) => { userEdited.current = true; setStormReport(next); }}
+            />
 
             {/* Quote Style — shown here for mobile visibility (not for inspection reports) */}
             {!inspectionOnly && <div className="bg-gray-50 rounded-xl p-4">

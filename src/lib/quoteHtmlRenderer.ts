@@ -6,20 +6,22 @@
 import { canHideBranding, normalizeTier } from './planLimits';
 import { getMeasurementSummary } from './measurementSummary';
 import { calculateCancellationDeadline, getLegalNotice } from './legalNotices';
+import { describeStormEntry, formatStormDate, hasStormReport, type QuoteStormReport } from './stormReportDoc';
 
-type PageKey = 'cover' | 'about' | 'scope' | 'photos' | 'warranty' | 'signature' | 'cancel';
+type PageKey = 'cover' | 'about' | 'scope' | 'photos' | 'storm' | 'warranty' | 'signature' | 'cancel';
 
 const PAGE_TITLES: Record<PageKey, string> = {
   cover: 'Cover',
   about: 'About Our Company',
   scope: 'Project Overview & Scope',
   photos: 'Photo Documentation',
+  storm: 'Storm Report',
   warranty: 'Warranty Information',
   signature: 'Quote Acceptance Agreement',
   cancel: '3-Day Right to Cancel',
 };
 
-const DEFAULT_PAGE_ORDER: PageKey[] = ['cover', 'about', 'photos', 'scope', 'warranty', 'signature', 'cancel'];
+const DEFAULT_PAGE_ORDER: PageKey[] = ['cover', 'about', 'photos', 'storm', 'scope', 'warranty', 'signature', 'cancel'];
 const VALID_PAGE_KEYS = new Set<PageKey>(DEFAULT_PAGE_ORDER);
 
 interface QuoteHtmlOptions {
@@ -167,6 +169,7 @@ export const generateQuoteHTML = ({
     // contingency agreement instead.
     includeScope: !isInspectionReportDoc || Boolean(quote.contingency_enabled),
     includePhotos: photos.length > 0,
+    includeStorm: hasStormReport(quote.storm_report),
     includeWarranty: quote.include_warranty_page !== false && Boolean(company.warranty_text),
     // Inspection reports never get the generic tier-acceptance signature/cancel
     // pages — with contingency on, signing happens via the dedicated agreement
@@ -971,6 +974,42 @@ export const generateQuoteHTML = ({
     </div>
   `;
 
+  // Storms near the property, picked in the Quote Builder (quotes.storm_report).
+  const renderStormPage = () => {
+    if (!hasStormReport(quote.storm_report)) return '';
+    const report = quote.storm_report as QuoteStormReport;
+    const rows = [...report.entries]
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .map((e) => `
+          <tr>
+            <td style="padding:8px 10px;white-space:nowrap;">${escapeHtml(formatStormDate(e.date))}</td>
+            <td style="padding:8px 10px;font-weight:600;">${escapeHtml(describeStormEntry(e))}</td>
+            <td style="padding:8px 10px;white-space:nowrap;">${escapeHtml(`${e.distanceMiles} mi ${e.direction}`)}</td>
+            <td style="padding:8px 10px;color:#6b7280;">${escapeHtml(e.place || '—')}</td>
+          </tr>`).join('');
+    return `
+    <div class="page">
+      ${renderWatermark()}
+      ${renderHeader()}
+      <div class="proposal-panel-header compact">
+        <div class="proposal-panel-kicker">Section ${String(proposalSections.findIndex(section => section.title === PAGE_TITLES.storm) + 1).padStart(2, '0')}</div>
+        <div class="proposal-panel-title">Storm Report</div>
+      </div>
+      <div class="proposal-panel-accent" style="margin-bottom:18px;"></div>
+      <p style="font-size:13px;color:#4b5563;margin:0 0 14px;">Storms recorded within ${escapeHtml(String(report.radiusMiles))} miles of ${escapeHtml(report.address || 'this property')}.</p>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;border:1px solid #e5e7eb;">
+        <thead>
+          <tr style="background:#f9fafb;color:#6b7280;text-transform:uppercase;font-size:11px;letter-spacing:.05em;text-align:left;">
+            <th style="padding:8px 10px;">Date</th><th style="padding:8px 10px;">Event</th><th style="padding:8px 10px;">Distance</th><th style="padding:8px 10px;">Location</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <p style="font-size:11px;color:#9ca3af;margin-top:12px;">Source: National Weather Service storm reports and NOAA radar hail detection. Compiled ${escapeHtml(formatStormDate(report.generatedAt))}.</p>
+    </div>
+  `;
+  };
+
   const renderWarrantyPage = () => `
     <div class="page">
       ${renderWatermark()}
@@ -1660,6 +1699,7 @@ export const generateQuoteHTML = ({
               ? () => renderScopePage() + renderContingencyPage()
               : renderScopePage,
     photos: renderPhotosPage,
+    storm: renderStormPage,
     warranty: renderWarrantyPage,
     signature: renderAcceptancePage,
     cancel: renderCancelNoticePage,
@@ -2923,6 +2963,7 @@ const resolvePageOrder = (
     includeAbout: boolean;
     includeScope: boolean;
     includePhotos: boolean;
+    includeStorm?: boolean;
     includeWarranty: boolean;
     includeSignatureAndCancel?: boolean;
     includeCancel?: boolean;
@@ -2939,6 +2980,7 @@ const resolvePageOrder = (
     if (page === 'about') return flags.includeAbout;
     if (page === 'scope') return flags.includeScope;
     if (page === 'photos') return flags.includePhotos;
+    if (page === 'storm') return flags.includeStorm === true;
     if (page === 'warranty') return flags.includeWarranty;
     if (page === 'signature') return showSigAndCancel;
     if (page === 'cancel') return showSigAndCancel && flags.includeCancel !== false;
