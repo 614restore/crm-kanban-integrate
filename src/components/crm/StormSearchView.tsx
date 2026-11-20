@@ -216,6 +216,9 @@ export default function StormSearchView() {
       setAddress(focus.label ?? '');
       setMonths(focusMonths);
       setRadius(focusRadius);
+      // Opening from a customer carries the company's wind and hail thresholds.
+      if (focus.minWind != null) setMinWind(focus.minWind);
+      if (focus.minHail != null) setMinHail(focus.minHail);
       runSearch(
         { lat: focus.lat, lon: focus.lon, label: focus.label || 'Alert location', state: toStateCode(focus.state) },
         focusMonths,

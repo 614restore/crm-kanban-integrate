@@ -59,6 +59,9 @@ export interface StormFocus {
   state?: string | null;
   radiusMiles?: number | null;
   months?: number | null;
+  /** Wind and hail thresholds to open with, from the company's storm history settings. */
+  minWind?: number | null;
+  minHail?: number | null;
 }
 
 export const STORM_FOCUS_EVENT = 'trussctr:storm-focus';
