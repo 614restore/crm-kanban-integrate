@@ -7,6 +7,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { requireAuth } from './_auth-middleware.mjs';
+import { applyCors } from './_cors.mjs';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -41,6 +42,7 @@ function evHeaders(apiKey, apiSecret) {
 const EV_BASE = 'https://api.eagleview.com/v1';
 
 export default async function handler(req, res) {
+  if (applyCors(req, res, 'POST, OPTIONS')) return;
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }

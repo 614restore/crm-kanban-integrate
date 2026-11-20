@@ -10,6 +10,7 @@
 import { createClient } from '@supabase/supabase-js';
 import nodemailer from 'nodemailer';
 import { requireAuth } from './_auth-middleware.mjs';
+import { applyCors } from './_cors.mjs';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -17,20 +18,6 @@ const PLATFORM_RESEND_KEY = process.env.RESEND_API_KEY;
 const PLATFORM_SENDER = '614 Restore <scopemgr@614restore.com>';
 
 const svcDb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-
-// ── CORS ──────────────────────────────────────────────────────────────────────
-function setCors(req, res) {
-  const origin = req.headers.origin || '';
-  const allowed =
-    origin === 'https://crm-kanban-integrate.vercel.app' ||
-    origin.endsWith('.vercel.app') ||
-    origin.startsWith('http://localhost') ||
-    origin.startsWith('http://127.0.0.1');
-  res.setHeader('Access-Control-Allow-Origin', allowed ? origin : 'https://crm-kanban-integrate.vercel.app');
-  res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.setHeader('Vary', 'Origin');
-}
 
 // ── Helpers: company lookup ───────────────────────────────────────────────────
 async function getCompanyId(userId) {
@@ -201,8 +188,8 @@ async function logSms({ companyId, customerId, userId, direction, subject, conte
 
 // ── Handler ───────────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
-  setCors(req, res);
-  if (req.method === 'OPTIONS') return res.status(200).end();
+  // Cross-origin callers: the iPhone app (capacitor://localhost), previews, local dev.
+  if (applyCors(req, res, 'POST, OPTIONS')) return;
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
   const user = await requireAuth(req, res);

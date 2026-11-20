@@ -1,5 +1,6 @@
 import { requireAuth } from './_auth-middleware.mjs';
 import { createClient } from '@supabase/supabase-js';
+import { applyCors } from './_cors.mjs';
 
 // Each company brings its own AI key; there is no shared platform key, which
 // would split one free-tier quota across every company. The caller's personal
@@ -101,6 +102,7 @@ async function callProvider(config, systemPrompt, userPrompt) {
 }
 
 export default async function handler(req, res) {
+  if (applyCors(req, res, 'POST, OPTIONS')) return;
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
