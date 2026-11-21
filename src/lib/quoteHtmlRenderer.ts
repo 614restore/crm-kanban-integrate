@@ -1885,10 +1885,12 @@ export const generateQuoteHTML = ({
             .hero-company { font-size: 16px !important; }
             .hero-brand { gap: 10px !important; margin-top: 12px !important; }
             .hero-logo { width: 44px !important; height: 44px !important; }
-            /* Hero meta — 4 col single row, tighten spacing for print */
-            .hero-meta-grid { grid-template-columns: repeat(4, 1fr) !important; gap: 8px !important; margin-top: 10px !important; }
-            .hero-meta-card { padding: 10px !important; }
-            .hero-meta-value { font-size: 13px !important; }
+            /* Hero meta — two by two, same as wider screens. This block used to force four
+               columns with !important, which beat the two-column rule and squeezed each box
+               to a sliver on a phone, so the date and quote number spilled out of it. */
+            .hero-meta-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 8px !important; margin-top: 10px !important; }
+            .hero-meta-card { padding: 10px !important; min-width: 0 !important; }
+            .hero-meta-value { font-size: 14px !important; overflow-wrap: anywhere; }
             /* Cover badges — 4 cols → 2 cols */
             .cover-badge-row { grid-template-columns: repeat(2, 1fr) !important; gap: 8px !important; margin-top: 12px !important; }
             .cover-badge { padding: 10px !important; }
